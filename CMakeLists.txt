@@ -19,6 +19,7 @@ add_library(gliss
     src/local_mode_model.f90
     src/nonuniform_derivative.f90
     src/mode_topology.f90
+    src/two_component_kernel.f90
     src/mercier_diagnostic.f90
     src/radial_bspline_basis.f90
     src/symmetric_eigensolver.f90)
@@ -86,6 +87,11 @@ if(BUILD_TESTING)
     add_test(NAME gvec_cas3d_reconstruction
         COMMAND test_gvec_cas3d_reconstruction)
 
+    add_executable(test_two_component_kernel
+        test/test_two_component_kernel.f90)
+    target_link_libraries(test_two_component_kernel PRIVATE gliss)
+    add_test(NAME two_component_kernel COMMAND test_two_component_kernel)
+
     add_executable(test_mode_topology test/test_mode_topology.f90)
     target_link_libraries(test_mode_topology PRIVATE gliss)
     add_test(NAME mode_topology COMMAND test_mode_topology)
@@ -112,6 +118,7 @@ if(GLISS_ENABLE_ENZYME)
             src/local_mode_model.f90
     src/nonuniform_derivative.f90
     src/mode_topology.f90
+    src/two_component_kernel.f90
     src/mercier_diagnostic.f90
             test/enzyme_drive_gradient.f90)
 endif()
