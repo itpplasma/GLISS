@@ -26,6 +26,7 @@ add_library(gliss
     src/nonuniform_derivative.f90
     src/mode_topology.f90
     src/phase_factor_topology.f90
+    src/radial_space_policy.f90
     src/terpsichore_topology.f90
     src/two_component_kernel.f90
     src/newcomb_limit.f90
@@ -107,6 +108,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_radial_bspline_basis PRIVATE gliss)
     add_test(NAME radial_bspline_basis COMMAND test_radial_bspline_basis)
 
+    add_executable(test_radial_space_policy
+        test/test_radial_space_policy.f90)
+    target_link_libraries(test_radial_space_policy PRIVATE gliss)
+    add_test(NAME radial_space_policy COMMAND test_radial_space_policy)
+
     add_executable(test_gvec_cas3d_reconstruction
         test/test_gvec_cas3d_reconstruction.f90)
     target_link_libraries(test_gvec_cas3d_reconstruction PRIVATE gliss)
@@ -186,6 +192,7 @@ if(GLISS_ENABLE_ENZYME)
     src/nonuniform_derivative.f90
     src/mode_topology.f90
     src/phase_factor_topology.f90
+    src/radial_space_policy.f90
     src/terpsichore_topology.f90
     src/two_component_kernel.f90
     src/newcomb_limit.f90

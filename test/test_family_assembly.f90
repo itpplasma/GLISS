@@ -7,6 +7,7 @@ program test_family_assembly
         lowest_family_eigenvalue, surface_geometry_t
     use newcomb_limit, only: cylinder_profiles_t, &
         lowest_eigenvalue_single_mode
+    use radial_space_policy, only: form_s_power_edge
     implicit none
 
     real(dp), parameter :: pi = acos(-1.0_dp)
@@ -48,6 +49,7 @@ program test_family_assembly
     call check_parity_classes(geometry, step)
     call check_symmetric_decoupling(step)
     call check_field_period_phase(geometry, step)
+    call check_radial_space_options(geometry, step)
 
     call iterate_family_eigenvalue(geometry, [1], [1], step, &
         1.05_dp * family_value, iterated, info)
@@ -236,6 +238,38 @@ contains
             wrong, info, three_periods)
         call require(info == -2, "invalid field-period count was accepted")
     end subroutine check_field_period_phase
+
+    subroutine check_radial_space_options(geometry, step)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step
+        type(family_assembly_options_t) :: options
+        real(dp), allocatable :: reference(:, :), explicit_default(:, :)
+        real(dp), allocatable :: weighted(:, :)
+        real(dp) :: scale
+        integer :: info
+
+        call assemble_family_stiffness(geometry, [2], [1], step, &
+            reference, info)
+        call require(info == 0, "implicit radial-space assembly failed")
+        call assemble_family_stiffness(geometry, [2], [1], step, &
+            explicit_default, info, options)
+        call require(info == 0, "explicit radial-space assembly failed")
+        call require(all(explicit_default == reference), &
+            "explicit default changes the assembled operator")
+        options%radial_space%form_policy = form_s_power_edge
+        call assemble_family_stiffness(geometry, [2], [1], step, &
+            weighted, info, options)
+        call require(info == 0, "weighted radial-space assembly failed")
+        scale = max(1.0_dp, maxval(abs(weighted)))
+        call require(maxval(abs(weighted - transpose(weighted))) &
+            < 1.0e-12_dp * scale, "weighted radial space breaks symmetry")
+        call require(maxval(abs(weighted - reference)) > 1.0e-6_dp * scale, &
+            "form-function policy does not change the assembled operator")
+        options%radial_space%normal_degree = 2
+        call assemble_family_stiffness(geometry, [2], [1], step, &
+            weighted, info, options)
+        call require(info == -2, "unsupported radial space was accepted")
+    end subroutine check_radial_space_options
 
     subroutine symmetric_surface(radius, surface)
         real(dp), intent(in) :: radius
