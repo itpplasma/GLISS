@@ -12,6 +12,7 @@ file records which published work each module implements.
 | `src/radial_bspline_basis.f90` | Open clamped B-spline basis, Cox-de Boor recurrence, fixed-boundary elimination | de Boor, A Practical Guide to Splines (2001) |
 | `src/local_mode_model.f90`, `src/symmetric_eigensolver.f90` | Local plane-wave ideal-MHD energy prototype, dense symmetric generalized eigensolver | Bernstein et al. (1958); Freidberg, Ideal MHD (2014); LAPACK |
 | `test/enzyme_drive_gradient.f90`, `cmake/EnzymeFortran.cmake` | Enzyme reverse-mode gradient of the local energy kernel | Moses and Churavy, Enzyme (NeurIPS 2020) |
+| `src/mercier_diagnostic.f90`, `src/nonuniform_derivative.f90` | Mercier criterion terms from the CAS3D export, with the flux-coordinate curl and force-balance recovery chain | Mercier (1960); Landreman and Jorge, JPP 86 (2020), eqs. 4.16-4.20; verified against the Suydam reduction in the research repository gates |
 
 Planned layers follow, in the same discipline: basis topology and mode
 families per Schwab (1991) sections 3.3 and 3.4; the static two-component

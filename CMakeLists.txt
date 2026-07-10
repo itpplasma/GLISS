@@ -17,6 +17,8 @@ add_library(gliss
     src/gvec_cas3d_integrals.f90
     src/gvec_cas3d_types.f90
     src/local_mode_model.f90
+    src/nonuniform_derivative.f90
+    src/mercier_diagnostic.f90
     src/radial_bspline_basis.f90
     src/symmetric_eigensolver.f90)
 target_link_libraries(gliss PUBLIC
@@ -41,6 +43,11 @@ add_executable(gvec_cas3d_compare_pointwise
     app/gvec_cas3d_compare_pointwise.f90)
 target_link_libraries(gvec_cas3d_compare_pointwise PRIVATE gliss)
 set_target_properties(gvec_cas3d_compare_pointwise PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_mercier app/gliss_mercier.f90)
+target_link_libraries(gliss_mercier PRIVATE gliss)
+set_target_properties(gliss_mercier PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gvec_cas3d_integrate app/gvec_cas3d_integrate.f90)
@@ -78,6 +85,15 @@ if(BUILD_TESTING)
     add_test(NAME gvec_cas3d_reconstruction
         COMMAND test_gvec_cas3d_reconstruction)
 
+    add_executable(test_nonuniform_derivative
+        test/test_nonuniform_derivative.f90)
+    target_link_libraries(test_nonuniform_derivative PRIVATE gliss)
+    add_test(NAME nonuniform_derivative COMMAND test_nonuniform_derivative)
+
+    add_executable(test_mercier_diagnostic test/test_mercier_diagnostic.f90)
+    target_link_libraries(test_mercier_diagnostic PRIVATE gliss)
+    add_test(NAME mercier_diagnostic COMMAND test_mercier_diagnostic)
+
     add_executable(test_gvec_cas3d_integrals test/test_gvec_cas3d_integrals.f90)
     target_link_libraries(test_gvec_cas3d_integrals PRIVATE gliss)
     add_test(NAME gvec_cas3d_integrals COMMAND test_gvec_cas3d_integrals)
@@ -89,5 +105,7 @@ if(GLISS_ENABLE_ENZYME)
     add_enzyme_fortran_test(enzyme_drive_gradient
         SOURCES
             src/local_mode_model.f90
+    src/nonuniform_derivative.f90
+    src/mercier_diagnostic.f90
             test/enzyme_drive_gradient.f90)
 endif()
