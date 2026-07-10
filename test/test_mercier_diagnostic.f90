@@ -60,6 +60,8 @@ program test_mercier_diagnostic
             "covariant components are not flux functions")
         call require(result%force_balance_residual(i) < 1.0e-3_dp, &
             "force balance residual is too large")
+        call require(result%jacobian_identity_deviation(i) < 1.0e-10_dp, &
+            "Boozer Jacobian identity is violated")
     end do
     call require(any(result%d_mercier < 0.0_dp), &
         "expected Mercier-unstable surfaces were not found")

@@ -25,6 +25,7 @@ module mercier_diagnostic
         real(dp), allocatable :: iota_deviation(:)
         real(dp), allocatable :: boozer_deviation(:)
         real(dp), allocatable :: force_balance_residual(:)
+        real(dp), allocatable :: jacobian_identity_deviation(:)
     end type mercier_result_t
 
     type :: surface_data_t
@@ -87,6 +88,12 @@ contains
                 - equilibrium%rotational_transform(i))
             result%boozer_deviation(i) = boozer_deviation(surface, &
                 covariant_theta(i), covariant_zeta(i))
+            result%jacobian_identity_deviation(i) = maxval(abs( &
+                surface%mod_b**2 * surface%jacobian &
+                - (flux_slope(i) * covariant_zeta(i) &
+                + grid_mean(surface%jacobian * surface%b_theta) &
+                * covariant_theta(i)))) &
+                / abs(flux_slope(i) * covariant_zeta(i))
         end do
 
         call first_derivative_nonuniform(equilibrium%s, &
@@ -355,6 +362,7 @@ contains
         allocate (result%d_mercier(ns), result%iota_deviation(ns))
         allocate (result%boozer_deviation(ns))
         allocate (result%force_balance_residual(ns))
+        allocate (result%jacobian_identity_deviation(ns))
     end subroutine allocate_result
 
 end module mercier_diagnostic

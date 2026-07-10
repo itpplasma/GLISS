@@ -28,12 +28,14 @@ program gliss_mercier
     end if
 
     write (*, "(a)") "s,D_shear,D_current,D_well,D_geodesic,D_Mercier," // &
-        "iota_deviation,boozer_deviation,force_balance_residual"
+        "iota_deviation,boozer_deviation,force_balance_residual," // &
+        "jacobian_identity_deviation"
     do i = 1, size(result%s)
-        write (*, "(es24.16, 8(',', es24.16))") result%s(i), &
+        write (*, "(es24.16, 9(',', es24.16))") result%s(i), &
             result%d_shear(i), result%d_current(i), result%d_well(i), &
             result%d_geodesic(i), result%d_mercier(i), &
             result%iota_deviation(i), result%boozer_deviation(i), &
-            result%force_balance_residual(i)
+            result%force_balance_residual(i), &
+            result%jacobian_identity_deviation(i)
     end do
 end program gliss_mercier
