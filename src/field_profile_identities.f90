@@ -249,67 +249,77 @@ contains
         real(dp), intent(in) :: pressure_slope(:)
         type(field_profile_identity_result_t), intent(inout) :: result
         real(dp), allocatable :: residual(:, :), terms(:, :)
-        real(dp) :: poloidal_field_slope
+        real(dp) :: covariant_scale, current_scale, flux_scale
+        real(dp) :: poloidal_field_slope, toroidal_field_slope
 
-        poloidal_field_slope = flux_poloidal_slope(i) / periods
-        result%field_toroidal_flux_slope(i) = grid_mean(jacobian * contra_zeta)
+        toroidal_field_slope = -flux_toroidal_slope(i)
+        poloidal_field_slope = -flux_poloidal_slope(i) / periods
+        flux_scale = max(maxval(abs(flux_toroidal_slope)), &
+            maxval(abs(flux_poloidal_slope)), tiny(1.0_dp))
+        covariant_scale = max(maxval(abs(equilibrium%b_theta_average)), &
+            maxval(abs(equilibrium%b_zeta_average)), tiny(1.0_dp))
+        current_scale = max(maxval(abs(b_theta_slope)), &
+            maxval(abs(b_zeta_slope)), tiny(1.0_dp))
+        result%field_toroidal_flux_slope(i) = &
+            -grid_mean(jacobian * contra_zeta)
         result%field_poloidal_flux_slope(i) = &
-            periods * grid_mean(jacobian * contra_theta)
+            -periods * grid_mean(jacobian * contra_theta)
         result%field_covariant_theta(i) = grid_mean(b_theta)
         result%field_covariant_zeta(i) = grid_mean(b_zeta)
         result%toroidal_flux_deviation(i) = relative_grid_deviation( &
-            jacobian * contra_zeta, &
-            flux_toroidal_slope(i))
+            -jacobian * contra_zeta, flux_toroidal_slope(i), flux_scale)
         result%poloidal_flux_deviation(i) = relative_grid_deviation( &
-            periods * jacobian * contra_theta, &
-            flux_poloidal_slope(i))
+            -periods * jacobian * contra_theta, flux_poloidal_slope(i), &
+            flux_scale)
         result%covariant_theta_deviation(i) = relative_grid_deviation( &
-            b_theta, equilibrium%b_theta_average(i))
+            b_theta, equilibrium%b_theta_average(i), covariant_scale)
         result%covariant_zeta_deviation(i) = relative_grid_deviation( &
-            b_zeta, equilibrium%b_zeta_average(i))
+            b_zeta, equilibrium%b_zeta_average(i), covariant_scale)
         result%iota_flux_deviation(i) = relative_scalar_deviation( &
             flux_poloidal_slope(i), equilibrium%rotational_transform(i) &
-            * flux_toroidal_slope(i))
+            * flux_toroidal_slope(i), flux_scale)
         result%ampere_theta_deviation(i) = relative_scalar_deviation( &
-            grid_mean(beta_zeta - field_zeta_slope), -b_zeta_slope(i))
+            grid_mean(beta_zeta - field_zeta_slope), -b_zeta_slope(i), &
+            current_scale)
         result%ampere_zeta_deviation(i) = relative_scalar_deviation( &
-            grid_mean(field_theta_slope - beta_theta), b_theta_slope(i))
+            grid_mean(field_theta_slope - beta_theta), b_theta_slope(i), &
+            current_scale)
         residual = mod_b_squared * jacobian &
-            - flux_toroidal_slope(i) * equilibrium%b_zeta_average(i) &
+            - toroidal_field_slope * equilibrium%b_zeta_average(i) &
             - poloidal_field_slope * equilibrium%b_theta_average(i)
         terms = abs(mod_b_squared * jacobian) &
-            + abs(flux_toroidal_slope(i) &
+            + abs(toroidal_field_slope &
             * equilibrium%b_zeta_average(i)) &
             + abs(poloidal_field_slope * equilibrium%b_theta_average(i))
         result%exported_jacobian_deviation(i) = scaled_grid_residual( &
             residual, terms)
         residual = mu0 * pressure_slope(i) * jacobian &
-            + flux_toroidal_slope(i) * b_zeta_slope(i) &
+            + toroidal_field_slope * b_zeta_slope(i) &
             + poloidal_field_slope * b_theta_slope(i) &
-            - flux_toroidal_slope(i) * beta_zeta &
+            - toroidal_field_slope * beta_zeta &
             - poloidal_field_slope * beta_theta
         terms = abs(mu0 * pressure_slope(i) * jacobian) &
-            + abs(flux_toroidal_slope(i) * b_zeta_slope(i)) &
+            + abs(toroidal_field_slope * b_zeta_slope(i)) &
             + abs(poloidal_field_slope * b_theta_slope(i)) &
-            + abs(flux_toroidal_slope(i) * beta_zeta) &
+            + abs(toroidal_field_slope * beta_zeta) &
             + abs(poloidal_field_slope * beta_theta)
         result%general_force_balance_deviation(i) = scaled_grid_residual( &
             residual, terms)
     end subroutine summarize_surface
 
-    pure function relative_grid_deviation(values, reference) result(value)
-        real(dp), intent(in) :: values(:, :), reference
-        real(dp) :: value, scale
+    pure function relative_grid_deviation(values, reference, scale) &
+            result(value)
+        real(dp), intent(in) :: values(:, :), reference, scale
+        real(dp) :: value
 
-        scale = max(maxval(abs(values)), abs(reference), tiny(1.0_dp))
         value = maxval(abs(values - reference)) / scale
     end function relative_grid_deviation
 
-    pure function relative_scalar_deviation(value_a, value_b) result(value)
-        real(dp), intent(in) :: value_a, value_b
-        real(dp) :: value, scale
+    pure function relative_scalar_deviation(value_a, value_b, scale) &
+            result(value)
+        real(dp), intent(in) :: value_a, value_b, scale
+        real(dp) :: value
 
-        scale = max(abs(value_a), abs(value_b), tiny(1.0_dp))
         value = abs(value_a - value_b) / scale
     end function relative_scalar_deviation
 
