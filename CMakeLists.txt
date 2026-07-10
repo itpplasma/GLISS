@@ -48,6 +48,11 @@ target_link_libraries(gvec_cas3d_compare_pointwise PRIVATE gliss)
 set_target_properties(gvec_cas3d_compare_pointwise PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
+add_executable(gliss_newcomb app/gliss_newcomb.f90)
+target_link_libraries(gliss_newcomb PRIVATE gliss)
+set_target_properties(gliss_newcomb PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
 add_executable(gliss_mercier app/gliss_mercier.f90)
 target_link_libraries(gliss_mercier PRIVATE gliss)
 set_target_properties(gliss_mercier PROPERTIES
