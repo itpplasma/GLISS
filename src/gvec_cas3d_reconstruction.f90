@@ -15,6 +15,7 @@ module gvec_cas3d_reconstruction
 
     public :: reconstruct_harmonic_grid
     public :: periodic_sixth_order_derivatives
+    public :: project_harmonic_grid
 
 contains
 
@@ -51,6 +52,41 @@ contains
             zeta_derivative_phase), dp)
         info = reconstruction_ok
     end subroutine reconstruct_harmonic_grid
+
+    pure subroutine project_harmonic_grid(values, poloidal_modes, &
+            toroidal_modes, theta, zeta_period, cosine, sine)
+        real(dp), intent(in) :: values(:, :)
+        integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
+        real(dp), intent(in) :: theta(:), zeta_period(:)
+        real(dp), intent(out) :: cosine(:, :), sine(:, :)
+        real(dp) :: phase, cosine_sum, sine_sum, weight
+        integer :: mode_m, mode_n, m, n, j, k
+
+        do mode_n = 1, size(toroidal_modes)
+            n = toroidal_modes(mode_n)
+            do mode_m = 1, size(poloidal_modes)
+                m = poloidal_modes(mode_m)
+                cosine(mode_m, mode_n) = 0.0_dp
+                sine(mode_m, mode_n) = 0.0_dp
+                if (m == 0 .and. n < 0) cycle
+                cosine_sum = 0.0_dp
+                sine_sum = 0.0_dp
+                do k = 1, size(zeta_period)
+                    do j = 1, size(theta)
+                        phase = two_pi * (real(m, dp) * theta(j) &
+                            - real(n, dp) * zeta_period(k))
+                        cosine_sum = cosine_sum + values(j, k) * cos(phase)
+                        sine_sum = sine_sum + values(j, k) * sin(phase)
+                    end do
+                end do
+                weight = 2.0_dp
+                if (m == 0 .and. n == 0) weight = 1.0_dp
+                weight = weight / real(size(theta) * size(zeta_period), dp)
+                cosine(mode_m, mode_n) = weight * cosine_sum
+                sine(mode_m, mode_n) = weight * sine_sum
+            end do
+        end do
+    end subroutine project_harmonic_grid
 
     pure subroutine build_phase_matrices(poloidal_modes, toroidal_modes, &
             theta, zeta_period, theta_phase, theta_derivative_phase, &

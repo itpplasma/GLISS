@@ -1,6 +1,6 @@
 module mercier_diagnostic
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use gvec_cas3d_reconstruction, only: periodic_sixth_order_derivatives, &
+    use gvec_cas3d_reconstruction, only: project_harmonic_grid, &
         reconstruct_harmonic_grid, reconstruction_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
         radial_grid_half
@@ -31,7 +31,7 @@ module mercier_diagnostic
     type :: surface_data_t
         real(dp), allocatable :: jacobian(:, :), g_tt(:, :), g_tz(:, :)
         real(dp), allocatable :: g_zz(:, :), b_theta(:, :), b_zeta(:, :)
-        real(dp), allocatable :: mod_b(:, :), beta_s(:, :)
+        real(dp), allocatable :: mod_b(:, :)
         real(dp), allocatable :: area_element(:, :)
     end type surface_data_t
 
@@ -45,7 +45,6 @@ contains
         type(mercier_result_t), intent(out) :: result
         integer, intent(out) :: info
         type(surface_data_t) :: surface
-        type(harmonic_pair_t) :: xhat_s, yhat_s, zhat_s
         real(dp), allocatable :: theta(:), zeta(:)
         real(dp), allocatable :: covariant_theta(:), covariant_zeta(:)
         real(dp), allocatable :: flux_slope(:), volume_slope(:)
@@ -62,10 +61,6 @@ contains
         if (ns < 5) return
 
         call build_angular_grids(n_theta, n_zeta, theta, zeta)
-        call differentiate_pair(equilibrium%s, equilibrium%xhat, xhat_s)
-        call differentiate_pair(equilibrium%s, equilibrium%yhat, yhat_s)
-        call differentiate_pair(equilibrium%s, equilibrium%zhat, zhat_s)
-
         call allocate_result(ns, result)
         allocate (covariant_theta(ns), covariant_zeta(ns), flux_slope(ns))
         allocate (volume_slope(ns), covariant_theta_slope(ns))
@@ -73,8 +68,7 @@ contains
         allocate (iota_slope(ns), flux_curvature(ns), volume_curvature(ns))
 
         do i = 1, ns
-            call load_surface(equilibrium, xhat_s, yhat_s, zhat_s, i, &
-                theta, zeta, surface, info)
+            call load_surface(equilibrium, i, theta, zeta, surface, info)
             if (info /= mercier_ok) return
             covariant_theta(i) = grid_mean(surface%g_tt * surface%b_theta &
                 + surface%g_tz * surface%b_zeta)
@@ -110,10 +104,10 @@ contains
             volume_curvature)
 
         do i = 1, ns
-            call load_surface(equilibrium, xhat_s, yhat_s, zhat_s, i, &
-                theta, zeta, surface, info)
+            call load_surface(equilibrium, i, theta, zeta, surface, info)
             if (info /= mercier_ok) return
-            call assemble_surface_terms(equilibrium, surface, i, &
+            call assemble_surface_terms(equilibrium, surface, theta, &
+                zeta, i, &
                 covariant_theta(i), covariant_zeta(i), &
                 covariant_theta_slope(i), covariant_zeta_slope(i), &
                 flux_slope(i), flux_curvature(i), volume_slope(i), &
@@ -124,13 +118,14 @@ contains
         info = mercier_ok
     end subroutine compute_mercier
 
-    subroutine assemble_surface_terms(equilibrium, surface, i, &
-            covariant_theta, covariant_zeta, covariant_theta_slope, &
+    subroutine assemble_surface_terms(equilibrium, surface, theta, zeta, &
+            i, covariant_theta, covariant_zeta, covariant_theta_slope, &
             covariant_zeta_slope, flux_slope, flux_curvature, &
             volume_slope, volume_curvature, pressure_slope, iota_slope, &
             result)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
+        real(dp), intent(in) :: theta(:), zeta(:)
         integer, intent(in) :: i
         real(dp), intent(in) :: covariant_theta, covariant_zeta
         real(dp), intent(in) :: covariant_theta_slope, covariant_zeta_slope
@@ -146,14 +141,13 @@ contains
         real(dp) :: integral_xi, integral_inverse, integral_bsq
         real(dp) :: integral_jb, integral_jb_squared, n_grid
         real(dp) :: pressure_term, toroidal_term, poloidal_term
-        integer :: fd_info
 
         field_periods = real(equilibrium%field_periods, dp)
         n_grid = real(size(surface%jacobian), dp)
-        call periodic_sixth_order_derivatives(surface%beta_s, &
-            1.0_dp / real(size(surface%beta_s, 1), dp), &
-            1.0_dp / real(size(surface%beta_s, 2), dp), beta_theta, &
-            beta_zeta, fd_info)
+        call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
+            covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
+            grid_mean(surface%jacobian * surface%b_theta), flux_slope, &
+            beta_theta, beta_zeta)
         mu0_j_dot_b = ((beta_zeta - covariant_zeta_slope) &
             * covariant_theta &
             + (covariant_theta_slope - beta_theta) * covariant_zeta) &
@@ -200,10 +194,8 @@ contains
             1.0e-14_dp * abs(flux_slope * covariant_zeta))
     end subroutine assemble_surface_terms
 
-    subroutine load_surface(equilibrium, xhat_s, yhat_s, zhat_s, i, theta, &
-            zeta, surface, info)
+    subroutine load_surface(equilibrium, i, theta, zeta, surface, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
-        type(harmonic_pair_t), intent(in) :: xhat_s, yhat_s, zhat_s
         integer, intent(in) :: i
         real(dp), intent(in) :: theta(:), zeta(:)
         type(surface_data_t), intent(out) :: surface
@@ -236,28 +228,6 @@ contains
             surface%mod_b, info)
         if (info /= mercier_ok) return
 
-        call surface_with_derivatives(xhat_s, i, equilibrium, theta, zeta, &
-            es_x, discard_a, discard_b, info)
-        if (info /= mercier_ok) return
-        call surface_with_derivatives(yhat_s, i, equilibrium, theta, zeta, &
-            es_y, discard_a, discard_b, info)
-        if (info /= mercier_ok) return
-        call surface_with_derivatives(zhat_s, i, equilibrium, theta, zeta, &
-            es_z, discard_a, discard_b, info)
-        if (info /= mercier_ok) return
-        call surface_with_derivatives(equilibrium%xhat, i, equilibrium, &
-            theta, zeta, discard_a, eu_x, ev_x, info)
-        if (info /= mercier_ok) return
-        call surface_with_derivatives(equilibrium%yhat, i, equilibrium, &
-            theta, zeta, discard_a, eu_y, ev_y, info)
-        if (info /= mercier_ok) return
-        call surface_with_derivatives(equilibrium%zhat, i, equilibrium, &
-            theta, zeta, discard_a, eu_z, ev_z, info)
-        if (info /= mercier_ok) return
-
-        g_su = es_x * eu_x + es_y * eu_y + es_z * eu_z
-        g_sv = es_x * ev_x + es_y * ev_y + es_z * ev_z
-        surface%beta_s = g_su * surface%b_theta + g_sv * surface%b_zeta
         surface%area_element = sqrt(max(surface%g_tt * surface%g_zz &
             - surface%g_tz**2, 0.0_dp))
         info = mercier_ok
@@ -281,42 +251,58 @@ contains
             rec_info == reconstruction_ok)
     end subroutine surface_values
 
-    subroutine surface_with_derivatives(pair, i, equilibrium, theta, zeta, &
-            values, derivative_theta, derivative_zeta, info)
-        type(harmonic_pair_t), intent(in) :: pair
-        integer, intent(in) :: i
+    subroutine solve_beta_derivatives(equilibrium, surface, theta, zeta, &
+            covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
+            poloidal_flux_slope, toroidal_flux_slope, beta_theta, &
+            beta_zeta)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
-        real(dp), allocatable, intent(out) :: values(:, :)
-        real(dp), allocatable, intent(out) :: derivative_theta(:, :)
-        real(dp), allocatable, intent(out) :: derivative_zeta(:, :)
-        integer, intent(out) :: info
-        integer :: rec_info
+        real(dp), intent(in) :: covariant_theta_slope, covariant_zeta_slope
+        real(dp), intent(in) :: pressure_slope, poloidal_flux_slope
+        real(dp), intent(in) :: toroidal_flux_slope
+        real(dp), allocatable, intent(out) :: beta_theta(:, :)
+        real(dp), allocatable, intent(out) :: beta_zeta(:, :)
+        type(harmonic_pair_t) :: beta_pair
+        real(dp), allocatable :: rhs(:, :), discard(:, :)
+        real(dp) :: rhs_cosine(size(equilibrium%poloidal_modes), &
+            size(equilibrium%toroidal_modes))
+        real(dp) :: rhs_sine(size(equilibrium%poloidal_modes), &
+            size(equilibrium%toroidal_modes))
+        real(dp) :: denominator, scale
+        integer :: mode_m, mode_n, rec_info
 
-        call reconstruct_harmonic_grid(pair, i, equilibrium%poloidal_modes, &
-            equilibrium%toroidal_modes, theta, zeta, values, &
-            derivative_theta, derivative_zeta, rec_info)
-        info = merge(mercier_ok, mercier_reconstruction_error, &
-            rec_info == reconstruction_ok)
-    end subroutine surface_with_derivatives
-
-    pure subroutine differentiate_pair(s, pair, slope_pair)
-        real(dp), intent(in) :: s(:)
-        type(harmonic_pair_t), intent(in) :: pair
-        type(harmonic_pair_t), intent(out) :: slope_pair
-        integer :: m, n
-
-        allocate (slope_pair%cosine, mold=pair%cosine)
-        allocate (slope_pair%sine, mold=pair%sine)
-        do n = 1, size(pair%cosine, 3)
-            do m = 1, size(pair%cosine, 2)
-                call first_derivative_nonuniform(s, pair%cosine(:, m, n), &
-                    slope_pair%cosine(:, m, n))
-                call first_derivative_nonuniform(s, pair%sine(:, m, n), &
-                    slope_pair%sine(:, m, n))
+        rhs = surface%jacobian * (mu0 * pressure_slope &
+            + covariant_zeta_slope * surface%b_zeta &
+            + covariant_theta_slope * surface%b_theta)
+        call project_harmonic_grid(rhs, equilibrium%poloidal_modes, &
+            equilibrium%toroidal_modes, theta, zeta, rhs_cosine, rhs_sine)
+        allocate (beta_pair%cosine(1, size(rhs_cosine, 1), &
+            size(rhs_cosine, 2)))
+        allocate (beta_pair%sine(1, size(rhs_sine, 1), size(rhs_sine, 2)))
+        scale = abs(toroidal_flux_slope) + abs(poloidal_flux_slope)
+        do mode_n = 1, size(equilibrium%toroidal_modes)
+            do mode_m = 1, size(equilibrium%poloidal_modes)
+                denominator = two_pi * (real( &
+                    equilibrium%poloidal_modes(mode_m), dp) &
+                    * poloidal_flux_slope - real( &
+                    equilibrium%toroidal_modes(mode_n), dp) &
+                    * toroidal_flux_slope)
+                if (abs(denominator) < 1.0e-10_dp * scale) then
+                    beta_pair%cosine(1, mode_m, mode_n) = 0.0_dp
+                    beta_pair%sine(1, mode_m, mode_n) = 0.0_dp
+                else
+                    beta_pair%sine(1, mode_m, mode_n) = &
+                        rhs_cosine(mode_m, mode_n) / denominator
+                    beta_pair%cosine(1, mode_m, mode_n) = &
+                        -rhs_sine(mode_m, mode_n) / denominator
+                end if
             end do
         end do
-    end subroutine differentiate_pair
+        call reconstruct_harmonic_grid(beta_pair, 1, &
+            equilibrium%poloidal_modes, equilibrium%toroidal_modes, theta, &
+            zeta, discard, beta_theta, beta_zeta, rec_info)
+    end subroutine solve_beta_derivatives
 
     pure function boozer_deviation(surface, covariant_theta, &
             covariant_zeta) result(deviation)
