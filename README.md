@@ -52,10 +52,6 @@ Newcomb (1960) and Suydam (1958) for the cylindrical gates, Mercier
 Anderson et al. (1990) for eigenvalue counting by matrix inertia.
 `PROVENANCE.md` maps each module to its sources.
 
-No CAS3D source code was ever seen by the authors; the implementation
-derives from the published record alone.  Interoperability labels such as
-"CAS3D export format" describe file formats, not lineage of code.
-
 ## License
 
 MIT.  See [LICENSE](LICENSE).
