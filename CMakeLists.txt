@@ -25,6 +25,7 @@ add_library(gliss
     src/local_mode_model.f90
     src/nonuniform_derivative.f90
     src/mode_topology.f90
+    src/phase_factor_topology.f90
     src/terpsichore_topology.f90
     src/two_component_kernel.f90
     src/newcomb_limit.f90
@@ -136,6 +137,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_mode_topology PRIVATE gliss)
     add_test(NAME mode_topology COMMAND test_mode_topology)
 
+    add_executable(test_phase_factor_topology
+        test/test_phase_factor_topology.f90)
+    target_link_libraries(test_phase_factor_topology PRIVATE gliss)
+    add_test(NAME phase_factor_topology COMMAND test_phase_factor_topology)
+
     add_executable(test_terpsichore_topology
         test/test_terpsichore_topology.f90)
     target_link_libraries(test_terpsichore_topology PRIVATE gliss)
@@ -179,6 +185,7 @@ if(GLISS_ENABLE_ENZYME)
             src/local_mode_model.f90
     src/nonuniform_derivative.f90
     src/mode_topology.f90
+    src/phase_factor_topology.f90
     src/terpsichore_topology.f90
     src/two_component_kernel.f90
     src/newcomb_limit.f90
