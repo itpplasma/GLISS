@@ -64,6 +64,11 @@ target_link_libraries(gliss_mercier PRIVATE gliss)
 set_target_properties(gliss_mercier PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
+add_executable(gliss_family app/gliss_family.f90)
+target_link_libraries(gliss_family PRIVATE gliss)
+set_target_properties(gliss_family PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
 add_executable(gvec_cas3d_integrate app/gvec_cas3d_integrate.f90)
 target_link_libraries(gvec_cas3d_integrate PRIVATE gliss)
 set_target_properties(gvec_cas3d_integrate PROPERTIES
