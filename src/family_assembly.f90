@@ -17,6 +17,7 @@ module family_assembly
     public :: assemble_family_blocks
     public :: assemble_family_stiffness
     public :: family_negative_count
+    public :: iterate_block_eigenvalue
     public :: iterate_family_eigenvalue
     public :: lowest_family_eigenvalue
 
@@ -137,14 +138,25 @@ contains
         integer, intent(out) :: info
         integer, intent(in), optional :: class_selector
         type(block_tridiagonal_t) :: blocks
+
+        call assemble_family_blocks(geometry, mode_m, mode_n, &
+            radial_step, blocks, info, class_selector)
+        if (info /= 0) return
+        call iterate_block_eigenvalue(blocks, radial_step, shift, &
+            eigenvalue, info)
+    end subroutine iterate_family_eigenvalue
+
+    subroutine iterate_block_eigenvalue(blocks, radial_step, shift, &
+            eigenvalue, info)
+        type(block_tridiagonal_t), intent(in) :: blocks
+        real(dp), intent(in) :: radial_step, shift
+        real(dp), intent(out) :: eigenvalue
+        integer, intent(out) :: info
         type(block_factor_t) :: factor
         real(dp), allocatable :: vector(:, :)
         real(dp) :: rayleigh, previous
         integer :: trials, nodes, iteration, t, j
 
-        call assemble_family_blocks(geometry, mode_m, mode_n, &
-            radial_step, blocks, info, class_selector)
-        if (info /= 0) return
         call factorize_shifted(blocks, shift * radial_step, factor, info)
         if (info /= 0) return
         trials = size(blocks%diag, 1)
@@ -175,7 +187,7 @@ contains
         end if
         eigenvalue = rayleigh / radial_step
         info = 0
-    end subroutine iterate_family_eigenvalue
+    end subroutine iterate_block_eigenvalue
 
     subroutine assemble_family_stiffness(geometry, mode_m, mode_n, &
             radial_step, stiffness, info, class_selector)

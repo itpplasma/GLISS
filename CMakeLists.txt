@@ -21,6 +21,7 @@ add_library(gliss
     src/gvec_cas3d_integrals.f90
     src/gvec_cas3d_types.f90
     src/block_tridiagonal.f90
+    src/eigenvalue_tracking.f90
     src/local_mode_model.f90
     src/nonuniform_derivative.f90
     src/mode_topology.f90
@@ -144,6 +145,11 @@ if(BUILD_TESTING)
     add_executable(test_suydam_marginal test/test_suydam_marginal.f90)
     target_link_libraries(test_suydam_marginal PRIVATE gliss_test_support)
     add_test(NAME suydam_marginal COMMAND test_suydam_marginal)
+
+    add_executable(test_eigenvalue_tracking
+        test/test_eigenvalue_tracking.f90)
+    target_link_libraries(test_eigenvalue_tracking PRIVATE gliss)
+    add_test(NAME eigenvalue_tracking COMMAND test_eigenvalue_tracking)
 endif()
 
 option(GLISS_ENABLE_ENZYME "Build Enzyme derivative checks" OFF)

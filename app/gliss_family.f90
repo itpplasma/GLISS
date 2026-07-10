@@ -1,7 +1,8 @@
 program gliss_family
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use eigenvalue_tracking, only: certified_lowest_eigenvalue
     use family_assembly, only: family_negative_count, &
-        lowest_family_eigenvalue, surface_geometry_t
+        surface_geometry_t
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use mercier_diagnostic, only: build_kernel_geometry, mercier_ok
@@ -13,7 +14,7 @@ program gliss_family
     real(dp), allocatable :: fields(:, :, :, :), drive(:, :, :)
     integer, allocatable :: mode_m(:), mode_n(:)
     character(len=1024) :: filename, token
-    real(dp) :: step, lowest
+    real(dp) :: step, lowest, width
     integer :: info, i, ns, count, arguments, comma, selector
 
     arguments = command_argument_count()
@@ -57,12 +58,14 @@ program gliss_family
     write (*, "(a)") "chart_metric,modes,parity_class," // &
         "lowest_eigenvalue,negative_count"
     do selector = 0, 2
-        call lowest_family_eigenvalue(geometry, mode_m, mode_n, step, &
-            lowest, info, selector)
+        call certified_lowest_eigenvalue(geometry, mode_m, mode_n, &
+            step, lowest, width, info, selector)
         if (info /= 0) then
             write (error_unit, "(a, i0)") "eigensolver error ", info
             error stop 1
         end if
+        write (error_unit, "(a, i0, a, es9.2)") &
+            "certified class ", selector, " window ", width
         call family_negative_count(geometry, mode_m, mode_n, step, &
             0.0_dp, count, info, selector)
         if (info /= 0) then
