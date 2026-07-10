@@ -8,7 +8,7 @@ module cylinder_fixture
     private
 
     integer, parameter, public :: fixture_ns = 33
-    integer, parameter :: ns = fixture_ns, nm = 2, nn = 3
+    integer, parameter :: nm = 2, nn = 3
     integer, parameter :: field_count = 13, profile_count = 6
     character(len=11), parameter :: field_names(field_count) = &
         [character(len=11) :: "mod_B", "xhat", "yhat", "zhat", "Jac", &
@@ -77,16 +77,26 @@ contains
             * s_value) / (2.0_dp * pi * b_axial)
     end function iota_of
 
-    subroutine create_cylinder_fixture(filename)
+    subroutine create_cylinder_fixture(filename, chart_shift, surfaces)
         character(len=*), intent(in) :: filename
+        real(dp), intent(in), optional :: chart_shift
+        integer, intent(in), optional :: surfaces
         integer :: ncid, dim_s, dim_m, dim_n
         integer :: id_nfp, id_beta, id_winding, id_m, id_n, id_rho
         integer :: id_profiles(profile_count)
         integer :: id_cos(field_count), id_sin(field_count)
-        real(dp) :: rho_values(ns), s_values(ns), radius
-        real(dp) :: profile_values(ns)
-        real(dp) :: cosine(nn, nm, ns), sine(nn, nm, ns)
-        integer :: field, profile, i
+        integer :: id_gst_cos, id_gst_sin, id_gsz_cos, id_gsz_sin
+        real(dp), allocatable :: rho_values(:), s_values(:)
+        real(dp), allocatable :: profile_values(:)
+        real(dp), allocatable :: cosine(:, :, :), sine(:, :, :)
+        real(dp) :: shift, angle, rotated_cos, rotated_sin, radius
+        logical :: shifted
+        integer :: ns, field, profile, i, j
+
+        ns = fixture_ns
+        if (present(surfaces)) ns = surfaces
+        allocate (rho_values(ns), s_values(ns), profile_values(ns))
+        allocate (cosine(nn, nm, ns), sine(nn, nm, ns))
 
         call require_netcdf(nc_create_netcdf4(filename, ncid))
         call require_netcdf(nc_def_dimension(ncid, "s", ns, dim_s))
@@ -108,6 +118,9 @@ contains
                 trim(profile_names(profile)), nc_double, [dim_s], &
                 id_profiles(profile)))
         end do
+        shifted = present(chart_shift)
+        shift = 0.0_dp
+        if (shifted) shift = chart_shift
         do field = 1, field_count
             call require_netcdf(nc_def_variable(ncid, &
                 trim(field_names(field)) // "_mnc", nc_double, &
@@ -116,6 +129,16 @@ contains
                 trim(field_names(field)) // "_mns", nc_double, &
                 [dim_s, dim_m, dim_n], id_sin(field)))
         end do
+        if (shifted) then
+            call require_netcdf(nc_def_variable(ncid, "g_st_mnc", &
+                nc_double, [dim_s, dim_m, dim_n], id_gst_cos))
+            call require_netcdf(nc_def_variable(ncid, "g_st_mns", &
+                nc_double, [dim_s, dim_m, dim_n], id_gst_sin))
+            call require_netcdf(nc_def_variable(ncid, "g_sz_mnc", &
+                nc_double, [dim_s, dim_m, dim_n], id_gsz_cos))
+            call require_netcdf(nc_def_variable(ncid, "g_sz_mns", &
+                nc_double, [dim_s, dim_m, dim_n], id_gsz_sin))
+        end if
         call require_netcdf(nc_put_global_text(ncid, &
             "stellarator_symmetry", "False"))
         call require_netcdf(nc_end_definitions(ncid))
@@ -188,9 +211,38 @@ contains
                     sine(1, 2, i) = radius
                 end select
             end do
+            select case (trim(field_names(field)))
+            case ("xhat", "yhat", "zhat")
+                if (shifted) then
+                    do i = 1, ns
+                        angle = 2.0_dp * pi * shift * s_values(i)
+                        do j = 1, nn
+                            rotated_cos = cosine(j, 2, i) * cos(angle) &
+                                - sine(j, 2, i) * sin(angle)
+                            rotated_sin = cosine(j, 2, i) * sin(angle) &
+                                + sine(j, 2, i) * cos(angle)
+                            cosine(j, 2, i) = rotated_cos
+                            sine(j, 2, i) = rotated_sin
+                        end do
+                    end do
+                end if
+            end select
             call require_netcdf(nc_put_real(ncid, id_cos(field), cosine))
             call require_netcdf(nc_put_real(ncid, id_sin(field), sine))
         end do
+        if (shifted) then
+            cosine = 0.0_dp
+            sine = 0.0_dp
+            do i = 1, ns
+                radius = radius_of(s_values(i))
+                cosine(1, 1, i) = -shift * (2.0_dp * pi * radius)**2
+            end do
+            call require_netcdf(nc_put_real(ncid, id_gst_cos, cosine))
+            call require_netcdf(nc_put_real(ncid, id_gst_sin, sine))
+            cosine = 0.0_dp
+            call require_netcdf(nc_put_real(ncid, id_gsz_cos, cosine))
+            call require_netcdf(nc_put_real(ncid, id_gsz_sin, sine))
+        end if
         call require_netcdf(nc_close_file(ncid))
     end subroutine create_cylinder_fixture
 

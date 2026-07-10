@@ -16,6 +16,7 @@ module gvec_cas3d_types
         integer :: winding = 0
         integer :: radial_grid = 0
         logical :: stellarator_symmetric = .false.
+        logical :: has_chart_metric = .false.
         real(dp) :: beta_average = 0.0_dp
         integer, allocatable :: poloidal_modes(:)
         integer, allocatable :: toroidal_modes(:)
@@ -35,6 +36,8 @@ module gvec_cas3d_types
         type(harmonic_pair_t) :: g_tt
         type(harmonic_pair_t) :: g_tz
         type(harmonic_pair_t) :: g_zz
+        type(harmonic_pair_t) :: g_st
+        type(harmonic_pair_t) :: g_sz
         type(harmonic_pair_t) :: second_form_tt
         type(harmonic_pair_t) :: second_form_tz
         type(harmonic_pair_t) :: second_form_zz

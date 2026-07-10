@@ -155,7 +155,7 @@ contains
         integer, intent(in) :: ncid, ns, nm, nn
         type(gvec_cas3d_equilibrium_t), intent(inout) :: equilibrium
         integer, intent(out) :: info
-        logical :: require_both
+        logical :: require_both, found_st, found_sz
 
         require_both = .not. equilibrium%stellarator_symmetric
         call read_even_pair(ncid, "mod_B", ns, nm, nn, require_both, &
@@ -196,7 +196,33 @@ contains
         if (info /= reader_ok) return
         call read_even_pair(ncid, "B_contra_z", ns, nm, nn, require_both, &
             equilibrium%b_contravariant_zeta, info)
+        if (info /= reader_ok) return
+        call read_optional_pair(ncid, "g_st", ns, nm, nn, &
+            equilibrium%g_st, found_st, info)
+        if (info /= reader_ok) return
+        call read_optional_pair(ncid, "g_sz", ns, nm, nn, &
+            equilibrium%g_sz, found_sz, info)
+        if (info /= reader_ok) return
+        equilibrium%has_chart_metric = found_st .and. found_sz
     end subroutine read_harmonics
+
+    subroutine read_optional_pair(ncid, name, ns, nm, nn, pair, found, info)
+        integer, intent(in) :: ncid, ns, nm, nn
+        character(len=*), intent(in) :: name
+        type(harmonic_pair_t), intent(out) :: pair
+        logical, intent(out) :: found
+        integer, intent(out) :: info
+        logical :: has_cosine, has_sine
+
+        found = .false.
+        call read_harmonic_component(ncid, trim(name) // "_mnc", ns, nm, nn, &
+            pair%cosine, has_cosine, info)
+        if (info /= reader_ok) return
+        call read_harmonic_component(ncid, trim(name) // "_mns", ns, nm, nn, &
+            pair%sine, has_sine, info)
+        if (info /= reader_ok) return
+        found = has_cosine .or. has_sine
+    end subroutine read_optional_pair
 
     subroutine read_even_pair(ncid, name, ns, nm, nn, require_both, pair, info)
         integer, intent(in) :: ncid, ns, nm, nn

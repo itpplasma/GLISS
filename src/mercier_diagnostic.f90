@@ -32,6 +32,7 @@ module mercier_diagnostic
     type :: surface_data_t
         real(dp), allocatable :: jacobian(:, :), g_tt(:, :), g_tz(:, :)
         real(dp), allocatable :: g_zz(:, :), b_theta(:, :), b_zeta(:, :)
+        real(dp), allocatable :: g_st(:, :), g_sz(:, :)
         real(dp), allocatable :: mod_b(:, :)
         real(dp), allocatable :: area_element(:, :)
     end type surface_data_t
@@ -132,8 +133,18 @@ contains
                 + (covariant_theta_slope(i) - beta_theta) &
                 * covariant_zeta(i)) / surface%jacobian
             fields(:, :, 11, i) = mu0 * pressure_slope(i)
-            fields(:, :, 12, i) = 0.0_dp
-            fields(:, :, 13, i) = beta_values
+            if (equilibrium%has_chart_metric) then
+                fields(:, :, 12, i) = ((surface%g_tz * surface%b_theta &
+                    + surface%g_zz * surface%b_zeta) * surface%g_st &
+                    - (surface%g_tt * surface%b_theta &
+                    + surface%g_tz * surface%b_zeta) * surface%g_sz) &
+                    / (surface%jacobian * surface%mod_b)
+                fields(:, :, 13, i) = surface%b_theta * surface%g_st &
+                    + surface%b_zeta * surface%g_sz
+            else
+                fields(:, :, 12, i) = 0.0_dp
+                fields(:, :, 13, i) = beta_values
+            end if
             grad_s2_floor = 1.0_dp
             drive(:, :, i) = (fields(:, :, 10, i)**2 &
                 + (mu0 * pressure_slope(i))**2 * fields(:, :, 9, i)) &
@@ -145,9 +156,70 @@ contains
                 / surface%jacobian &
                 - mu0 * pressure_slope(i) * jac_slope_grid &
                 / surface%jacobian
+            if (equilibrium%has_chart_metric) then
+                call add_drive_chart_term(equilibrium, surface, theta, &
+                    zeta, covariant_theta_slope(i), &
+                    covariant_zeta_slope(i), beta_theta, beta_zeta, &
+                    poloidal_slope(i), flux_slope(i), drive(:, :, i), &
+                    info)
+                if (info /= mercier_ok) return
+            end if
         end do
         info = mercier_ok
     end subroutine build_kernel_geometry
+
+    subroutine add_drive_chart_term(equilibrium, surface, theta, zeta, &
+            covariant_theta_slope, covariant_zeta_slope, beta_theta, &
+            beta_zeta, poloidal_flux_slope, toroidal_flux_slope, drive, &
+            info)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        type(surface_data_t), intent(in) :: surface
+        real(dp), intent(in) :: theta(:), zeta(:)
+        real(dp), intent(in) :: covariant_theta_slope, covariant_zeta_slope
+        real(dp), intent(in) :: beta_theta(:, :), beta_zeta(:, :)
+        real(dp), intent(in) :: poloidal_flux_slope, toroidal_flux_slope
+        real(dp), intent(inout) :: drive(:, :)
+        integer, intent(out) :: info
+        type(harmonic_pair_t) :: operand_pair
+        real(dp), allocatable :: operand(:, :), grad_s2(:, :)
+        real(dp), allocatable :: upper_ts(:, :), upper_zs(:, :)
+        real(dp), allocatable :: operand_values(:, :)
+        real(dp), allocatable :: operand_theta(:, :), operand_zeta(:, :)
+        real(dp) :: operand_cosine(size(equilibrium%poloidal_modes), &
+            size(equilibrium%toroidal_modes))
+        real(dp) :: operand_sine(size(equilibrium%poloidal_modes), &
+            size(equilibrium%toroidal_modes))
+        integer :: rec_info
+
+        upper_ts = (surface%g_sz * surface%g_tz &
+            - surface%g_st * surface%g_zz) / surface%jacobian**2
+        upper_zs = (surface%g_st * surface%g_tz &
+            - surface%g_sz * surface%g_tt) / surface%jacobian**2
+        grad_s2 = max((surface%g_tt * surface%g_zz - surface%g_tz**2) &
+            / surface%jacobian**2, tiny(1.0_dp))
+        operand = ((covariant_theta_slope - beta_theta) * upper_ts &
+            - (beta_zeta - covariant_zeta_slope) * upper_zs) / grad_s2
+        call project_harmonic_grid(operand, equilibrium%poloidal_modes, &
+            equilibrium%toroidal_modes, theta, zeta, operand_cosine, &
+            operand_sine)
+        allocate (operand_pair%cosine(1, size(operand_cosine, 1), &
+            size(operand_cosine, 2)))
+        allocate (operand_pair%sine(1, size(operand_sine, 1), &
+            size(operand_sine, 2)))
+        operand_pair%cosine(1, :, :) = operand_cosine
+        operand_pair%sine(1, :, :) = operand_sine
+        call reconstruct_harmonic_grid(operand_pair, 1, &
+            equilibrium%poloidal_modes, equilibrium%toroidal_modes, &
+            theta, zeta, operand_values, operand_theta, operand_zeta, &
+            rec_info)
+        if (rec_info /= reconstruction_ok) then
+            info = mercier_reconstruction_error
+            return
+        end if
+        drive = drive + (poloidal_flux_slope * operand_theta &
+            + toroidal_flux_slope * operand_zeta) / surface%jacobian
+        info = mercier_ok
+    end subroutine add_drive_chart_term
 
     subroutine compute_mercier(equilibrium, n_theta, n_zeta, result, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
@@ -353,6 +425,12 @@ contains
         if (info /= mercier_ok) return
         call surface_values(equilibrium%mod_b, i, equilibrium, theta, zeta, &
             surface%mod_b, info)
+        if (info /= mercier_ok) return
+        call surface_values(equilibrium%g_st, i, equilibrium, theta, zeta, &
+            surface%g_st, info)
+        if (info /= mercier_ok) return
+        call surface_values(equilibrium%g_sz, i, equilibrium, theta, zeta, &
+            surface%g_sz, info)
         if (info /= mercier_ok) return
 
         surface%area_element = sqrt(max(surface%g_tt * surface%g_zz &

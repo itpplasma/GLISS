@@ -43,10 +43,10 @@ contains
         real(dp), intent(out) :: lowest
         integer, intent(out) :: info
         real(dp), allocatable :: stiffness(:, :), eigenvalues(:), work(:)
-        integer :: modes, unknowns
+        integer :: trials, unknowns
 
-        modes = size(mode_m)
-        unknowns = modes * (size(geometry) - 1)
+        trials = 2 * size(mode_m)
+        unknowns = trials * (size(geometry) - 1)
         call assemble_family_stiffness(geometry, mode_m, mode_n, &
             radial_step, stiffness, info)
         if (info /= 0) return
@@ -65,22 +65,22 @@ contains
         real(dp), allocatable, intent(out) :: stiffness(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: element(:, :)
-        integer :: modes, intervals, i, a, b, row, column
+        integer :: trials, intervals, i, a, b, row, column
 
-        modes = size(mode_m)
+        trials = 2 * size(mode_m)
         intervals = size(geometry)
-        allocate (stiffness(modes * (intervals - 1), &
-            modes * (intervals - 1)), source=0.0_dp)
-        allocate (element(2 * modes, 2 * modes))
+        allocate (stiffness(trials * (intervals - 1), &
+            trials * (intervals - 1)), source=0.0_dp)
+        allocate (element(2 * trials, 2 * trials))
         do i = 1, intervals
             call condensed_element(geometry(i), mode_m, mode_n, &
                 radial_step, element, info)
             if (info /= 0) return
-            do b = 1, 2 * modes
-                column = global_index(i, b, modes, intervals)
+            do b = 1, 2 * trials
+                column = global_index(i, b, trials, intervals)
                 if (column == 0) cycle
-                do a = 1, 2 * modes
-                    row = global_index(i, a, modes, intervals)
+                do a = 1, 2 * trials
+                    row = global_index(i, a, trials, intervals)
                     if (row == 0) cycle
                     stiffness(row, column) = stiffness(row, column) &
                         + element(a, b)
@@ -90,23 +90,23 @@ contains
         info = 0
     end subroutine assemble_family_stiffness
 
-    pure function global_index(interval, local, modes, intervals) &
+    pure function global_index(interval, local, trials, intervals) &
             result(index)
-        integer, intent(in) :: interval, local, modes, intervals
+        integer, intent(in) :: interval, local, trials, intervals
         integer :: index
-        integer :: node, mode
+        integer :: node, trial
 
-        if (local <= modes) then
+        if (local <= trials) then
             node = interval - 1
-            mode = local
+            trial = local
         else
             node = interval
-            mode = local - modes
+            trial = local - trials
         end if
         if (node == 0 .or. node == intervals) then
             index = 0
         else
-            index = (node - 1) * modes + mode
+            index = (node - 1) * trials + trial
         end if
     end function global_index
 
@@ -118,13 +118,13 @@ contains
         real(dp), intent(out) :: element(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: full(:, :)
-        integer :: modes, n_theta, n_zeta, j, l, k
+        integer :: trials, n_theta, n_zeta, j, l, k
         real(dp) :: weight
 
-        modes = size(mode_m)
+        trials = 2 * size(mode_m)
         n_theta = size(surface%fields, 1)
         n_zeta = size(surface%fields, 2)
-        allocate (full(3 * modes, 3 * modes), source=0.0_dp)
+        allocate (full(3 * trials, 3 * trials), source=0.0_dp)
         weight = 1.0_dp / real(n_theta * n_zeta, dp)
         do l = 1, n_zeta
             do j = 1, n_theta
@@ -135,7 +135,7 @@ contains
                     radial_step, weight, full)
             end do
         end do
-        call condense_tangential(full, modes, element, info)
+        call condense_tangential(full, trials, element, info)
         do k = 1, size(element, 1)
             element(:, k) = element(:, k) * radial_step
         end do
@@ -147,10 +147,11 @@ contains
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step, weight
         real(dp), intent(inout) :: full(:, :)
-        real(dp) :: rows(4, 3 * size(mode_m))
+        real(dp) :: rows(4, 6 * size(mode_m))
         real(dp) :: phase, cosine, sine
+        real(dp) :: value, dvalue, dother
         real(dp) :: c1_of(6), c2_of(6), c3_of(6)
-        integer :: modes, k, entry_index
+        integer :: trials, k, parity, trial, entry_index
         real(dp) :: unit_inputs(6)
 
         do entry_index = 1, 6
@@ -165,74 +166,92 @@ contains
                 c1_of(entry_index), c2_of(entry_index), &
                 c3_of(entry_index))
         end do
-        modes = size(mode_m)
+        trials = 2 * size(mode_m)
         rows = 0.0_dp
-        do k = 1, modes
+        do k = 1, size(mode_m)
             phase = two_pi * (real(mode_m(k), dp) * theta &
                 - real(mode_n(k), dp) * zeta)
             cosine = cos(phase)
             sine = sin(phase)
-            do entry_index = 1, 6
-                call add_linear(rows, k, modes, entry_index, cosine, &
-                    sine, mode_m(k), mode_n(k), radial_step, &
-                    c1_of(entry_index), c2_of(entry_index), &
-                    c3_of(entry_index))
+            do parity = 1, 2
+                if (parity == 1) then
+                    value = cosine
+                    dvalue = -sine
+                    dother = cosine
+                else
+                    value = sine
+                    dvalue = cosine
+                    dother = -sine
+                end if
+                trial = 2 * (k - 1) + parity
+                do entry_index = 1, 6
+                    call add_linear(rows, trial, trials, entry_index, &
+                        value, dvalue, dother, mode_m(k), mode_n(k), &
+                        radial_step, c1_of(entry_index), &
+                        c2_of(entry_index), c3_of(entry_index))
+                end do
+                rows(4, trial) = rows(4, trial) + 0.5_dp * value
+                rows(4, trials + trial) = rows(4, trials + trial) &
+                    + 0.5_dp * value
             end do
-            rows(4, k) = rows(4, k) + 0.5_dp * cosine
-            rows(4, modes + k) = rows(4, modes + k) + 0.5_dp * cosine
         end do
         call rank_updates(rows, drive, weight * abs(fields(7)), full)
     end subroutine accumulate_point
 
-    subroutine add_linear(rows, k, modes, entry_index, cosine, sine, m, &
-            n, radial_step, c1, c2, c3)
+    subroutine add_linear(rows, trial, trials, entry_index, value, &
+            dvalue, dother, m, n, radial_step, c1, c2, c3)
         real(dp), intent(inout) :: rows(:, :)
-        integer, intent(in) :: k, modes, entry_index, m, n
-        real(dp), intent(in) :: cosine, sine, radial_step, c1, c2, c3
+        integer, intent(in) :: trial, trials, entry_index, m, n
+        real(dp), intent(in) :: value, dvalue, dother, radial_step
+        real(dp), intent(in) :: c1, c2, c3
 
         select case (entry_index)
         case (1)
-            call apply(rows, k, modes, cosine * 0.5_dp, &
-                cosine * 0.5_dp, 0.0_dp, c1, c2, c3)
+            call apply(rows, trial, trials, value * 0.5_dp, &
+                value * 0.5_dp, 0.0_dp, c1, c2, c3)
         case (2)
-            call apply(rows, k, modes, -cosine / radial_step, &
-                cosine / radial_step, 0.0_dp, c1, c2, c3)
+            call apply(rows, trial, trials, -value / radial_step, &
+                value / radial_step, 0.0_dp, c1, c2, c3)
         case (3)
-            call apply(rows, k, modes, &
-                -two_pi * real(m, dp) * sine * 0.5_dp, &
-                -two_pi * real(m, dp) * sine * 0.5_dp, 0.0_dp, c1, c2, &
+            call apply(rows, trial, trials, &
+                two_pi * real(m, dp) * dvalue * 0.5_dp, &
+                two_pi * real(m, dp) * dvalue * 0.5_dp, 0.0_dp, c1, c2, &
                 c3)
         case (4)
-            call apply(rows, k, modes, &
-                two_pi * real(n, dp) * sine * 0.5_dp, &
-                two_pi * real(n, dp) * sine * 0.5_dp, 0.0_dp, c1, c2, c3)
+            call apply(rows, trial, trials, &
+                -two_pi * real(n, dp) * dvalue * 0.5_dp, &
+                -two_pi * real(n, dp) * dvalue * 0.5_dp, 0.0_dp, c1, c2, &
+                c3)
         case (5)
-            call apply(rows, k, modes, 0.0_dp, 0.0_dp, &
-                two_pi * real(m, dp) * cosine, c1, c2, c3)
+            call apply(rows, trial, trials, 0.0_dp, 0.0_dp, &
+                two_pi * real(m, dp) * dother, c1, c2, c3)
         case (6)
-            call apply(rows, k, modes, 0.0_dp, 0.0_dp, &
-                -two_pi * real(n, dp) * cosine, c1, c2, c3)
+            call apply(rows, trial, trials, 0.0_dp, 0.0_dp, &
+                -two_pi * real(n, dp) * dother, c1, c2, c3)
         end select
     end subroutine add_linear
 
-    subroutine apply(rows, k, modes, left_factor, right_factor, &
+    subroutine apply(rows, trial, trials, left_factor, right_factor, &
             tangential_factor, c1, c2, c3)
         real(dp), intent(inout) :: rows(:, :)
-        integer, intent(in) :: k, modes
+        integer, intent(in) :: trial, trials
         real(dp), intent(in) :: left_factor, right_factor
         real(dp), intent(in) :: tangential_factor, c1, c2, c3
 
-        rows(1, k) = rows(1, k) + c1 * left_factor
-        rows(1, modes + k) = rows(1, modes + k) + c1 * right_factor
-        rows(1, 2 * modes + k) = rows(1, 2 * modes + k) &
+        rows(1, trial) = rows(1, trial) + c1 * left_factor
+        rows(1, trials + trial) = rows(1, trials + trial) &
+            + c1 * right_factor
+        rows(1, 2 * trials + trial) = rows(1, 2 * trials + trial) &
             + c1 * tangential_factor
-        rows(2, k) = rows(2, k) + c2 * left_factor
-        rows(2, modes + k) = rows(2, modes + k) + c2 * right_factor
-        rows(2, 2 * modes + k) = rows(2, 2 * modes + k) &
+        rows(2, trial) = rows(2, trial) + c2 * left_factor
+        rows(2, trials + trial) = rows(2, trials + trial) &
+            + c2 * right_factor
+        rows(2, 2 * trials + trial) = rows(2, 2 * trials + trial) &
             + c2 * tangential_factor
-        rows(3, k) = rows(3, k) + c3 * left_factor
-        rows(3, modes + k) = rows(3, modes + k) + c3 * right_factor
-        rows(3, 2 * modes + k) = rows(3, 2 * modes + k) &
+        rows(3, trial) = rows(3, trial) + c3 * left_factor
+        rows(3, trials + trial) = rows(3, trials + trial) &
+            + c3 * right_factor
+        rows(3, 2 * trials + trial) = rows(3, 2 * trials + trial) &
             + c3 * tangential_factor
     end subroutine apply
 
@@ -253,18 +272,18 @@ contains
         end do
     end subroutine rank_updates
 
-    subroutine condense_tangential(full, modes, element, info)
+    subroutine condense_tangential(full, trials, element, info)
         real(dp), intent(in) :: full(:, :)
-        integer, intent(in) :: modes
+        integer, intent(in) :: trials
         real(dp), intent(out) :: element(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: yy(:, :), yx(:, :)
         integer :: two_k
 
-        two_k = 2 * modes
+        two_k = 2 * trials
         yy = full(two_k + 1:, two_k + 1:)
         yx = full(two_k + 1:, 1:two_k)
-        call dposv("U", modes, two_k, yy, modes, yx, modes, info)
+        call dposv("U", trials, two_k, yy, trials, yx, trials, info)
         if (info /= 0) return
         element = full(1:two_k, 1:two_k) &
             - matmul(full(1:two_k, two_k + 1:), yx)
