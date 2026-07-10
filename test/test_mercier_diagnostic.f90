@@ -4,8 +4,8 @@ program test_mercier_diagnostic
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use mercier_diagnostic, only: compute_mercier, mercier_ok, &
         mercier_result_t
-    use cylinder_fixture, only: create_cylinder_fixture, iota_of, &
-        b_poloidal, pressure_of, radius_of
+    use cylinder_fixture, only: b_poloidal, create_cylinder_fixture, &
+        radius_of
     implicit none
 
     integer, parameter :: ns = 33, nm = 2, nn = 3
