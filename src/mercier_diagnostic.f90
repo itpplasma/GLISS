@@ -138,6 +138,7 @@ contains
         real(dp) :: dp_dpsi, d2v_dpsi2, current_slope_ratio
         real(dp) :: integral_xi, integral_inverse, integral_bsq
         real(dp) :: integral_jb, integral_jb_squared, n_grid
+        real(dp) :: pressure_term, toroidal_term, poloidal_term
         integer :: fd_info
 
         field_periods = real(equilibrium%field_periods, dp)
@@ -181,12 +182,15 @@ contains
             - integral_bsq * integral_jb_squared) / two_pi**6
         result%d_mercier(i) = result%d_shear(i) + result%d_current(i) &
             + result%d_well(i) + result%d_geodesic(i)
-        result%force_balance_residual(i) = abs(mu0 * pressure_slope &
-            * grid_mean(surface%jacobian) &
-            + flux_slope * covariant_zeta_slope &
-            + grid_mean(surface%jacobian * surface%b_theta) &
-            * covariant_theta_slope) / max(abs(mu0 * pressure_slope &
-            * grid_mean(surface%jacobian)), tiny(1.0_dp)**0.25_dp)
+        pressure_term = mu0 * pressure_slope * grid_mean(surface%jacobian)
+        toroidal_term = flux_slope * covariant_zeta_slope
+        poloidal_term = grid_mean(surface%jacobian * surface%b_theta) &
+            * covariant_theta_slope
+        result%force_balance_residual(i) = &
+            abs(pressure_term + toroidal_term + poloidal_term) &
+            / max(abs(pressure_term) + abs(toroidal_term) &
+            + abs(poloidal_term), &
+            1.0e-14_dp * abs(flux_slope * covariant_zeta))
     end subroutine assemble_surface_terms
 
     subroutine load_surface(equilibrium, xhat_s, yhat_s, zhat_s, i, theta, &
