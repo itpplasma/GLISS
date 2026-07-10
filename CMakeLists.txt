@@ -21,6 +21,7 @@ add_library(gliss
     src/gvec_cas3d_integrals.f90
     src/gvec_cas3d_types.f90
     src/block_tridiagonal.f90
+    src/generalized_block_solver.f90
     src/eigenvalue_tracking.f90
     src/family_point_assembly.f90
     src/local_mode_model.f90
@@ -130,6 +131,11 @@ if(BUILD_TESTING)
     add_executable(test_family_assembly test/test_family_assembly.f90)
     target_link_libraries(test_family_assembly PRIVATE gliss)
     add_test(NAME family_assembly COMMAND test_family_assembly)
+
+    add_executable(test_generalized_block_solver
+        test/test_generalized_block_solver.f90)
+    target_link_libraries(test_generalized_block_solver PRIVATE gliss)
+    add_test(NAME generalized_block_solver COMMAND test_generalized_block_solver)
 
     add_executable(test_newcomb_limit test/test_newcomb_limit.f90)
     target_link_libraries(test_newcomb_limit PRIVATE gliss)

@@ -111,12 +111,11 @@ contains
         type(block_factor_t), intent(in) :: factor
         real(dp), intent(inout) :: rhs(:, :)
         integer, intent(out) :: info
-        real(dp), allocatable :: partial(:)
+        real(dp) :: partial(size(rhs, 1))
         integer :: k, nb, i
 
         k = size(matrix%diag, 1)
         nb = size(matrix%diag, 3)
-        allocate (partial(k))
         do i = 1, nb
             if (i > 1) then
                 partial = rhs(:, i - 1)
