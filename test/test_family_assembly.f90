@@ -1,13 +1,16 @@
 program test_family_assembly
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use block_tridiagonal, only: block_tridiagonal_t
+    use family_point_assembly, only: assemble_direct_surface, &
+        assemble_transformed_surface
     use family_assembly, only: assemble_family_blocks, &
         assemble_family_stiffness, family_negative_count, &
         family_assembly_options_t, iterate_family_eigenvalue, &
-        lowest_family_eigenvalue, surface_geometry_t
+        lowest_family_eigenvalue, phase_assembly_direct, &
+        phase_assembly_transformed, surface_geometry_t
     use newcomb_limit, only: cylinder_profiles_t, &
         lowest_eigenvalue_single_mode
-    use radial_space_policy, only: form_s_power_edge
+    use radial_space_policy, only: form_s_power_edge, radial_space_config_t
     implicit none
 
     real(dp), parameter :: pi = acos(-1.0_dp)
@@ -49,6 +52,7 @@ program test_family_assembly
     call check_parity_classes(geometry, step)
     call check_symmetric_decoupling(step)
     call check_field_period_phase(geometry, step)
+    call check_transformed_assembly()
     call check_radial_space_options(geometry, step)
 
     call iterate_family_eigenvalue(geometry, [1], [1], step, &
@@ -239,6 +243,184 @@ contains
         call require(info == -2, "invalid field-period count was accepted")
     end subroutine check_field_period_phase
 
+    subroutine check_transformed_assembly()
+        type(surface_geometry_t), allocatable :: shaped(:)
+        integer, parameter :: phase_radial = 8
+        real(dp) :: phase_step
+        integer :: i
+
+        phase_step = 0.5_dp / real(phase_radial, dp)
+        allocate (shaped(phase_radial))
+        do i = 1, size(shaped)
+            call symmetric_surface((real(i, dp) - 0.5_dp) * phase_step, &
+                shaped(i))
+        end do
+        call compare_phase_paths(shaped, phase_step, 1, [1, 2], [1, -1])
+        call compare_phase_paths(shaped, phase_step, 3, [1, 2, 3, 4], &
+            [1, -1, 4, -4])
+        call compare_phase_paths(shaped, phase_step, 4, [1, 2, 3, 4], &
+            [1, -1, 5, -5])
+        call compare_phase_paths(shaped, phase_step, 4, [1, 2, 3, 4], &
+            [2, -2, 6, -6])
+        call check_uncondensed_phase_transform(shaped, phase_step)
+        call check_phase_path_derivative(shaped, phase_step)
+    end subroutine check_transformed_assembly
+
+    subroutine compare_phase_paths(geometry, step, periods, mode_m, mode_n)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step
+        integer, intent(in) :: periods, mode_m(:), mode_n(:)
+        type(family_assembly_options_t) :: direct, transformed
+        real(dp), allocatable :: direct_matrix(:, :), transformed_matrix(:, :)
+        real(dp) :: scale
+        integer :: info, direct_count, transformed_count
+
+        direct%field_periods = periods
+        direct%phase_assembly = phase_assembly_direct
+        transformed = direct
+        transformed%phase_assembly = phase_assembly_transformed
+        call assemble_family_stiffness(geometry, mode_m, mode_n, step, &
+            direct_matrix, info, direct)
+        call require(info == 0, "direct phase assembly failed")
+        call assemble_family_stiffness(geometry, mode_m, mode_n, step, &
+            transformed_matrix, info, transformed)
+        call require(info == 0, "transformed phase assembly failed")
+        scale = max(1.0_dp, maxval(abs(direct_matrix)))
+        call require(maxval(abs(direct_matrix - transformed_matrix)) &
+            < 2.0e-11_dp * scale, &
+            "one-period transform differs from the direct-period oracle")
+        call require(maxval(abs(transformed_matrix &
+            - transpose(transformed_matrix))) < 1.0e-12_dp * scale, &
+            "one-period phase transform breaks symmetry")
+        call family_negative_count(geometry, mode_m, mode_n, step, 0.0_dp, &
+            direct_count, info, direct)
+        call require(info == 0, "direct phase inertia failed")
+        call family_negative_count(geometry, mode_m, mode_n, step, 0.0_dp, &
+            transformed_count, info, transformed)
+        call require(info == 0, "transformed phase inertia failed")
+        call require(direct_count == transformed_count, &
+            "phase transform changes matrix inertia")
+    end subroutine compare_phase_paths
+
+    subroutine check_uncondensed_phase_transform(geometry, step)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step
+        integer, parameter :: periods = 3, trials = 8
+        integer, parameter :: trial_m(trials) = [1, 1, 2, 2, 3, 3, 4, 4]
+        integer, parameter :: trial_n(trials) = [1, 1, -1, -1, 4, 4, -4, -4]
+        integer, parameter :: parity(trials) = [1, 2, 1, 2, 1, 2, 1, 2]
+        type(radial_space_config_t) :: radial_space
+        real(dp) :: fields(1, 1, 13), drive(1, 1)
+        real(dp) :: short_fields(1, 1, 12)
+        real(dp) :: direct(3 * trials, 3 * trials)
+        real(dp) :: transformed(3 * trials, 3 * trials), scale
+        integer :: bad_parity(trials)
+        integer :: info, surface
+
+        surface = size(geometry) / 2
+        fields(1, 1, :) = geometry(surface)%fields(2, 3, :)
+        drive(1, 1) = geometry(surface)%drive(2, 3)
+        direct = 0.0_dp
+        transformed = 0.0_dp
+        call assemble_direct_surface(fields, drive, trial_m, trial_n, parity, &
+            periods, radial_space, 0.25_dp, step, direct, info)
+        call require(info == 0, "uncondensed direct assembly failed")
+        call assemble_transformed_surface(fields, drive, trial_m, trial_n, &
+            parity, periods, radial_space, 0.25_dp, step, transformed, info)
+        call require(info == 0, "uncondensed transformed assembly failed")
+        scale = max(1.0_dp, maxval(abs(direct)))
+        call require(maxval(abs(direct - transformed)) < 2.0e-12_dp * scale, &
+            "uncondensed phase transform differs from the direct oracle")
+        call assemble_transformed_surface(fields, drive, trial_m, trial_n, &
+            parity, 0, radial_space, 0.25_dp, step, transformed, info)
+        call require(info == -1, "zero surface period count was accepted")
+        bad_parity = parity
+        bad_parity(1) = 0
+        call assemble_transformed_surface(fields, drive, trial_m, trial_n, &
+            bad_parity, periods, radial_space, 0.25_dp, step, transformed, &
+            info)
+        call require(info == -1, "invalid surface parity was accepted")
+        short_fields = fields(:, :, 1:12)
+        call assemble_transformed_surface(short_fields, drive, trial_m, &
+            trial_n, parity, periods, radial_space, 0.25_dp, step, &
+            transformed, info)
+        call require(info == -1, "short surface field array was accepted")
+    end subroutine check_uncondensed_phase_transform
+
+    subroutine check_phase_path_derivative(geometry, step)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step
+        type(surface_geometry_t), allocatable :: plus(:), minus(:)
+        type(family_assembly_options_t) :: direct, transformed
+        real(dp), allocatable :: direct_plus(:, :), direct_minus(:, :)
+        real(dp), allocatable :: transformed_plus(:, :), transformed_minus(:, :)
+        real(dp), allocatable :: direct_derivative(:, :)
+        real(dp), allocatable :: transformed_derivative(:, :)
+        real(dp), parameter :: perturbation = 1.0e-3_dp
+        real(dp) :: angle, difference, direction, scale
+        integer :: info, surface, j, l, field
+
+        plus = geometry
+        minus = geometry
+        do surface = 1, size(geometry)
+            do l = 1, size(geometry(surface)%fields, 2)
+                do j = 1, size(geometry(surface)%fields, 1)
+                    angle = 2.0_dp * pi * (real(j - 1, dp) &
+                        / real(size(geometry(surface)%fields, 1), dp) &
+                        - real(l - 1, dp) &
+                        / real(size(geometry(surface)%fields, 2), dp))
+                    do field = 1, 13
+                        direction = 0.05_dp * real(field, dp) / 13.0_dp &
+                            * max(1.0_dp, &
+                            abs(geometry(surface)%fields(j, l, field))) &
+                            * (1.0_dp + 0.1_dp * cos(angle))
+                        plus(surface)%fields(j, l, field) = &
+                            plus(surface)%fields(j, l, field) &
+                            + perturbation * direction
+                        minus(surface)%fields(j, l, field) = &
+                            minus(surface)%fields(j, l, field) &
+                            - perturbation * direction
+                    end do
+                    direction = max(1.0_dp, &
+                        abs(geometry(surface)%drive(j, l))) &
+                        * (0.03_dp + 0.01_dp * sin(angle))
+                    plus(surface)%drive(j, l) = plus(surface)%drive(j, l) &
+                        + perturbation * direction
+                    minus(surface)%drive(j, l) = minus(surface)%drive(j, l) &
+                        - perturbation * direction
+                end do
+            end do
+        end do
+        direct%field_periods = 3
+        direct%phase_assembly = phase_assembly_direct
+        transformed = direct
+        transformed%phase_assembly = phase_assembly_transformed
+        call assemble_family_stiffness(plus, [1, 2], [1, -1], step, &
+            direct_plus, info, direct)
+        call require(info == 0, "direct positive perturbation failed")
+        call assemble_family_stiffness(minus, [1, 2], [1, -1], step, &
+            direct_minus, info, direct)
+        call require(info == 0, "direct negative perturbation failed")
+        call assemble_family_stiffness(plus, [1, 2], [1, -1], step, &
+            transformed_plus, info, transformed)
+        call require(info == 0, "transformed positive perturbation failed")
+        call assemble_family_stiffness(minus, [1, 2], [1, -1], step, &
+            transformed_minus, info, transformed)
+        call require(info == 0, "transformed negative perturbation failed")
+        direct_derivative = (direct_plus - direct_minus) &
+            / (2.0_dp * perturbation)
+        transformed_derivative = (transformed_plus - transformed_minus) &
+            / (2.0_dp * perturbation)
+        scale = max(1.0_dp, maxval(abs(direct_derivative)))
+        difference = maxval(abs(direct_derivative - transformed_derivative))
+        if (difference >= 2.0e-8_dp * scale) then
+            write (error_unit, "(a,2es24.16)") &
+                "phase derivative difference and scale ", difference, scale
+        end if
+        call require(difference < 2.0e-8_dp * scale, &
+            "phase transform changes the continuous-input derivative")
+    end subroutine check_phase_path_derivative
+
     subroutine check_radial_space_options(geometry, step)
         type(surface_geometry_t), intent(in) :: geometry(:)
         real(dp), intent(in) :: step
@@ -269,6 +451,11 @@ contains
         call assemble_family_stiffness(geometry, [2], [1], step, &
             weighted, info, options)
         call require(info == -2, "unsupported radial space was accepted")
+        options%radial_space%normal_degree = 1
+        options%phase_assembly = 0
+        call assemble_family_stiffness(geometry, [2], [1], step, &
+            weighted, info, options)
+        call require(info == -2, "unsupported phase assembly was accepted")
     end subroutine check_radial_space_options
 
     subroutine symmetric_surface(radius, surface)

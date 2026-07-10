@@ -22,6 +22,7 @@ add_library(gliss
     src/gvec_cas3d_types.f90
     src/block_tridiagonal.f90
     src/eigenvalue_tracking.f90
+    src/family_point_assembly.f90
     src/local_mode_model.f90
     src/nonuniform_derivative.f90
     src/mode_topology.f90
@@ -175,7 +176,8 @@ if(BUILD_TESTING)
 
     add_executable(test_suydam_marginal test/test_suydam_marginal.f90)
     target_link_libraries(test_suydam_marginal PRIVATE gliss_test_support)
-    add_test(NAME suydam_marginal COMMAND test_suydam_marginal)
+    add_test(NAME suydam_marginal_m4 COMMAND test_suydam_marginal 4)
+    add_test(NAME suydam_marginal_m6 COMMAND test_suydam_marginal 6)
 
     add_executable(test_eigenvalue_tracking
         test/test_eigenvalue_tracking.f90)
@@ -189,16 +191,13 @@ if(GLISS_ENABLE_ENZYME)
     add_enzyme_fortran_test(enzyme_drive_gradient
         SOURCES
             src/local_mode_model.f90
-    src/nonuniform_derivative.f90
-    src/mode_topology.f90
-    src/phase_factor_topology.f90
-    src/radial_space_policy.f90
-    src/terpsichore_topology.f90
-    src/two_component_kernel.f90
-    src/newcomb_limit.f90
-    src/block_tridiagonal.f90
-    src/family_assembly.f90
-    src/field_profile_identities.f90
-    src/mercier_diagnostic.f90
             test/enzyme_drive_gradient.f90)
+    add_enzyme_fortran_test(enzyme_phase_assembly_gradient
+        SOURCES
+            src/phase_factor_topology.f90
+            src/radial_space_policy.f90
+            src/two_component_kernel.f90
+            src/family_point_assembly.f90
+            test/enzyme_phase_fixture.f90
+            test/enzyme_phase_assembly_gradient.f90)
 endif()

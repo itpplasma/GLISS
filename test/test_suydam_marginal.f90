@@ -20,32 +20,35 @@ program test_suydam_marginal
     real(dp), parameter :: threshold = -1.0e-8_dp
     integer, parameter :: n_theta = 32, n_zeta = 32
     integer, parameter :: resolutions(3) = [96, 192, 384]
-    character(len=*), parameter :: fixture = "suydam_marginal.nc"
-    real(dp) :: boundary(3, 2)
-    integer :: modes(2), level, which
+    character(len=32) :: fixture
+    character(len=16) :: mode_argument
+    real(dp) :: boundary(3)
+    integer :: mode, level, status
     logical :: ok
 
-    modes = [4, 6]
-    do which = 1, 2
-        do level = 1, 3
-            call bisect_marginal(modes(which), resolutions(level), &
-                boundary(level, which), ok)
-            call require(ok, "no stability transition bracketed")
-        end do
-        write (error_unit, "(a, i0, a, 3f10.6)") "m=", modes(which), &
-            " boundaries ", boundary(:, which)
-    end do
+    call get_command_argument(1, mode_argument, status=status)
+    call require(status == 0, "mode argument is unavailable")
+    call require(len_trim(mode_argument) > 0, "mode argument is missing")
+    read (mode_argument, *, iostat=status) mode
+    call require(status == 0, "mode argument is invalid")
+    call require(mode == 4 .or. mode == 6, "mode argument is unsupported")
+    write (fixture, "('suydam_marginal_',i0,'.nc')") mode
 
-    do which = 1, 2
-        call require(boundary(1, which) > boundary(2, which) .and. &
-            boundary(2, which) > boundary(3, which), &
-            "the discrete boundary does not decrease under refinement")
-        call require(boundary(3, which) > kappa_star, &
-            "the discrete boundary undershoots the Suydam threshold")
-        call require(boundary(3, which) - kappa_star < 0.75_dp * &
-            (boundary(1, which) - kappa_star), &
-            "the boundary does not contract toward the threshold")
+    do level = 1, 3
+        call bisect_marginal(mode, resolutions(level), boundary(level), ok)
+        call require(ok, "no stability transition bracketed")
     end do
+    write (error_unit, "(a, i0, a, 3f10.6)") "m=", mode, &
+        " boundaries ", boundary
+
+    call require(boundary(1) > boundary(2) .and. &
+        boundary(2) > boundary(3), &
+        "the discrete boundary does not decrease under refinement")
+    call require(boundary(3) > kappa_star, &
+        "the discrete boundary undershoots the Suydam threshold")
+    call require(boundary(3) - kappa_star < 0.75_dp * &
+        (boundary(1) - kappa_star), &
+        "the boundary does not contract toward the threshold")
     write (*, "(a)") "PASS"
 
 contains

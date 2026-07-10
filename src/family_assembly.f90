@@ -3,13 +3,16 @@ module family_assembly
     use block_tridiagonal, only: apply_block_tridiagonal, &
         block_factor_t, block_tridiagonal_t, factorize_shifted, &
         solve_factored
-    use radial_space_policy, only: evaluate_normal_basis, &
-        radial_space_config_t, radial_space_ok, validate_radial_space
-    use two_component_kernel, only: two_component_components
+    use family_point_assembly, only: assemble_direct_surface, &
+        assemble_transformed_surface
+    use radial_space_policy, only: radial_space_config_t, radial_space_ok, &
+        validate_radial_space
     implicit none
     private
 
     real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
+    integer, parameter, public :: phase_assembly_transformed = 1
+    integer, parameter, public :: phase_assembly_direct = 2
 
     type, public :: surface_geometry_t
         real(dp), allocatable :: fields(:, :, :)
@@ -19,6 +22,7 @@ module family_assembly
     type, public :: family_assembly_options_t
         integer :: field_periods = 1
         integer :: parity_class = 0
+        integer :: phase_assembly = phase_assembly_transformed
         type(radial_space_config_t) :: radial_space
     end type family_assembly_options_t
 
@@ -83,9 +87,11 @@ contains
         real(dp), allocatable :: element(:, :)
         integer, allocatable :: trial_m(:), trial_n(:), trial_parity(:)
         integer :: trials, intervals, nodes, i, periods, selector
+        integer :: phase_assembly
         type(radial_space_config_t) :: radial_space
 
-        call resolve_options(options, periods, selector, radial_space, info)
+        call resolve_options(options, periods, selector, phase_assembly, &
+            radial_space, info)
         if (info /= 0) return
         call build_trial_tables(mode_m, mode_n, selector, trial_m, &
             trial_n, trial_parity)
@@ -97,7 +103,7 @@ contains
         allocate (element(2 * trials, 2 * trials))
         do i = 1, intervals
             call condensed_element(geometry(i), trial_m, trial_n, &
-                trial_parity, periods, radial_space, &
+                trial_parity, periods, phase_assembly, radial_space, &
                 (real(i, dp) - 0.5_dp) * radial_step, radial_step, &
                 element, info)
             if (info /= 0) return
@@ -208,9 +214,11 @@ contains
         real(dp), allocatable :: element(:, :)
         integer, allocatable :: trial_m(:), trial_n(:), trial_parity(:)
         integer :: trials, intervals, i, a, b, row, column, periods, selector
+        integer :: phase_assembly
         type(radial_space_config_t) :: radial_space
 
-        call resolve_options(options, periods, selector, radial_space, info)
+        call resolve_options(options, periods, selector, phase_assembly, &
+            radial_space, info)
         if (info /= 0) return
         call build_trial_tables(mode_m, mode_n, selector, trial_m, &
             trial_n, trial_parity)
@@ -221,7 +229,7 @@ contains
         allocate (element(2 * trials, 2 * trials))
         do i = 1, intervals
             call condensed_element(geometry(i), trial_m, trial_n, &
-                trial_parity, periods, radial_space, &
+                trial_parity, periods, phase_assembly, radial_space, &
                 (real(i, dp) - 0.5_dp) * radial_step, radial_step, &
                 element, info)
             if (info /= 0) return
@@ -239,22 +247,26 @@ contains
         info = 0
     end subroutine assemble_family_stiffness
 
-    pure subroutine resolve_options(options, periods, selector, radial_space, &
-            info)
+    pure subroutine resolve_options(options, periods, selector, &
+            phase_assembly, radial_space, info)
         type(family_assembly_options_t), intent(in), optional :: options
         type(radial_space_config_t), intent(out) :: radial_space
-        integer, intent(out) :: periods, selector, info
+        integer, intent(out) :: periods, selector, phase_assembly, info
 
         periods = 1
         selector = 0
+        phase_assembly = phase_assembly_transformed
         if (present(options)) then
             periods = options%field_periods
             selector = options%parity_class
+            phase_assembly = options%phase_assembly
             radial_space = options%radial_space
         end if
         info = -2
         if (periods < 1) return
         if (selector < 0 .or. selector > 2) return
+        if (phase_assembly /= phase_assembly_transformed .and. &
+            phase_assembly /= phase_assembly_direct) return
         call validate_radial_space(radial_space, info)
         if (info /= radial_space_ok) then
             info = -2
@@ -309,187 +321,35 @@ contains
     end function global_index
 
     subroutine condensed_element(surface, trial_m, trial_n, &
-            trial_parity, field_periods, radial_space, radial_coordinate, &
-            radial_step, element, info)
+            trial_parity, field_periods, phase_assembly, radial_space, &
+            radial_coordinate, radial_step, element, info)
         type(surface_geometry_t), intent(in) :: surface
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
-        integer, intent(in) :: field_periods
+        integer, intent(in) :: field_periods, phase_assembly
         type(radial_space_config_t), intent(in) :: radial_space
         real(dp), intent(in) :: radial_coordinate, radial_step
         real(dp), intent(out) :: element(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: full(:, :)
-        integer :: trials, n_theta, n_zeta, j, l, k, period
-        real(dp) :: weight
+        integer :: trials, k
 
         trials = size(trial_m)
-        n_theta = size(surface%fields, 1)
-        n_zeta = size(surface%fields, 2)
         allocate (full(3 * trials, 3 * trials), source=0.0_dp)
-        weight = 1.0_dp / real(n_theta * n_zeta * field_periods, dp)
-        do period = 0, field_periods - 1
-            do l = 1, n_zeta
-                do j = 1, n_theta
-                    call accumulate_point(surface%fields(j, l, :), &
-                        surface%drive(j, l), trial_m, trial_n, &
-                        trial_parity, field_periods, radial_space, &
-                        radial_coordinate, &
-                        (real(j, dp) - 1.0_dp) / real(n_theta, dp), &
-                        (real(l, dp) - 1.0_dp) / real(n_zeta, dp) &
-                        + real(period, dp), radial_step, weight, full, info)
-                    if (info /= 0) return
-                end do
-            end do
-        end do
+        if (phase_assembly == phase_assembly_direct) then
+            call assemble_direct_surface(surface%fields, surface%drive, &
+                trial_m, trial_n, trial_parity, field_periods, radial_space, &
+                radial_coordinate, radial_step, full, info)
+        else
+            call assemble_transformed_surface(surface%fields, surface%drive, &
+                trial_m, trial_n, trial_parity, field_periods, radial_space, &
+                radial_coordinate, radial_step, full, info)
+        end if
+        if (info /= 0) return
         call condense_tangential(full, trials, element, info)
         do k = 1, size(element, 1)
             element(:, k) = element(:, k) * radial_step
         end do
     end subroutine condensed_element
-
-    subroutine accumulate_point(fields, drive, trial_m, trial_n, &
-            trial_parity, field_periods, radial_space, radial_coordinate, &
-            theta, zeta, radial_step, weight, full, info)
-        real(dp), intent(in) :: fields(:), drive, theta, zeta
-        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
-        integer, intent(in) :: field_periods
-        type(radial_space_config_t), intent(in) :: radial_space
-        real(dp), intent(in) :: radial_coordinate
-        real(dp), intent(in) :: radial_step, weight
-        real(dp), intent(inout) :: full(:, :)
-        integer, intent(out) :: info
-        real(dp) :: rows(4, 3 * size(trial_m))
-        real(dp) :: phase, cosine, sine, toroidal_wave
-        real(dp) :: value, dvalue, dother
-        real(dp) :: normal_values(2), normal_derivatives(2)
-        real(dp) :: c1_of(6), c2_of(6), c3_of(6)
-        integer :: trials, trial, entry_index
-        real(dp) :: unit_inputs(6)
-
-        do entry_index = 1, 6
-            unit_inputs = 0.0_dp
-            unit_inputs(entry_index) = 1.0_dp
-            call two_component_components(fields(1), fields(2), &
-                fields(3), fields(4), fields(5), fields(6), &
-                fields(7), fields(8), fields(9), fields(10), &
-                fields(11), fields(12), fields(13), &
-                unit_inputs(1), unit_inputs(2), unit_inputs(3), &
-                unit_inputs(4), unit_inputs(5), unit_inputs(6), &
-                c1_of(entry_index), c2_of(entry_index), &
-                c3_of(entry_index))
-        end do
-        trials = size(trial_m)
-        rows = 0.0_dp
-        do trial = 1, trials
-            call evaluate_normal_basis(radial_space, trial_m(trial), &
-                radial_coordinate, radial_step, 0.5_dp, normal_values, &
-                normal_derivatives, info)
-            if (info /= radial_space_ok) return
-            toroidal_wave = real(trial_n(trial), dp) &
-                / real(field_periods, dp)
-            phase = two_pi * (real(trial_m(trial), dp) * theta &
-                - toroidal_wave * zeta)
-            cosine = cos(phase)
-            sine = sin(phase)
-            if (trial_parity(trial) == 1) then
-                value = cosine
-                dvalue = -sine
-                dother = cosine
-            else
-                value = sine
-                dvalue = cosine
-                dother = -sine
-            end if
-            do entry_index = 1, 6
-                call add_linear(rows, trial, trials, entry_index, &
-                    value, dvalue, dother, trial_m(trial), &
-                    toroidal_wave, normal_values, normal_derivatives, &
-                    c1_of(entry_index), &
-                    c2_of(entry_index), c3_of(entry_index))
-            end do
-            rows(4, trial) = rows(4, trial) + normal_values(1) * value
-            rows(4, trials + trial) = rows(4, trials + trial) &
-                + normal_values(2) * value
-        end do
-        call rank_updates(rows, drive, weight * abs(fields(7)), full)
-        info = 0
-    end subroutine accumulate_point
-
-    subroutine add_linear(rows, trial, trials, entry_index, value, &
-            dvalue, dother, m, toroidal_wave, normal_values, &
-            normal_derivatives, c1, c2, c3)
-        real(dp), intent(inout) :: rows(:, :)
-        integer, intent(in) :: trial, trials, entry_index, m
-        real(dp), intent(in) :: value, dvalue, dother, toroidal_wave
-        real(dp), intent(in) :: normal_values(2), normal_derivatives(2)
-        real(dp), intent(in) :: c1, c2, c3
-
-        select case (entry_index)
-        case (1)
-            call apply(rows, trial, trials, value * normal_values(1), &
-                value * normal_values(2), 0.0_dp, c1, c2, c3)
-        case (2)
-            call apply(rows, trial, trials, value * normal_derivatives(1), &
-                value * normal_derivatives(2), 0.0_dp, c1, c2, c3)
-        case (3)
-            call apply(rows, trial, trials, &
-                two_pi * real(m, dp) * dvalue * normal_values(1), &
-                two_pi * real(m, dp) * dvalue * normal_values(2), 0.0_dp, &
-                c1, c2, c3)
-        case (4)
-            call apply(rows, trial, trials, &
-                -two_pi * toroidal_wave * dvalue * normal_values(1), &
-                -two_pi * toroidal_wave * dvalue * normal_values(2), &
-                0.0_dp, c1, c2, c3)
-        case (5)
-            call apply(rows, trial, trials, 0.0_dp, 0.0_dp, &
-                two_pi * real(m, dp) * dother, c1, c2, c3)
-        case (6)
-            call apply(rows, trial, trials, 0.0_dp, 0.0_dp, &
-                -two_pi * toroidal_wave * dother, c1, c2, c3)
-        end select
-    end subroutine add_linear
-
-    subroutine apply(rows, trial, trials, left_factor, right_factor, &
-            tangential_factor, c1, c2, c3)
-        real(dp), intent(inout) :: rows(:, :)
-        integer, intent(in) :: trial, trials
-        real(dp), intent(in) :: left_factor, right_factor
-        real(dp), intent(in) :: tangential_factor, c1, c2, c3
-
-        rows(1, trial) = rows(1, trial) + c1 * left_factor
-        rows(1, trials + trial) = rows(1, trials + trial) &
-            + c1 * right_factor
-        rows(1, 2 * trials + trial) = rows(1, 2 * trials + trial) &
-            + c1 * tangential_factor
-        rows(2, trial) = rows(2, trial) + c2 * left_factor
-        rows(2, trials + trial) = rows(2, trials + trial) &
-            + c2 * right_factor
-        rows(2, 2 * trials + trial) = rows(2, 2 * trials + trial) &
-            + c2 * tangential_factor
-        rows(3, trial) = rows(3, trial) + c3 * left_factor
-        rows(3, trials + trial) = rows(3, trials + trial) &
-            + c3 * right_factor
-        rows(3, 2 * trials + trial) = rows(3, 2 * trials + trial) &
-            + c3 * tangential_factor
-    end subroutine apply
-
-    subroutine rank_updates(rows, drive, weight, full)
-        real(dp), intent(in) :: rows(:, :), drive, weight
-        real(dp), intent(inout) :: full(:, :)
-        integer :: a, b, component
-
-        do b = 1, size(full, 2)
-            do a = 1, size(full, 1)
-                do component = 1, 3
-                    full(a, b) = full(a, b) + weight &
-                        * rows(component, a) * rows(component, b)
-                end do
-                full(a, b) = full(a, b) - weight * drive &
-                    * rows(4, a) * rows(4, b)
-            end do
-        end do
-    end subroutine rank_updates
 
     subroutine condense_tangential(full, trials, element, info)
         real(dp), intent(in) :: full(:, :)
