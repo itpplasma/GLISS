@@ -14,13 +14,14 @@ contains
 
     subroutine certified_lowest_eigenvalue(geometry, mode_m, mode_n, &
             radial_step, eigenvalue, certificate_width, info, &
-            options)
+            options, normal_stored_power)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step
         real(dp), intent(out) :: eigenvalue, certificate_width
         integer, intent(out) :: info
         type(family_assembly_options_t), intent(in), optional :: options
+        real(dp), intent(in), optional :: normal_stored_power(:)
         type(block_tridiagonal_t) :: blocks
         real(dp) :: lower, upper, mid, scale, rayleigh, width
         real(dp) :: floor_local, window
@@ -29,7 +30,7 @@ contains
         logical :: at_floor, try_iterate
 
         call assemble_family_blocks(geometry, mode_m, mode_n, &
-            radial_step, blocks, info, options)
+            radial_step, blocks, info, options, normal_stored_power)
         if (info /= 0) return
         call gershgorin_bounds(blocks, radial_step, lower, upper)
         scale = max(1.0_dp, abs(lower), abs(upper))

@@ -11,7 +11,7 @@ module terpsichore_topology
 
     type, public :: terpsichore_topology_config_t
         integer :: equilibrium_periods = 0
-        integer :: stability_periods = 0
+        integer :: field_periods_per_stability_period = 0
         integer :: poloidal_shift = 0
         real(dp) :: parfac = 0.0_dp
         real(dp) :: qn = 0.0_dp
@@ -47,7 +47,8 @@ contains
         if (.not. allocated(mask%selected)) return
         selected_count = count(mask%selected)
         if (selected_count == 0) return
-        ratio = config%equilibrium_periods / config%stability_periods
+        ratio = config%equilibrium_periods &
+            / config%field_periods_per_stability_period
         selection%field_periods = config%equilibrium_periods
         selection%parity_class = parity_from(config%parfac)
         allocate (selection%poloidal(selected_count), &
@@ -79,13 +80,12 @@ contains
         real(dp), parameter :: tolerance = 64.0_dp * epsilon(1.0_dp)
 
         valid = config%equilibrium_periods > 0
-        valid = valid .and. config%stability_periods > 0
+        valid = valid .and. config%field_periods_per_stability_period > 0
         if (.not. valid) return
         valid = mod(config%equilibrium_periods, &
-            config%stability_periods) == 0
+            config%field_periods_per_stability_period) == 0
         valid = valid .and. ieee_is_finite(config%parfac)
         valid = valid .and. ieee_is_finite(config%qn)
-        valid = valid .and. config%qn >= 0.0_dp
         valid = valid .and. (abs(config%parfac) <= tolerance .or. &
             abs(config%parfac - 0.5_dp) <= tolerance)
     end function valid_config

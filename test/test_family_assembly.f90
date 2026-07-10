@@ -10,7 +10,11 @@ program test_family_assembly
         phase_assembly_transformed, surface_geometry_t
     use newcomb_limit, only: cylinder_profiles_t, &
         lowest_eigenvalue_single_mode
+    use mode_topology, only: build_mode_family, mode_family_t
     use radial_space_policy, only: form_s_power_edge, radial_space_config_t
+    use terpsichore_topology, only: convert_terpsichore_mask, &
+        terpsichore_mode_mask_t, terpsichore_mode_selection_t, &
+        terpsichore_topology_config_t, terpsichore_topology_ok
     implicit none
 
     real(dp), parameter :: pi = acos(-1.0_dp)
@@ -53,6 +57,7 @@ program test_family_assembly
     call check_symmetric_decoupling(step)
     call check_field_period_phase(geometry, step)
     call check_transformed_assembly()
+    call check_terpsichore_selection_equivalence(geometry, step)
     call check_radial_space_options(geometry, step)
 
     call iterate_family_eigenvalue(geometry, [1], [1], step, &
@@ -314,38 +319,322 @@ contains
         real(dp) :: short_fields(1, 1, 12)
         real(dp) :: direct(3 * trials, 3 * trials)
         real(dp) :: transformed(3 * trials, 3 * trials), scale
+        real(dp) :: zero_power_matrix(3 * trials, 3 * trials)
+        real(dp) :: stored_power(trials)
         integer :: bad_parity(trials)
         integer :: info, surface
 
         surface = size(geometry) / 2
         fields(1, 1, :) = geometry(surface)%fields(2, 3, :)
         drive(1, 1) = geometry(surface)%drive(2, 3)
+        stored_power = 0.0_dp
+        stored_power(1:2) = 0.25_dp
         direct = 0.0_dp
         transformed = 0.0_dp
         call assemble_direct_surface(fields, drive, trial_m, trial_n, parity, &
-            periods, radial_space, 0.25_dp, step, direct, info)
+            periods, radial_space, 0.25_dp, step, direct, info, stored_power)
         call require(info == 0, "uncondensed direct assembly failed")
         call assemble_transformed_surface(fields, drive, trial_m, trial_n, &
-            parity, periods, radial_space, 0.25_dp, step, transformed, info)
+            parity, periods, radial_space, 0.25_dp, step, transformed, info, &
+            stored_power)
         call require(info == 0, "uncondensed transformed assembly failed")
         scale = max(1.0_dp, maxval(abs(direct)))
         call require(maxval(abs(direct - transformed)) < 2.0e-12_dp * scale, &
             "uncondensed phase transform differs from the direct oracle")
+        zero_power_matrix = 0.0_dp
         call assemble_transformed_surface(fields, drive, trial_m, trial_n, &
-            parity, 0, radial_space, 0.25_dp, step, transformed, info)
+            parity, periods, radial_space, 0.25_dp, step, zero_power_matrix, &
+            info)
+        call require(info == 0, "zero-power surface assembly failed")
+        call require(maxval(abs(transformed - zero_power_matrix)) &
+            > 1.0e-8_dp * scale, &
+            "stored normal power does not change the assembled operator")
+        call assemble_transformed_surface(fields, drive, trial_m, trial_n, &
+            parity, 0, radial_space, 0.25_dp, step, transformed, info, &
+            stored_power)
         call require(info == -1, "zero surface period count was accepted")
         bad_parity = parity
         bad_parity(1) = 0
         call assemble_transformed_surface(fields, drive, trial_m, trial_n, &
             bad_parity, periods, radial_space, 0.25_dp, step, transformed, &
-            info)
+            info, stored_power)
         call require(info == -1, "invalid surface parity was accepted")
+        call assemble_transformed_surface(fields, drive, trial_m, trial_n, &
+            parity, periods, radial_space, 0.25_dp, step, transformed, info, &
+            stored_power(1:trials - 1))
+        call require(info == -1, "mis-sized stored-power table was accepted")
         short_fields = fields(:, :, 1:12)
         call assemble_transformed_surface(short_fields, drive, trial_m, &
             trial_n, parity, periods, radial_space, 0.25_dp, step, &
-            transformed, info)
+            transformed, info, stored_power)
         call require(info == -1, "short surface field array was accepted")
     end subroutine check_uncondensed_phase_transform
+
+    subroutine check_terpsichore_selection_equivalence(geometry, step)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step
+        integer, parameter :: modes = 5, surfaces = 8
+        type(mode_family_t) :: family
+        type(terpsichore_mode_selection_t) :: selection
+        type(surface_geometry_t), allocatable :: shaped(:)
+        real(dp) :: rectangular_power(modes)
+        integer :: permutation(modes), i
+
+        call build_comparison_selection(family, selection, rectangular_power, &
+            permutation)
+        allocate (shaped(surfaces))
+        do i = 1, surfaces
+            call coupled_surface((real(i, dp) - 0.5_dp) * step, shaped(i))
+        end do
+        call check_selection_stiffness(shaped, step, family, selection, &
+            rectangular_power, permutation)
+        call check_selection_blocks(shaped, step, family, selection, &
+            rectangular_power, permutation)
+        call check_selection_surface(shaped(4), step, family, selection, &
+            rectangular_power, permutation)
+        call check_family_input_validation(geometry, step)
+    end subroutine check_terpsichore_selection_equivalence
+
+    subroutine build_comparison_selection(family, selection, power, &
+            permutation)
+        type(mode_family_t), intent(out) :: family
+        type(terpsichore_mode_selection_t), intent(out) :: selection
+        real(dp), intent(out) :: power(:)
+        integer, intent(out) :: permutation(:)
+        type(terpsichore_topology_config_t) :: config
+        type(terpsichore_mode_mask_t) :: mask
+        integer :: info, i
+
+        call build_mode_family(3, 1, 2, 1, family, info)
+        call require(info == 0, "rectangular comparison family failed")
+        config%equilibrium_periods = 3
+        config%field_periods_per_stability_period = 3
+        config%parfac = 0.0_dp
+        config%qn = 0.25_dp
+        mask%poloidal_min = 0
+        mask%toroidal_min = -1
+        allocate (mask%selected(3, 3), source=.false.)
+        mask%selected(2:3, 1) = .true.
+        mask%selected(1:3, 3) = .true.
+        call convert_terpsichore_mask(config, mask, selection, info)
+        call require(info == terpsichore_topology_ok, &
+            "ragged comparison selection failed")
+        call require(size(family%poloidal) == size(power), &
+            "rectangular comparison family has the wrong size")
+        call require(selection%field_periods == family%field_periods, &
+            "ragged and rectangular period counts differ")
+        power = 0.0_dp
+        where (family%poloidal == 1) power = config%qn
+        do i = 1, size(power)
+            permutation(i) = find_mode(selection%poloidal, &
+                selection%toroidal, family%poloidal(i), family%toroidal(i))
+            call require(permutation(i) > 0, &
+                "ragged selection is missing a rectangular mode")
+        end do
+        do i = 1, size(power)
+            call require(count(permutation == i) == 1, &
+                "ragged comparison mode is duplicated")
+        end do
+    end subroutine build_comparison_selection
+
+    subroutine check_selection_stiffness(geometry, step, family, selection, &
+            power, permutation)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step, power(:)
+        type(mode_family_t), intent(in) :: family
+        type(terpsichore_mode_selection_t), intent(in) :: selection
+        integer, intent(in) :: permutation(:)
+        type(family_assembly_options_t) :: options
+        real(dp), allocatable :: rectangular(:, :), ragged(:, :), zero(:, :)
+        real(dp), allocatable :: explicit_zero(:, :), negative(:, :)
+        real(dp) :: negative_power(size(power)), scale
+        integer :: info
+
+        options%field_periods = family%field_periods
+        options%parity_class = selection%parity_class
+        call assemble_family_stiffness(geometry, family%poloidal, &
+            family%toroidal, step, rectangular, info, options, power)
+        call require(info == 0, "rectangular comparison assembly failed")
+        call assemble_family_stiffness(geometry, selection%poloidal, &
+            selection%toroidal, step, ragged, info, options, &
+            selection%stored_variable_power)
+        call require(info == 0, "ragged comparison assembly failed")
+        scale = max(1.0_dp, maxval(abs(rectangular)))
+        call require(permuted_matrix_difference(rectangular, ragged, &
+            permutation) < 2.0e-12_dp * scale, &
+            "ragged and rectangular condensed matrices differ")
+        if (cross_mode_max(rectangular, size(power)) &
+            <= 1.0e-10_dp * scale) then
+            write (error_unit, "(a,2es24.16)") &
+                "3D cross-mode maximum and scale ", &
+                cross_mode_max(rectangular, size(power)), scale
+        end if
+        call require(cross_mode_max(rectangular, size(power)) &
+            > 1.0e-10_dp * scale, "3D comparison has no mode coupling")
+        call assemble_family_stiffness(geometry, family%poloidal, &
+            family%toroidal, step, zero, info, options)
+        call require(info == 0, "default stored-power assembly failed")
+        call assemble_family_stiffness(geometry, family%poloidal, &
+            family%toroidal, step, explicit_zero, info, options, &
+            0.0_dp * power)
+        call require(info == 0, "zero stored-power assembly failed")
+        call require(all(zero == explicit_zero), &
+            "zero stored power changes the assembled matrix")
+        call require(maxval(abs(rectangular - zero)) > 1.0e-8_dp * scale, &
+            "nonzero stored power does not change the condensed matrix")
+        negative_power = -power
+        call assemble_family_stiffness(geometry, family%poloidal, &
+            family%toroidal, step, negative, info, options, negative_power)
+        call require(info == 0, "negative stored-power assembly failed")
+        scale = max(1.0_dp, maxval(abs(negative)))
+        call require(maxval(abs(negative - transpose(negative))) &
+            < 2.0e-12_dp * scale, &
+            "negative stored power breaks matrix symmetry")
+    end subroutine check_selection_stiffness
+
+    subroutine check_selection_blocks(geometry, step, family, selection, &
+            power, permutation)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step, power(:)
+        type(mode_family_t), intent(in) :: family
+        type(terpsichore_mode_selection_t), intent(in) :: selection
+        integer, intent(in) :: permutation(:)
+        type(family_assembly_options_t) :: options
+        type(block_tridiagonal_t) :: rectangular, ragged, zero
+        real(dp) :: difference, scale
+        integer :: info, i
+
+        options%field_periods = family%field_periods
+        options%parity_class = selection%parity_class
+        call assemble_family_blocks(geometry, family%poloidal, &
+            family%toroidal, step, rectangular, info, options, power)
+        call require(info == 0, "rectangular block assembly failed")
+        call assemble_family_blocks(geometry, selection%poloidal, &
+            selection%toroidal, step, ragged, info, options, &
+            selection%stored_variable_power)
+        call require(info == 0, "ragged block assembly failed")
+        call assemble_family_blocks(geometry, family%poloidal, &
+            family%toroidal, step, zero, info, options)
+        call require(info == 0, "zero-power block assembly failed")
+        difference = 0.0_dp
+        do i = 1, size(rectangular%diag, 3)
+            difference = max(difference, permuted_matrix_difference(&
+                rectangular%diag(:, :, i), ragged%diag(:, :, i), permutation))
+        end do
+        do i = 1, size(rectangular%off, 3)
+            difference = max(difference, permuted_matrix_difference(&
+                rectangular%off(:, :, i), ragged%off(:, :, i), permutation))
+        end do
+        scale = max(1.0_dp, maxval(abs(rectangular%diag)))
+        call require(difference < 2.0e-12_dp * scale, &
+            "ragged and rectangular block matrices differ")
+        call require(maxval(abs(rectangular%diag - zero%diag)) &
+            > 1.0e-8_dp * scale, &
+            "stored power does not change the production block path")
+    end subroutine check_selection_blocks
+
+    subroutine check_selection_surface(surface, step, family, selection, &
+            power, permutation)
+        type(surface_geometry_t), intent(in) :: surface
+        real(dp), intent(in) :: step, power(:)
+        type(mode_family_t), intent(in) :: family
+        type(terpsichore_mode_selection_t), intent(in) :: selection
+        integer, intent(in) :: permutation(:)
+        type(radial_space_config_t) :: radial_space
+        real(dp) :: rectangular(3 * size(power), 3 * size(power))
+        real(dp) :: ragged(3 * size(power), 3 * size(power)), scale
+        integer :: parity(size(power)), info
+
+        parity = selection%parity_class
+        rectangular = 0.0_dp
+        ragged = 0.0_dp
+        call assemble_transformed_surface(surface%fields, surface%drive, &
+            family%poloidal, family%toroidal, parity, family%field_periods, &
+            radial_space, 0.25_dp, step, rectangular, info, power)
+        call require(info == 0, "rectangular surface comparison failed")
+        call assemble_transformed_surface(surface%fields, surface%drive, &
+            selection%poloidal, selection%toroidal, parity, &
+            selection%field_periods, radial_space, 0.25_dp, step, ragged, &
+            info, selection%stored_variable_power)
+        call require(info == 0, "ragged surface comparison failed")
+        scale = max(1.0_dp, maxval(abs(rectangular)))
+        call require(permuted_matrix_difference(rectangular, ragged, &
+            permutation) < 2.0e-12_dp * scale, &
+            "ragged and rectangular uncondensed matrices differ")
+    end subroutine check_selection_surface
+
+    subroutine check_family_input_validation(geometry, step)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step
+        real(dp), allocatable :: stiffness(:, :)
+        integer :: info
+
+        call assemble_family_stiffness(geometry, [1, 2], [1], step, &
+            stiffness, info)
+        call require(info == -2, "short toroidal mode table was accepted")
+        call assemble_family_stiffness(geometry, [1], [1, 2], step, &
+            stiffness, info)
+        call require(info == -2, "long toroidal mode table was accepted")
+        call assemble_family_stiffness(geometry, [1], [1], step, &
+            stiffness, info, normal_stored_power=[0.0_dp, 0.0_dp])
+        call require(info == -2, "mis-sized stored-power table was accepted")
+    end subroutine check_family_input_validation
+
+    pure function permuted_matrix_difference(first, second, permutation) &
+            result(difference)
+        real(dp), intent(in) :: first(:, :), second(:, :)
+        integer, intent(in) :: permutation(:)
+        real(dp) :: difference
+        integer :: row, column
+
+        difference = 0.0_dp
+        do column = 1, size(first, 2)
+            do row = 1, size(first, 1)
+                difference = max(difference, abs(first(row, column) &
+                    - second(permuted_trial_index(row, size(permutation), &
+                    permutation), permuted_trial_index(column, &
+                    size(permutation), permutation))))
+            end do
+        end do
+    end function permuted_matrix_difference
+
+    pure function cross_mode_max(matrix, modes) result(cross)
+        real(dp), intent(in) :: matrix(:, :)
+        integer, intent(in) :: modes
+        real(dp) :: cross
+        integer :: row, column
+
+        cross = 0.0_dp
+        do column = 1, size(matrix, 2)
+            do row = 1, size(matrix, 1)
+                if (modulo(row - 1, modes) == &
+                    modulo(column - 1, modes)) cycle
+                cross = max(cross, abs(matrix(row, column)))
+            end do
+        end do
+    end function cross_mode_max
+
+    pure function permuted_trial_index(index, trials, permutation) &
+            result(permuted)
+        integer, intent(in) :: index, trials, permutation(:)
+        integer :: permuted, local
+
+        local = modulo(index - 1, trials) + 1
+        permuted = index - local + permutation(local)
+    end function permuted_trial_index
+
+    pure function find_mode(mode_m, mode_n, target_m, target_n) result(index)
+        integer, intent(in) :: mode_m(:), mode_n(:), target_m, target_n
+        integer :: index, i
+
+        index = 0
+        do i = 1, size(mode_m)
+            if (mode_m(i) /= target_m) cycle
+            if (mode_n(i) /= target_n) cycle
+            index = i
+            return
+        end do
+    end function find_mode
 
     subroutine check_phase_path_derivative(geometry, step)
         type(surface_geometry_t), intent(in) :: geometry(:)
@@ -486,6 +775,25 @@ contains
             end do
         end do
     end subroutine symmetric_surface
+
+    subroutine coupled_surface(radius, surface)
+        real(dp), intent(in) :: radius
+        type(surface_geometry_t), intent(out) :: surface
+        real(dp) :: factor, theta
+        integer :: j, l
+
+        call symmetric_surface(radius, surface)
+        do l = 1, n_zeta
+            do j = 1, n_theta
+                theta = 2.0_dp * pi * (real(j, dp) - 1.0_dp) &
+                    / real(n_theta, dp)
+                factor = 1.0_dp + 0.02_dp * cos(theta)
+                surface%fields(j, l, 7) = surface%fields(j, l, 7) * factor
+                surface%fields(j, l, 8) = surface%fields(j, l, 8) * factor
+                surface%drive(j, l) = surface%drive(j, l) * factor
+            end do
+        end do
+    end subroutine coupled_surface
 
     subroutine cylinder_surface(radius, surface)
         real(dp), intent(in) :: radius

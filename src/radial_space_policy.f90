@@ -1,4 +1,5 @@
 module radial_space_policy
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     implicit none
     private
@@ -37,18 +38,24 @@ contains
     end subroutine validate_radial_space
 
     pure subroutine evaluate_normal_basis(config, poloidal_mode, s, &
-            radial_step, local_coordinate, values, derivatives, info)
+            radial_step, local_coordinate, values, derivatives, info, &
+            normal_stored_power)
         type(radial_space_config_t), intent(in) :: config
         integer, intent(in) :: poloidal_mode
         real(dp), intent(in) :: s, radial_step, local_coordinate
         real(dp), intent(out) :: values(2), derivatives(2)
         integer, intent(out) :: info
+        real(dp), intent(in), optional :: normal_stored_power
         real(dp) :: hats(2), slopes(2), form, form_slope, half_m
+        real(dp) :: base_values(2), base_derivatives(2), power, scale
 
         call validate_radial_space(config, info)
         if (info /= radial_space_ok) return
         info = radial_space_invalid
         if (poloidal_mode < 0) return
+        if (.not. ieee_is_finite(s)) return
+        if (.not. ieee_is_finite(radial_step)) return
+        if (.not. ieee_is_finite(local_coordinate)) return
         if (s < 0.0_dp .or. s > 1.0_dp) return
         if (radial_step <= 0.0_dp) return
         if (local_coordinate < 0.0_dp .or. local_coordinate > 1.0_dp) return
@@ -67,8 +74,24 @@ contains
                     * (1.0_dp - s) - s**half_m
             end if
         end if
-        values = form * hats
-        derivatives = form_slope * hats + form * slopes
+        base_values = form * hats
+        base_derivatives = form_slope * hats + form * slopes
+        power = 0.0_dp
+        if (present(normal_stored_power)) power = normal_stored_power
+        if (.not. ieee_is_finite(power)) return
+        if (power == 0.0_dp) then
+            values = base_values
+            derivatives = base_derivatives
+            info = radial_space_ok
+            return
+        end if
+        if (s == 0.0_dp) return
+        scale = s**(-power)
+        if (.not. ieee_is_finite(scale)) return
+        values = scale * base_values
+        derivatives = scale * (base_derivatives - power * base_values / s)
+        if (.not. all(ieee_is_finite(values))) return
+        if (.not. all(ieee_is_finite(derivatives))) return
         info = radial_space_ok
     end subroutine evaluate_normal_basis
 

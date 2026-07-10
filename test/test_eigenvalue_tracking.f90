@@ -29,15 +29,17 @@ program test_eigenvalue_tracking
     call check_tracks_dense(geometry, [2], [1], step, 0)
     call check_tracks_dense(geometry, [1], [1], step, 1)
     call check_tracks_dense(geometry, [1], [1], step, 2)
+    call check_tracks_dense(geometry, [1], [1], step, 2, [0.25_dp])
     write (*, "(a)") "PASS"
 
 contains
 
     subroutine check_tracks_dense(geometry, mode_m, mode_n, step, &
-            selector)
+            selector, normal_stored_power)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:), selector
         real(dp), intent(in) :: step
+        real(dp), intent(in), optional :: normal_stored_power(:)
         real(dp) :: dense, certified, width, tolerance
         integer :: info
         type(family_assembly_options_t) :: options
@@ -45,10 +47,10 @@ contains
         options%parity_class = selector
 
         call lowest_family_eigenvalue(geometry, mode_m, mode_n, step, &
-            dense, info, options)
+            dense, info, options, normal_stored_power)
         call require(info == 0, "dense reference solve failed")
         call certified_lowest_eigenvalue(geometry, mode_m, mode_n, &
-            step, certified, width, info, options)
+            step, certified, width, info, options, normal_stored_power)
         call require(info == 0, "certified tracking failed")
         call require(width <= 1.0e-8_dp * max(1.0_dp, abs(certified)), &
             "certificate window is not tight")

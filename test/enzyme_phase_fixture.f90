@@ -1,7 +1,7 @@
 module enzyme_phase_fixture
     use, intrinsic :: iso_c_binding, only: c_double
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use family_point_assembly, only: assemble_transformed_surface
+    use family_point_assembly, only: assemble_transformed_surface_resolved
     use radial_space_policy, only: radial_space_config_t
     implicit none
     private
@@ -18,6 +18,8 @@ contains
         integer, parameter :: mode_m(trials) = [1, 1, 2, 2]
         integer, parameter :: mode_n(trials) = [1, 1, -1, -1]
         integer, parameter :: parity(trials) = [1, 2, 1, 2]
+        real(dp), parameter :: stored_power(trials) = &
+            [0.25_dp, 0.25_dp, 0.0_dp, 0.0_dp]
         type(radial_space_config_t) :: radial_space
         real(dp) :: fields(2, 2, 13), drive(2, 2)
         real(dp) :: full(3 * trials, 3 * trials), direction, weight
@@ -43,8 +45,9 @@ contains
             end do
         end do
         full = 0.0_dp
-        call assemble_transformed_surface(fields, drive, mode_m, mode_n, &
-            parity, 3, radial_space, 0.35_dp, 0.1_dp, full, info)
+        call assemble_transformed_surface_resolved(fields, drive, mode_m, &
+            mode_n, parity, stored_power, 3, radial_space, 0.35_dp, 0.1_dp, &
+            full, info)
         energy = 0.0_c_double
         if (info /= 0) return
         do column = 1, size(full, 2)

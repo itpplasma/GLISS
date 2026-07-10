@@ -12,7 +12,7 @@ program test_terpsichore_topology
     integer :: info
 
     config%equilibrium_periods = 3
-    config%stability_periods = 3
+    config%field_periods_per_stability_period = 3
     config%parfac = 0.0_dp
     config%qn = 2.0_dp
     mask%poloidal_min = 0
@@ -35,7 +35,7 @@ program test_terpsichore_topology
         0.0_dp, 2.0_dp]), "QN was not restricted to shifted m=1")
 
     config%equilibrium_periods = 6
-    config%stability_periods = 3
+    config%field_periods_per_stability_period = 3
     config%poloidal_shift = 1
     config%parfac = 0.5_dp
     config%qn = 0.25_dp
@@ -53,12 +53,18 @@ program test_terpsichore_topology
         "NSTA conversion is wrong")
     call require(all(selection%stored_variable_power == [0.25_dp, 0.0_dp]), &
         "shifted QN selection is wrong")
+    config%qn = -0.25_dp
+    call convert_terpsichore_mask(config, mask, selection, info)
+    call require(info == terpsichore_topology_ok, &
+        "finite negative QN was rejected")
+    call require(all(selection%stored_variable_power == [-0.25_dp, 0.0_dp]), &
+        "negative QN selection is wrong")
 
-    config%stability_periods = 4
+    config%field_periods_per_stability_period = 4
     call convert_terpsichore_mask(config, mask, selection, info)
     call require(info == terpsichore_topology_invalid, &
         "non-divisor NSTA was accepted")
-    config%stability_periods = 3
+    config%field_periods_per_stability_period = 3
     config%parfac = 0.25_dp
     call convert_terpsichore_mask(config, mask, selection, info)
     call require(info == terpsichore_topology_invalid, &

@@ -6,6 +6,7 @@ program test_radial_space_policy
 
     type(radial_space_config_t) :: config
     real(dp) :: values(2), derivatives(2), plus(2), minus(2), step
+    real(dp) :: identity_values(2), identity_derivatives(2)
     integer :: info
 
     call evaluate_normal_basis(config, 2, 0.4_dp, 0.1_dp, 0.25_dp, &
@@ -31,6 +32,52 @@ program test_radial_space_policy
         values, derivatives, info)
     call require(maxval(abs(derivatives - (plus - minus) / (2.0_dp * step))) &
         < 1.0e-8_dp, "form-function product rule is wrong")
+
+    config = radial_space_config_t()
+    call evaluate_normal_basis(config, 1, 0.4_dp, 0.1_dp, 0.25_dp, &
+        identity_values, identity_derivatives, info)
+    call evaluate_normal_basis(config, 1, 0.4_dp, 0.1_dp, 0.25_dp, &
+        values, derivatives, info, 0.0_dp)
+    call require(info == radial_space_ok, "zero stored power was rejected")
+    call require(all(values == identity_values), &
+        "zero stored power changes normal values")
+    call require(all(derivatives == identity_derivatives), &
+        "zero stored power changes normal derivatives")
+    call evaluate_normal_basis(config, 1, 0.4_dp + step, 0.1_dp, &
+        0.25_dp + step / 0.1_dp, plus, derivatives, info, 0.25_dp)
+    call require(info == radial_space_ok, "positive stored-power point failed")
+    call evaluate_normal_basis(config, 1, 0.4_dp - step, 0.1_dp, &
+        0.25_dp - step / 0.1_dp, minus, derivatives, info, 0.25_dp)
+    call require(info == radial_space_ok, "negative stored-power point failed")
+    call evaluate_normal_basis(config, 1, 0.4_dp, 0.1_dp, 0.25_dp, &
+        values, derivatives, info, 0.25_dp)
+    call require(info == radial_space_ok, "stored-power radial space failed")
+    call require(maxval(abs(values - 0.4_dp**(-0.25_dp) &
+        * identity_values)) < 1.0e-15_dp, &
+        "stored normal variable has the wrong power direction")
+    call require(maxval(abs(derivatives - (plus - minus) &
+        / (2.0_dp * step))) < 1.0e-8_dp, &
+        "stored normal variable product rule is wrong")
+    call evaluate_normal_basis(config, 1, 0.4_dp + step, 0.1_dp, &
+        0.25_dp + step / 0.1_dp, plus, derivatives, info, -0.25_dp)
+    call require(info == radial_space_ok, &
+        "positive negative-power point failed")
+    call evaluate_normal_basis(config, 1, 0.4_dp - step, 0.1_dp, &
+        0.25_dp - step / 0.1_dp, minus, derivatives, info, -0.25_dp)
+    call require(info == radial_space_ok, &
+        "negative negative-power point failed")
+    call evaluate_normal_basis(config, 1, 0.4_dp, 0.1_dp, 0.25_dp, &
+        values, derivatives, info, -0.25_dp)
+    call require(info == radial_space_ok, "negative stored power failed")
+    call require(maxval(abs(values - 0.4_dp**0.25_dp * identity_values)) &
+        < 1.0e-15_dp, "negative stored power has the wrong direction")
+    call require(maxval(abs(derivatives - (plus - minus) &
+        / (2.0_dp * step))) < 1.0e-8_dp, &
+        "negative stored power product rule is wrong")
+    call evaluate_normal_basis(config, 1, 0.0_dp, 0.1_dp, 0.0_dp, &
+        values, derivatives, info, 0.25_dp)
+    call require(info == radial_space_invalid, &
+        "nonzero stored power was evaluated on the axis")
 
     config%normal_degree = 2
     call evaluate_normal_basis(config, 2, 0.4_dp, 0.1_dp, 0.25_dp, &

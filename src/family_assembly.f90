@@ -1,10 +1,11 @@
 module family_assembly
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use block_tridiagonal, only: apply_block_tridiagonal, &
         block_factor_t, block_tridiagonal_t, factorize_shifted, &
         solve_factored
-    use family_point_assembly, only: assemble_direct_surface, &
-        assemble_transformed_surface
+    use family_point_assembly, only: assemble_direct_surface_resolved, &
+        assemble_transformed_surface_resolved, resolve_normal_stored_power
     use radial_space_policy, only: radial_space_config_t, radial_space_ok, &
         validate_radial_space
     implicit none
@@ -55,18 +56,19 @@ module family_assembly
 contains
 
     subroutine lowest_family_eigenvalue(geometry, mode_m, mode_n, &
-            radial_step, lowest, info, options)
+            radial_step, lowest, info, options, normal_stored_power)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step
         real(dp), intent(out) :: lowest
         integer, intent(out) :: info
         type(family_assembly_options_t), intent(in), optional :: options
+        real(dp), intent(in), optional :: normal_stored_power(:)
         real(dp), allocatable :: stiffness(:, :), eigenvalues(:), work(:)
         integer :: unknowns
 
         call assemble_family_stiffness(geometry, mode_m, mode_n, &
-            radial_step, stiffness, info, options)
+            radial_step, stiffness, info, options, normal_stored_power)
         if (info /= 0) return
         unknowns = size(stiffness, 1)
         allocate (eigenvalues(unknowns), work(8 * unknowns))
@@ -77,24 +79,34 @@ contains
     end subroutine lowest_family_eigenvalue
 
     subroutine assemble_family_blocks(geometry, mode_m, mode_n, &
-            radial_step, blocks, info, options)
+            radial_step, blocks, info, options, normal_stored_power)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step
         type(block_tridiagonal_t), intent(out) :: blocks
         integer, intent(out) :: info
         type(family_assembly_options_t), intent(in), optional :: options
+        real(dp), intent(in), optional :: normal_stored_power(:)
         real(dp), allocatable :: element(:, :)
         integer, allocatable :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), allocatable :: mode_stored_power(:), trial_stored_power(:)
         integer :: trials, intervals, nodes, i, periods, selector
         integer :: phase_assembly
         type(radial_space_config_t) :: radial_space
 
+        call validate_family_inputs(geometry, mode_m, mode_n, radial_step, info)
+        if (info /= 0) return
         call resolve_options(options, periods, selector, phase_assembly, &
             radial_space, info)
         if (info /= 0) return
-        call build_trial_tables(mode_m, mode_n, selector, trial_m, &
-            trial_n, trial_parity)
+        call resolve_normal_stored_power(normal_stored_power, size(mode_m), &
+            mode_stored_power, info)
+        if (info /= 0) then
+            info = -2
+            return
+        end if
+        call build_trial_tables(mode_m, mode_n, mode_stored_power, selector, &
+            trial_m, trial_n, trial_parity, trial_stored_power)
         trials = size(trial_m)
         intervals = size(geometry)
         nodes = intervals - 1
@@ -103,7 +115,8 @@ contains
         allocate (element(2 * trials, 2 * trials))
         do i = 1, intervals
             call condensed_element(geometry(i), trial_m, trial_n, &
-                trial_parity, periods, phase_assembly, radial_space, &
+                trial_parity, trial_stored_power, periods, phase_assembly, &
+                radial_space, &
                 (real(i, dp) - 0.5_dp) * radial_step, radial_step, &
                 element, info)
             if (info /= 0) return
@@ -124,19 +137,20 @@ contains
     end subroutine assemble_family_blocks
 
     subroutine family_negative_count(geometry, mode_m, mode_n, &
-            radial_step, shift, count, info, options)
+            radial_step, shift, count, info, options, normal_stored_power)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step, shift
         integer, intent(out) :: count
         integer, intent(out) :: info
         type(family_assembly_options_t), intent(in), optional :: options
+        real(dp), intent(in), optional :: normal_stored_power(:)
         type(block_tridiagonal_t) :: blocks
         type(block_factor_t) :: factor
 
         count = -1
         call assemble_family_blocks(geometry, mode_m, mode_n, &
-            radial_step, blocks, info, options)
+            radial_step, blocks, info, options, normal_stored_power)
         if (info /= 0) return
         call factorize_shifted(blocks, shift * radial_step, factor, info)
         if (info /= 0) return
@@ -144,17 +158,18 @@ contains
     end subroutine family_negative_count
 
     subroutine iterate_family_eigenvalue(geometry, mode_m, mode_n, &
-            radial_step, shift, eigenvalue, info, options)
+            radial_step, shift, eigenvalue, info, options, normal_stored_power)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step, shift
         real(dp), intent(out) :: eigenvalue
         integer, intent(out) :: info
         type(family_assembly_options_t), intent(in), optional :: options
+        real(dp), intent(in), optional :: normal_stored_power(:)
         type(block_tridiagonal_t) :: blocks
 
         call assemble_family_blocks(geometry, mode_m, mode_n, &
-            radial_step, blocks, info, options)
+            radial_step, blocks, info, options, normal_stored_power)
         if (info /= 0) return
         call iterate_block_eigenvalue(blocks, radial_step, shift, &
             eigenvalue, info)
@@ -204,24 +219,34 @@ contains
     end subroutine iterate_block_eigenvalue
 
     subroutine assemble_family_stiffness(geometry, mode_m, mode_n, &
-            radial_step, stiffness, info, options)
+            radial_step, stiffness, info, options, normal_stored_power)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step
         real(dp), allocatable, intent(out) :: stiffness(:, :)
         integer, intent(out) :: info
         type(family_assembly_options_t), intent(in), optional :: options
+        real(dp), intent(in), optional :: normal_stored_power(:)
         real(dp), allocatable :: element(:, :)
         integer, allocatable :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), allocatable :: mode_stored_power(:), trial_stored_power(:)
         integer :: trials, intervals, i, a, b, row, column, periods, selector
         integer :: phase_assembly
         type(radial_space_config_t) :: radial_space
 
+        call validate_family_inputs(geometry, mode_m, mode_n, radial_step, info)
+        if (info /= 0) return
         call resolve_options(options, periods, selector, phase_assembly, &
             radial_space, info)
         if (info /= 0) return
-        call build_trial_tables(mode_m, mode_n, selector, trial_m, &
-            trial_n, trial_parity)
+        call resolve_normal_stored_power(normal_stored_power, size(mode_m), &
+            mode_stored_power, info)
+        if (info /= 0) then
+            info = -2
+            return
+        end if
+        call build_trial_tables(mode_m, mode_n, mode_stored_power, selector, &
+            trial_m, trial_n, trial_parity, trial_stored_power)
         trials = size(trial_m)
         intervals = size(geometry)
         allocate (stiffness(trials * (intervals - 1), &
@@ -229,7 +254,8 @@ contains
         allocate (element(2 * trials, 2 * trials))
         do i = 1, intervals
             call condensed_element(geometry(i), trial_m, trial_n, &
-                trial_parity, periods, phase_assembly, radial_space, &
+                trial_parity, trial_stored_power, periods, phase_assembly, &
+                radial_space, &
                 (real(i, dp) - 0.5_dp) * radial_step, radial_step, &
                 element, info)
             if (info /= 0) return
@@ -275,17 +301,35 @@ contains
         info = 0
     end subroutine resolve_options
 
-    pure subroutine build_trial_tables(mode_m, mode_n, selector, &
-            trial_m, trial_n, trial_parity)
+    pure subroutine validate_family_inputs(geometry, mode_m, mode_n, &
+            radial_step, info)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        integer, intent(in) :: mode_m(:), mode_n(:)
+        real(dp), intent(in) :: radial_step
+        integer, intent(out) :: info
+
+        info = -2
+        if (size(geometry) < 2) return
+        if (size(mode_m) < 1) return
+        if (size(mode_n) /= size(mode_m)) return
+        if (.not. ieee_is_finite(radial_step)) return
+        if (radial_step <= 0.0_dp) return
+        info = 0
+    end subroutine validate_family_inputs
+
+    pure subroutine build_trial_tables(mode_m, mode_n, normal_stored_power, &
+            selector, trial_m, trial_n, trial_parity, trial_stored_power)
         integer, intent(in) :: mode_m(:), mode_n(:), selector
+        real(dp), intent(in) :: normal_stored_power(:)
         integer, allocatable, intent(out) :: trial_m(:), trial_n(:)
         integer, allocatable, intent(out) :: trial_parity(:)
+        real(dp), allocatable, intent(out) :: trial_stored_power(:)
         integer :: k, parity, t, trials
 
         trials = 2 * size(mode_m)
         if (selector /= 0) trials = size(mode_m)
         allocate (trial_m(trials), trial_n(trials), &
-            trial_parity(trials))
+            trial_parity(trials), trial_stored_power(trials))
         t = 0
         do k = 1, size(mode_m)
             do parity = 1, 2
@@ -296,6 +340,7 @@ contains
                 trial_m(t) = mode_m(k)
                 trial_n(t) = mode_n(k)
                 trial_parity(t) = parity
+                trial_stored_power(t) = normal_stored_power(k)
             end do
         end do
     end subroutine build_trial_tables
@@ -321,10 +366,11 @@ contains
     end function global_index
 
     subroutine condensed_element(surface, trial_m, trial_n, &
-            trial_parity, field_periods, phase_assembly, radial_space, &
-            radial_coordinate, radial_step, element, info)
+            trial_parity, normal_stored_power, field_periods, phase_assembly, &
+            radial_space, radial_coordinate, radial_step, element, info)
         type(surface_geometry_t), intent(in) :: surface
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: normal_stored_power(:)
         integer, intent(in) :: field_periods, phase_assembly
         type(radial_space_config_t), intent(in) :: radial_space
         real(dp), intent(in) :: radial_coordinate, radial_step
@@ -336,12 +382,14 @@ contains
         trials = size(trial_m)
         allocate (full(3 * trials, 3 * trials), source=0.0_dp)
         if (phase_assembly == phase_assembly_direct) then
-            call assemble_direct_surface(surface%fields, surface%drive, &
-                trial_m, trial_n, trial_parity, field_periods, radial_space, &
+            call assemble_direct_surface_resolved(surface%fields, &
+                surface%drive, trial_m, trial_n, trial_parity, &
+                normal_stored_power, field_periods, radial_space, &
                 radial_coordinate, radial_step, full, info)
         else
-            call assemble_transformed_surface(surface%fields, surface%drive, &
-                trial_m, trial_n, trial_parity, field_periods, radial_space, &
+            call assemble_transformed_surface_resolved(surface%fields, &
+                surface%drive, trial_m, trial_n, trial_parity, &
+                normal_stored_power, field_periods, radial_space, &
                 radial_coordinate, radial_step, full, info)
         end if
         if (info /= 0) return

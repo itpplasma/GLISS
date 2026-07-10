@@ -11,15 +11,39 @@ module family_point_assembly
     real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
 
     public :: assemble_direct_surface
+    public :: assemble_direct_surface_resolved
     public :: assemble_transformed_surface
+    public :: assemble_transformed_surface_resolved
+    public :: resolve_normal_stored_power
 
 contains
 
     subroutine assemble_direct_surface(fields, drive, trial_m, trial_n, &
             trial_parity, field_periods, radial_space, radial_coordinate, &
-            radial_step, full, info)
+            radial_step, full, info, normal_stored_power)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in), optional :: normal_stored_power(:)
+        integer, intent(in) :: field_periods
+        type(radial_space_config_t), intent(in) :: radial_space
+        real(dp), intent(in) :: radial_coordinate, radial_step
+        real(dp), intent(inout) :: full(:, :)
+        integer, intent(out) :: info
+        real(dp), allocatable :: stored_power(:)
+        call resolve_normal_stored_power(normal_stored_power, size(trial_m), &
+            stored_power, info)
+        if (info /= 0) return
+        call assemble_direct_surface_resolved(fields, drive, trial_m, trial_n, &
+            trial_parity, stored_power, field_periods, radial_space, &
+            radial_coordinate, radial_step, full, info)
+    end subroutine assemble_direct_surface
+
+    subroutine assemble_direct_surface_resolved(fields, drive, trial_m, &
+            trial_n, trial_parity, normal_stored_power, field_periods, &
+            radial_space, radial_coordinate, radial_step, full, info)
+        real(dp), intent(in) :: fields(:, :, :), drive(:, :)
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: normal_stored_power(:)
         integer, intent(in) :: field_periods
         type(radial_space_config_t), intent(in) :: radial_space
         real(dp), intent(in) :: radial_coordinate, radial_step
@@ -29,8 +53,8 @@ contains
         integer :: j, l, period
 
         call validate_surface_inputs(fields, drive, trial_m, trial_n, &
-            trial_parity, field_periods, radial_coordinate, radial_step, &
-            full, info)
+            trial_parity, normal_stored_power, field_periods, &
+            radial_coordinate, radial_step, full, info)
         if (info /= 0) return
         weight = 1.0_dp / real(size(fields, 1) * size(fields, 2) &
             * field_periods, dp)
@@ -38,8 +62,8 @@ contains
             do l = 1, size(fields, 2)
                 do j = 1, size(fields, 1)
                     call accumulate_direct_point(fields(j, l, :), drive(j, l), &
-                        trial_m, trial_n, trial_parity, field_periods, &
-                        radial_space, radial_coordinate, &
+                        trial_m, trial_n, trial_parity, normal_stored_power, &
+                        field_periods, radial_space, radial_coordinate, &
                         (real(j, dp) - 1.0_dp) / real(size(fields, 1), dp), &
                         (real(l, dp) - 1.0_dp) / real(size(fields, 2), dp) &
                         + real(period, dp), radial_step, weight, full, info)
@@ -47,13 +71,34 @@ contains
                 end do
             end do
         end do
-    end subroutine assemble_direct_surface
+    end subroutine assemble_direct_surface_resolved
 
     subroutine assemble_transformed_surface(fields, drive, trial_m, trial_n, &
             trial_parity, field_periods, radial_space, radial_coordinate, &
-            radial_step, full, info)
+            radial_step, full, info, normal_stored_power)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in), optional :: normal_stored_power(:)
+        integer, intent(in) :: field_periods
+        type(radial_space_config_t), intent(in) :: radial_space
+        real(dp), intent(in) :: radial_coordinate, radial_step
+        real(dp), intent(inout) :: full(:, :)
+        integer, intent(out) :: info
+        real(dp), allocatable :: stored_power(:)
+        call resolve_normal_stored_power(normal_stored_power, size(trial_m), &
+            stored_power, info)
+        if (info /= 0) return
+        call assemble_transformed_surface_resolved(fields, drive, trial_m, &
+            trial_n, trial_parity, stored_power, field_periods, radial_space, &
+            radial_coordinate, radial_step, full, info)
+    end subroutine assemble_transformed_surface
+
+    subroutine assemble_transformed_surface_resolved(fields, drive, trial_m, &
+            trial_n, trial_parity, normal_stored_power, field_periods, &
+            radial_space, radial_coordinate, radial_step, full, info)
+        real(dp), intent(in) :: fields(:, :, :), drive(:, :)
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: normal_stored_power(:)
         integer, intent(in) :: field_periods
         type(radial_space_config_t), intent(in) :: radial_space
         real(dp), intent(in) :: radial_coordinate, radial_step
@@ -63,28 +108,46 @@ contains
         integer :: j, l
 
         call validate_surface_inputs(fields, drive, trial_m, trial_n, &
-            trial_parity, field_periods, radial_coordinate, radial_step, &
-            full, info)
+            trial_parity, normal_stored_power, field_periods, &
+            radial_coordinate, radial_step, full, info)
         if (info /= 0) return
         weight = 1.0_dp / real(size(fields, 1) * size(fields, 2), dp)
         do l = 1, size(fields, 2)
             do j = 1, size(fields, 1)
                 call accumulate_transformed_point(fields(j, l, :), &
                     drive(j, l), trial_m, trial_n, trial_parity, &
-                    field_periods, radial_space, radial_coordinate, &
+                    normal_stored_power, field_periods, radial_space, &
+                    radial_coordinate, &
                     (real(j, dp) - 1.0_dp) / real(size(fields, 1), dp), &
                     (real(l, dp) - 1.0_dp) / real(size(fields, 2), dp), &
                     radial_step, weight, full, info)
                 if (info /= 0) return
             end do
         end do
-    end subroutine assemble_transformed_surface
+    end subroutine assemble_transformed_surface_resolved
+
+    subroutine resolve_normal_stored_power(input, trials, power, info)
+        real(dp), intent(in), optional :: input(:)
+        integer, intent(in) :: trials
+        real(dp), allocatable, intent(out) :: power(:)
+        integer, intent(out) :: info
+
+        info = -1
+        allocate (power(trials), source=0.0_dp)
+        if (present(input)) then
+            if (size(input) /= trials) return
+            if (.not. all(ieee_is_finite(input))) return
+            power = input
+        end if
+        info = 0
+    end subroutine resolve_normal_stored_power
 
     subroutine validate_surface_inputs(fields, drive, trial_m, trial_n, &
-            trial_parity, field_periods, radial_coordinate, radial_step, &
-            full, info)
+            trial_parity, normal_stored_power, field_periods, &
+            radial_coordinate, radial_step, full, info)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: normal_stored_power(:)
         integer, intent(in) :: field_periods
         real(dp), intent(in) :: radial_coordinate, radial_step
         real(dp), intent(in) :: full(:, :)
@@ -95,6 +158,7 @@ contains
         trials = size(trial_m)
         if (field_periods < 1 .or. trials < 1) return
         if (size(trial_n) /= trials .or. size(trial_parity) /= trials) return
+        if (size(normal_stored_power) /= trials) return
         if (size(fields, 3) < 13) return
         if (size(drive, 1) /= size(fields, 1)) return
         if (size(drive, 2) /= size(fields, 2)) return
@@ -102,6 +166,7 @@ contains
             size(full, 2) /= 3 * trials) return
         if (any(trial_m < 0)) return
         if (any(trial_parity < 1) .or. any(trial_parity > 2)) return
+        if (.not. all(ieee_is_finite(normal_stored_power))) return
         if (.not. ieee_is_finite(radial_coordinate)) return
         if (.not. ieee_is_finite(radial_step)) return
         if (radial_step <= 0.0_dp) return
@@ -111,10 +176,11 @@ contains
     end subroutine validate_surface_inputs
 
     subroutine accumulate_direct_point(fields, drive, trial_m, trial_n, &
-            trial_parity, field_periods, radial_space, radial_coordinate, &
-            theta, zeta, radial_step, weight, full, info)
+            trial_parity, normal_stored_power, field_periods, radial_space, &
+            radial_coordinate, theta, zeta, radial_step, weight, full, info)
         real(dp), intent(in) :: fields(:), drive, theta, zeta
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: normal_stored_power(:)
         integer, intent(in) :: field_periods
         type(radial_space_config_t), intent(in) :: radial_space
         real(dp), intent(in) :: radial_coordinate
@@ -134,7 +200,7 @@ contains
         do trial = 1, trials
             call evaluate_normal_basis(radial_space, trial_m(trial), &
                 radial_coordinate, radial_step, 0.5_dp, normal_values, &
-                normal_derivatives, info)
+                normal_derivatives, info, normal_stored_power(trial))
             if (info /= radial_space_ok) return
             toroidal_wave = real(trial_n(trial), dp) &
                 / real(field_periods, dp)
@@ -160,10 +226,11 @@ contains
     end subroutine accumulate_direct_point
 
     subroutine accumulate_transformed_point(fields, drive, trial_m, trial_n, &
-            trial_parity, field_periods, radial_space, radial_coordinate, &
-            theta, zeta, radial_step, weight, full, info)
+            trial_parity, normal_stored_power, field_periods, radial_space, &
+            radial_coordinate, theta, zeta, radial_step, weight, full, info)
         real(dp), intent(in) :: fields(:), drive, theta, zeta
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: normal_stored_power(:)
         integer, intent(in) :: field_periods
         type(radial_space_config_t), intent(in) :: radial_space
         real(dp), intent(in) :: radial_coordinate, radial_step, weight
@@ -183,7 +250,7 @@ contains
         do trial = 1, trials
             call evaluate_normal_basis(radial_space, trial_m(trial), &
                 radial_coordinate, radial_step, 0.5_dp, normal_values, &
-                normal_derivatives, info)
+                normal_derivatives, info, normal_stored_power(trial))
             if (info /= radial_space_ok) return
             toroidal_wave = real(trial_n(trial), dp) &
                 / real(field_periods, dp)
