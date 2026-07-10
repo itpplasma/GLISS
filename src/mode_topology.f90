@@ -35,12 +35,18 @@ contains
     end function modes_coupled
 
     pure subroutine build_mode_family(field_periods, family_index, &
-            poloidal_max, toroidal_max, family)
+            poloidal_max, toroidal_max, family, info)
         integer, intent(in) :: field_periods, family_index
         integer, intent(in) :: poloidal_max, toroidal_max
         type(mode_family_t), intent(out) :: family
+        integer, intent(out) :: info
         integer :: m, n, count
 
+        info = -1
+        if (field_periods < 2) return
+        if (family_index < 1 .or. &
+            family_index > family_count(field_periods)) return
+        if (poloidal_max < 0 .or. toroidal_max < 0) return
         family%field_periods = field_periods
         family%family_index = family_index
         count = 0
@@ -62,6 +68,7 @@ contains
                 family%toroidal(count) = n
             end do
         end do
+        info = 0
     end subroutine build_mode_family
 
     pure function family_member(m, n, field_periods, family_index) &

@@ -6,7 +6,7 @@ program test_mode_topology
     implicit none
 
     type(mode_family_t) :: family, other
-    integer :: periods, index_a, index_b, i, j, m
+    integer :: periods, index_a, index_b, i, j, m, info
     integer :: covered(-8:8)
     real(dp) :: s, step, central
 
@@ -19,7 +19,8 @@ program test_mode_topology
     do periods = 2, 8
         covered = 0
         do index_a = 1, family_count(periods)
-            call build_mode_family(periods, index_a, 2, 8, family)
+            call build_mode_family(periods, index_a, 2, 8, family, info)
+            if (info /= 0) call fail("valid family was rejected")
             if (size(family%toroidal) == 0) call fail("family is empty")
             do i = 1, size(family%toroidal)
                 do j = 1, size(family%toroidal)
@@ -38,7 +39,8 @@ program test_mode_topology
                     covered(family%toroidal(i)) + 1
             end do
             do index_b = index_a + 1, family_count(periods)
-                call build_mode_family(periods, index_b, 2, 8, other)
+                call build_mode_family(periods, index_b, 2, 8, other, info)
+                if (info /= 0) call fail("valid comparison family was rejected")
                 do i = 1, size(family%toroidal)
                     do j = 1, size(other%toroidal)
                         if (modes_coupled(family%toroidal(i), &
@@ -56,6 +58,11 @@ program test_mode_topology
             if (covered(i) == 0) call fail("families do not cover a mode")
         end do
     end do
+
+    call build_mode_family(3, 0, 2, 2, family, info)
+    if (info == 0) call fail("zero family index was accepted")
+    call build_mode_family(3, 1, -1, 2, family, info)
+    if (info == 0) call fail("negative truncation was accepted")
 
     do m = 0, 6
         s = 0.4_dp
