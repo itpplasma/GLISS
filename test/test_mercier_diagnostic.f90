@@ -62,6 +62,8 @@ program test_mercier_diagnostic
             "force balance residual is too large")
         call require(result%jacobian_identity_deviation(i) < 1.0e-10_dp, &
             "Boozer Jacobian identity is violated")
+        call require(result%beta_chart_deviation(i) < 1.0e-6_dp, &
+            "position and spectral beta disagree on the cylinder")
     end do
     call require(any(result%d_mercier < 0.0_dp), &
         "expected Mercier-unstable surfaces were not found")
