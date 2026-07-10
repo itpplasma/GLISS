@@ -21,10 +21,11 @@ contains
         integer, intent(out) :: info
         integer, intent(in), optional :: class_selector
         type(block_tridiagonal_t) :: blocks
-        real(dp) :: lower, upper, mid, scale, rayleigh, width_floor
-        real(dp) :: window
+        real(dp) :: lower, upper, mid, scale, rayleigh, width
+        real(dp) :: floor_local, window
         integer :: attempt, counted, count_upper, iterate_info
-        integer :: below, above
+        integer :: below, above, lookahead
+        logical :: at_floor, try_iterate
 
         call assemble_family_blocks(geometry, mode_m, mode_n, &
             radial_step, blocks, info, class_selector)
@@ -33,14 +34,35 @@ contains
         scale = max(1.0_dp, abs(lower), abs(upper))
         lower = lower - 1.0e-3_dp * scale
         upper = upper + 1.0e-3_dp * scale
-        width_floor = 1.0e-9_dp * scale
         count_upper = size(blocks%diag, 1) * size(blocks%diag, 3)
         do attempt = 1, 200
-            if (count_upper == 1 .or. upper - lower <= width_floor) then
+            width = upper - lower
+            floor_local = 1.0e-11_dp * max(1.0_dp, abs(lower), &
+                abs(upper))
+            at_floor = width <= floor_local
+            try_iterate = at_floor
+            if (count_upper == 1) then
+                if (.not. try_iterate) then
+                    ! Iterating at the bracket top contracts toward
+                    ! the bracketed eigenvalue only when the next one
+                    ! is farther away than the bracket is wide.
+                    call shifted_count(blocks, radial_step, &
+                        upper + width, lookahead, info)
+                    if (info /= 0) return
+                    try_iterate = lookahead == 1
+                end if
+            end if
+            if (try_iterate) then
                 call iterate_block_eigenvalue(blocks, radial_step, &
                     upper, rayleigh, iterate_info)
                 if (iterate_info == 0) then
                     window = 1.0e-9_dp * max(1.0_dp, abs(rayleigh))
+                    if (at_floor) then
+                        ! A cluster tighter than the bracket floor is
+                        ! certified as a whole: the window reaches
+                        ! down to the eigenvalue-free lower edge.
+                        window = max(window, rayleigh - lower)
+                    end if
                     call shifted_count(blocks, radial_step, &
                         rayleigh - window, below, info)
                     if (info /= 0) return
