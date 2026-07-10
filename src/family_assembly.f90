@@ -42,20 +42,20 @@ module family_assembly
 contains
 
     subroutine lowest_family_eigenvalue(geometry, mode_m, mode_n, &
-            radial_step, lowest, info)
+            radial_step, lowest, info, class_selector)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step
         real(dp), intent(out) :: lowest
         integer, intent(out) :: info
+        integer, intent(in), optional :: class_selector
         real(dp), allocatable :: stiffness(:, :), eigenvalues(:), work(:)
-        integer :: trials, unknowns
+        integer :: unknowns
 
-        trials = 2 * size(mode_m)
-        unknowns = trials * (size(geometry) - 1)
         call assemble_family_stiffness(geometry, mode_m, mode_n, &
-            radial_step, stiffness, info)
+            radial_step, stiffness, info, class_selector)
         if (info /= 0) return
+        unknowns = size(stiffness, 1)
         allocate (eigenvalues(unknowns), work(8 * unknowns))
         call dsyev("N", "U", unknowns, stiffness, unknowns, eigenvalues, &
             work, size(work), info)
@@ -64,24 +64,33 @@ contains
     end subroutine lowest_family_eigenvalue
 
     subroutine assemble_family_blocks(geometry, mode_m, mode_n, &
-            radial_step, blocks, info)
+            radial_step, blocks, info, class_selector)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step
         type(block_tridiagonal_t), intent(out) :: blocks
         integer, intent(out) :: info
+        integer, intent(in), optional :: class_selector
         real(dp), allocatable :: element(:, :)
-        integer :: trials, intervals, nodes, i
+        integer, allocatable :: trial_m(:), trial_n(:), trial_parity(:)
+        integer :: trials, intervals, nodes, i, selector
 
-        trials = 2 * size(mode_m)
+        selector = resolve_class(class_selector)
+        if (selector < 0 .or. selector > 2) then
+            info = -2
+            return
+        end if
+        call build_trial_tables(mode_m, mode_n, selector, trial_m, &
+            trial_n, trial_parity)
+        trials = size(trial_m)
         intervals = size(geometry)
         nodes = intervals - 1
         allocate (blocks%diag(trials, trials, nodes), source=0.0_dp)
         allocate (blocks%off(trials, trials, nodes - 1), source=0.0_dp)
         allocate (element(2 * trials, 2 * trials))
         do i = 1, intervals
-            call condensed_element(geometry(i), mode_m, mode_n, &
-                radial_step, element, info)
+            call condensed_element(geometry(i), trial_m, trial_n, &
+                trial_parity, radial_step, element, info)
             if (info /= 0) return
             if (i > 1) then
                 blocks%diag(:, :, i - 1) = blocks%diag(:, :, i - 1) &
@@ -100,18 +109,19 @@ contains
     end subroutine assemble_family_blocks
 
     subroutine family_negative_count(geometry, mode_m, mode_n, &
-            radial_step, shift, count, info)
+            radial_step, shift, count, info, class_selector)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step, shift
         integer, intent(out) :: count
         integer, intent(out) :: info
+        integer, intent(in), optional :: class_selector
         type(block_tridiagonal_t) :: blocks
         type(block_factor_t) :: factor
 
         count = -1
         call assemble_family_blocks(geometry, mode_m, mode_n, &
-            radial_step, blocks, info)
+            radial_step, blocks, info, class_selector)
         if (info /= 0) return
         call factorize_shifted(blocks, shift * radial_step, factor, info)
         if (info /= 0) return
@@ -119,12 +129,13 @@ contains
     end subroutine family_negative_count
 
     subroutine iterate_family_eigenvalue(geometry, mode_m, mode_n, &
-            radial_step, shift, eigenvalue, info)
+            radial_step, shift, eigenvalue, info, class_selector)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step, shift
         real(dp), intent(out) :: eigenvalue
         integer, intent(out) :: info
+        integer, intent(in), optional :: class_selector
         type(block_tridiagonal_t) :: blocks
         type(block_factor_t) :: factor
         real(dp), allocatable :: vector(:, :)
@@ -132,7 +143,7 @@ contains
         integer :: trials, nodes, iteration, t, j
 
         call assemble_family_blocks(geometry, mode_m, mode_n, &
-            radial_step, blocks, info)
+            radial_step, blocks, info, class_selector)
         if (info /= 0) return
         call factorize_shifted(blocks, shift * radial_step, factor, info)
         if (info /= 0) return
@@ -167,23 +178,32 @@ contains
     end subroutine iterate_family_eigenvalue
 
     subroutine assemble_family_stiffness(geometry, mode_m, mode_n, &
-            radial_step, stiffness, info)
+            radial_step, stiffness, info, class_selector)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step
         real(dp), allocatable, intent(out) :: stiffness(:, :)
         integer, intent(out) :: info
+        integer, intent(in), optional :: class_selector
         real(dp), allocatable :: element(:, :)
-        integer :: trials, intervals, i, a, b, row, column
+        integer, allocatable :: trial_m(:), trial_n(:), trial_parity(:)
+        integer :: trials, intervals, i, a, b, row, column, selector
 
-        trials = 2 * size(mode_m)
+        selector = resolve_class(class_selector)
+        if (selector < 0 .or. selector > 2) then
+            info = -2
+            return
+        end if
+        call build_trial_tables(mode_m, mode_n, selector, trial_m, &
+            trial_n, trial_parity)
+        trials = size(trial_m)
         intervals = size(geometry)
         allocate (stiffness(trials * (intervals - 1), &
             trials * (intervals - 1)), source=0.0_dp)
         allocate (element(2 * trials, 2 * trials))
         do i = 1, intervals
-            call condensed_element(geometry(i), mode_m, mode_n, &
-                radial_step, element, info)
+            call condensed_element(geometry(i), trial_m, trial_n, &
+                trial_parity, radial_step, element, info)
             if (info /= 0) return
             do b = 1, 2 * trials
                 column = global_index(i, b, trials, intervals)
@@ -198,6 +218,39 @@ contains
         end do
         info = 0
     end subroutine assemble_family_stiffness
+
+    pure function resolve_class(class_selector) result(selector)
+        integer, intent(in), optional :: class_selector
+        integer :: selector
+
+        selector = 0
+        if (present(class_selector)) selector = class_selector
+    end function resolve_class
+
+    pure subroutine build_trial_tables(mode_m, mode_n, selector, &
+            trial_m, trial_n, trial_parity)
+        integer, intent(in) :: mode_m(:), mode_n(:), selector
+        integer, allocatable, intent(out) :: trial_m(:), trial_n(:)
+        integer, allocatable, intent(out) :: trial_parity(:)
+        integer :: k, parity, t, trials
+
+        trials = 2 * size(mode_m)
+        if (selector /= 0) trials = size(mode_m)
+        allocate (trial_m(trials), trial_n(trials), &
+            trial_parity(trials))
+        t = 0
+        do k = 1, size(mode_m)
+            do parity = 1, 2
+                if (selector /= 0) then
+                    if (parity /= selector) cycle
+                end if
+                t = t + 1
+                trial_m(t) = mode_m(k)
+                trial_n(t) = mode_n(k)
+                trial_parity(t) = parity
+            end do
+        end do
+    end subroutine build_trial_tables
 
     pure function global_index(interval, local, trials, intervals) &
             result(index)
@@ -219,10 +272,10 @@ contains
         end if
     end function global_index
 
-    subroutine condensed_element(surface, mode_m, mode_n, radial_step, &
-            element, info)
+    subroutine condensed_element(surface, trial_m, trial_n, &
+            trial_parity, radial_step, element, info)
         type(surface_geometry_t), intent(in) :: surface
-        integer, intent(in) :: mode_m(:), mode_n(:)
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         real(dp), intent(in) :: radial_step
         real(dp), intent(out) :: element(:, :)
         integer, intent(out) :: info
@@ -230,7 +283,7 @@ contains
         integer :: trials, n_theta, n_zeta, j, l, k
         real(dp) :: weight
 
-        trials = 2 * size(mode_m)
+        trials = size(trial_m)
         n_theta = size(surface%fields, 1)
         n_zeta = size(surface%fields, 2)
         allocate (full(3 * trials, 3 * trials), source=0.0_dp)
@@ -238,7 +291,8 @@ contains
         do l = 1, n_zeta
             do j = 1, n_theta
                 call accumulate_point(surface%fields(j, l, :), &
-                    surface%drive(j, l), mode_m, mode_n, &
+                    surface%drive(j, l), trial_m, trial_n, &
+                    trial_parity, &
                     (real(j, dp) - 1.0_dp) / real(n_theta, dp), &
                     (real(l, dp) - 1.0_dp) / real(n_zeta, dp), &
                     radial_step, weight, full)
@@ -250,17 +304,17 @@ contains
         end do
     end subroutine condensed_element
 
-    subroutine accumulate_point(fields, drive, mode_m, mode_n, theta, &
-            zeta, radial_step, weight, full)
+    subroutine accumulate_point(fields, drive, trial_m, trial_n, &
+            trial_parity, theta, zeta, radial_step, weight, full)
         real(dp), intent(in) :: fields(:), drive, theta, zeta
-        integer, intent(in) :: mode_m(:), mode_n(:)
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         real(dp), intent(in) :: radial_step, weight
         real(dp), intent(inout) :: full(:, :)
-        real(dp) :: rows(4, 6 * size(mode_m))
+        real(dp) :: rows(4, 3 * size(trial_m))
         real(dp) :: phase, cosine, sine
         real(dp) :: value, dvalue, dother
         real(dp) :: c1_of(6), c2_of(6), c3_of(6)
-        integer :: trials, k, parity, trial, entry_index
+        integer :: trials, trial, entry_index
         real(dp) :: unit_inputs(6)
 
         do entry_index = 1, 6
@@ -275,34 +329,31 @@ contains
                 c1_of(entry_index), c2_of(entry_index), &
                 c3_of(entry_index))
         end do
-        trials = 2 * size(mode_m)
+        trials = size(trial_m)
         rows = 0.0_dp
-        do k = 1, size(mode_m)
-            phase = two_pi * (real(mode_m(k), dp) * theta &
-                - real(mode_n(k), dp) * zeta)
+        do trial = 1, trials
+            phase = two_pi * (real(trial_m(trial), dp) * theta &
+                - real(trial_n(trial), dp) * zeta)
             cosine = cos(phase)
             sine = sin(phase)
-            do parity = 1, 2
-                if (parity == 1) then
-                    value = cosine
-                    dvalue = -sine
-                    dother = cosine
-                else
-                    value = sine
-                    dvalue = cosine
-                    dother = -sine
-                end if
-                trial = 2 * (k - 1) + parity
-                do entry_index = 1, 6
-                    call add_linear(rows, trial, trials, entry_index, &
-                        value, dvalue, dother, mode_m(k), mode_n(k), &
-                        radial_step, c1_of(entry_index), &
-                        c2_of(entry_index), c3_of(entry_index))
-                end do
-                rows(4, trial) = rows(4, trial) + 0.5_dp * value
-                rows(4, trials + trial) = rows(4, trials + trial) &
-                    + 0.5_dp * value
+            if (trial_parity(trial) == 1) then
+                value = cosine
+                dvalue = -sine
+                dother = cosine
+            else
+                value = sine
+                dvalue = cosine
+                dother = -sine
+            end if
+            do entry_index = 1, 6
+                call add_linear(rows, trial, trials, entry_index, &
+                    value, dvalue, dother, trial_m(trial), &
+                    trial_n(trial), radial_step, c1_of(entry_index), &
+                    c2_of(entry_index), c3_of(entry_index))
             end do
+            rows(4, trial) = rows(4, trial) + 0.5_dp * value
+            rows(4, trials + trial) = rows(4, trials + trial) &
+                + 0.5_dp * value
         end do
         call rank_updates(rows, drive, weight * abs(fields(7)), full)
     end subroutine accumulate_point

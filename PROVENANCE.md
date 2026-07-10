@@ -16,7 +16,7 @@ file records which published work each module implements.
 | `src/mode_topology.f90` | Perturbation Fourier grid, mode families, coupling and parity selection | Schwab (1991), sections 3.3-3.4; Schwab (1993) |
 | `src/two_component_kernel.f90` | Incompressible two-component energy density: bending, shear, and compression scalar components with the interchange drive | Schwab (1991), eq. 3.2.14; Schwab (1993) |
 | `src/newcomb_limit.f90` | Single-mode cylinder assembly of the two-component functional, Newcomb/Suydam acceptance limit | Newcomb (1960); Suydam (1958); Schwab (1991) reduction |
-| `src/family_assembly.f90` | Coupled Fourier-family assembly over the two-component kernel with both perturbation parities, static condensation of the tangential unknowns, artificial marginality norm | Schwab (1991), sections 3.3-3.5; Schwab (1993) |
+| `src/family_assembly.f90` | Coupled Fourier-family assembly over the two-component kernel with both perturbation parities or a single symmetry class (the classes decouple for stellarator-symmetric fields; parity-class gate in the research repository), static condensation of the tangential unknowns, artificial marginality norm | Schwab (1991), sections 3.3-3.5; Schwab (1993) |
 
 Planned layers follow, in the same discipline: basis topology and mode
 families per Schwab (1991) sections 3.3 and 3.4; the static two-component

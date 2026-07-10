@@ -14,7 +14,7 @@ program gliss_family
     integer, allocatable :: mode_m(:), mode_n(:)
     character(len=1024) :: filename, token
     real(dp) :: step, lowest
-    integer :: info, i, ns, count, arguments, comma
+    integer :: info, i, ns, count, arguments, comma, selector
 
     arguments = command_argument_count()
     if (arguments < 2) then
@@ -54,21 +54,23 @@ program gliss_family
     end do
     step = 1.0_dp / real(ns, dp)
 
-    call lowest_family_eigenvalue(geometry, mode_m, mode_n, step, &
-        lowest, info)
-    if (info /= 0) then
-        write (error_unit, "(a, i0)") "eigensolver error ", info
-        error stop 1
-    end if
-    call family_negative_count(geometry, mode_m, mode_n, step, 0.0_dp, &
-        count, info)
-    if (info /= 0) then
-        write (error_unit, "(a, i0)") "inertia error ", info
-        error stop 1
-    end if
-    write (*, "(a)") "chart_metric,modes,lowest_eigenvalue," // &
-        "negative_count"
-    write (*, "(l1, a, i0, a, es24.16, a, i0)") &
-        equilibrium%has_chart_metric, ",", size(mode_m), ",", lowest, &
-        ",", count
+    write (*, "(a)") "chart_metric,modes,parity_class," // &
+        "lowest_eigenvalue,negative_count"
+    do selector = 0, 2
+        call lowest_family_eigenvalue(geometry, mode_m, mode_n, step, &
+            lowest, info, selector)
+        if (info /= 0) then
+            write (error_unit, "(a, i0)") "eigensolver error ", info
+            error stop 1
+        end if
+        call family_negative_count(geometry, mode_m, mode_n, step, &
+            0.0_dp, count, info, selector)
+        if (info /= 0) then
+            write (error_unit, "(a, i0)") "inertia error ", info
+            error stop 1
+        end if
+        write (*, "(l1, a, i0, a, i0, a, es24.16, a, i0)") &
+            equilibrium%has_chart_metric, ",", size(mode_m), ",", &
+            selector, ",", lowest, ",", count
+    end do
 end program gliss_family

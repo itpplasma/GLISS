@@ -45,6 +45,8 @@ program test_family_assembly
         "decoupled modes change the lowest eigenvalue")
 
     call check_block_assembly(geometry, step)
+    call check_parity_classes(geometry, step)
+    call check_symmetric_decoupling(step)
 
     call iterate_family_eigenvalue(geometry, [1], [1], step, &
         1.05_dp * family_value, iterated, info)
@@ -102,6 +104,126 @@ contains
         call require(deviation == 0.0_dp, &
             "block assembly differs from the dense assembly")
     end subroutine check_block_assembly
+
+    subroutine check_parity_classes(geometry, step)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step
+        real(dp) :: both, first, second
+        integer :: info
+
+        call lowest_family_eigenvalue(geometry, [1], [1], step, both, &
+            info)
+        call require(info == 0, "dual-class solve failed")
+        call lowest_family_eigenvalue(geometry, [1], [1], step, first, &
+            info, 1)
+        call require(info == 0, "class-1 solve failed")
+        call lowest_family_eigenvalue(geometry, [1], [1], step, &
+            second, info, 2)
+        call require(info == 0, "class-2 solve failed")
+        call require(abs(first - second) < 1.0e-7_dp * abs(first), &
+            "cylinder parity classes are not degenerate")
+        call require(abs(min(first, second) - both) < 1.0e-10_dp &
+            * abs(both), &
+            "class split changes the lowest eigenvalue")
+        call check_count_additivity(geometry, [1], [1], step, 0.0_dp)
+        call check_count_additivity(geometry, [1], [1], step, &
+            0.5_dp * both)
+    end subroutine check_parity_classes
+
+    subroutine check_symmetric_decoupling(step)
+        real(dp), intent(in) :: step
+        type(surface_geometry_t), allocatable :: shaped(:)
+        real(dp), allocatable :: stiffness(:, :)
+        real(dp) :: both, first, second, cross, scale
+        integer :: info, i, row, column, trials
+
+        allocate (shaped(n_radial))
+        do i = 1, n_radial
+            call symmetric_surface((real(i, dp) - 0.5_dp) * step, &
+                shaped(i))
+        end do
+        call assemble_family_stiffness(shaped, [1, 2], [1, 1], step, &
+            stiffness, info)
+        call require(info == 0, "symmetric assembly failed")
+        trials = 4
+        scale = maxval(abs(stiffness))
+        cross = 0.0_dp
+        do column = 1, size(stiffness, 2)
+            do row = 1, size(stiffness, 1)
+                if (mod(mod(row - 1, trials), 2) &
+                    /= mod(mod(column - 1, trials), 2)) then
+                    cross = max(cross, abs(stiffness(row, column)))
+                end if
+            end do
+        end do
+        call require(cross < 1.0e-10_dp * scale, &
+            "stellarator-symmetric fields couple the parity classes")
+        call lowest_family_eigenvalue(shaped, [1, 2], [1, 1], step, &
+            both, info)
+        call require(info == 0, "shaped dual solve failed")
+        call lowest_family_eigenvalue(shaped, [1, 2], [1, 1], step, &
+            first, info, 1)
+        call require(info == 0, "shaped class-1 solve failed")
+        call lowest_family_eigenvalue(shaped, [1, 2], [1, 1], step, &
+            second, info, 2)
+        call require(info == 0, "shaped class-2 solve failed")
+        call require(abs(min(first, second) - both) < 1.0e-10_dp &
+            * abs(both), &
+            "shaped class split changes the lowest eigenvalue")
+        call check_count_additivity(shaped, [1, 2], [1, 1], step, &
+            0.0_dp)
+        call check_count_additivity(shaped, [1, 2], [1, 1], step, &
+            0.5_dp * both)
+    end subroutine check_symmetric_decoupling
+
+    subroutine check_count_additivity(geometry, mode_m, mode_n, step, &
+            shift)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        integer, intent(in) :: mode_m(:), mode_n(:)
+        real(dp), intent(in) :: step, shift
+        integer :: info, count_both, count_first, count_second
+
+        call family_negative_count(geometry, mode_m, mode_n, step, &
+            shift, count_both, info)
+        call require(info == 0, "dual inertia count failed")
+        call family_negative_count(geometry, mode_m, mode_n, step, &
+            shift, count_first, info, 1)
+        call require(info == 0, "class-1 inertia count failed")
+        call family_negative_count(geometry, mode_m, mode_n, step, &
+            shift, count_second, info, 2)
+        call require(info == 0, "class-2 inertia count failed")
+        call require(count_both == count_first + count_second, &
+            "class inertia counts do not sum to the dual count")
+    end subroutine check_count_additivity
+
+    subroutine symmetric_surface(radius, surface)
+        real(dp), intent(in) :: radius
+        type(surface_geometry_t), intent(out) :: surface
+        real(dp) :: angle, even
+        integer :: j, l
+
+        call cylinder_surface(radius, surface)
+        do l = 1, n_zeta
+            do j = 1, n_theta
+                angle = 2.0_dp * pi &
+                    * ((real(j, dp) - 1.0_dp) / real(n_theta, dp) &
+                    - (real(l, dp) - 1.0_dp) / real(n_zeta, dp))
+                even = 1.0_dp + 0.05_dp * cos(angle)
+                surface%fields(j, l, 7) = surface%fields(j, l, 7) &
+                    * even
+                surface%fields(j, l, 8) = surface%fields(j, l, 8) &
+                    * (1.0_dp + 0.03_dp * cos(angle))
+                surface%fields(j, l, 9) = surface%fields(j, l, 9) &
+                    * (1.0_dp + 0.04_dp * cos(angle))
+                surface%fields(j, l, 10) = surface%fields(j, l, 10) &
+                    * even
+                surface%fields(j, l, 12) = 0.1_dp * sin(angle)
+                surface%fields(j, l, 13) = 0.05_dp &
+                    * surface%fields(j, l, 8) * sin(angle)
+                surface%drive(j, l) = surface%drive(j, l) * even
+            end do
+        end do
+    end subroutine symmetric_surface
 
     subroutine cylinder_surface(radius, surface)
         real(dp), intent(in) :: radius
