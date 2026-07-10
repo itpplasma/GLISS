@@ -1,8 +1,8 @@
 program gliss_family
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use eigenvalue_tracking, only: certified_lowest_eigenvalue
-    use family_assembly, only: family_negative_count, &
-        surface_geometry_t
+    use family_assembly, only: family_assembly_options_t, &
+        family_negative_count, surface_geometry_t
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use mercier_diagnostic, only: build_kernel_geometry, mercier_ok
@@ -10,6 +10,7 @@ program gliss_family
 
     integer, parameter :: n_theta = 64, n_zeta = 64
     type(gvec_cas3d_equilibrium_t) :: equilibrium
+    type(family_assembly_options_t) :: options
     type(surface_geometry_t), allocatable :: geometry(:)
     real(dp), allocatable :: fields(:, :, :, :), drive(:, :, :)
     integer, allocatable :: mode_m(:), mode_n(:)
@@ -54,12 +55,14 @@ program gliss_family
         geometry(i)%drive = drive(:, :, i)
     end do
     step = 1.0_dp / real(ns, dp)
+    options%field_periods = equilibrium%field_periods
 
-    write (*, "(a)") "chart_metric,modes,parity_class," // &
+    write (*, "(a)") "chart_metric,field_periods,modes,parity_class," // &
         "lowest_eigenvalue,negative_count"
     do selector = 0, 2
+        options%parity_class = selector
         call certified_lowest_eigenvalue(geometry, mode_m, mode_n, &
-            step, lowest, width, info, selector)
+            step, lowest, width, info, options)
         if (info /= 0) then
             write (error_unit, "(a, i0)") "eigensolver error ", info
             error stop 1
@@ -67,13 +70,13 @@ program gliss_family
         write (error_unit, "(a, i0, a, es9.2)") &
             "certified class ", selector, " window ", width
         call family_negative_count(geometry, mode_m, mode_n, step, &
-            0.0_dp, count, info, selector)
+            0.0_dp, count, info, options)
         if (info /= 0) then
             write (error_unit, "(a, i0)") "inertia error ", info
             error stop 1
         end if
-        write (*, "(l1, a, i0, a, i0, a, es24.16, a, i0)") &
-            equilibrium%has_chart_metric, ",", size(mode_m), ",", &
-            selector, ",", lowest, ",", count
+        write (*, "(l1, a, i0, a, i0, a, i0, a, es24.16, a, i0)") &
+            equilibrium%has_chart_metric, ",", options%field_periods, &
+            ",", size(mode_m), ",", selector, ",", lowest, ",", count
     end do
 end program gliss_family

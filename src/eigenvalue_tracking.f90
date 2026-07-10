@@ -3,7 +3,8 @@ module eigenvalue_tracking
     use block_tridiagonal, only: block_factor_t, block_tridiagonal_t, &
         factorize_shifted
     use family_assembly, only: assemble_family_blocks, &
-        iterate_block_eigenvalue, surface_geometry_t
+        family_assembly_options_t, iterate_block_eigenvalue, &
+        surface_geometry_t
     implicit none
     private
 
@@ -13,13 +14,13 @@ contains
 
     subroutine certified_lowest_eigenvalue(geometry, mode_m, mode_n, &
             radial_step, eigenvalue, certificate_width, info, &
-            class_selector)
+            options)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step
         real(dp), intent(out) :: eigenvalue, certificate_width
         integer, intent(out) :: info
-        integer, intent(in), optional :: class_selector
+        type(family_assembly_options_t), intent(in), optional :: options
         type(block_tridiagonal_t) :: blocks
         real(dp) :: lower, upper, mid, scale, rayleigh, width
         real(dp) :: floor_local, window
@@ -28,7 +29,7 @@ contains
         logical :: at_floor, try_iterate
 
         call assemble_family_blocks(geometry, mode_m, mode_n, &
-            radial_step, blocks, info, class_selector)
+            radial_step, blocks, info, options)
         if (info /= 0) return
         call gershgorin_bounds(blocks, radial_step, lower, upper)
         scale = max(1.0_dp, abs(lower), abs(upper))

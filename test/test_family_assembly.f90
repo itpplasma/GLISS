@@ -3,8 +3,8 @@ program test_family_assembly
     use block_tridiagonal, only: block_tridiagonal_t
     use family_assembly, only: assemble_family_blocks, &
         assemble_family_stiffness, family_negative_count, &
-        iterate_family_eigenvalue, lowest_family_eigenvalue, &
-        surface_geometry_t
+        family_assembly_options_t, iterate_family_eigenvalue, &
+        lowest_family_eigenvalue, surface_geometry_t
     use newcomb_limit, only: cylinder_profiles_t, &
         lowest_eigenvalue_single_mode
     implicit none
@@ -47,6 +47,7 @@ program test_family_assembly
     call check_block_assembly(geometry, step)
     call check_parity_classes(geometry, step)
     call check_symmetric_decoupling(step)
+    call check_field_period_phase(geometry, step)
 
     call iterate_family_eigenvalue(geometry, [1], [1], step, &
         1.05_dp * family_value, iterated, info)
@@ -110,15 +111,18 @@ contains
         real(dp), intent(in) :: step
         real(dp) :: both, first, second
         integer :: info
+        type(family_assembly_options_t) :: options
 
         call lowest_family_eigenvalue(geometry, [1], [1], step, both, &
             info)
         call require(info == 0, "dual-class solve failed")
+        options%parity_class = 1
         call lowest_family_eigenvalue(geometry, [1], [1], step, first, &
-            info, 1)
+            info, options)
         call require(info == 0, "class-1 solve failed")
+        options%parity_class = 2
         call lowest_family_eigenvalue(geometry, [1], [1], step, &
-            second, info, 2)
+            second, info, options)
         call require(info == 0, "class-2 solve failed")
         call require(abs(first - second) < 1.0e-7_dp * abs(first), &
             "cylinder parity classes are not degenerate")
@@ -136,6 +140,7 @@ contains
         real(dp), allocatable :: stiffness(:, :)
         real(dp) :: both, first, second, cross, scale
         integer :: info, i, row, column, trials
+        type(family_assembly_options_t) :: options
 
         allocate (shaped(n_radial))
         do i = 1, n_radial
@@ -161,11 +166,13 @@ contains
         call lowest_family_eigenvalue(shaped, [1, 2], [1, 1], step, &
             both, info)
         call require(info == 0, "shaped dual solve failed")
+        options%parity_class = 1
         call lowest_family_eigenvalue(shaped, [1, 2], [1, 1], step, &
-            first, info, 1)
+            first, info, options)
         call require(info == 0, "shaped class-1 solve failed")
+        options%parity_class = 2
         call lowest_family_eigenvalue(shaped, [1, 2], [1, 1], step, &
-            second, info, 2)
+            second, info, options)
         call require(info == 0, "shaped class-2 solve failed")
         call require(abs(min(first, second) - both) < 1.0e-10_dp &
             * abs(both), &
@@ -182,19 +189,53 @@ contains
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: step, shift
         integer :: info, count_both, count_first, count_second
+        type(family_assembly_options_t) :: options
 
         call family_negative_count(geometry, mode_m, mode_n, step, &
             shift, count_both, info)
         call require(info == 0, "dual inertia count failed")
+        options%parity_class = 1
         call family_negative_count(geometry, mode_m, mode_n, step, &
-            shift, count_first, info, 1)
+            shift, count_first, info, options)
         call require(info == 0, "class-1 inertia count failed")
+        options%parity_class = 2
         call family_negative_count(geometry, mode_m, mode_n, step, &
-            shift, count_second, info, 2)
+            shift, count_second, info, options)
         call require(info == 0, "class-2 inertia count failed")
         call require(count_both == count_first + count_second, &
             "class inertia counts do not sum to the dual count")
     end subroutine check_count_additivity
+
+    subroutine check_field_period_phase(geometry, step)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step
+        type(family_assembly_options_t) :: one_period, three_periods
+        real(dp), allocatable :: reference(:, :), repeated(:, :), wrong(:, :)
+        real(dp) :: scale
+        integer :: info
+
+        one_period%parity_class = 1
+        three_periods = one_period
+        three_periods%field_periods = 3
+        call assemble_family_stiffness(geometry, [1], [1], step, &
+            reference, info, one_period)
+        call require(info == 0, "one-period assembly failed")
+        call assemble_family_stiffness(geometry, [1], [3], step, &
+            repeated, info, three_periods)
+        call require(info == 0, "three-period assembly failed")
+        scale = max(1.0_dp, maxval(abs(reference)))
+        call require(maxval(abs(repeated - reference)) < 1.0e-12_dp * scale, &
+            "topological toroidal mode is not scaled by field periods")
+        call assemble_family_stiffness(geometry, [1], [1], step, &
+            wrong, info, three_periods)
+        call require(info == 0, "fractional-wave assembly failed")
+        call require(maxval(abs(wrong - reference)) > 1.0e-6_dp * scale, &
+            "field-period scaling has no effect on the assembled operator")
+        three_periods%field_periods = 0
+        call assemble_family_stiffness(geometry, [1], [1], step, &
+            wrong, info, three_periods)
+        call require(info == -2, "invalid field-period count was accepted")
+    end subroutine check_field_period_phase
 
     subroutine symmetric_surface(radius, surface)
         real(dp), intent(in) :: radius

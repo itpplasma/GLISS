@@ -1,8 +1,8 @@
 program test_eigenvalue_tracking
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use eigenvalue_tracking, only: certified_lowest_eigenvalue
-    use family_assembly, only: lowest_family_eigenvalue, &
-        surface_geometry_t
+    use family_assembly, only: family_assembly_options_t, &
+        lowest_family_eigenvalue, surface_geometry_t
     use newcomb_limit, only: cylinder_profiles_t
     implicit none
 
@@ -40,12 +40,15 @@ contains
         real(dp), intent(in) :: step
         real(dp) :: dense, certified, width, tolerance
         integer :: info
+        type(family_assembly_options_t) :: options
+
+        options%parity_class = selector
 
         call lowest_family_eigenvalue(geometry, mode_m, mode_n, step, &
-            dense, info, selector)
+            dense, info, options)
         call require(info == 0, "dense reference solve failed")
         call certified_lowest_eigenvalue(geometry, mode_m, mode_n, &
-            step, certified, width, info, selector)
+            step, certified, width, info, options)
         call require(info == 0, "certified tracking failed")
         call require(width <= 1.0e-8_dp * max(1.0_dp, abs(certified)), &
             "certificate window is not tight")
