@@ -21,6 +21,7 @@ add_library(gliss
     src/mode_topology.f90
     src/two_component_kernel.f90
     src/newcomb_limit.f90
+    src/family_assembly.f90
     src/mercier_diagnostic.f90
     src/radial_bspline_basis.f90
     src/symmetric_eigensolver.f90)
@@ -93,6 +94,10 @@ if(BUILD_TESTING)
     add_test(NAME gvec_cas3d_reconstruction
         COMMAND test_gvec_cas3d_reconstruction)
 
+    add_executable(test_family_assembly test/test_family_assembly.f90)
+    target_link_libraries(test_family_assembly PRIVATE gliss)
+    add_test(NAME family_assembly COMMAND test_family_assembly)
+
     add_executable(test_newcomb_limit test/test_newcomb_limit.f90)
     target_link_libraries(test_newcomb_limit PRIVATE gliss)
     add_test(NAME newcomb_limit COMMAND test_newcomb_limit)
@@ -130,6 +135,7 @@ if(GLISS_ENABLE_ENZYME)
     src/mode_topology.f90
     src/two_component_kernel.f90
     src/newcomb_limit.f90
+    src/family_assembly.f90
     src/mercier_diagnostic.f90
             test/enzyme_drive_gradient.f90)
 endif()
