@@ -37,8 +37,117 @@ module mercier_diagnostic
     end type surface_data_t
 
     public :: compute_mercier
+    public :: build_kernel_geometry
 
 contains
+
+    subroutine build_kernel_geometry(equilibrium, n_theta, n_zeta, &
+            fields, drive, info)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(in) :: n_theta, n_zeta
+        real(dp), allocatable, intent(out) :: fields(:, :, :, :)
+        real(dp), allocatable, intent(out) :: drive(:, :, :)
+        integer, intent(out) :: info
+        type(surface_data_t) :: surface
+        type(harmonic_pair_t) :: jacobian_slope
+        real(dp), allocatable :: theta(:), zeta(:)
+        real(dp), allocatable :: covariant_theta(:), covariant_zeta(:)
+        real(dp), allocatable :: flux_slope(:), poloidal_slope(:)
+        real(dp), allocatable :: covariant_theta_slope(:)
+        real(dp), allocatable :: covariant_zeta_slope(:)
+        real(dp), allocatable :: pressure_slope(:)
+        real(dp), allocatable :: flux_curvature(:), poloidal_curvature(:)
+        real(dp), allocatable :: beta_values(:, :), beta_theta(:, :)
+        real(dp), allocatable :: beta_zeta(:, :), jac_slope_grid(:, :)
+        real(dp), allocatable :: discard_a(:, :), discard_b(:, :)
+        real(dp) :: grad_s2_floor
+        integer :: ns, i, rec_info
+
+        info = mercier_invalid_input
+        if (n_theta < 8 .or. n_zeta < 8) return
+        if (equilibrium%radial_grid /= radial_grid_half) return
+        ns = size(equilibrium%s)
+        if (ns < 5) return
+
+        call build_angular_grids(n_theta, n_zeta, theta, zeta)
+        call differentiate_pair(equilibrium%s, equilibrium%jacobian, &
+            jacobian_slope)
+        allocate (covariant_theta(ns), covariant_zeta(ns))
+        allocate (flux_slope(ns), poloidal_slope(ns))
+        allocate (covariant_theta_slope(ns), covariant_zeta_slope(ns))
+        allocate (pressure_slope(ns), flux_curvature(ns))
+        allocate (poloidal_curvature(ns))
+        allocate (fields(n_theta, n_zeta, 13, ns))
+        allocate (drive(n_theta, n_zeta, ns))
+
+        do i = 1, ns
+            call load_surface(equilibrium, i, theta, zeta, surface, info)
+            if (info /= mercier_ok) return
+            covariant_theta(i) = grid_mean(surface%g_tt * surface%b_theta &
+                + surface%g_tz * surface%b_zeta)
+            covariant_zeta(i) = grid_mean(surface%g_tz * surface%b_theta &
+                + surface%g_zz * surface%b_zeta)
+            flux_slope(i) = grid_mean(surface%jacobian * surface%b_zeta)
+            poloidal_slope(i) = grid_mean(surface%jacobian &
+                * surface%b_theta)
+        end do
+        call first_derivative_nonuniform(equilibrium%s, &
+            equilibrium%pressure, pressure_slope)
+        call first_derivative_nonuniform(equilibrium%s, covariant_theta, &
+            covariant_theta_slope)
+        call first_derivative_nonuniform(equilibrium%s, covariant_zeta, &
+            covariant_zeta_slope)
+        call first_derivative_nonuniform(equilibrium%s, flux_slope, &
+            flux_curvature)
+        call first_derivative_nonuniform(equilibrium%s, poloidal_slope, &
+            poloidal_curvature)
+
+        do i = 1, ns
+            call load_surface(equilibrium, i, theta, zeta, surface, info)
+            if (info /= mercier_ok) return
+            call solve_beta_derivatives(equilibrium, surface, theta, &
+                zeta, covariant_theta_slope(i), covariant_zeta_slope(i), &
+                pressure_slope(i), poloidal_slope(i), flux_slope(i), &
+                beta_values, beta_theta, beta_zeta)
+            call reconstruct_harmonic_grid(jacobian_slope, i, &
+                equilibrium%poloidal_modes, equilibrium%toroidal_modes, &
+                theta, zeta, jac_slope_grid, discard_a, discard_b, &
+                rec_info)
+            if (rec_info /= reconstruction_ok) then
+                info = mercier_reconstruction_error
+                return
+            end if
+            fields(:, :, 1, i) = flux_slope(i)
+            fields(:, :, 2, i) = poloidal_slope(i)
+            fields(:, :, 3, i) = flux_curvature(i)
+            fields(:, :, 4, i) = poloidal_curvature(i)
+            fields(:, :, 5, i) = covariant_zeta(i)
+            fields(:, :, 6, i) = covariant_theta(i)
+            fields(:, :, 7, i) = surface%jacobian
+            fields(:, :, 8, i) = surface%mod_b
+            fields(:, :, 9, i) = max((surface%g_tt * surface%g_zz &
+                - surface%g_tz**2) / surface%jacobian**2, tiny(1.0_dp))
+            fields(:, :, 10, i) = ((beta_zeta &
+                - covariant_zeta_slope(i)) * covariant_theta(i) &
+                + (covariant_theta_slope(i) - beta_theta) &
+                * covariant_zeta(i)) / surface%jacobian
+            fields(:, :, 11, i) = mu0 * pressure_slope(i)
+            fields(:, :, 12, i) = 0.0_dp
+            fields(:, :, 13, i) = beta_values
+            grad_s2_floor = 1.0_dp
+            drive(:, :, i) = (fields(:, :, 10, i)**2 &
+                + (mu0 * pressure_slope(i))**2 * fields(:, :, 9, i)) &
+                / (surface%mod_b**2 * fields(:, :, 9, i)) &
+                + (flux_curvature(i) * covariant_zeta_slope(i) &
+                + poloidal_curvature(i) * covariant_theta_slope(i) &
+                - flux_curvature(i) * beta_zeta &
+                - poloidal_curvature(i) * beta_theta) &
+                / surface%jacobian &
+                - mu0 * pressure_slope(i) * jac_slope_grid &
+                / surface%jacobian
+        end do
+        info = mercier_ok
+    end subroutine build_kernel_geometry
 
     subroutine compute_mercier(equilibrium, n_theta, n_zeta, result, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium

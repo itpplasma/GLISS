@@ -94,6 +94,13 @@ if(BUILD_TESTING)
     add_test(NAME gvec_cas3d_reconstruction
         COMMAND test_gvec_cas3d_reconstruction)
 
+    add_library(gliss_test_support test/cylinder_fixture.f90)
+    target_link_libraries(gliss_test_support PUBLIC gliss)
+
+    add_executable(test_export_assembly test/test_export_assembly.f90)
+    target_link_libraries(test_export_assembly PRIVATE gliss_test_support)
+    add_test(NAME export_assembly COMMAND test_export_assembly)
+
     add_executable(test_family_assembly test/test_family_assembly.f90)
     target_link_libraries(test_family_assembly PRIVATE gliss)
     add_test(NAME family_assembly COMMAND test_family_assembly)
@@ -116,9 +123,8 @@ if(BUILD_TESTING)
     target_link_libraries(test_nonuniform_derivative PRIVATE gliss)
     add_test(NAME nonuniform_derivative COMMAND test_nonuniform_derivative)
 
-    add_executable(test_mercier_diagnostic test/test_mercier_diagnostic.f90
-        test/cylinder_fixture.f90)
-    target_link_libraries(test_mercier_diagnostic PRIVATE gliss)
+    add_executable(test_mercier_diagnostic test/test_mercier_diagnostic.f90)
+    target_link_libraries(test_mercier_diagnostic PRIVATE gliss_test_support)
     add_test(NAME mercier_diagnostic COMMAND test_mercier_diagnostic)
 
     add_executable(test_gvec_cas3d_integrals test/test_gvec_cas3d_integrals.f90)
