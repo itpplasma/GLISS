@@ -16,6 +16,10 @@ module field_profile_identities
 
     type, public :: field_profile_identity_result_t
         real(dp), allocatable :: s(:)
+        real(dp), allocatable :: field_toroidal_flux_slope(:)
+        real(dp), allocatable :: field_poloidal_flux_slope(:)
+        real(dp), allocatable :: field_covariant_theta(:)
+        real(dp), allocatable :: field_covariant_zeta(:)
         real(dp), allocatable :: toroidal_flux_deviation(:)
         real(dp), allocatable :: poloidal_flux_deviation(:)
         real(dp), allocatable :: covariant_theta_deviation(:)
@@ -248,6 +252,11 @@ contains
         real(dp) :: poloidal_field_slope
 
         poloidal_field_slope = flux_poloidal_slope(i) / periods
+        result%field_toroidal_flux_slope(i) = grid_mean(jacobian * contra_zeta)
+        result%field_poloidal_flux_slope(i) = &
+            periods * grid_mean(jacobian * contra_theta)
+        result%field_covariant_theta(i) = grid_mean(b_theta)
+        result%field_covariant_zeta(i) = grid_mean(b_zeta)
         result%toroidal_flux_deviation(i) = relative_grid_deviation( &
             jacobian * contra_zeta, &
             flux_toroidal_slope(i))
@@ -338,6 +347,10 @@ contains
         type(field_profile_identity_result_t), intent(out) :: result
 
         allocate (result%s(ns), result%toroidal_flux_deviation(ns))
+        allocate (result%field_toroidal_flux_slope(ns))
+        allocate (result%field_poloidal_flux_slope(ns))
+        allocate (result%field_covariant_theta(ns))
+        allocate (result%field_covariant_zeta(ns))
         allocate (result%poloidal_flux_deviation(ns))
         allocate (result%covariant_theta_deviation(ns))
         allocate (result%covariant_zeta_deviation(ns))

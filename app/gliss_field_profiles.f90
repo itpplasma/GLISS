@@ -27,13 +27,19 @@ program gliss_field_profiles
         error stop 1
     end if
 
-    write (*, "(a)") "s,toroidal_flux_deviation," // &
+    write (*, "(a)") "s,field_toroidal_flux_slope," // &
+        "field_poloidal_flux_slope,field_covariant_theta," // &
+        "field_covariant_zeta,toroidal_flux_deviation," // &
         "poloidal_flux_deviation,covariant_theta_deviation," // &
         "covariant_zeta_deviation,iota_flux_deviation," // &
         "ampere_theta_deviation,ampere_zeta_deviation," // &
         "exported_jacobian_deviation,general_force_balance_deviation"
     do i = 1, size(result%s)
-        write (*, "(es24.16, 9(',', es24.16))") result%s(i), &
+        write (*, "(es24.16, 13(',', es24.16))") result%s(i), &
+            result%field_toroidal_flux_slope(i), &
+            result%field_poloidal_flux_slope(i), &
+            result%field_covariant_theta(i), &
+            result%field_covariant_zeta(i), &
             result%toroidal_flux_deviation(i), &
             result%poloidal_flux_deviation(i), &
             result%covariant_theta_deviation(i), &
