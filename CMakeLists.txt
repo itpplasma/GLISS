@@ -7,6 +7,10 @@ find_package(LAPACK REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NETCDF_C REQUIRED IMPORTED_TARGET netcdf)
 
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(-Wall -Wextra -Wno-compare-reals)
+endif()
+
 add_library(gliss
     src/gvec_cas3d_adapter.f90
     src/netcdf_c_bindings.f90

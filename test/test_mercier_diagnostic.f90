@@ -8,22 +8,13 @@ program test_mercier_diagnostic
         radius_of
     implicit none
 
-    integer, parameter :: ns = 33, nm = 2, nn = 3
-    integer, parameter :: field_count = 13, profile_count = 6
-    character(len=11), parameter :: field_names(field_count) = &
-        [character(len=11) :: "mod_B", "xhat", "yhat", "zhat", "Jac", &
-        "g_tt", "g_tz", "g_zz", "II_tt", "II_tz", "II_zz", &
-        "B_contra_t", "B_contra_z"]
-    character(len=11), parameter :: profile_names(profile_count) = &
-        [character(len=11) :: "p", "B_theta_avg", "B_zeta_avg", &
-        "Phi", "chi", "iota"]
+    integer, parameter :: ns = 33
     character(len=*), parameter :: fixture = "mercier_cylinder.nc"
 
     real(dp), parameter :: pi = acos(-1.0_dp)
     real(dp), parameter :: mu0 = 4.0e-7_dp * pi
     real(dp), parameter :: minor_radius = 0.5_dp
     real(dp), parameter :: period_length = 6.0_dp * pi
-    real(dp), parameter :: axis_radius = 3.0_dp
     real(dp), parameter :: b_axial = 1.0_dp
     real(dp), parameter :: b_linear = 0.3_dp
     real(dp), parameter :: b_cubic = 0.4_dp

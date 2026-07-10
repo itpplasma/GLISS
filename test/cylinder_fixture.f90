@@ -81,24 +81,59 @@ contains
         character(len=*), intent(in) :: filename
         real(dp), intent(in), optional :: chart_shift
         integer, intent(in), optional :: surfaces
-        integer :: ncid, dim_s, dim_m, dim_n
-        integer :: id_nfp, id_beta, id_winding, id_m, id_n, id_rho
+        integer :: ncid, id_nfp, id_beta, id_winding, id_m, id_n, id_rho
         integer :: id_profiles(profile_count)
         integer :: id_cos(field_count), id_sin(field_count)
-        integer :: id_gst_cos, id_gst_sin, id_gsz_cos, id_gsz_sin
-        real(dp), allocatable :: rho_values(:), s_values(:)
-        real(dp), allocatable :: profile_values(:)
-        real(dp), allocatable :: cosine(:, :, :), sine(:, :, :)
-        real(dp) :: shift, angle, rotated_cos, rotated_sin, radius
+        integer :: id_chart(4)
+        real(dp), allocatable :: s_values(:)
+        real(dp) :: shift
         logical :: shifted
-        integer :: ns, field, profile, i, j
+        integer :: ns, i
 
         ns = fixture_ns
         if (present(surfaces)) ns = surfaces
-        allocate (rho_values(ns), s_values(ns), profile_values(ns))
-        allocate (cosine(nn, nm, ns), sine(nn, nm, ns))
+        shifted = present(chart_shift)
+        shift = 0.0_dp
+        if (shifted) shift = chart_shift
+        allocate (s_values(ns))
+        do i = 1, ns
+            s_values(i) = (real(i, dp) - 0.5_dp) / real(ns, dp)
+        end do
 
         call require_netcdf(nc_create_netcdf4(filename, ncid))
+        call define_fixture_variables(ncid, ns, shifted, id_nfp, id_beta, &
+            id_winding, id_m, id_n, id_rho, id_profiles, id_cos, id_sin, &
+            id_chart)
+        call require_netcdf(nc_put_integer(ncid, id_nfp, 1))
+        call require_netcdf(nc_put_real(ncid, id_beta, 0.0_dp))
+        call require_netcdf(nc_put_integer(ncid, id_winding, 1))
+        call require_netcdf(nc_put_integer(ncid, id_m, [0, 1]))
+        call require_netcdf(nc_put_integer(ncid, id_n, [0, 1, -1]))
+        call require_netcdf(nc_put_real(ncid, id_rho, sqrt(s_values)))
+        call write_fixture_profiles(ncid, id_profiles, s_values)
+        call write_fixture_fields(ncid, id_cos, id_sin, s_values, &
+            shifted, shift)
+        if (shifted) call write_chart_metric(ncid, id_chart, s_values, &
+            shift)
+        call require_netcdf(nc_close_file(ncid))
+    end subroutine create_cylinder_fixture
+
+    subroutine define_fixture_variables(ncid, ns, shifted, id_nfp, &
+            id_beta, id_winding, id_m, id_n, id_rho, id_profiles, id_cos, &
+            id_sin, id_chart)
+        integer, intent(in) :: ncid, ns
+        logical, intent(in) :: shifted
+        integer, intent(out) :: id_nfp, id_beta, id_winding
+        integer, intent(out) :: id_m, id_n, id_rho
+        integer, intent(out) :: id_profiles(profile_count)
+        integer, intent(out) :: id_cos(field_count), id_sin(field_count)
+        integer, intent(out) :: id_chart(4)
+        character(len=6), parameter :: chart_names(4) = [character(len=6) &
+            :: "g_st", "g_st", "g_sz", "g_sz"]
+        character(len=4), parameter :: chart_suffix(4) = [character(len=4) &
+            :: "_mnc", "_mns", "_mnc", "_mns"]
+        integer :: dim_s, dim_m, dim_n, field, profile
+
         call require_netcdf(nc_def_dimension(ncid, "s", ns, dim_s))
         call require_netcdf(nc_def_dimension(ncid, "m", nm, dim_m))
         call require_netcdf(nc_def_dimension(ncid, "n", nn, dim_n))
@@ -118,9 +153,6 @@ contains
                 trim(profile_names(profile)), nc_double, [dim_s], &
                 id_profiles(profile)))
         end do
-        shifted = present(chart_shift)
-        shift = 0.0_dp
-        if (shifted) shift = chart_shift
         do field = 1, field_count
             call require_netcdf(nc_def_variable(ncid, &
                 trim(field_names(field)) // "_mnc", nc_double, &
@@ -130,32 +162,25 @@ contains
                 [dim_s, dim_m, dim_n], id_sin(field)))
         end do
         if (shifted) then
-            call require_netcdf(nc_def_variable(ncid, "g_st_mnc", &
-                nc_double, [dim_s, dim_m, dim_n], id_gst_cos))
-            call require_netcdf(nc_def_variable(ncid, "g_st_mns", &
-                nc_double, [dim_s, dim_m, dim_n], id_gst_sin))
-            call require_netcdf(nc_def_variable(ncid, "g_sz_mnc", &
-                nc_double, [dim_s, dim_m, dim_n], id_gsz_cos))
-            call require_netcdf(nc_def_variable(ncid, "g_sz_mns", &
-                nc_double, [dim_s, dim_m, dim_n], id_gsz_sin))
+            do field = 1, 4
+                call require_netcdf(nc_def_variable(ncid, &
+                    trim(chart_names(field)) // chart_suffix(field), &
+                    nc_double, [dim_s, dim_m, dim_n], id_chart(field)))
+            end do
         end if
         call require_netcdf(nc_put_global_text(ncid, &
             "stellarator_symmetry", "False"))
         call require_netcdf(nc_end_definitions(ncid))
+    end subroutine define_fixture_variables
 
-        do i = 1, ns
-            s_values(i) = (real(i, dp) - 0.5_dp) / real(ns, dp)
-        end do
-        rho_values = sqrt(s_values)
-        call require_netcdf(nc_put_integer(ncid, id_nfp, 1))
-        call require_netcdf(nc_put_real(ncid, id_beta, 0.0_dp))
-        call require_netcdf(nc_put_integer(ncid, id_winding, 1))
-        call require_netcdf(nc_put_integer(ncid, id_m, [0, 1]))
-        call require_netcdf(nc_put_integer(ncid, id_n, [0, 1, -1]))
-        call require_netcdf(nc_put_real(ncid, id_rho, rho_values))
+    subroutine write_fixture_profiles(ncid, id_profiles, s_values)
+        integer, intent(in) :: ncid, id_profiles(profile_count)
+        real(dp), intent(in) :: s_values(:)
+        real(dp) :: profile_values(size(s_values)), radius
+        integer :: profile, i
 
         do profile = 1, profile_count
-            do i = 1, ns
+            do i = 1, size(s_values)
                 radius = radius_of(s_values(i))
                 select case (trim(profile_names(profile)))
                 case ("p")
@@ -178,12 +203,25 @@ contains
             call require_netcdf(nc_put_real(ncid, id_profiles(profile), &
                 profile_values))
         end do
+    end subroutine write_fixture_profiles
+
+    subroutine write_fixture_fields(ncid, id_cos, id_sin, s_values, &
+            shifted, shift)
+        integer, intent(in) :: ncid
+        integer, intent(in) :: id_cos(field_count), id_sin(field_count)
+        real(dp), intent(in) :: s_values(:)
+        logical, intent(in) :: shifted
+        real(dp), intent(in) :: shift
+        real(dp) :: cosine(nn, nm, size(s_values))
+        real(dp) :: sine(nn, nm, size(s_values))
+        real(dp) :: radius
+        integer :: field, i
 
         do field = 1, field_count
             cosine = 0.0_dp
             sine = 0.0_dp
-            do i = 1, ns
-                radius = radius_of((real(i, dp) - 0.5_dp) / real(ns, dp))
+            do i = 1, size(s_values)
+                radius = radius_of(s_values(i))
                 select case (trim(field_names(field)))
                 case ("mod_B")
                     cosine(1, 1, i) = sqrt(b_poloidal(radius)**2 &
@@ -213,38 +251,53 @@ contains
             end do
             select case (trim(field_names(field)))
             case ("xhat", "yhat", "zhat")
-                if (shifted) then
-                    do i = 1, ns
-                        angle = 2.0_dp * pi * shift * s_values(i)
-                        do j = 1, nn
-                            rotated_cos = cosine(j, 2, i) * cos(angle) &
-                                - sine(j, 2, i) * sin(angle)
-                            rotated_sin = cosine(j, 2, i) * sin(angle) &
-                                + sine(j, 2, i) * cos(angle)
-                            cosine(j, 2, i) = rotated_cos
-                            sine(j, 2, i) = rotated_sin
-                        end do
-                    end do
-                end if
+                if (shifted) call rotate_position_harmonics(cosine, sine, &
+                    s_values, shift)
             end select
             call require_netcdf(nc_put_real(ncid, id_cos(field), cosine))
             call require_netcdf(nc_put_real(ncid, id_sin(field), sine))
         end do
-        if (shifted) then
-            cosine = 0.0_dp
-            sine = 0.0_dp
-            do i = 1, ns
-                radius = radius_of(s_values(i))
-                cosine(1, 1, i) = -shift * (2.0_dp * pi * radius)**2
+    end subroutine write_fixture_fields
+
+    subroutine rotate_position_harmonics(cosine, sine, s_values, shift)
+        real(dp), intent(inout) :: cosine(:, :, :), sine(:, :, :)
+        real(dp), intent(in) :: s_values(:)
+        real(dp), intent(in) :: shift
+        real(dp) :: angle, rotated_cos, rotated_sin
+        integer :: i, j
+
+        do i = 1, size(s_values)
+            angle = 2.0_dp * pi * shift * s_values(i)
+            do j = 1, nn
+                rotated_cos = cosine(j, 2, i) * cos(angle) &
+                    - sine(j, 2, i) * sin(angle)
+                rotated_sin = cosine(j, 2, i) * sin(angle) &
+                    + sine(j, 2, i) * cos(angle)
+                cosine(j, 2, i) = rotated_cos
+                sine(j, 2, i) = rotated_sin
             end do
-            call require_netcdf(nc_put_real(ncid, id_gst_cos, cosine))
-            call require_netcdf(nc_put_real(ncid, id_gst_sin, sine))
-            cosine = 0.0_dp
-            call require_netcdf(nc_put_real(ncid, id_gsz_cos, cosine))
-            call require_netcdf(nc_put_real(ncid, id_gsz_sin, sine))
-        end if
-        call require_netcdf(nc_close_file(ncid))
-    end subroutine create_cylinder_fixture
+        end do
+    end subroutine rotate_position_harmonics
+
+    subroutine write_chart_metric(ncid, id_chart, s_values, shift)
+        integer, intent(in) :: ncid, id_chart(4)
+        real(dp), intent(in) :: s_values(:)
+        real(dp), intent(in) :: shift
+        real(dp) :: cosine(nn, nm, size(s_values))
+        real(dp) :: zeros(nn, nm, size(s_values))
+        integer :: i
+
+        cosine = 0.0_dp
+        zeros = 0.0_dp
+        do i = 1, size(s_values)
+            cosine(1, 1, i) = -shift &
+                * (2.0_dp * pi * radius_of(s_values(i)))**2
+        end do
+        call require_netcdf(nc_put_real(ncid, id_chart(1), cosine))
+        call require_netcdf(nc_put_real(ncid, id_chart(2), zeros))
+        call require_netcdf(nc_put_real(ncid, id_chart(3), zeros))
+        call require_netcdf(nc_put_real(ncid, id_chart(4), zeros))
+    end subroutine write_chart_metric
 
     subroutine require_netcdf(status)
         integer, intent(in) :: status
