@@ -28,6 +28,7 @@ add_library(gliss
     src/two_component_kernel.f90
     src/newcomb_limit.f90
     src/family_assembly.f90
+    src/field_profile_identities.f90
     src/mercier_diagnostic.f90
     src/radial_bspline_basis.f90
     src/symmetric_eigensolver.f90)
@@ -63,6 +64,11 @@ set_target_properties(gliss_newcomb PROPERTIES
 add_executable(gliss_mercier app/gliss_mercier.f90)
 target_link_libraries(gliss_mercier PRIVATE gliss)
 set_target_properties(gliss_mercier PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_field_profiles app/gliss_field_profiles.f90)
+target_link_libraries(gliss_field_profiles PRIVATE gliss)
+set_target_properties(gliss_field_profiles PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gliss_family app/gliss_family.f90)
@@ -138,6 +144,13 @@ if(BUILD_TESTING)
     target_link_libraries(test_mercier_diagnostic PRIVATE gliss_test_support)
     add_test(NAME mercier_diagnostic COMMAND test_mercier_diagnostic)
 
+    add_executable(test_field_profile_identities
+        test/test_field_profile_identities.f90)
+    target_link_libraries(test_field_profile_identities PRIVATE
+        gliss_test_support)
+    add_test(NAME field_profile_identities
+        COMMAND test_field_profile_identities)
+
     add_executable(test_gvec_cas3d_integrals test/test_gvec_cas3d_integrals.f90)
     target_link_libraries(test_gvec_cas3d_integrals PRIVATE gliss)
     add_test(NAME gvec_cas3d_integrals COMMAND test_gvec_cas3d_integrals)
@@ -164,6 +177,7 @@ if(GLISS_ENABLE_ENZYME)
     src/newcomb_limit.f90
     src/block_tridiagonal.f90
     src/family_assembly.f90
+    src/field_profile_identities.f90
     src/mercier_diagnostic.f90
             test/enzyme_drive_gradient.f90)
 endif()

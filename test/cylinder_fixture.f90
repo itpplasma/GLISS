@@ -228,10 +228,10 @@ contains
                     profile_values(i) = -pi * minor_radius**2 &
                         * axial_flux_mean(s_values(i), fraction)
                 case ("chi")
-                    profile_values(i) = -minor_radius**2 &
-                        * b_axial_scaled(radius, fraction) &
-                        * iota_scaled(s_values(i), fraction) &
-                        * s_values(i) / 2.0_dp
+                    profile_values(i) = -minor_radius**2 * period_length &
+                        * (b_linear * s_values(i) &
+                        + 0.5_dp * b_cubic * minor_radius**2 &
+                        * s_values(i)**2) / 2.0_dp
                 case ("iota")
                     profile_values(i) = iota_scaled(s_values(i), fraction)
                 end select
