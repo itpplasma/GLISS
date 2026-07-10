@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use GLISS, cite it via this metadata."
+title: "GLISS: Global Linear Ideal Stability Solver"
+type: software
+authors:
+  - family-names: Albert
+    given-names: Christopher G.
+    orcid: "https://orcid.org/0000-0003-4773-416X"
+repository-code: "https://github.com/itpplasma/GLISS"
+license: MIT
+keywords:
+  - ideal MHD
+  - stellarator
+  - stability
+  - automatic differentiation
