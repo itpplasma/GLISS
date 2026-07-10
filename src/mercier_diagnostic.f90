@@ -179,10 +179,13 @@ contains
             fields(:, :, 12) = 0.0_dp
             fields(:, :, 13) = beta_values
         end if
+        ! The current-curvature group enters with a minus sign in the
+        ! export chart; pinned against the geometric drive in
+        ! derivations/drive_machinery_identity.wl.
         drive = (fields(:, :, 10)**2 &
             + (mu0 * profiles%pressure_slope)**2 * fields(:, :, 9)) &
             / (surface%mod_b**2 * fields(:, :, 9)) &
-            + (profiles%flux_curvature * profiles%covariant_zeta_slope &
+            - (profiles%flux_curvature * profiles%covariant_zeta_slope &
             + profiles%poloidal_curvature &
             * profiles%covariant_theta_slope &
             - profiles%flux_curvature * beta_zeta &
