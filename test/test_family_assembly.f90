@@ -1,6 +1,9 @@
 program test_family_assembly
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
-    use family_assembly, only: lowest_family_eigenvalue, &
+    use block_tridiagonal, only: block_tridiagonal_t
+    use family_assembly, only: assemble_family_blocks, &
+        assemble_family_stiffness, family_negative_count, &
+        iterate_family_eigenvalue, lowest_family_eigenvalue, &
         surface_geometry_t
     use newcomb_limit, only: cylinder_profiles_t, &
         lowest_eigenvalue_single_mode
@@ -11,7 +14,8 @@ program test_family_assembly
     type(cylinder_profiles_t) :: profiles
     type(surface_geometry_t), allocatable :: geometry(:)
     real(dp) :: reference, family_value, pair_value, step
-    integer :: i, info
+    real(dp) :: iterated
+    integer :: i, info, negatives
 
     profiles%length = 6.0_dp * pi
     profiles%b_axial = 1.0_dp
@@ -39,9 +43,65 @@ program test_family_assembly
     call require(abs(pair_value - family_value) < 1.0e-10_dp * &
         abs(family_value), &
         "decoupled modes change the lowest eigenvalue")
+
+    call check_block_assembly(geometry, step)
+
+    call iterate_family_eigenvalue(geometry, [1], [1], step, &
+        1.05_dp * family_value, iterated, info)
+    call require(info == 0, "inverse iteration failed")
+    ! The dual-parity pair is degenerate up to quadrature round-off;
+    ! the iterate may land anywhere in that split.
+    call require(abs(iterated - family_value) < 1.0e-7_dp * &
+        abs(family_value), &
+        "inverse iteration disagrees with the dense solve")
+
+    call family_negative_count(geometry, [1], [1], step, 0.0_dp, &
+        negatives, info)
+    call require(info == 0, "inertia count failed")
+    call require(negatives >= 1, &
+        "the unstable mode is invisible to the inertia count")
+    call family_negative_count(geometry, [1], [1], step, &
+        2.0_dp * family_value, negatives, info)
+    call require(info == 0, "shifted inertia count failed")
+    call require(negatives == 0, &
+        "the inertia count below the lowest eigenvalue is not zero")
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_block_assembly(geometry, step)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        real(dp), intent(in) :: step
+        type(block_tridiagonal_t) :: blocks
+        real(dp), allocatable :: stiffness(:, :), dense_block(:, :)
+        real(dp) :: deviation
+        integer :: trials, nodes, info, i
+
+        call assemble_family_stiffness(geometry, [1], [1], step, &
+            stiffness, info)
+        call require(info == 0, "dense assembly failed")
+        call assemble_family_blocks(geometry, [1], [1], step, blocks, &
+            info)
+        call require(info == 0, "block assembly failed")
+        trials = size(blocks%diag, 1)
+        nodes = size(blocks%diag, 3)
+        deviation = 0.0_dp
+        allocate (dense_block(trials, trials))
+        do i = 1, nodes
+            dense_block = stiffness(trials * (i - 1) + 1:trials * i, &
+                trials * (i - 1) + 1:trials * i)
+            deviation = max(deviation, maxval(abs(dense_block &
+                - blocks%diag(:, :, i))))
+            if (i < nodes) then
+                dense_block = stiffness(trials * i + 1:trials * (i + 1), &
+                    trials * (i - 1) + 1:trials * i)
+                deviation = max(deviation, maxval(abs(dense_block &
+                    - blocks%off(:, :, i))))
+            end if
+        end do
+        call require(deviation == 0.0_dp, &
+            "block assembly differs from the dense assembly")
+    end subroutine check_block_assembly
 
     subroutine cylinder_surface(radius, surface)
         real(dp), intent(in) :: radius

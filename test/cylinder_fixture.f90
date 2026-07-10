@@ -35,6 +35,7 @@ module cylinder_fixture
 
     public :: create_cylinder_fixture
     public :: radius_of, b_poloidal, pressure_of, iota_of
+    public :: b_axial_scaled, iota_scaled, pressure_scaled
 
 contains
 
@@ -77,16 +78,44 @@ contains
             * s_value) / (2.0_dp * pi * b_axial)
     end function iota_of
 
-    subroutine create_cylinder_fixture(filename, chart_shift, surfaces)
+    pure function b_axial_scaled(radius, pressure_fraction) result(value)
+        real(dp), intent(in) :: radius, pressure_fraction
+        real(dp) :: value
+
+        value = sqrt(b_axial**2 + 2.0_dp * (1.0_dp - pressure_fraction) &
+            * (integral_at(minor_radius) - integral_at(radius)))
+    end function b_axial_scaled
+
+    pure function pressure_scaled(radius, pressure_fraction) result(value)
+        real(dp), intent(in) :: radius, pressure_fraction
+        real(dp) :: value
+
+        value = pressure_fraction * (integral_at(minor_radius) &
+            - integral_at(radius)) / mu0 + 1.0e2_dp
+    end function pressure_scaled
+
+    pure function iota_scaled(s_value, pressure_fraction) result(value)
+        real(dp), intent(in) :: s_value, pressure_fraction
+        real(dp) :: value
+        real(dp) :: radius
+
+        radius = radius_of(s_value)
+        value = period_length * b_poloidal(radius) / (2.0_dp * pi &
+            * radius * b_axial_scaled(radius, pressure_fraction))
+    end function iota_scaled
+
+    subroutine create_cylinder_fixture(filename, chart_shift, surfaces, &
+            pressure_scale)
         character(len=*), intent(in) :: filename
         real(dp), intent(in), optional :: chart_shift
         integer, intent(in), optional :: surfaces
+        real(dp), intent(in), optional :: pressure_scale
         integer :: ncid, id_nfp, id_beta, id_winding, id_m, id_n, id_rho
         integer :: id_profiles(profile_count)
         integer :: id_cos(field_count), id_sin(field_count)
         integer :: id_chart(4)
         real(dp), allocatable :: s_values(:)
-        real(dp) :: shift
+        real(dp) :: shift, fraction
         logical :: shifted
         integer :: ns, i
 
@@ -95,6 +124,8 @@ contains
         shifted = present(chart_shift)
         shift = 0.0_dp
         if (shifted) shift = chart_shift
+        fraction = 1.0_dp
+        if (present(pressure_scale)) fraction = pressure_scale
         allocate (s_values(ns))
         do i = 1, ns
             s_values(i) = (real(i, dp) - 0.5_dp) / real(ns, dp)
@@ -110,9 +141,9 @@ contains
         call require_netcdf(nc_put_integer(ncid, id_m, [0, 1]))
         call require_netcdf(nc_put_integer(ncid, id_n, [0, 1, -1]))
         call require_netcdf(nc_put_real(ncid, id_rho, sqrt(s_values)))
-        call write_fixture_profiles(ncid, id_profiles, s_values)
+        call write_fixture_profiles(ncid, id_profiles, s_values, fraction)
         call write_fixture_fields(ncid, id_cos, id_sin, s_values, &
-            shifted, shift)
+            shifted, shift, fraction)
         if (shifted) call write_chart_metric(ncid, id_chart, s_values, &
             shift)
         call require_netcdf(nc_close_file(ncid))
@@ -173,9 +204,11 @@ contains
         call require_netcdf(nc_end_definitions(ncid))
     end subroutine define_fixture_variables
 
-    subroutine write_fixture_profiles(ncid, id_profiles, s_values)
+    subroutine write_fixture_profiles(ncid, id_profiles, s_values, &
+            fraction)
         integer, intent(in) :: ncid, id_profiles(profile_count)
         real(dp), intent(in) :: s_values(:)
+        real(dp), intent(in) :: fraction
         real(dp) :: profile_values(size(s_values)), radius
         integer :: profile, i
 
@@ -184,20 +217,23 @@ contains
                 radius = radius_of(s_values(i))
                 select case (trim(profile_names(profile)))
                 case ("p")
-                    profile_values(i) = pressure_of(radius)
+                    profile_values(i) = pressure_scaled(radius, fraction)
                 case ("B_theta_avg")
                     profile_values(i) = 2.0_dp * pi * radius &
                         * b_poloidal(radius)
                 case ("B_zeta_avg")
-                    profile_values(i) = period_length * b_axial
+                    profile_values(i) = period_length &
+                        * b_axial_scaled(radius, fraction)
                 case ("Phi")
-                    profile_values(i) = -s_values(i) * pi &
-                        * minor_radius**2 * b_axial
+                    profile_values(i) = -pi * minor_radius**2 &
+                        * axial_flux_mean(s_values(i), fraction)
                 case ("chi")
-                    profile_values(i) = -minor_radius**2 * b_axial &
-                        * iota_of(s_values(i)) * s_values(i) / 2.0_dp
+                    profile_values(i) = -minor_radius**2 &
+                        * b_axial_scaled(radius, fraction) &
+                        * iota_scaled(s_values(i), fraction) &
+                        * s_values(i) / 2.0_dp
                 case ("iota")
-                    profile_values(i) = iota_of(s_values(i))
+                    profile_values(i) = iota_scaled(s_values(i), fraction)
                 end select
             end do
             call require_netcdf(nc_put_real(ncid, id_profiles(profile), &
@@ -205,13 +241,32 @@ contains
         end do
     end subroutine write_fixture_profiles
 
+    pure function axial_flux_mean(s_value, fraction) result(value)
+        real(dp), intent(in) :: s_value, fraction
+        real(dp) :: value
+        integer, parameter :: intervals = 200
+        real(dp) :: step, sigma, weight
+        integer :: i
+
+        step = s_value / real(intervals, dp)
+        value = b_axial_scaled(radius_of(0.0_dp), fraction) &
+            + b_axial_scaled(radius_of(s_value), fraction)
+        do i = 1, intervals - 1
+            sigma = real(i, dp) * step
+            weight = merge(4.0_dp, 2.0_dp, mod(i, 2) == 1)
+            value = value + weight * b_axial_scaled(radius_of(sigma), &
+                fraction)
+        end do
+        value = value * step / 3.0_dp
+    end function axial_flux_mean
+
     subroutine write_fixture_fields(ncid, id_cos, id_sin, s_values, &
-            shifted, shift)
+            shifted, shift, fraction)
         integer, intent(in) :: ncid
         integer, intent(in) :: id_cos(field_count), id_sin(field_count)
         real(dp), intent(in) :: s_values(:)
         logical, intent(in) :: shifted
-        real(dp), intent(in) :: shift
+        real(dp), intent(in) :: shift, fraction
         real(dp) :: cosine(nn, nm, size(s_values))
         real(dp) :: sine(nn, nm, size(s_values))
         real(dp) :: radius
@@ -225,7 +280,7 @@ contains
                 select case (trim(field_names(field)))
                 case ("mod_B")
                     cosine(1, 1, i) = sqrt(b_poloidal(radius)**2 &
-                        + b_axial**2)
+                        + b_axial_scaled(radius, fraction)**2)
                 case ("Jac")
                     cosine(1, 1, i) = -pi * minor_radius**2 * period_length
                 case ("g_tt")
@@ -236,7 +291,8 @@ contains
                     cosine(1, 1, i) = b_poloidal(radius) &
                         / (2.0_dp * pi * radius)
                 case ("B_contra_z")
-                    cosine(1, 1, i) = b_axial / period_length
+                    cosine(1, 1, i) = b_axial_scaled(radius, fraction) &
+                        / period_length
                 case ("xhat")
                     cosine(3, 1, i) = axis_radius
                     cosine(2, 2, i) = radius / 2.0_dp

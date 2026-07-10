@@ -20,6 +20,7 @@ add_library(gliss
     src/gvec_cas3d_reconstruction.f90
     src/gvec_cas3d_integrals.f90
     src/gvec_cas3d_types.f90
+    src/block_tridiagonal.f90
     src/local_mode_model.f90
     src/nonuniform_derivative.f90
     src/mode_topology.f90
@@ -134,6 +135,10 @@ if(BUILD_TESTING)
     add_executable(test_gvec_cas3d_integrals test/test_gvec_cas3d_integrals.f90)
     target_link_libraries(test_gvec_cas3d_integrals PRIVATE gliss)
     add_test(NAME gvec_cas3d_integrals COMMAND test_gvec_cas3d_integrals)
+
+    add_executable(test_suydam_marginal test/test_suydam_marginal.f90)
+    target_link_libraries(test_suydam_marginal PRIVATE gliss_test_support)
+    add_test(NAME suydam_marginal COMMAND test_suydam_marginal)
 endif()
 
 option(GLISS_ENABLE_ENZYME "Build Enzyme derivative checks" OFF)
@@ -146,6 +151,7 @@ if(GLISS_ENABLE_ENZYME)
     src/mode_topology.f90
     src/two_component_kernel.f90
     src/newcomb_limit.f90
+    src/block_tridiagonal.f90
     src/family_assembly.f90
     src/mercier_diagnostic.f90
             test/enzyme_drive_gradient.f90)

@@ -1,5 +1,8 @@
 module family_assembly
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use block_tridiagonal, only: apply_block_tridiagonal, &
+        block_factor_t, block_tridiagonal_t, factorize_shifted, &
+        solve_factored
     use two_component_kernel, only: two_component_components
     implicit none
     private
@@ -11,7 +14,10 @@ module family_assembly
         real(dp), allocatable :: drive(:, :)
     end type surface_geometry_t
 
+    public :: assemble_family_blocks
     public :: assemble_family_stiffness
+    public :: family_negative_count
+    public :: iterate_family_eigenvalue
     public :: lowest_family_eigenvalue
 
     interface
@@ -56,6 +62,109 @@ contains
         if (info /= 0) return
         lowest = eigenvalues(1) / radial_step
     end subroutine lowest_family_eigenvalue
+
+    subroutine assemble_family_blocks(geometry, mode_m, mode_n, &
+            radial_step, blocks, info)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        integer, intent(in) :: mode_m(:), mode_n(:)
+        real(dp), intent(in) :: radial_step
+        type(block_tridiagonal_t), intent(out) :: blocks
+        integer, intent(out) :: info
+        real(dp), allocatable :: element(:, :)
+        integer :: trials, intervals, nodes, i
+
+        trials = 2 * size(mode_m)
+        intervals = size(geometry)
+        nodes = intervals - 1
+        allocate (blocks%diag(trials, trials, nodes), source=0.0_dp)
+        allocate (blocks%off(trials, trials, nodes - 1), source=0.0_dp)
+        allocate (element(2 * trials, 2 * trials))
+        do i = 1, intervals
+            call condensed_element(geometry(i), mode_m, mode_n, &
+                radial_step, element, info)
+            if (info /= 0) return
+            if (i > 1) then
+                blocks%diag(:, :, i - 1) = blocks%diag(:, :, i - 1) &
+                    + element(1:trials, 1:trials)
+            end if
+            if (i <= nodes) then
+                blocks%diag(:, :, i) = blocks%diag(:, :, i) &
+                    + element(trials + 1:, trials + 1:)
+            end if
+            if (i > 1 .and. i <= nodes) then
+                blocks%off(:, :, i - 1) = blocks%off(:, :, i - 1) &
+                    + element(trials + 1:, 1:trials)
+            end if
+        end do
+        info = 0
+    end subroutine assemble_family_blocks
+
+    subroutine family_negative_count(geometry, mode_m, mode_n, &
+            radial_step, shift, count, info)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        integer, intent(in) :: mode_m(:), mode_n(:)
+        real(dp), intent(in) :: radial_step, shift
+        integer, intent(out) :: count
+        integer, intent(out) :: info
+        type(block_tridiagonal_t) :: blocks
+        type(block_factor_t) :: factor
+
+        count = -1
+        call assemble_family_blocks(geometry, mode_m, mode_n, &
+            radial_step, blocks, info)
+        if (info /= 0) return
+        call factorize_shifted(blocks, shift * radial_step, factor, info)
+        if (info /= 0) return
+        count = factor%negative_count
+    end subroutine family_negative_count
+
+    subroutine iterate_family_eigenvalue(geometry, mode_m, mode_n, &
+            radial_step, shift, eigenvalue, info)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        integer, intent(in) :: mode_m(:), mode_n(:)
+        real(dp), intent(in) :: radial_step, shift
+        real(dp), intent(out) :: eigenvalue
+        integer, intent(out) :: info
+        type(block_tridiagonal_t) :: blocks
+        type(block_factor_t) :: factor
+        real(dp), allocatable :: vector(:, :)
+        real(dp) :: rayleigh, previous
+        integer :: trials, nodes, iteration, t, j
+
+        call assemble_family_blocks(geometry, mode_m, mode_n, &
+            radial_step, blocks, info)
+        if (info /= 0) return
+        call factorize_shifted(blocks, shift * radial_step, factor, info)
+        if (info /= 0) return
+        trials = size(blocks%diag, 1)
+        nodes = size(blocks%diag, 3)
+        allocate (vector(trials, nodes))
+        do j = 1, nodes
+            do t = 1, trials
+                vector(t, j) = 1.0_dp + 0.1_dp * real(t, dp) &
+                    + 0.01_dp * real(j, dp)
+            end do
+        end do
+        vector = vector / norm2(vector)
+        previous = huge(1.0_dp)
+        do iteration = 1, 500
+            call solve_factored(blocks, factor, vector, info)
+            if (info /= 0) return
+            vector = vector / norm2(vector)
+            rayleigh = sum(vector * apply_block_tridiagonal(blocks, &
+                vector))
+            if (abs(rayleigh - previous) <= 1.0e-13_dp &
+                * max(1.0_dp, abs(rayleigh))) exit
+            previous = rayleigh
+        end do
+        if (abs(rayleigh - previous) > 1.0e-11_dp &
+            * max(1.0_dp, abs(rayleigh))) then
+            info = -1
+            return
+        end if
+        eigenvalue = rayleigh / radial_step
+        info = 0
+    end subroutine iterate_family_eigenvalue
 
     subroutine assemble_family_stiffness(geometry, mode_m, mode_n, &
             radial_step, stiffness, info)
