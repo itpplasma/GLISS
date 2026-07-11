@@ -22,6 +22,7 @@ add_library(gliss
     src/gvec_cas3d_types.f90
     src/block_tridiagonal.f90
     src/compressible_stiffness_assembly.f90
+    src/compressible_stiffness_family_assembly.f90
     src/generalized_block_solver.f90
     src/eigenvalue_tracking.f90
     src/dynamic_family_layout.f90
@@ -181,6 +182,13 @@ if(BUILD_TESTING)
     add_test(NAME compressible_stiffness_assembly
         COMMAND test_compressible_stiffness_assembly)
 
+    add_executable(test_compressible_stiffness_family_assembly
+        test/test_compressible_stiffness_family_assembly.f90)
+    target_link_libraries(test_compressible_stiffness_family_assembly PRIVATE
+        gliss)
+    add_test(NAME compressible_stiffness_family_assembly
+        COMMAND test_compressible_stiffness_family_assembly)
+
     add_executable(test_dynamic_family_layout
         test/test_dynamic_family_layout.f90)
     target_link_libraries(test_dynamic_family_layout PRIVATE gliss)
@@ -296,4 +304,17 @@ if(GLISS_ENABLE_ENZYME)
             src/compressible_stiffness_assembly.f90
             test/enzyme_compressible_stiffness_fixture.f90
             test/enzyme_compressible_stiffness_gradient.f90)
+    add_enzyme_fortran_test(enzyme_compressible_stiffness_family_gradient
+        SOURCES
+            src/dynamic_family_layout.f90
+            src/phase_assembly_policy.f90
+            src/phase_factor_topology.f90
+            src/physical_constants.f90
+            src/radial_space_policy.f90
+            src/two_component_kernel.f90
+            src/three_component_kernel.f90
+            src/compressible_stiffness_assembly.f90
+            src/compressible_stiffness_family_assembly.f90
+            test/enzyme_compressible_stiffness_family_fixture.f90
+            test/enzyme_compressible_stiffness_family_gradient.f90)
 endif()

@@ -1,9 +1,8 @@
 module physical_mass_family_assembly
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use dynamic_family_layout, only: build_dynamic_family_layout, &
-        dynamic_family_layout_t, dynamic_layout_ok, eta_global_index, &
-        mu_global_index, normal_global_index
+    use dynamic_family_layout, only: add_dynamic_element, &
+        build_dynamic_family_layout, dynamic_family_layout_t, dynamic_layout_ok
     use mass_density_policy, only: evaluate_mass_density, mass_density_ok, &
         mass_density_profile_t
     use phase_assembly_policy, only: phase_assembly_direct, &
@@ -86,86 +85,47 @@ contains
                 radial_space, radial_coordinate, radial_step, phase_assembly, &
                 element, info)
             if (info /= 0) return
-            call add_element(layout, interval, element, mass)
+            call add_dynamic_element(layout, interval, element, mass, info)
+            if (info /= dynamic_layout_ok) return
         end do
         info = 0
     end subroutine assemble_physical_family_mass_resolved
 
-    subroutine add_element(layout, interval, element, mass)
-        type(dynamic_family_layout_t), intent(in) :: layout
-        integer, intent(in) :: interval
-        real(dp), intent(in) :: element(:, :)
-        real(dp), intent(inout) :: mass(:, :)
-        integer :: local_a, local_b, global_a, global_b
+    subroutine validate_resolved_inputs(fields, density_kg_m3, trial_m, &
+            trial_n, trial_parity, stored_power, field_periods, radial_step, &
+            phase_assembly, mass, layout, info)
+        real(dp), intent(in) :: fields(:, :, :, :), density_kg_m3(:)
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: stored_power(:), radial_step
+        integer, intent(in) :: field_periods, phase_assembly
+        real(dp), intent(in) :: mass(:, :)
+        type(dynamic_family_layout_t), intent(out) :: layout
+        integer, intent(out) :: info
+        integer :: trials, intervals
 
-        do local_b = 1, size(element, 2)
-            global_b = element_global_index(layout, interval, local_b)
-            if (global_b == 0) cycle
-            do local_a = 1, size(element, 1)
-                global_a = element_global_index(layout, interval, local_a)
-                if (global_a == 0) cycle
-                mass(global_a, global_b) = mass(global_a, global_b) &
-                    + element(local_a, local_b)
-            end do
-        end do
-    end subroutine add_element
-
-    pure function element_global_index(layout, interval, local) result(index)
-        type(dynamic_family_layout_t), intent(in) :: layout
-        integer, intent(in) :: interval, local
-        integer :: index, block, trial
-
-        block = (local - 1) / layout%trials + 1
-            trial = modulo(local - 1, layout%trials) + 1
-            select case (block)
-            case (1)
-                index = normal_global_index(layout, interval - 1, trial)
-            case (2)
-                index = normal_global_index(layout, interval, trial)
-            case (3)
-                index = eta_global_index(layout, interval, trial)
-            case (4)
-                index = mu_global_index(layout, interval, trial)
-            case default
-                index = 0
-            end select
-        end function element_global_index
-
-        subroutine validate_resolved_inputs(fields, density_kg_m3, trial_m, &
-                trial_n, trial_parity, stored_power, field_periods, radial_step, &
-                phase_assembly, mass, layout, info)
-            real(dp), intent(in) :: fields(:, :, :, :), density_kg_m3(:)
-            integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
-            real(dp), intent(in) :: stored_power(:), radial_step
-            integer, intent(in) :: field_periods, phase_assembly
-            real(dp), intent(in) :: mass(:, :)
-            type(dynamic_family_layout_t), intent(out) :: layout
-            integer, intent(out) :: info
-            integer :: trials, intervals
-
+        info = -1
+        trials = size(trial_m)
+        intervals = size(fields, 4)
+        call build_dynamic_family_layout(trials, intervals, layout, info)
+        if (info /= dynamic_layout_ok) then
             info = -1
-            trials = size(trial_m)
-            intervals = size(fields, 4)
-            call build_dynamic_family_layout(trials, intervals, layout, info)
-            if (info /= dynamic_layout_ok) then
-                info = -1
-                return
-            end if
-            info = -1
-            if (size(trial_n) /= trials .or. size(trial_parity) /= trials) return
-            if (size(stored_power) /= trials) return
-            if (size(density_kg_m3) /= intervals) return
-            if (.not. all(ieee_is_finite(density_kg_m3))) return
-            if (any(density_kg_m3 <= 0.0_dp)) return
-            if (.not. ieee_is_finite(radial_step)) return
-            if (abs(radial_step * real(intervals, dp) - 1.0_dp) &
-                > radial_tolerance) return
-            if (field_periods < 1) return
-            if (phase_assembly /= phase_assembly_transformed .and. &
-                phase_assembly /= phase_assembly_direct) return
-            if (size(mass, 1) /= layout%total_unknowns) return
-            if (size(mass, 2) /= layout%total_unknowns) return
-            info = 0
-        end subroutine validate_resolved_inputs
+            return
+        end if
+        info = -1
+        if (size(trial_n) /= trials .or. size(trial_parity) /= trials) return
+        if (size(stored_power) /= trials) return
+        if (size(density_kg_m3) /= intervals) return
+        if (.not. all(ieee_is_finite(density_kg_m3))) return
+        if (any(density_kg_m3 <= 0.0_dp)) return
+        if (.not. ieee_is_finite(radial_step)) return
+        if (abs(radial_step * real(intervals, dp) - 1.0_dp) &
+            > radial_tolerance) return
+        if (field_periods < 1) return
+        if (phase_assembly /= phase_assembly_transformed .and. &
+            phase_assembly /= phase_assembly_direct) return
+        if (size(mass, 1) /= layout%total_unknowns) return
+        if (size(mass, 2) /= layout%total_unknowns) return
+        info = 0
+    end subroutine validate_resolved_inputs
 
-    end module physical_mass_family_assembly
+end module physical_mass_family_assembly

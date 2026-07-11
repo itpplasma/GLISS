@@ -1,0 +1,140 @@
+module compressible_stiffness_family_assembly
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use compressible_stiffness_assembly, only: &
+        assemble_compressible_stiffness_surface_resolved
+    use dynamic_family_layout, only: add_dynamic_element, &
+        build_dynamic_family_layout, dynamic_family_layout_t, dynamic_layout_ok
+    use phase_assembly_policy, only: phase_assembly_direct, &
+        phase_assembly_transformed
+    use radial_space_policy, only: radial_space_config_t
+    implicit none
+    private
+
+    real(dp), parameter :: radial_tolerance = 1.0e-12_dp
+
+    public :: assemble_compressible_family_stiffness
+    public :: assemble_compressible_family_stiffness_resolved
+
+contains
+
+    subroutine assemble_compressible_family_stiffness(fields, drive, &
+            signed_sqrtg_radial, signed_sqrtg_theta, signed_sqrtg_zeta, &
+            gamma_pressure_pa, trial_m, trial_n, trial_parity, stored_power, &
+            field_periods, radial_space, radial_step, phase_assembly, &
+            stiffness, layout, info)
+        real(dp), intent(in) :: fields(:, :, :, :), drive(:, :, :)
+        real(dp), intent(in) :: signed_sqrtg_radial(:, :, :)
+        real(dp), intent(in) :: signed_sqrtg_theta(:, :, :)
+        real(dp), intent(in) :: signed_sqrtg_zeta(:, :, :)
+        real(dp), intent(in) :: gamma_pressure_pa(:, :, :)
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: stored_power(:)
+        integer, intent(in) :: field_periods, phase_assembly
+        type(radial_space_config_t), intent(in) :: radial_space
+        real(dp), intent(in) :: radial_step
+        real(dp), allocatable, intent(out) :: stiffness(:, :)
+        type(dynamic_family_layout_t), intent(out) :: layout
+        integer, intent(out) :: info
+
+        call build_dynamic_family_layout(size(trial_m), size(fields, 4), &
+            layout, info)
+        if (info /= dynamic_layout_ok) return
+        allocate (stiffness(layout%total_unknowns, layout%total_unknowns))
+        call assemble_compressible_family_stiffness_resolved(fields, drive, &
+            signed_sqrtg_radial, signed_sqrtg_theta, signed_sqrtg_zeta, &
+            gamma_pressure_pa, trial_m, trial_n, trial_parity, stored_power, &
+            field_periods, radial_space, radial_step, phase_assembly, &
+            stiffness, info)
+    end subroutine assemble_compressible_family_stiffness
+
+    subroutine assemble_compressible_family_stiffness_resolved(fields, &
+            drive, signed_sqrtg_radial, signed_sqrtg_theta, &
+            signed_sqrtg_zeta, gamma_pressure_pa, trial_m, trial_n, &
+            trial_parity, stored_power, field_periods, radial_space, &
+            radial_step, phase_assembly, stiffness, info)
+        real(dp), intent(in) :: fields(:, :, :, :), drive(:, :, :)
+        real(dp), intent(in) :: signed_sqrtg_radial(:, :, :)
+        real(dp), intent(in) :: signed_sqrtg_theta(:, :, :)
+        real(dp), intent(in) :: signed_sqrtg_zeta(:, :, :)
+        real(dp), intent(in) :: gamma_pressure_pa(:, :, :)
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: stored_power(:)
+        integer, intent(in) :: field_periods, phase_assembly
+        type(radial_space_config_t), intent(in) :: radial_space
+        real(dp), intent(in) :: radial_step
+        real(dp), intent(out) :: stiffness(:, :)
+        integer, intent(out) :: info
+        type(dynamic_family_layout_t) :: layout
+        real(dp) :: element(4 * size(trial_m), 4 * size(trial_m))
+        real(dp) :: radial_coordinate
+        integer :: interval
+
+        call validate_inputs(fields, drive, signed_sqrtg_radial, &
+            signed_sqrtg_theta, signed_sqrtg_zeta, gamma_pressure_pa, &
+            trial_m, trial_n, trial_parity, stored_power, field_periods, &
+            radial_step, phase_assembly, stiffness, layout, info)
+        if (info /= 0) return
+        stiffness = 0.0_dp
+        do interval = 1, layout%intervals
+            radial_coordinate = (real(interval, dp) - 0.5_dp) * radial_step
+            call assemble_compressible_stiffness_surface_resolved( &
+                fields(:, :, :, interval), drive(:, :, interval), &
+                signed_sqrtg_radial(:, :, interval), &
+                signed_sqrtg_theta(:, :, interval), &
+                signed_sqrtg_zeta(:, :, interval), &
+                gamma_pressure_pa(:, :, interval), trial_m, trial_n, &
+                trial_parity, stored_power, field_periods, radial_space, &
+                radial_coordinate, radial_step, phase_assembly, element, info)
+            if (info /= 0) return
+            call add_dynamic_element(layout, interval, element, stiffness, info)
+            if (info /= dynamic_layout_ok) return
+        end do
+        info = 0
+    end subroutine assemble_compressible_family_stiffness_resolved
+
+    subroutine validate_inputs(fields, drive, jacobian_radial, &
+            jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
+            trial_parity, stored_power, field_periods, radial_step, &
+            phase_assembly, stiffness, layout, info)
+        real(dp), intent(in) :: fields(:, :, :, :), drive(:, :, :)
+        real(dp), intent(in) :: jacobian_radial(:, :, :)
+        real(dp), intent(in) :: jacobian_theta(:, :, :)
+        real(dp), intent(in) :: jacobian_zeta(:, :, :), gamma_pressure(:, :, :)
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: stored_power(:), radial_step
+        integer, intent(in) :: field_periods, phase_assembly
+        real(dp), intent(in) :: stiffness(:, :)
+        type(dynamic_family_layout_t), intent(out) :: layout
+        integer, intent(out) :: info
+        integer :: angular_radial_shape(3), intervals, trials
+
+        info = -1
+        trials = size(trial_m)
+        intervals = size(fields, 4)
+        call build_dynamic_family_layout(trials, intervals, layout, info)
+        if (info /= dynamic_layout_ok) then
+            info = -1
+            return
+        end if
+        info = -1
+        angular_radial_shape = [size(fields, 1), size(fields, 2), intervals]
+        if (size(trial_n) /= trials .or. size(trial_parity) /= trials) return
+        if (size(stored_power) /= trials) return
+        if (size(fields, 3) < 13) return
+        if (any(shape(drive) /= angular_radial_shape)) return
+        if (any(shape(jacobian_radial) /= angular_radial_shape)) return
+        if (any(shape(jacobian_theta) /= angular_radial_shape)) return
+        if (any(shape(jacobian_zeta) /= angular_radial_shape)) return
+        if (any(shape(gamma_pressure) /= angular_radial_shape)) return
+        if (.not. ieee_is_finite(radial_step)) return
+        if (abs(radial_step * real(intervals, dp) - 1.0_dp) &
+            > radial_tolerance) return
+        if (field_periods < 1) return
+        if (phase_assembly /= phase_assembly_transformed .and. &
+            phase_assembly /= phase_assembly_direct) return
+        if (any(shape(stiffness) /= layout%total_unknowns)) return
+        info = 0
+    end subroutine validate_inputs
+
+end module compressible_stiffness_family_assembly

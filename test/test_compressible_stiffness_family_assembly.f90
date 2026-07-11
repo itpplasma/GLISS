@@ -1,0 +1,246 @@
+program test_compressible_stiffness_family_assembly
+    use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use compressible_stiffness_assembly, only: &
+        assemble_compressible_stiffness_surface_resolved
+    use compressible_stiffness_family_assembly, only: &
+        assemble_compressible_family_stiffness
+    use dynamic_family_layout, only: dynamic_family_layout_t, &
+        eta_global_index, mu_global_index, normal_global_index
+    use phase_assembly_policy, only: phase_assembly_direct, &
+        phase_assembly_transformed
+    use radial_space_policy, only: radial_space_config_t
+    implicit none
+
+    integer, parameter :: intervals = 4, n_theta = 8, n_zeta = 8
+    integer, parameter :: trial_m(2) = [1, 2]
+    integer, parameter :: trial_n(2) = [1, 4]
+    integer, parameter :: trial_parity(2) = [1, 2]
+    real(dp), parameter :: stored_power(2) = 0.0_dp
+    real(dp), allocatable :: fields(:, :, :, :), drive(:, :, :)
+    real(dp), allocatable :: jacobian_radial(:, :, :)
+    real(dp), allocatable :: jacobian_theta(:, :, :), jacobian_zeta(:, :, :)
+    real(dp), allocatable :: gamma_pressure(:, :, :), direct(:, :)
+    real(dp), allocatable :: transformed(:, :), zero(:, :), doubled(:, :)
+    real(dp) :: probe(22), matrix_energy, element_energy
+    type(dynamic_family_layout_t) :: layout, direct_layout
+    type(radial_space_config_t) :: radial_space
+    integer :: info
+
+    call build_fixture(fields, drive, jacobian_radial, jacobian_theta, &
+        jacobian_zeta, gamma_pressure)
+    call assemble(fields, drive, jacobian_radial, jacobian_theta, &
+        jacobian_zeta, gamma_pressure, phase_assembly_direct, direct, &
+        direct_layout, info)
+    call require(info == 0, "direct global stiffness assembly failed")
+    call assemble(fields, drive, jacobian_radial, jacobian_theta, &
+        jacobian_zeta, gamma_pressure, phase_assembly_transformed, &
+        transformed, layout, info)
+    call require(info == 0, "transformed global stiffness assembly failed")
+    call require(layout%total_unknowns == 22, "global stiffness layout is wrong")
+    call require(direct_layout%total_unknowns == layout%total_unknowns, &
+        "phase backends produced different stiffness layouts")
+    call require_close(direct, transformed, 1.0e-12_dp, &
+        "global direct and transformed stiffness matrices differ")
+    call require_close(transformed, transpose(transformed), 1.0e-13_dp, &
+        "global compressible stiffness is not symmetric")
+
+    call build_probe(probe)
+    matrix_energy = dot_product(probe, matmul(transformed, probe))
+    call sum_element_energies(fields, drive, jacobian_radial, &
+        jacobian_theta, jacobian_zeta, gamma_pressure, layout, probe, &
+        element_energy, info)
+    call require(info == 0, "global element-energy oracle failed")
+    call require(abs(matrix_energy - element_energy) < 1.0e-12_dp &
+        * max(1.0_dp, abs(matrix_energy), abs(element_energy)), &
+        "global gather changes the sum of element energies")
+
+    call assemble(fields, drive, jacobian_radial, jacobian_theta, &
+        jacobian_zeta, 0.0_dp * gamma_pressure, phase_assembly_transformed, &
+        zero, layout, info)
+    call require(info == 0, "zero-gamma global stiffness assembly failed")
+    call require(maxval(abs(zero(layout%normal_unknowns &
+        + layout%eta_unknowns + 1:, :))) < 1.0e-13_dp, &
+        "zero-gamma global stiffness retained mu coupling")
+    call assemble(fields, drive, jacobian_radial, jacobian_theta, &
+        jacobian_zeta, 2.0_dp * gamma_pressure, phase_assembly_transformed, &
+        doubled, layout, info)
+    call require(info == 0, "scaled-gamma global stiffness assembly failed")
+    call require_close(doubled(layout%normal_unknowns &
+        + layout%eta_unknowns + 1:, :), &
+        2.0_dp * transformed(layout%normal_unknowns &
+        + layout%eta_unknowns + 1:, :), 1.0e-13_dp, &
+        "global mu rows are not linear in gamma pressure")
+
+    call assemble_compressible_family_stiffness(fields, drive, &
+        jacobian_radial, jacobian_theta, jacobian_zeta, gamma_pressure, &
+        trial_m, trial_n, trial_parity, stored_power, 3, radial_space, &
+        0.2_dp, phase_assembly_transformed, doubled, layout, info)
+    call require(info /= 0, "inconsistent stiffness radial partition accepted")
+
+    write (*, "(a)") "PASS"
+
+contains
+
+    subroutine assemble(local_fields, local_drive, local_jacobian_radial, &
+            local_jacobian_theta, local_jacobian_zeta, local_gamma_pressure, &
+            phase_assembly, stiffness, local_layout, local_info)
+        real(dp), intent(in) :: local_fields(:, :, :, :), local_drive(:, :, :)
+        real(dp), intent(in) :: local_jacobian_radial(:, :, :)
+        real(dp), intent(in) :: local_jacobian_theta(:, :, :)
+        real(dp), intent(in) :: local_jacobian_zeta(:, :, :)
+        real(dp), intent(in) :: local_gamma_pressure(:, :, :)
+        integer, intent(in) :: phase_assembly
+        real(dp), allocatable, intent(out) :: stiffness(:, :)
+        type(dynamic_family_layout_t), intent(out) :: local_layout
+        integer, intent(out) :: local_info
+
+        call assemble_compressible_family_stiffness(local_fields, local_drive, &
+            local_jacobian_radial, local_jacobian_theta, &
+            local_jacobian_zeta, local_gamma_pressure, trial_m, trial_n, &
+            trial_parity, stored_power, 3, radial_space, 0.25_dp, &
+            phase_assembly, stiffness, local_layout, local_info)
+    end subroutine assemble
+
+    subroutine sum_element_energies(local_fields, local_drive, &
+            local_jacobian_radial, local_jacobian_theta, local_jacobian_zeta, &
+            local_gamma_pressure, local_layout, global_vector, energy, info)
+        real(dp), intent(in) :: local_fields(:, :, :, :), local_drive(:, :, :)
+        real(dp), intent(in) :: local_jacobian_radial(:, :, :)
+        real(dp), intent(in) :: local_jacobian_theta(:, :, :)
+        real(dp), intent(in) :: local_jacobian_zeta(:, :, :)
+        real(dp), intent(in) :: local_gamma_pressure(:, :, :), global_vector(:)
+        type(dynamic_family_layout_t), intent(in) :: local_layout
+        real(dp), intent(out) :: energy
+        integer, intent(out) :: info
+        real(dp) :: element(8, 8), local_vector(8), radial_coordinate
+        integer :: interval
+
+        energy = 0.0_dp
+        do interval = 1, intervals
+            radial_coordinate = (real(interval, dp) - 0.5_dp) / intervals
+            call assemble_compressible_stiffness_surface_resolved( &
+                local_fields(:, :, :, interval), local_drive(:, :, interval), &
+                local_jacobian_radial(:, :, interval), &
+                local_jacobian_theta(:, :, interval), &
+                local_jacobian_zeta(:, :, interval), &
+                local_gamma_pressure(:, :, interval), trial_m, trial_n, &
+                trial_parity, stored_power, 3, radial_space, &
+                radial_coordinate, 0.25_dp, phase_assembly_transformed, &
+                element, info)
+            if (info /= 0) return
+            call extract_element_vector(local_layout, interval, global_vector, &
+                local_vector)
+            energy = energy + dot_product(local_vector, &
+                matmul(element, local_vector))
+        end do
+        info = 0
+    end subroutine sum_element_energies
+
+    pure subroutine extract_element_vector(local_layout, interval, global, &
+            local)
+        type(dynamic_family_layout_t), intent(in) :: local_layout
+        integer, intent(in) :: interval
+        real(dp), intent(in) :: global(:)
+        real(dp), intent(out) :: local(:)
+        integer :: index, trial
+
+        local = 0.0_dp
+        do trial = 1, local_layout%trials
+            index = normal_global_index(local_layout, interval - 1, trial)
+            if (index > 0) local(trial) = global(index)
+            index = normal_global_index(local_layout, interval, trial)
+            if (index > 0) local(local_layout%trials + trial) = global(index)
+            index = eta_global_index(local_layout, interval, trial)
+            local(2 * local_layout%trials + trial) = global(index)
+            index = mu_global_index(local_layout, interval, trial)
+            local(3 * local_layout%trials + trial) = global(index)
+        end do
+    end subroutine extract_element_vector
+
+    subroutine build_fixture(local_fields, local_drive, local_jacobian_radial, &
+            local_jacobian_theta, local_jacobian_zeta, local_gamma_pressure)
+        real(dp), allocatable, intent(out) :: local_fields(:, :, :, :)
+        real(dp), allocatable, intent(out) :: local_drive(:, :, :)
+        real(dp), allocatable, intent(out) :: local_jacobian_radial(:, :, :)
+        real(dp), allocatable, intent(out) :: local_jacobian_theta(:, :, :)
+        real(dp), allocatable, intent(out) :: local_jacobian_zeta(:, :, :)
+        real(dp), allocatable, intent(out) :: local_gamma_pressure(:, :, :)
+        real(dp) :: theta, zeta, s, two_pi
+        integer :: i, j, k
+
+        two_pi = 2.0_dp * acos(-1.0_dp)
+        allocate (local_fields(n_theta, n_zeta, 13, intervals), source=0.0_dp)
+        allocate (local_drive(n_theta, n_zeta, intervals))
+        allocate (local_jacobian_radial(n_theta, n_zeta, intervals))
+        allocate (local_jacobian_theta(n_theta, n_zeta, intervals))
+        allocate (local_jacobian_zeta(n_theta, n_zeta, intervals))
+        allocate (local_gamma_pressure(n_theta, n_zeta, intervals))
+        do i = 1, intervals
+            s = (real(i, dp) - 0.5_dp) / intervals
+            do k = 1, n_zeta
+                zeta = two_pi * real(k - 1, dp) / n_zeta
+                do j = 1, n_theta
+                    theta = two_pi * real(j - 1, dp) / n_theta
+                    call set_point(local_fields(j, k, :, i), &
+                        local_drive(j, k, i), local_jacobian_radial(j, k, i), &
+                        local_jacobian_theta(j, k, i), &
+                        local_jacobian_zeta(j, k, i), &
+                        local_gamma_pressure(j, k, i), theta, zeta, s, two_pi)
+                end do
+            end do
+        end do
+    end subroutine build_fixture
+
+    pure subroutine set_point(fields, local_drive, jacobian_radial, &
+            jacobian_theta, jacobian_zeta, gamma_pressure, theta, zeta, s, &
+            two_pi)
+        real(dp), intent(out) :: fields(:), local_drive, jacobian_radial
+        real(dp), intent(out) :: jacobian_theta, jacobian_zeta, gamma_pressure
+        real(dp), intent(in) :: theta, zeta, s, two_pi
+
+        fields = 0.0_dp
+        fields(1:6) = [1.2_dp + 0.02_dp * s, 0.7_dp, 0.04_dp, -0.03_dp, &
+            0.8_dp, 0.6_dp]
+        fields(7) = -1.1_dp - 0.02_dp * cos(theta) - 0.03_dp * sin(zeta)
+        fields(8:13) = [1.4_dp, 1.3_dp, 0.2_dp, -0.15_dp, 0.1_dp, -0.12_dp]
+        local_drive = 0.05_dp + 0.01_dp * cos(theta - zeta)
+        jacobian_radial = -0.08_dp + 0.01_dp * s
+        jacobian_theta = 0.02_dp * two_pi * sin(theta)
+        jacobian_zeta = -0.03_dp * two_pi * cos(zeta)
+        gamma_pressure = 0.9_dp + 0.1_dp * cos(theta + zeta) + 0.02_dp * s
+    end subroutine set_point
+
+    pure subroutine build_probe(probe)
+        real(dp), intent(out) :: probe(:)
+        integer :: i
+
+        do i = 1, size(probe)
+            probe(i) = (-1.0_dp)**i * real(i, dp) / real(size(probe), dp)
+        end do
+    end subroutine build_probe
+
+    subroutine require_close(first, second, tolerance, message)
+        real(dp), intent(in) :: first(:, :), second(:, :), tolerance
+        character(len=*), intent(in) :: message
+        real(dp) :: difference, scale
+
+        difference = maxval(abs(first - second))
+        scale = max(1.0_dp, maxval(abs(first)), maxval(abs(second)))
+        if (difference > tolerance * scale) then
+            write (error_unit, "(a,2es24.16)") "FAIL: " // message // &
+                "; difference and scale: ", difference, scale
+            error stop 1
+        end if
+    end subroutine require_close
+
+    subroutine require(condition, message)
+        logical, intent(in) :: condition
+        character(len=*), intent(in) :: message
+
+        if (.not. condition) then
+            write (error_unit, "(a)") "FAIL: " // message
+            error stop 1
+        end if
+    end subroutine require
+
+end program test_compressible_stiffness_family_assembly
