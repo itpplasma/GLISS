@@ -43,6 +43,7 @@ add_library(gliss
     src/perpendicular_kinetic_kernel.f90
     src/symmetric_pivot_inertia.f90
     src/terpsichore_model_policy.f90
+    src/terpsichore_reduced_mass.f90
     src/terpsichore_topology.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
@@ -273,6 +274,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_terpsichore_model_policy PRIVATE gliss)
     add_test(NAME terpsichore_model_policy COMMAND test_terpsichore_model_policy)
 
+    add_executable(test_terpsichore_reduced_mass
+        test/test_terpsichore_reduced_mass.f90)
+    target_link_libraries(test_terpsichore_reduced_mass PRIVATE gliss)
+    add_test(NAME terpsichore_reduced_mass
+        COMMAND test_terpsichore_reduced_mass)
+
     add_executable(test_nonuniform_derivative
         test/test_nonuniform_derivative.f90)
     target_link_libraries(test_nonuniform_derivative PRIVATE gliss)
@@ -344,6 +351,10 @@ if(GLISS_ENABLE_ENZYME)
         SOURCES
             src/perpendicular_kinetic_kernel.f90
             test/enzyme_perpendicular_kinetic_gradient.f90)
+    add_enzyme_fortran_test(enzyme_terpsichore_reduced_mass_gradient
+        SOURCES
+            src/terpsichore_reduced_mass.f90
+            test/enzyme_terpsichore_reduced_mass_gradient.f90)
     add_enzyme_fortran_test(enzyme_physical_mass_assembly_gradient
         SOURCES
             src/fourier_phase_kind.f90
