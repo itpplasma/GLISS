@@ -102,6 +102,10 @@ name = "variable_generalized_solver"
 main = "test_variable_generalized_solver.f90"
 
 [[test]]
+name = "variable_spectrum_analysis"
+main = "test_variable_spectrum_analysis.f90"
+
+[[test]]
 name = "physical_mass_family_assembly"
 main = "test_physical_mass_family_assembly.f90"
 

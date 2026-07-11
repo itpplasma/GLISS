@@ -46,6 +46,7 @@ add_library(gliss
     src/two_component_kernel.f90
     src/variable_block_tridiagonal.f90
     src/variable_generalized_solver.f90
+    src/variable_spectrum_analysis.f90
     src/newcomb_limit.f90
     src/family_assembly.f90
     src/field_profile_identities.f90
@@ -221,6 +222,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_variable_generalized_solver PRIVATE gliss)
     add_test(NAME variable_generalized_solver
         COMMAND test_variable_generalized_solver)
+
+    add_executable(test_variable_spectrum_analysis
+        test/test_variable_spectrum_analysis.f90)
+    target_link_libraries(test_variable_spectrum_analysis PRIVATE gliss)
+    add_test(NAME variable_spectrum_analysis
+        COMMAND test_variable_spectrum_analysis)
 
     add_executable(test_physical_mass_family_assembly
         test/test_physical_mass_family_assembly.f90)
