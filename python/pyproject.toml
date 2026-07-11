@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = ["pytest", "simsopt"]
 
 [project.urls]
 Homepage = "https://github.com/itpplasma/GLISS"

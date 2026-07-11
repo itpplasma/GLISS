@@ -41,3 +41,10 @@ def version():
 from .mercier import mercier_objective, mercier_profile  # noqa: E402
 
 __all__ = ["version", "mercier_profile", "mercier_objective"]
+
+try:
+    from .simsopt import MercierPenalty, mercier_penalty  # noqa: E402
+except ImportError:
+    pass
+else:
+    __all__ += ["MercierPenalty", "mercier_penalty"]
