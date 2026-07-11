@@ -60,6 +60,27 @@ jobs:
             exit 1
           fi
 
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran cmake ninja-build \
+            liblapack-dev libnetcdf-dev pkg-config
+          python -m pip install --upgrade pip
+          pip install numpy pytest
+      - name: Build shared library
+        run: |
+          cmake -S . -B build -G Ninja
+          cmake --build build --target gliss_c
+      - name: Run Python binding tests
+        # Contract tests run against the built libgliss_c; the golden and
+        # simsopt tests skip without the LFS fixtures / simsopt, which is the
+        # intended behavior in public CI.
+        run: GLISS_LIB=$PWD/build/libgliss_c.so python -m pytest python/tests -v
+
   flang:
     runs-on: ubuntu-latest
     steps:
