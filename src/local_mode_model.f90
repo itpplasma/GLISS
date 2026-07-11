@@ -1,11 +1,11 @@
 module local_mode_model
     use, intrinsic :: iso_c_binding, only: c_double
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use physical_constants, only: vacuum_permeability
     implicit none
     private
 
-    real(dp), parameter, public :: vacuum_permeability = &
-        1.2566370614359172954e-6_dp
+    public :: vacuum_permeability
 
     public :: assemble_local_mode
     public :: benchmark_mode_energy

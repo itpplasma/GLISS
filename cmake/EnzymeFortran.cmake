@@ -99,7 +99,7 @@ endforeach()
 set(linked \"\${WORK}/linked.ll\")
 run_checked(\${LLVM_LINK} -S \${IR_FILES} -o \${linked})
 set(differentiated \"\${WORK}/enzyme.ll\")
-run_checked(\${OPT} -load-pass-plugin=\${PLUGIN} -passes=enzyme
+run_checked(\${OPT} -load-pass-plugin=\${PLUGIN} -passes=default<O2>,enzyme
     \${linked} -S -o \${differentiated})
 run_checked(\${FLANG} -O2 \${differentiated} -o \${EXECUTABLE})
 ")
