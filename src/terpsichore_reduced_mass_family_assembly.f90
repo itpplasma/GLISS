@@ -2,13 +2,13 @@ module terpsichore_reduced_mass_family_assembly
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use dynamic_family_layout, only: add_mapped_dynamic_element, &
-        build_dynamic_element_map, build_resolved_dynamic_family_layout, &
         dynamic_family_layout_t, dynamic_layout_ok
+    use terpsichore_reduced_layout, only: &
+        build_terpsichore_reduced_fixed_boundary_layout, &
+        terpsichore_reduced_layout_ok
     use terpsichore_reduced_mass, only: &
         assemble_terpsichore_reduced_mass_element_resolved, &
         terpsichore_reduced_ok
-    use trial_space_topology, only: build_trial_space_topology, &
-        trial_space_topology_t, trial_topology_ok
     implicit none
     private
 
@@ -33,20 +33,13 @@ contains
         real(dp), allocatable, intent(out) :: mass(:, :)
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
-        type(trial_space_topology_t) :: topology
         integer, allocatable :: element_to_global(:, :)
         integer :: allocation_status
 
         info = terpsichore_reduced_family_invalid
-        call build_trial_space_topology(trial_m, trial_n, trial_parity, &
-            topology, info)
-        if (info /= trial_topology_ok) return
-        topology%active(3, :) = .false.
-        call build_resolved_dynamic_family_layout(topology, &
-            size(signed_bjac, 2), layout, info)
-        if (info /= dynamic_layout_ok) return
-        call build_dynamic_element_map(layout, element_to_global, info)
-        if (info /= dynamic_layout_ok) return
+        call build_terpsichore_reduced_fixed_boundary_layout(trial_m, trial_n, &
+            trial_parity, size(signed_bjac, 2), layout, element_to_global, info)
+        if (info /= terpsichore_reduced_layout_ok) return
         allocate (mass(layout%total_unknowns, layout%total_unknowns), &
             stat=allocation_status)
         if (allocation_status /= 0) then
@@ -56,7 +49,7 @@ contains
         call assemble_terpsichore_reduced_family_mass_fixed_layout( &
             signed_bjac, flux_t_slope, normal_phase, tangential_phase, &
             normal_radial_factor, normalized_radial_weight, &
-            element_to_global(:3 * size(trial_m), :), mass, info)
+            element_to_global, mass, info)
     end subroutine assemble_terpsichore_reduced_fixed_boundary_mass
 
     subroutine assemble_terpsichore_reduced_family_mass_fixed_layout( &

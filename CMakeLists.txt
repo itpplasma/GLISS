@@ -46,6 +46,9 @@ add_library(gliss
     src/terpsichore_model_policy.f90
     src/terpsichore_normalization.f90
     src/terpsichore_matrix_fixture.f90
+    src/terpsichore_noninteracting_coefficients.f90
+    src/terpsichore_noninteracting_stiffness.f90
+    src/terpsichore_reduced_layout.f90
     src/terpsichore_reduced_mass.f90
     src/terpsichore_reduced_mass_adapter.f90
     src/terpsichore_reduced_mass_family_assembly.f90
@@ -125,6 +128,12 @@ add_executable(gliss_terpsichore_potential_inspect
     app/gliss_terpsichore_potential_inspect.f90)
 target_link_libraries(gliss_terpsichore_potential_inspect PRIVATE gliss)
 set_target_properties(gliss_terpsichore_potential_inspect PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_terpsichore_noninteracting_stiffness
+    app/gliss_terpsichore_noninteracting_stiffness.f90)
+target_link_libraries(gliss_terpsichore_noninteracting_stiffness PRIVATE gliss)
+set_target_properties(gliss_terpsichore_noninteracting_stiffness PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 if(BUILD_TESTING)
@@ -307,6 +316,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_terpsichore_reduced_mass_adapter PRIVATE gliss)
     add_test(NAME terpsichore_reduced_mass_adapter
         COMMAND test_terpsichore_reduced_mass_adapter)
+
+    add_executable(test_terpsichore_noninteracting_stiffness
+        test/test_terpsichore_noninteracting_stiffness.f90)
+    target_link_libraries(test_terpsichore_noninteracting_stiffness PRIVATE gliss)
+    add_test(NAME terpsichore_noninteracting_stiffness
+        COMMAND test_terpsichore_noninteracting_stiffness)
 
     add_executable(test_terpsichore_normalization
         test/test_terpsichore_normalization.f90)
