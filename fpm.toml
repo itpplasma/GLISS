@@ -130,6 +130,10 @@ name = "terpsichore_topology"
 main = "test_terpsichore_topology.f90"
 
 [[test]]
+name = "terpsichore_model_policy"
+main = "test_terpsichore_model_policy.f90"
+
+[[test]]
 name = "nonuniform_derivative"
 main = "test_nonuniform_derivative.f90"
 

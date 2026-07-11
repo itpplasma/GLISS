@@ -41,6 +41,7 @@ add_library(gliss
     src/physical_constants.f90
     src/radial_space_policy.f90
     src/symmetric_pivot_inertia.f90
+    src/terpsichore_model_policy.f90
     src/terpsichore_topology.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
@@ -259,6 +260,11 @@ if(BUILD_TESTING)
         test/test_terpsichore_topology.f90)
     target_link_libraries(test_terpsichore_topology PRIVATE gliss)
     add_test(NAME terpsichore_topology COMMAND test_terpsichore_topology)
+
+    add_executable(test_terpsichore_model_policy
+        test/test_terpsichore_model_policy.f90)
+    target_link_libraries(test_terpsichore_model_policy PRIVATE gliss)
+    add_test(NAME terpsichore_model_policy COMMAND test_terpsichore_model_policy)
 
     add_executable(test_nonuniform_derivative
         test/test_nonuniform_derivative.f90)
