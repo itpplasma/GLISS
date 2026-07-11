@@ -9,6 +9,10 @@ program test_zero_family_homogeneous_spectrum
     use physical_mass_family_assembly, only: assemble_physical_family_mass
     use radial_space_policy, only: radial_space_config_t
     use symmetric_eigensolver, only: solve_symmetric_generalized
+    use variable_block_tridiagonal, only: pack_variable_blocks, &
+        variable_block_tridiagonal_t
+    use variable_generalized_solver, only: variable_generalized_inertia, &
+        variable_generalized_ok
     implicit none
 
     real(dp), parameter :: density_kg_m3 = 2.0_dp
@@ -71,6 +75,7 @@ contains
             "homogeneous N=0 K/M layouts differ")
         call check_spectrum(stiffness, mass, intervals, eigenvalues, &
             eigenvectors, info)
+        call certify_zero_cluster(stiffness, mass, intervals, eigenvalues)
         continuum_error = abs(eigenvalues(2 * intervals + 1) &
             - fixed_endpoint_fast_eigenvalue())
     end subroutine check_homogeneous_mesh
@@ -101,6 +106,46 @@ contains
                 "homogeneous N=0 discrete fast eigenvalue is wrong")
         end do
     end subroutine check_spectrum
+
+    subroutine certify_zero_cluster(stiffness, mass, intervals, eigenvalues)
+        real(dp), intent(in) :: stiffness(:, :), mass(:, :)
+        integer, intent(in) :: intervals
+        real(dp), intent(in) :: eigenvalues(:)
+        type(variable_block_tridiagonal_t) :: k_blocks, m_blocks
+        integer :: widths(1), cluster, count, info
+        real(dp) :: scale, floor, first_positive, window
+
+        cluster = 2 * intervals
+        widths(1) = 3 * intervals - 1
+        call pack_variable_blocks(stiffness, widths, k_blocks, info)
+        call require(info == 0, "zero-family stiffness packing failed")
+        call pack_variable_blocks(mass, widths, m_blocks, info)
+        call require(info == 0, "zero-family mass packing failed")
+
+        scale = discrete_fast_eigenvalue(intervals, 1)
+        floor = 1.0e-7_dp * scale
+        first_positive = eigenvalues(cluster + 1)
+        window = 0.25_dp * (discrete_fast_eigenvalue(intervals, 2) &
+            - first_positive)
+
+        call variable_generalized_inertia(k_blocks, m_blocks, -floor, &
+            count, info)
+        call require(info == variable_generalized_ok .and. count == 0, &
+            "N=0 spectrum has a mode below the arithmetic floor")
+        call variable_generalized_inertia(k_blocks, m_blocks, floor, &
+            count, info)
+        call require(info == variable_generalized_ok .and. count == cluster, &
+            "N=0 zero cluster is not counted at the floor")
+        call variable_generalized_inertia(k_blocks, m_blocks, &
+            first_positive - window, count, info)
+        call require(info == variable_generalized_ok .and. count == cluster, &
+            "lowest positive mode is not bracketed above the window base")
+        call variable_generalized_inertia(k_blocks, m_blocks, &
+            first_positive + window, count, info)
+        call require(info == variable_generalized_ok &
+            .and. count == cluster + 1, &
+            "window does not pin the lowest positive mode")
+    end subroutine certify_zero_cluster
 
     subroutine build_homogeneous_fields(intervals, fields, drive, &
             jacobian_s, jacobian_t, jacobian_z, gamma_p)
