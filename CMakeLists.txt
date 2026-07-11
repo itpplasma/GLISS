@@ -223,6 +223,12 @@ if(BUILD_TESTING)
     add_test(NAME physical_mass_family_assembly
         COMMAND test_physical_mass_family_assembly)
 
+    add_executable(test_zero_family_homogeneous_spectrum
+        test/test_zero_family_homogeneous_spectrum.f90)
+    target_link_libraries(test_zero_family_homogeneous_spectrum PRIVATE gliss)
+    add_test(NAME zero_family_homogeneous_spectrum
+        COMMAND test_zero_family_homogeneous_spectrum)
+
     add_executable(test_mode_topology test/test_mode_topology.f90)
     target_link_libraries(test_mode_topology PRIVATE gliss)
     add_test(NAME mode_topology COMMAND test_mode_topology)
