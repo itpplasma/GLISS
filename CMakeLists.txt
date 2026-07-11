@@ -25,6 +25,7 @@ add_library(gliss
     src/eigenvalue_tracking.f90
     src/family_point_assembly.f90
     src/local_mode_model.f90
+    src/physical_mass_kernel.f90
     src/nonuniform_derivative.f90
     src/mode_topology.f90
     src/phase_factor_topology.f90
@@ -146,6 +147,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_two_component_kernel PRIVATE gliss)
     add_test(NAME two_component_kernel COMMAND test_two_component_kernel)
 
+    add_executable(test_physical_mass_kernel
+        test/test_physical_mass_kernel.f90)
+    target_link_libraries(test_physical_mass_kernel PRIVATE gliss)
+    add_test(NAME physical_mass_kernel COMMAND test_physical_mass_kernel)
+
     add_executable(test_mode_topology test/test_mode_topology.f90)
     target_link_libraries(test_mode_topology PRIVATE gliss)
     add_test(NAME mode_topology COMMAND test_mode_topology)
@@ -206,4 +212,8 @@ if(GLISS_ENABLE_ENZYME)
             src/family_point_assembly.f90
             test/enzyme_phase_fixture.f90
             test/enzyme_phase_assembly_gradient.f90)
+    add_enzyme_fortran_test(enzyme_physical_mass_gradient
+        SOURCES
+            src/physical_mass_kernel.f90
+            test/enzyme_physical_mass_gradient.f90)
 endif()
