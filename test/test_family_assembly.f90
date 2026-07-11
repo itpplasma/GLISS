@@ -9,7 +9,7 @@ program test_family_assembly
         lowest_family_eigenvalue, phase_assembly_direct, &
         phase_assembly_transformed, surface_geometry_t
     use newcomb_limit, only: cylinder_profiles_t, &
-        lowest_eigenvalue_single_mode
+        lowest_artificial_stiffness_level
     use mode_topology, only: build_mode_family, mode_family_t
     use radial_space_policy, only: form_s_power_edge, radial_space_config_t
     use terpsichore_topology, only: convert_terpsichore_mask, &
@@ -21,7 +21,7 @@ program test_family_assembly
     integer, parameter :: n_radial = 100, n_theta = 64, n_zeta = 32
     type(cylinder_profiles_t) :: profiles
     type(surface_geometry_t), allocatable :: geometry(:)
-    real(dp) :: reference, family_value, pair_value, step
+    real(dp) :: reference, matched_family, family_value, pair_value, step
     real(dp) :: iterated
     integer :: i, info, negatives
 
@@ -36,14 +36,18 @@ program test_family_assembly
         call cylinder_surface((real(i, dp) - 0.5_dp) * step, geometry(i))
     end do
 
-    call lowest_eigenvalue_single_mode(profiles, 1, 1, 0.5_dp, &
-        n_radial, reference)
+    call lowest_artificial_stiffness_level(profiles, 2, 1, 0.5_dp, &
+        n_radial, reference, info)
+    call require(info == 0, "one-dimensional reference solve failed")
+    call lowest_family_eigenvalue(geometry, [2], [1], step, matched_family, info)
+    call require(info == 0, "family assembly failed")
+    call require(abs(reference - matched_family) < 1.0e-6_dp * &
+        abs(reference), &
+        "matched-axis family disagrees with the 1D assembly")
+
     call lowest_family_eigenvalue(geometry, [1], [1], step, &
         family_value, info)
-    call require(info == 0, "family assembly failed")
-    call require(abs(family_value - reference) < 1.0e-6_dp * &
-        abs(reference), &
-        "single-mode family disagrees with the 1D assembly")
+    call require(info == 0, "restricted unit-harmonic assembly failed")
 
     call lowest_family_eigenvalue(geometry, [1, 2], [1, 1], step, &
         pair_value, info)
