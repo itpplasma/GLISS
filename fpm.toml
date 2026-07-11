@@ -146,6 +146,10 @@ name = "terpsichore_reduced_mass"
 main = "test_terpsichore_reduced_mass.f90"
 
 [[test]]
+name = "terpsichore_reduced_mass_adapter"
+main = "test_terpsichore_reduced_mass_adapter.f90"
+
+[[test]]
 name = "terpsichore_normalization"
 main = "test_terpsichore_normalization.f90"
 

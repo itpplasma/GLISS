@@ -1,0 +1,225 @@
+program test_terpsichore_reduced_mass_adapter
+    use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use dynamic_family_layout, only: dynamic_family_layout_t
+    use fourier_phase_kind, only: phase_sine
+    use terpsichore_matrix_fixture, only: &
+        read_terpsichore_fixed_boundary_fixture, &
+        terpsichore_matrix_fixture_invalid, terpsichore_matrix_fixture_ok, &
+        terpsichore_matrix_fixture_t
+    use terpsichore_reduced_mass_adapter, only: &
+        assemble_terpsichore_fixture_reduced_mass, &
+        terpsichore_reduced_adapter_ok
+    use terpsichore_reduced_mass_family_assembly, only: &
+        assemble_terpsichore_reduced_fixed_boundary_mass
+    implicit none
+
+    call test_fixture_reader()
+    call test_fixture_adapter()
+    call test_fixture_rejections()
+    write (*, "(a)") "PASS"
+
+contains
+
+    subroutine test_fixture_reader()
+        type(terpsichore_matrix_fixture_t) :: fixture
+        integer :: info, unit
+
+        open (newunit=unit, status="scratch", form="unformatted", &
+            access="sequential")
+        call write_fixture(unit)
+        rewind (unit)
+        call read_terpsichore_fixed_boundary_fixture(unit, 0, fixture, info)
+        close (unit)
+        call require(info == terpsichore_matrix_fixture_ok, &
+            "valid TERPSICHORE matrix fixture was rejected")
+        call require(fixture%intervals == 3 .and. fixture%poloidal_points == 2 &
+            .and. fixture%toroidal_points == 2 .and. fixture%modes == 2, &
+            "TERPSICHORE fixture dimensions are wrong")
+        call require(all(fixture%mode_m == [1, 2]) .and. &
+            all(fixture%mode_n == [0, 1]), &
+            "TERPSICHORE fixture modes are wrong")
+        call require(maxval(abs(fixture%s - [0.0_dp, 0.2_dp, 0.6_dp, &
+            1.0_dp])) < 1.0e-7_dp, "TERPSICHORE radial grid is wrong")
+        call require(abs(fixture%flux_t_slope(2) - 1.1_dp) < 1.0e-7_dp, &
+            "TERPSICHORE toroidal flux slope is wrong")
+        call require(abs(fixture%signed_bjac(4, 3) + 1.6_dp) < 1.0e-7_dp, &
+            "TERPSICHORE BJAC ordering is wrong")
+    end subroutine test_fixture_reader
+
+    subroutine write_fixture(unit)
+        integer, intent(in) :: unit
+        real(dp) :: s(0:3), pth(3), fpp(4), ftp(4), profile(3)
+        real(dp) :: parity, ql(2), bjac(4, 0:3)
+        integer :: mode_m(2), mode_n(2), point, surface
+
+        s = [0.0_dp, 0.2_dp, 0.6_dp, 1.0_dp]
+        pth = 0.0_dp
+        fpp = 0.0_dp
+        ftp = [1.0_dp, 1.1_dp, 1.2_dp, 1.3_dp]
+        profile = 0.0_dp
+        parity = 0.0_dp
+        mode_m = [1, 2]
+        mode_n = [0, 1]
+        ql = [0.5_dp, 0.0_dp]
+        do surface = 0, 3
+            do point = 1, 4
+                bjac(point, surface) = -1.0_dp &
+                    - 0.1_dp * real(point - 1, dp) &
+                    - 0.1_dp * real(surface, dp)
+            end do
+        end do
+        bjac(:, 0) = 0.0_dp
+        write (unit) 3, 2, 2, 1, 1, 2
+        write (unit) s, pth, fpp, ftp, profile, profile, profile, parity
+        write (unit) mode_m, mode_n, ql
+        write (unit) 0.0_dp
+        write (unit) bjac
+    end subroutine write_fixture
+
+    subroutine test_fixture_adapter()
+        type(terpsichore_matrix_fixture_t) :: fixture
+        type(dynamic_family_layout_t) :: actual_layout, expected_layout
+        real(dp), allocatable :: actual(:, :), expected(:, :)
+        real(dp), allocatable :: normal_phase(:, :, :), tangent_phase(:, :, :)
+        real(dp), allocatable :: radial_factor(:, :), radial_weight(:)
+        integer :: info
+
+        call build_adapter_fixture(fixture)
+        call assemble_terpsichore_fixture_reduced_mass(fixture, actual, &
+            actual_layout, info)
+        call require(info == terpsichore_reduced_adapter_ok, &
+            "TERPSICHORE fixture adapter failed")
+        call build_expected_inputs(fixture, normal_phase, tangent_phase, &
+            radial_factor, radial_weight)
+        call assemble_terpsichore_reduced_fixed_boundary_mass( &
+            fixture%signed_bjac(:, 1:), &
+            fixture%flux_t_slope(:fixture%intervals), &
+            normal_phase, tangent_phase, radial_factor, radial_weight, &
+            fixture%mode_m, fixture%mode_n, [phase_sine, phase_sine], &
+            expected, expected_layout, info)
+        call require(info == 0, "direct reduced fixture assembly failed")
+        call require(actual_layout%total_unknowns &
+            == expected_layout%total_unknowns, "fixture layouts differ")
+        call require(maxval(abs(actual - expected)) < 2.0e-14_dp, &
+            "TERPSICHORE fixture adapter matrix is wrong")
+    end subroutine test_fixture_adapter
+
+    subroutine test_fixture_rejections()
+        type(terpsichore_matrix_fixture_t) :: fixture
+        type(dynamic_family_layout_t) :: layout
+        real(dp), allocatable :: mass(:, :)
+        integer :: info, unit
+
+        open (newunit=unit, status="scratch", form="unformatted", &
+            access="sequential")
+        call write_fixture(unit)
+        rewind (unit)
+        call read_terpsichore_fixed_boundary_fixture(unit, 1, fixture, info)
+        close (unit)
+        call require(info == terpsichore_matrix_fixture_invalid, &
+            "nonzero IVAC was accepted by the fixed-boundary reader")
+        call require_header_rejected([997, 2, 2, 1, 1, 2], &
+            "oversized external dimensions were accepted")
+        call require_header_rejected([2, 999, 999, 1, 1, 3], &
+            "oversized phase storage was accepted")
+        call require_header_rejected([996, 1, 1, 1, 1, 3], &
+            "oversized dense matrix was accepted")
+        call build_adapter_fixture(fixture)
+        fixture%stability_periods = 2
+        call assemble_terpsichore_fixture_reduced_mass(fixture, mass, &
+            layout, info)
+        call require(info /= terpsichore_reduced_adapter_ok, &
+            "incommensurate stability periods were accepted")
+        fixture%stability_periods = 1
+        fixture%s(fixture%intervals) = 0.9_dp
+        call assemble_terpsichore_fixture_reduced_mass(fixture, mass, &
+            layout, info)
+        call require(info /= terpsichore_reduced_adapter_ok, &
+            "incomplete normalized radial domain was accepted")
+    end subroutine test_fixture_rejections
+
+    subroutine require_header_rejected(header, message)
+        integer, intent(in) :: header(6)
+        character(len=*), intent(in) :: message
+        type(terpsichore_matrix_fixture_t) :: fixture
+        integer :: info, unit
+
+        open (newunit=unit, status="scratch", form="unformatted", &
+            access="sequential")
+        write (unit) header
+        rewind (unit)
+        call read_terpsichore_fixed_boundary_fixture(unit, 0, fixture, info)
+        close (unit)
+        call require(info == terpsichore_matrix_fixture_invalid, message)
+    end subroutine require_header_rejected
+
+    subroutine build_adapter_fixture(fixture)
+        type(terpsichore_matrix_fixture_t), intent(out) :: fixture
+        integer :: point, surface
+
+        fixture%intervals = 3
+        fixture%poloidal_points = 4
+        fixture%toroidal_points = 3
+        fixture%stability_periods = 1
+        fixture%field_periods = 1
+        fixture%modes = 2
+        fixture%parity = 0.0_dp
+        allocate (fixture%s(0:3))
+        fixture%s = [0.0_dp, 0.2_dp, 0.6_dp, 1.0_dp]
+        fixture%flux_t_slope = [1.0_dp, 1.1_dp, 1.2_dp, 1.3_dp]
+        fixture%mode_m = [1, 2]
+        fixture%mode_n = [0, 1]
+        fixture%radial_power = [0.5_dp, 0.0_dp]
+        allocate (fixture%signed_bjac(12, 0:3))
+        do surface = 0, 3
+            do point = 1, 12
+                fixture%signed_bjac(point, surface) = -1.0_dp &
+                    - 0.01_dp * real(point + surface, dp)
+            end do
+        end do
+        fixture%signed_bjac(:, 0) = 0.0_dp
+    end subroutine build_adapter_fixture
+
+    subroutine build_expected_inputs(fixture, normal_phase, tangent_phase, &
+            radial_factor, radial_weight)
+        type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        real(dp), allocatable, intent(out) :: normal_phase(:, :, :)
+        real(dp), allocatable, intent(out) :: tangent_phase(:, :, :)
+        real(dp), allocatable, intent(out) :: radial_factor(:, :)
+        real(dp), allocatable, intent(out) :: radial_weight(:)
+        real(dp) :: angle, midpoint, theta, zeta
+        integer :: interval, j, k, mode, point
+
+        allocate (normal_phase(2, 12, 3), tangent_phase(2, 12, 3))
+        allocate (radial_factor(2, 3), radial_weight(3))
+        do interval = 1, 3
+            midpoint = 0.5_dp * (fixture%s(interval - 1) + fixture%s(interval))
+            radial_factor(:, interval) = midpoint**(-fixture%radial_power)
+            radial_weight(interval) = 3.0_dp &
+                * (fixture%s(interval) - fixture%s(interval - 1))
+            do k = 1, 3
+                zeta = 2.0_dp * acos(-1.0_dp) * real(k - 1, dp) / 3.0_dp
+                do j = 1, 4
+                    theta = 2.0_dp * acos(-1.0_dp) * real(j - 1, dp) / 4.0_dp
+                    point = j + 4 * (k - 1)
+                    do mode = 1, 2
+                        angle = real(fixture%mode_m(mode), dp) * theta &
+                            - real(fixture%mode_n(mode), dp) * zeta
+                        normal_phase(mode, point, interval) = sin(angle)
+                        tangent_phase(mode, point, interval) = cos(angle)
+                    end do
+                end do
+            end do
+        end do
+    end subroutine build_expected_inputs
+
+    subroutine require(condition, message)
+        logical, intent(in) :: condition
+        character(len=*), intent(in) :: message
+
+        if (condition) return
+        write (error_unit, "(a)") message
+        error stop 1
+    end subroutine require
+
+end program test_terpsichore_reduced_mass_adapter

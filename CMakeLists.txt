@@ -45,7 +45,9 @@ add_library(gliss
     src/symmetric_pivot_inertia.f90
     src/terpsichore_model_policy.f90
     src/terpsichore_normalization.f90
+    src/terpsichore_matrix_fixture.f90
     src/terpsichore_reduced_mass.f90
+    src/terpsichore_reduced_mass_adapter.f90
     src/terpsichore_reduced_mass_family_assembly.f90
     src/terpsichore_topology.f90
     src/three_component_kernel.f90
@@ -111,6 +113,12 @@ set_target_properties(gliss_family PROPERTIES
 add_executable(gvec_cas3d_integrate app/gvec_cas3d_integrate.f90)
 target_link_libraries(gvec_cas3d_integrate PRIVATE gliss)
 set_target_properties(gvec_cas3d_integrate PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_terpsichore_reduced_mass
+    app/gliss_terpsichore_reduced_mass.f90)
+target_link_libraries(gliss_terpsichore_reduced_mass PRIVATE gliss)
+set_target_properties(gliss_terpsichore_reduced_mass PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 if(BUILD_TESTING)
@@ -287,6 +295,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_terpsichore_reduced_mass PRIVATE gliss)
     add_test(NAME terpsichore_reduced_mass
         COMMAND test_terpsichore_reduced_mass)
+
+    add_executable(test_terpsichore_reduced_mass_adapter
+        test/test_terpsichore_reduced_mass_adapter.f90)
+    target_link_libraries(test_terpsichore_reduced_mass_adapter PRIVATE gliss)
+    add_test(NAME terpsichore_reduced_mass_adapter
+        COMMAND test_terpsichore_reduced_mass_adapter)
 
     add_executable(test_terpsichore_normalization
         test/test_terpsichore_normalization.f90)

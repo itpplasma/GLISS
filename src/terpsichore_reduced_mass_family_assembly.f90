@@ -35,6 +35,7 @@ contains
         integer, intent(out) :: info
         type(trial_space_topology_t) :: topology
         integer, allocatable :: element_to_global(:, :)
+        integer :: allocation_status
 
         info = terpsichore_reduced_family_invalid
         call build_trial_space_topology(trial_m, trial_n, trial_parity, &
@@ -46,7 +47,12 @@ contains
         if (info /= dynamic_layout_ok) return
         call build_dynamic_element_map(layout, element_to_global, info)
         if (info /= dynamic_layout_ok) return
-        allocate (mass(layout%total_unknowns, layout%total_unknowns))
+        allocate (mass(layout%total_unknowns, layout%total_unknowns), &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = terpsichore_reduced_family_invalid
+            return
+        end if
         call assemble_terpsichore_reduced_family_mass_fixed_layout( &
             signed_bjac, flux_t_slope, normal_phase, tangential_phase, &
             normal_radial_factor, normalized_radial_weight, &
