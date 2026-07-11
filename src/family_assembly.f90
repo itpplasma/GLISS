@@ -6,14 +6,16 @@ module family_assembly
         solve_factored
     use family_point_assembly, only: assemble_direct_surface_resolved, &
         assemble_transformed_surface_resolved, resolve_normal_stored_power
+    use phase_assembly_policy, only: phase_assembly_direct, &
+        phase_assembly_transformed
     use radial_space_policy, only: radial_space_config_t, radial_space_ok, &
         validate_radial_space
     implicit none
     private
 
     real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
-    integer, parameter, public :: phase_assembly_transformed = 1
-    integer, parameter, public :: phase_assembly_direct = 2
+    public :: phase_assembly_direct
+    public :: phase_assembly_transformed
 
     type, public :: surface_geometry_t
         real(dp), allocatable :: fields(:, :, :)
