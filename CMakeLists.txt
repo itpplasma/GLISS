@@ -271,6 +271,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_mercier_full_gradient PRIVATE gliss)
     add_test(NAME mercier_full_gradient COMMAND test_mercier_full_gradient)
 
+    add_executable(test_mercier_fluxslope_gradient
+        test/test_mercier_fluxslope_gradient.f90)
+    target_link_libraries(test_mercier_fluxslope_gradient PRIVATE gliss)
+    add_test(NAME mercier_fluxslope_gradient
+        COMMAND test_mercier_fluxslope_gradient)
+
     add_executable(test_field_profile_identities
         test/test_field_profile_identities.f90)
     target_link_libraries(test_field_profile_identities PRIVATE
