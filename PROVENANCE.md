@@ -8,6 +8,7 @@ file records which published work each module implements.
 |---|---|---|
 | `src/gvec_cas3d_types.f90`, `src/gvec_cas3d_netcdf.f90`, `src/gvec_cas3d_reader.f90` | GVEC CAS3D NetCDF export schema, `(s,m,n)` storage, one-period phase convention | GVEC documentation (CAS3D interface); audited exporter behavior |
 | `src/netcdf_c_bindings.f90`, `src/netcdf_c_api.f90` | NetCDF C ABI access | Unidata NetCDF-C |
+| `src/gliss_capi.f90` | Public C ABI (`iso_c_binding`) entry points: library version string and integer ABI version, exported by the `gliss_c` shared library for the Python package | Fortran 2018 `iso_c_binding` |
 | `src/gvec_cas3d_adapter.f90`, `src/gvec_cas3d_reconstruction.f90`, `src/gvec_cas3d_integrals.f90` | Coordinate and Fourier conventions, pointwise reconstruction, signed-volume and derivative checks | Schwab (1993) conventions; GVEC export contract |
 | `src/radial_bspline_basis.f90` | Open clamped B-spline basis, Cox-de Boor recurrence, fixed-boundary elimination | de Boor, A Practical Guide to Splines (2001) |
 | `src/local_mode_model.f90`, `src/symmetric_eigensolver.f90` | Local plane-wave ideal-MHD energy prototype, dense symmetric generalized eigensolver | Bernstein et al. (1958); Freidberg, Ideal MHD (2014); LAPACK |
