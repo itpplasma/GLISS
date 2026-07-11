@@ -1,5 +1,6 @@
 program test_gvec_cas3d_reader
     use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
+    use, intrinsic :: iso_c_binding, only: c_int
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, &
         reader_coordinate_error, reader_data_error, reader_ok, &
@@ -22,12 +23,15 @@ program test_gvec_cas3d_reader
     character(len=11), parameter :: profile_names(profile_count) = &
         [character(len=11) :: "p", "B_theta_avg", "B_zeta_avg", &
         "Phi", "chi", "iota"]
-    character(len=*), parameter :: half_file = "reader_half.nc"
-    character(len=*), parameter :: full_file = "reader_full.nc"
-    character(len=*), parameter :: symmetric_file = "reader_symmetric.nc"
-    character(len=*), parameter :: corrupt_file = "reader_corrupt.nc"
-    character(len=*), parameter :: nan_file = "reader_nan.nc"
-    character(len=*), parameter :: mode_file = "reader_mode.nc"
+    character(len=64) :: half_file, full_file, symmetric_file
+    character(len=64) :: corrupt_file, nan_file, mode_file, missing_file
+
+    interface
+        function get_process_id() result(process_id) bind(c, name="getpid")
+            import :: c_int
+            integer(c_int) :: process_id
+        end function get_process_id
+    end interface
 
     type :: fixture_ids_t
         integer :: ncid = -1
@@ -39,6 +43,14 @@ program test_gvec_cas3d_reader
 
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     integer :: info
+
+    write (half_file, '("reader_half_",i0,".nc")') get_process_id()
+    write (full_file, '("reader_full_",i0,".nc")') get_process_id()
+    write (symmetric_file, '("reader_symmetric_",i0,".nc")') get_process_id()
+    write (corrupt_file, '("reader_corrupt_",i0,".nc")') get_process_id()
+    write (nan_file, '("reader_nan_",i0,".nc")') get_process_id()
+    write (mode_file, '("reader_mode_",i0,".nc")') get_process_id()
+    write (missing_file, '("reader_missing_",i0,".nc")') get_process_id()
 
     call create_fixture(half_file, radial_grid_half, .false., .false.)
     call read_gvec_cas3d_file(half_file, equilibrium, info)
@@ -72,7 +84,7 @@ program test_gvec_cas3d_reader
     call read_gvec_cas3d_file(mode_file, equilibrium, info)
     call require(info == reader_coordinate_error, &
         "invalid toroidal mode order was accepted")
-    call read_gvec_cas3d_file("reader_missing.nc", equilibrium, info)
+    call read_gvec_cas3d_file(missing_file, equilibrium, info)
     call require(info == reader_open_error, "missing file was accepted")
 
     call delete_fixture(half_file)
