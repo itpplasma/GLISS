@@ -1,5 +1,6 @@
 module block_tridiagonal
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use symmetric_pivot_inertia, only: pivot_negative_count
     implicit none
     private
 
@@ -76,35 +77,6 @@ contains
         end do
         info = 0
     end subroutine factorize_shifted
-
-    pure function pivot_negative_count(factored, pivots) result(count)
-        real(dp), intent(in) :: factored(:, :)
-        integer, intent(in) :: pivots(:)
-        integer :: count
-        real(dp) :: diagonal, determinant, trace
-        integer :: j, k
-
-        k = size(pivots)
-        count = 0
-        j = 1
-        do while (j <= k)
-            if (pivots(j) > 0) then
-                diagonal = factored(j, j)
-                if (diagonal < 0.0_dp) count = count + 1
-                j = j + 1
-            else
-                determinant = factored(j, j) * factored(j + 1, j + 1) &
-                    - factored(j, j + 1)**2
-                trace = factored(j, j) + factored(j + 1, j + 1)
-                if (determinant < 0.0_dp) then
-                    count = count + 1
-                else if (trace < 0.0_dp) then
-                    count = count + 2
-                end if
-                j = j + 2
-            end if
-        end do
-    end function pivot_negative_count
 
     subroutine solve_factored(matrix, factor, rhs, info)
         type(block_tridiagonal_t), intent(in) :: matrix

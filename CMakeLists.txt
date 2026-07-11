@@ -38,6 +38,7 @@ add_library(gliss
     src/phase_factor_topology.f90
     src/physical_constants.f90
     src/radial_space_policy.f90
+    src/symmetric_pivot_inertia.f90
     src/terpsichore_topology.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
@@ -200,6 +201,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_variable_block_tridiagonal PRIVATE gliss)
     add_test(NAME variable_block_tridiagonal
         COMMAND test_variable_block_tridiagonal)
+
+    add_executable(test_variable_block_factorization
+        test/test_variable_block_factorization.f90)
+    target_link_libraries(test_variable_block_factorization PRIVATE gliss)
+    add_test(NAME variable_block_factorization
+        COMMAND test_variable_block_factorization)
 
     add_executable(test_physical_mass_family_assembly
         test/test_physical_mass_family_assembly.f90)
