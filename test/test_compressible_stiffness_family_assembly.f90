@@ -270,6 +270,7 @@ contains
         integer, allocatable :: widths(:), permutation(:)
         integer :: local_info
 
+        allocate (density%s(3), density%kilograms_per_cubic_metre(3))
         density%s = [0.0_dp, 0.5_dp, 1.0_dp]
         density%kilograms_per_cubic_metre = [2.0_dp, 3.0_dp, 5.0_dp]
         call assemble_physical_family_mass(local_fields, density, trial_m, &
