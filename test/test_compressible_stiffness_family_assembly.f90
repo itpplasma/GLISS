@@ -4,11 +4,15 @@ program test_compressible_stiffness_family_assembly
         assemble_compressible_stiffness_surface_resolved
     use compressible_stiffness_family_assembly, only: &
         assemble_compressible_family_stiffness
-    use dynamic_family_layout, only: dynamic_family_layout_t, &
-        eta_global_index, mu_global_index, normal_global_index
+    use dynamic_family_layout, only: build_dynamic_block_permutation, &
+        dynamic_family_layout_t, eta_global_index, mu_global_index, &
+        normal_global_index
     use phase_assembly_policy, only: phase_assembly_direct, &
         phase_assembly_transformed
     use radial_space_policy, only: radial_space_config_t
+    use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
+        variable_block_ok, variable_block_to_dense, &
+        variable_block_tridiagonal_t
     implicit none
 
     integer, parameter :: intervals = 4, n_theta = 8, n_zeta = 8
@@ -43,6 +47,7 @@ program test_compressible_stiffness_family_assembly
         "global direct and transformed stiffness matrices differ")
     call require_close(transformed, transpose(transformed), 1.0e-13_dp, &
         "global compressible stiffness is not symmetric")
+    call check_variable_block_structure(transformed, layout)
 
     call build_probe(probe)
     matrix_energy = dot_product(probe, matmul(transformed, probe))
@@ -218,6 +223,32 @@ contains
             probe(i) = (-1.0_dp)**i * real(i, dp) / real(size(probe), dp)
         end do
     end subroutine build_probe
+
+    subroutine check_variable_block_structure(matrix, local_layout)
+        real(dp), intent(in) :: matrix(:, :)
+        type(dynamic_family_layout_t), intent(in) :: local_layout
+        type(variable_block_tridiagonal_t) :: blocks
+        real(dp), allocatable :: blocked(:, :), expected(:, :)
+        integer, allocatable :: widths(:), permutation(:)
+        integer :: i, j, local_info
+
+        call build_dynamic_block_permutation(local_layout, widths, &
+            permutation, local_info)
+        call require(local_info == 0, "stiffness block permutation failed")
+        call pack_permuted_variable_blocks(matrix, permutation, widths, &
+            blocks, local_info)
+        call require(local_info == variable_block_ok, &
+            "global stiffness is not variable-block tridiagonal")
+        call variable_block_to_dense(blocks, blocked, local_info)
+        allocate (expected(size(matrix, 1), size(matrix, 2)))
+        do j = 1, size(matrix, 2)
+            do i = 1, size(matrix, 1)
+                expected(i, j) = matrix(permutation(i), permutation(j))
+            end do
+        end do
+        call require_close(blocked, expected, 1.0e-14_dp, &
+            "global stiffness variable-block reconstruction is wrong")
+    end subroutine check_variable_block_structure
 
     subroutine require_close(first, second, tolerance, message)
         real(dp), intent(in) :: first(:, :), second(:, :), tolerance

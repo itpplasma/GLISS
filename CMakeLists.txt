@@ -41,6 +41,7 @@ add_library(gliss
     src/terpsichore_topology.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
+    src/variable_block_tridiagonal.f90
     src/newcomb_limit.f90
     src/family_assembly.f90
     src/field_profile_identities.f90
@@ -193,6 +194,12 @@ if(BUILD_TESTING)
         test/test_dynamic_family_layout.f90)
     target_link_libraries(test_dynamic_family_layout PRIVATE gliss)
     add_test(NAME dynamic_family_layout COMMAND test_dynamic_family_layout)
+
+    add_executable(test_variable_block_tridiagonal
+        test/test_variable_block_tridiagonal.f90)
+    target_link_libraries(test_variable_block_tridiagonal PRIVATE gliss)
+    add_test(NAME variable_block_tridiagonal
+        COMMAND test_variable_block_tridiagonal)
 
     add_executable(test_physical_mass_family_assembly
         test/test_physical_mass_family_assembly.f90)

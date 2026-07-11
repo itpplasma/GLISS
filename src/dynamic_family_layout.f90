@@ -16,6 +16,7 @@ module dynamic_family_layout
     end type dynamic_family_layout_t
 
     public :: build_dynamic_family_layout
+    public :: build_dynamic_block_permutation
     public :: add_dynamic_element
     public :: eta_global_index
     public :: mu_global_index
@@ -30,17 +31,9 @@ contains
         real(dp), intent(inout) :: matrix(:, :)
         integer, intent(out) :: info
         integer :: local_a, local_b, global_a, global_b
-        type(dynamic_family_layout_t) :: expected
 
         info = dynamic_layout_invalid
-        call build_dynamic_family_layout(layout%trials, layout%intervals, &
-            expected, info)
-        if (info /= dynamic_layout_ok) return
-        info = dynamic_layout_invalid
-        if (layout%normal_unknowns /= expected%normal_unknowns) return
-        if (layout%eta_unknowns /= expected%eta_unknowns) return
-        if (layout%mu_unknowns /= expected%mu_unknowns) return
-        if (layout%total_unknowns /= expected%total_unknowns) return
+        if (.not. dynamic_layout_is_consistent(layout)) return
         if (interval < 1 .or. interval > layout%intervals) return
         if (any(shape(element) /= 4 * layout%trials)) return
         if (any(shape(matrix) /= layout%total_unknowns)) return
@@ -56,6 +49,40 @@ contains
         end do
         info = dynamic_layout_ok
     end subroutine add_dynamic_element
+
+    subroutine build_dynamic_block_permutation(layout, widths, permutation, &
+            info)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        integer, allocatable, intent(out) :: widths(:), permutation(:)
+        integer, intent(out) :: info
+        integer :: base, cell, trial
+
+        info = dynamic_layout_invalid
+        if (.not. dynamic_layout_is_consistent(layout)) return
+        allocate (widths(layout%intervals), &
+            permutation(layout%total_unknowns))
+        widths(1:layout%intervals - 1) = 3 * layout%trials
+        widths(layout%intervals) = 2 * layout%trials
+        do cell = 1, layout%intervals - 1
+            base = 3 * layout%trials * (cell - 1)
+            do trial = 1, layout%trials
+                permutation(base + trial) = &
+                    normal_global_index(layout, cell, trial)
+                permutation(base + layout%trials + trial) = &
+                    eta_global_index(layout, cell, trial)
+                permutation(base + 2 * layout%trials + trial) = &
+                    mu_global_index(layout, cell, trial)
+            end do
+        end do
+        base = 3 * layout%trials * (layout%intervals - 1)
+        do trial = 1, layout%trials
+            permutation(base + trial) = &
+                eta_global_index(layout, layout%intervals, trial)
+            permutation(base + layout%trials + trial) = &
+                mu_global_index(layout, layout%intervals, trial)
+        end do
+        info = dynamic_layout_ok
+    end subroutine build_dynamic_block_permutation
 
     pure function element_global_index(layout, interval, local) result(index)
         type(dynamic_family_layout_t), intent(in) :: layout
@@ -95,6 +122,25 @@ contains
             + layout%eta_unknowns + layout%mu_unknowns
         info = dynamic_layout_ok
     end subroutine build_dynamic_family_layout
+
+    pure function dynamic_layout_is_consistent(layout) result(consistent)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        type(dynamic_family_layout_t) :: expected
+        logical :: consistent
+        integer :: info
+
+        call build_dynamic_family_layout(layout%trials, layout%intervals, &
+            expected, info)
+        consistent = info == dynamic_layout_ok
+        if (.not. consistent) return
+        consistent = layout%normal_unknowns == expected%normal_unknowns
+        if (.not. consistent) return
+        consistent = layout%eta_unknowns == expected%eta_unknowns
+        if (.not. consistent) return
+        consistent = layout%mu_unknowns == expected%mu_unknowns
+        if (.not. consistent) return
+        consistent = layout%total_unknowns == expected%total_unknowns
+    end function dynamic_layout_is_consistent
 
     pure function normal_global_index(layout, node, trial) result(index)
         type(dynamic_family_layout_t), intent(in) :: layout

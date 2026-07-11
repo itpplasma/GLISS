@@ -1,11 +1,15 @@
 program test_physical_mass_family_assembly
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
-    use dynamic_family_layout, only: dynamic_family_layout_t
+    use dynamic_family_layout, only: build_dynamic_block_permutation, &
+        dynamic_family_layout_t
     use mass_density_policy, only: mass_density_profile_t
     use phase_assembly_policy, only: phase_assembly_direct, &
         phase_assembly_transformed
     use physical_mass_family_assembly, only: assemble_physical_family_mass
     use radial_space_policy, only: radial_space_config_t
+    use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
+        variable_block_ok, variable_block_to_dense, &
+        variable_block_tridiagonal_t
     implicit none
 
     integer, parameter :: intervals = 4, n_theta = 8, n_zeta = 8
@@ -47,6 +51,7 @@ program test_physical_mass_family_assembly
         "global direct and transformed mass matrices differ")
     call require(maxval(abs(transformed - transpose(transformed))) &
         < 1.0e-12_dp, "global physical mass is not symmetric")
+    call check_variable_block_structure(transformed, layout)
     call require_positive_definite(transformed)
     call require(maxval(abs(transformed(1:layout%normal_unknowns, &
         layout%normal_unknowns + 1:))) > 1.0e-8_dp, &
@@ -114,6 +119,32 @@ contains
             end do
         end do
     end subroutine build_fields
+
+    subroutine check_variable_block_structure(matrix, local_layout)
+        real(dp), intent(in) :: matrix(:, :)
+        type(dynamic_family_layout_t), intent(in) :: local_layout
+        type(variable_block_tridiagonal_t) :: blocks
+        real(dp), allocatable :: blocked(:, :), expected(:, :)
+        integer, allocatable :: widths(:), permutation(:)
+        integer :: i, j, local_info
+
+        call build_dynamic_block_permutation(local_layout, widths, &
+            permutation, local_info)
+        call require(local_info == 0, "mass block permutation failed")
+        call pack_permuted_variable_blocks(matrix, permutation, widths, &
+            blocks, local_info)
+        call require(local_info == variable_block_ok, &
+            "global mass is not variable-block tridiagonal")
+        call variable_block_to_dense(blocks, blocked, local_info)
+        allocate (expected(size(matrix, 1), size(matrix, 2)))
+        do j = 1, size(matrix, 2)
+            do i = 1, size(matrix, 1)
+                expected(i, j) = matrix(permutation(i), permutation(j))
+            end do
+        end do
+        call require(maxval(abs(blocked - expected)) < 1.0e-14_dp, &
+            "global mass variable-block reconstruction is wrong")
+    end subroutine check_variable_block_structure
 
     pure subroutine set_point_fields(fields, theta, zeta, s)
         real(dp), intent(out) :: fields(:)
