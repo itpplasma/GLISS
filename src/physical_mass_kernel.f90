@@ -26,9 +26,9 @@ contains
         coefficients = 0.0_dp
         coefficients(1, 1) = 1.0_dp / grad_s
         coefficients(2, 1) = signed_sigma_tilde / grad_s
-        coefficients(2, 2) = -grad_s / bmag
+        coefficients(2, 2) = grad_s / bmag
         coefficients(3, 1) = beta_tilde / bmag
-        coefficients(3, 2) = (current_i * flux_p_slope &
+        coefficients(3, 2) = -(current_i * flux_p_slope &
             - current_j * flux_t_slope) / (bmag * flux_norm_squared)
         coefficients(3, 3) = bmag / flux_norm_squared
         mass = density_kg_m3 * abs(signed_sqrtg) &

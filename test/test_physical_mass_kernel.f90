@@ -35,6 +35,12 @@ program test_physical_mass_kernel
         density_kg_m3, mass)
     call reconstruct_displacement(flux_t_slope, flux_p_slope, signed_sqrtg, &
         variables, xi_contravariant)
+    call require(abs(flux_t_slope * xi_contravariant(2) &
+        - flux_p_slope * xi_contravariant(3) - variables(2)) < 1.0e-14_dp, &
+        "reconstruction uses the wrong production eta convention")
+    call require(abs(signed_sqrtg * (flux_t_slope * xi_contravariant(3) &
+        + flux_p_slope * xi_contravariant(2)) - variables(3)) < 1.0e-14_dp, &
+        "reconstruction uses the wrong signed mu convention")
     direct_energy = 0.5_dp * density_kg_m3 * abs(signed_sqrtg) &
         * dot_product(xi_contravariant, matmul(metric, xi_contravariant))
     scalar_energy = physical_mass_energy(flux_t_slope, flux_p_slope, &
@@ -66,9 +72,9 @@ contains
 
         flux_norm_squared = ft**2 + fp**2
         xi(1) = values(1)
-        xi(2) = (-ft * values(2) + fp * values(3) / jacobian) &
+        xi(2) = (ft * values(2) + fp * values(3) / jacobian) &
             / flux_norm_squared
-        xi(3) = (fp * values(2) + ft * values(3) / jacobian) &
+        xi(3) = (-fp * values(2) + ft * values(3) / jacobian) &
             / flux_norm_squared
     end subroutine reconstruct_displacement
 
