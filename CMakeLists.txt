@@ -40,6 +40,7 @@ add_library(gliss
     src/phase_factor_topology.f90
     src/physical_constants.f90
     src/radial_space_policy.f90
+    src/perpendicular_kinetic_kernel.f90
     src/symmetric_pivot_inertia.f90
     src/terpsichore_model_policy.f90
     src/terpsichore_topology.f90
@@ -177,6 +178,12 @@ if(BUILD_TESTING)
         test/test_physical_mass_kernel.f90)
     target_link_libraries(test_physical_mass_kernel PRIVATE gliss)
     add_test(NAME physical_mass_kernel COMMAND test_physical_mass_kernel)
+
+    add_executable(test_perpendicular_kinetic_kernel
+        test/test_perpendicular_kinetic_kernel.f90)
+    target_link_libraries(test_perpendicular_kinetic_kernel PRIVATE gliss)
+    add_test(NAME perpendicular_kinetic_kernel
+        COMMAND test_perpendicular_kinetic_kernel)
 
     add_executable(test_mass_density_policy
         test/test_mass_density_policy.f90)
@@ -333,6 +340,10 @@ if(GLISS_ENABLE_ENZYME)
         SOURCES
             src/physical_mass_kernel.f90
             test/enzyme_physical_mass_gradient.f90)
+    add_enzyme_fortran_test(enzyme_perpendicular_kinetic_gradient
+        SOURCES
+            src/perpendicular_kinetic_kernel.f90
+            test/enzyme_perpendicular_kinetic_gradient.f90)
     add_enzyme_fortran_test(enzyme_physical_mass_assembly_gradient
         SOURCES
             src/fourier_phase_kind.f90

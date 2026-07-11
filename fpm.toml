@@ -70,6 +70,10 @@ name = "physical_mass_kernel"
 main = "test_physical_mass_kernel.f90"
 
 [[test]]
+name = "perpendicular_kinetic_kernel"
+main = "test_perpendicular_kinetic_kernel.f90"
+
+[[test]]
 name = "mass_density_policy"
 main = "test_mass_density_policy.f90"
 
