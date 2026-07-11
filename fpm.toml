@@ -1,0 +1,151 @@
+name = "gliss"
+version = "0.1.0"
+license = "MIT"
+author = "Christopher Albert"
+maintainer = "albert@tugraz.at"
+copyright = "Copyright 2026, GLISS contributors"
+
+[dependencies]
+netcdf = "*"
+
+[build]
+auto-executables = true
+auto-tests = false
+link = ["lapack"]
+
+[[test]]
+name = "local_mode"
+main = "test_local_mode.f90"
+
+[[test]]
+name = "eigen_sensitivity"
+main = "test_eigen_sensitivity.f90"
+
+[[test]]
+name = "gvec_cas3d_adapter"
+main = "test_gvec_cas3d_adapter.f90"
+
+[[test]]
+name = "gvec_cas3d_reader"
+main = "test_gvec_cas3d_reader.f90"
+
+[[test]]
+name = "radial_bspline_basis"
+main = "test_radial_bspline_basis.f90"
+
+[[test]]
+name = "radial_space_policy"
+main = "test_radial_space_policy.f90"
+
+[[test]]
+name = "gvec_cas3d_reconstruction"
+main = "test_gvec_cas3d_reconstruction.f90"
+
+[[test]]
+name = "export_assembly"
+main = "test_export_assembly.f90"
+
+[[test]]
+name = "family_assembly"
+main = "test_family_assembly.f90"
+
+[[test]]
+name = "generalized_block_solver"
+main = "test_generalized_block_solver.f90"
+
+[[test]]
+name = "newcomb_limit"
+main = "test_newcomb_limit.f90"
+
+[[test]]
+name = "two_component_kernel"
+main = "test_two_component_kernel.f90"
+
+[[test]]
+name = "three_component_kernel"
+main = "test_three_component_kernel.f90"
+
+[[test]]
+name = "physical_mass_kernel"
+main = "test_physical_mass_kernel.f90"
+
+[[test]]
+name = "mass_density_policy"
+main = "test_mass_density_policy.f90"
+
+[[test]]
+name = "physical_mass_assembly"
+main = "test_physical_mass_assembly.f90"
+
+[[test]]
+name = "compressible_stiffness_assembly"
+main = "test_compressible_stiffness_assembly.f90"
+
+[[test]]
+name = "compressible_stiffness_family_assembly"
+main = "test_compressible_stiffness_family_assembly.f90"
+
+[[test]]
+name = "dynamic_family_layout"
+main = "test_dynamic_family_layout.f90"
+
+[[test]]
+name = "variable_block_tridiagonal"
+main = "test_variable_block_tridiagonal.f90"
+
+[[test]]
+name = "variable_block_factorization"
+main = "test_variable_block_factorization.f90"
+
+[[test]]
+name = "variable_generalized_solver"
+main = "test_variable_generalized_solver.f90"
+
+[[test]]
+name = "physical_mass_family_assembly"
+main = "test_physical_mass_family_assembly.f90"
+
+[[test]]
+name = "zero_family_homogeneous_spectrum"
+main = "test_zero_family_homogeneous_spectrum.f90"
+
+[[test]]
+name = "mode_topology"
+main = "test_mode_topology.f90"
+
+[[test]]
+name = "trial_space_topology"
+main = "test_trial_space_topology.f90"
+
+[[test]]
+name = "phase_factor_topology"
+main = "test_phase_factor_topology.f90"
+
+[[test]]
+name = "terpsichore_topology"
+main = "test_terpsichore_topology.f90"
+
+[[test]]
+name = "nonuniform_derivative"
+main = "test_nonuniform_derivative.f90"
+
+[[test]]
+name = "mercier_diagnostic"
+main = "test_mercier_diagnostic.f90"
+
+[[test]]
+name = "field_profile_identities"
+main = "test_field_profile_identities.f90"
+
+[[test]]
+name = "gvec_cas3d_integrals"
+main = "test_gvec_cas3d_integrals.f90"
+
+# test_suydam_marginal requires a mandatory poloidal-mode CLI argument that
+# fpm cannot bake into a manifest entry, so it is omitted from the blanket
+# `fpm test` run. CMake ctest covers it (suydam_marginal_m4, suydam_marginal_m6);
+# under fpm run it explicitly, e.g. `fpm test suydam_marginal -- 4`.
+
+[[test]]
+name = "eigenvalue_tracking"
+main = "test_eigenvalue_tracking.f90"
