@@ -225,12 +225,13 @@ contains
                 widths(block)))
             blocks%diagonal(block)%values = dense(first:first + widths(block) &
                 - 1, first:first + widths(block) - 1)
+            call copy_upper_to_lower(blocks%diagonal(block)%values)
             if (block < size(widths)) then
                 next = first + widths(block)
                 allocate (blocks%lower(block)%values(widths(block + 1), &
                     widths(block)))
-                blocks%lower(block)%values = dense(next:next &
-                    + widths(block + 1) - 1, first:first + widths(block) - 1)
+                blocks%lower(block)%values = transpose(dense(first:first &
+                    + widths(block) - 1, next:next + widths(block + 1) - 1))
             end if
             first = first + widths(block)
         end do
@@ -241,6 +242,17 @@ contains
             > 128.0_dp * epsilon(1.0_dp) * scale) return
         info = variable_block_ok
     end subroutine pack_variable_blocks
+
+    pure subroutine copy_upper_to_lower(matrix)
+        real(dp), intent(inout) :: matrix(:, :)
+        integer :: i, j
+
+        do j = 1, size(matrix, 2)
+            do i = j + 1, size(matrix, 1)
+                matrix(i, j) = matrix(j, i)
+            end do
+        end do
+    end subroutine copy_upper_to_lower
 
     subroutine pack_permuted_variable_blocks(dense, permutation, widths, &
             blocks, info)

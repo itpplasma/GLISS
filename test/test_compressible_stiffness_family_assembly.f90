@@ -7,12 +7,18 @@ program test_compressible_stiffness_family_assembly
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
         dynamic_family_layout_t, eta_global_index, mu_global_index, &
         normal_global_index
+    use mass_density_policy, only: mass_density_profile_t
     use phase_assembly_policy, only: phase_assembly_direct, &
         phase_assembly_transformed
     use radial_space_policy, only: radial_space_config_t
+    use physical_mass_family_assembly, only: assemble_physical_family_mass
+    use symmetric_eigensolver, only: solve_symmetric_generalized
     use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
         variable_block_ok, variable_block_to_dense, &
         variable_block_tridiagonal_t
+    use variable_generalized_solver, only: &
+        iterate_variable_generalized_eigenvalue, &
+        variable_generalized_diagnostics, variable_generalized_ok
     implicit none
 
     integer, parameter :: intervals = 4, n_theta = 8, n_zeta = 8
@@ -48,6 +54,7 @@ program test_compressible_stiffness_family_assembly
     call require_close(transformed, transpose(transformed), 1.0e-13_dp, &
         "global compressible stiffness is not symmetric")
     call check_variable_block_structure(transformed, layout)
+    call check_physical_generalized_problem(fields, transformed, layout)
 
     call build_probe(probe)
     matrix_energy = dot_product(probe, matmul(transformed, probe))
@@ -249,6 +256,111 @@ contains
         call require_close(blocked, expected, 1.0e-14_dp, &
             "global stiffness variable-block reconstruction is wrong")
     end subroutine check_variable_block_structure
+
+    subroutine check_physical_generalized_problem(local_fields, stiffness, &
+            stiffness_layout)
+        real(dp), intent(in) :: local_fields(:, :, :, :), stiffness(:, :)
+        type(dynamic_family_layout_t), intent(in) :: stiffness_layout
+        type(dynamic_family_layout_t) :: mass_layout
+        type(mass_density_profile_t) :: density
+        type(variable_block_tridiagonal_t) :: stiffness_blocks, mass_blocks
+        real(dp), allocatable :: mass(:, :), blocked_stiffness(:, :)
+        real(dp), allocatable :: blocked_mass(:, :), eigenvalues(:)
+        real(dp), allocatable :: eigenvectors(:, :)
+        integer, allocatable :: widths(:), permutation(:)
+        integer :: local_info
+
+        density%s = [0.0_dp, 0.5_dp, 1.0_dp]
+        density%kilograms_per_cubic_metre = [2.0_dp, 3.0_dp, 5.0_dp]
+        call assemble_physical_family_mass(local_fields, density, trial_m, &
+            trial_n, trial_parity, stored_power, 3, radial_space, 0.25_dp, &
+            phase_assembly_transformed, mass, mass_layout, local_info)
+        call require(local_info == 0, "physical generalized mass failed")
+        call require(mass_layout%total_unknowns &
+            == stiffness_layout%total_unknowns, "physical K/M layouts differ")
+        call build_dynamic_block_permutation(stiffness_layout, widths, &
+            permutation, local_info)
+        call pack_permuted_variable_blocks(stiffness, permutation, widths, &
+            stiffness_blocks, local_info)
+        call require(local_info == variable_block_ok, &
+            "physical stiffness block packing failed")
+        call pack_permuted_variable_blocks(mass, permutation, widths, &
+            mass_blocks, local_info)
+        call require(local_info == variable_block_ok, &
+            "physical mass block packing failed")
+        call variable_block_to_dense(stiffness_blocks, blocked_stiffness, &
+            local_info)
+        call require(local_info == variable_block_ok, &
+            "physical stiffness block reconstruction failed")
+        call variable_block_to_dense(mass_blocks, blocked_mass, local_info)
+        call require(local_info == variable_block_ok, &
+            "physical mass block reconstruction failed")
+        call solve_symmetric_generalized(blocked_stiffness, blocked_mass, &
+            eigenvalues, eigenvectors, local_info)
+        call require(local_info == 0, "dense physical generalized solve failed")
+        call check_physical_solution(stiffness_blocks, mass_blocks, &
+            blocked_mass, eigenvalues, eigenvectors)
+    end subroutine check_physical_generalized_problem
+
+    subroutine check_physical_solution(stiffness, mass, dense_m, &
+            eigenvalues, eigenvectors)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), intent(in) :: dense_m(:, :)
+        real(dp), intent(in) :: eigenvalues(:), eigenvectors(:, :)
+        real(dp), allocatable :: vector(:)
+        real(dp) :: eigenvalue, oracle_quotient, oracle_residual
+        real(dp) :: oracle_resolution, overlap, residual, resolution
+        real(dp) :: shift, scale, tolerance
+        integer :: local_info
+
+        scale = max(1.0_dp, abs(eigenvalues(1)))
+        shift = eigenvalues(1) - 0.25_dp &
+            * max(eigenvalues(2) - eigenvalues(1), 1.0e-6_dp * scale)
+        call iterate_variable_generalized_eigenvalue(stiffness, mass, shift, &
+            eigenvalue, vector, residual, resolution, &
+            local_info)
+        call require(local_info == variable_generalized_ok, &
+            "physical variable generalized solve failed")
+        call variable_generalized_diagnostics(stiffness, mass, &
+            eigenvectors(:, 1), eigenvalues(1), oracle_quotient, &
+            oracle_residual, oracle_resolution, local_info)
+        call require(local_info == variable_generalized_ok, &
+            "dense physical mode diagnostics failed")
+        tolerance = 1.0e-12_dp * scale + resolution + oracle_resolution &
+            + residual + oracle_residual
+        overlap = dense_cluster_overlap(vector, dense_m, eigenvalues, &
+            eigenvectors, tolerance)
+        call require(abs(eigenvalue - oracle_quotient) <= tolerance, &
+            "physical variable quotient disagrees with dense mode")
+        if (abs(eigenvalue - eigenvalues(1)) > tolerance) then
+            write (error_unit, "(a,5es24.16)") &
+                "FAIL: physical eigenvalues and resolution bounds ", &
+                eigenvalue, eigenvalues(1), resolution, oracle_resolution, &
+                oracle_residual
+            error stop 1
+        end if
+        call require(overlap > 1.0_dp - 1.0e-10_dp, &
+            "physical variable mode misses the dense lowest eigenspace")
+        call require(residual <= max(1.0e-12_dp * scale, resolution), &
+            "physical variable residual exceeds its convergence certificate")
+    end subroutine check_physical_solution
+
+    function dense_cluster_overlap(vector, mass, eigenvalues, eigenvectors, &
+            tolerance) result(overlap)
+        real(dp), intent(in) :: vector(:), mass(:, :), eigenvalues(:)
+        real(dp), intent(in) :: eigenvectors(:, :), tolerance
+        real(dp) :: overlap, projection, mass_image(size(vector))
+        integer :: i
+
+        mass_image = matmul(mass, vector)
+        overlap = 0.0_dp
+        do i = 1, size(eigenvalues)
+            if (eigenvalues(i) - eigenvalues(1) > tolerance) exit
+            projection = dot_product(eigenvectors(:, i), mass_image)
+            overlap = overlap + projection * projection
+        end do
+        overlap = sqrt(overlap)
+    end function dense_cluster_overlap
 
     subroutine require_close(first, second, tolerance, message)
         real(dp), intent(in) :: first(:, :), second(:, :), tolerance
