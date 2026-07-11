@@ -3,7 +3,7 @@ module enzyme_physical_mass_family_fixture
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use phase_assembly_policy, only: phase_assembly_transformed
     use physical_mass_family_assembly, only: &
-        assemble_physical_family_mass_resolved
+        assemble_physical_family_mass_fixed_layout
     use radial_space_policy, only: radial_space_config_t
     implicit none
     private
@@ -19,6 +19,10 @@ contains
         integer, parameter :: trial_m(2) = [1, 2]
         integer, parameter :: trial_n(2) = [1, 4]
         integer, parameter :: parity(2) = [1, 2]
+        integer, parameter :: element_to_global(8, 3) = reshape([ &
+            0, 0, 1, 2, 5, 6, 11, 12, &
+            1, 2, 3, 4, 7, 8, 13, 14, &
+            3, 4, 0, 0, 9, 10, 15, 16], [8, 3])
         real(dp), parameter :: stored_power(2) = [0.0_dp, 0.0_dp]
         type(radial_space_config_t) :: radial_space
         real(dp) :: fields(2, 2, 13, 3), density_kg_m3(3), mass(16, 16)
@@ -36,9 +40,10 @@ contains
             density_kg_m3(surface) = 2.0_dp + 0.2_dp * surface &
                 + active * 0.03_dp * surface
         end do
-        call assemble_physical_family_mass_resolved(fields, density_kg_m3, &
+        call assemble_physical_family_mass_fixed_layout(fields, density_kg_m3, &
             trial_m, trial_n, parity, stored_power, 3, radial_space, &
-            1.0_dp / 3.0_dp, phase_assembly_transformed, mass, info)
+            1.0_dp / 3.0_dp, phase_assembly_transformed, element_to_global, &
+            mass, info)
         energy = 0.0_c_double
         if (info /= 0) return
         do column = 1, size(mass, 2)

@@ -1,11 +1,12 @@
 program test_physical_mass_family_assembly
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
-        dynamic_family_layout_t
+        build_dynamic_element_map, dynamic_family_layout_t
     use mass_density_policy, only: mass_density_profile_t
     use phase_assembly_policy, only: phase_assembly_direct, &
         phase_assembly_transformed
-    use physical_mass_family_assembly, only: assemble_physical_family_mass
+    use physical_mass_family_assembly, only: assemble_physical_family_mass, &
+        assemble_physical_family_mass_fixed_layout
     use radial_space_policy, only: radial_space_config_t
     use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
         variable_block_ok, variable_block_to_dense, &
@@ -56,6 +57,7 @@ program test_physical_mass_family_assembly
     call require(maxval(abs(transformed(1:layout%normal_unknowns, &
         layout%normal_unknowns + 1:))) > 1.0e-8_dp, &
         "global physical mass lost normal-tangential coupling")
+    call check_fixed_layout_rejection(fields, layout)
 
     scaled_profile = density_profile
     scaled_profile%kilograms_per_cubic_metre = &
@@ -65,6 +67,7 @@ program test_physical_mass_family_assembly
     call require(info == 0, "scaled global mass assembly failed")
     call require(maxval(abs(scaled - 2.0_dp * transformed)) < 1.0e-12_dp, &
         "global mass is not linear in density")
+    call check_zero_family_mass(fields, density_profile)
 
     call assemble_physical_family_mass(fields, density_profile, trial_m, &
         trial_n, trial_parity, stored_power, 3, radial_space, 0.2_dp, &
@@ -74,6 +77,57 @@ program test_physical_mass_family_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_zero_family_mass(local_fields, profile)
+        real(dp), intent(in) :: local_fields(:, :, :, :)
+        type(mass_density_profile_t), intent(in) :: profile
+        real(dp), allocatable :: zero_direct(:, :), zero_transformed(:, :)
+        integer, allocatable :: permutation(:), widths(:)
+        type(dynamic_family_layout_t) :: zero_layout
+        integer :: local_info
+
+        call assemble_physical_family_mass(local_fields, profile, [0, 0], &
+            [0, 0], [1, 2], [0.0_dp, 0.0_dp], 3, radial_space, 0.25_dp, &
+            phase_assembly_direct, zero_direct, zero_layout, local_info)
+        call require(local_info == 0, "direct zero-family mass failed")
+        call assemble_physical_family_mass(local_fields, profile, [0, 0], &
+            [0, 0], [1, 2], [0.0_dp, 0.0_dp], 3, radial_space, 0.25_dp, &
+            phase_assembly_transformed, zero_transformed, zero_layout, &
+            local_info)
+        call require(local_info == 0, "transformed zero-family mass failed")
+        call require(zero_layout%total_unknowns == 11, &
+            "zero-family mass retained identically zero trials")
+        call require(maxval(abs(zero_direct - zero_transformed)) < 1.0e-12_dp, &
+            "zero-family mass phase backends differ")
+        call require_positive_definite(zero_transformed)
+        call build_dynamic_block_permutation(zero_layout, widths, &
+            permutation, local_info)
+        call require(local_info == 0 .and. all(widths == [3, 3, 3, 2]), &
+            "zero-family mass block widths are wrong")
+    end subroutine check_zero_family_mass
+
+    subroutine check_fixed_layout_rejection(local_fields, local_layout)
+        real(dp), intent(in) :: local_fields(:, :, :, :)
+        type(dynamic_family_layout_t), intent(in) :: local_layout
+        integer, allocatable :: element_map(:, :)
+        real(dp) :: rejected(local_layout%total_unknowns, &
+            local_layout%total_unknowns)
+        real(dp) :: density(intervals)
+        integer :: local_info
+
+        call build_dynamic_element_map(local_layout, element_map, local_info)
+        call require(local_info == 0, "fixed mass element map failed")
+        element_map(1, 1) = -1
+        density = [2.25_dp, 2.75_dp, 3.5_dp, 4.5_dp]
+        rejected = 7.0_dp
+        call assemble_physical_family_mass_fixed_layout(local_fields, density, &
+            trial_m, trial_n, trial_parity, stored_power, 3, radial_space, &
+            0.25_dp, phase_assembly_transformed, element_map, rejected, &
+            local_info)
+        call require(local_info /= 0, "invalid fixed mass layout was accepted")
+        call require(all(rejected == 7.0_dp), &
+            "rejected fixed mass layout modified the matrix")
+    end subroutine check_fixed_layout_rejection
 
     subroutine assemble(fields, profile, phase_assembly, mass, layout, info)
         real(dp), intent(in) :: fields(:, :, :, :)

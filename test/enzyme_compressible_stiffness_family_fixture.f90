@@ -2,7 +2,7 @@ module enzyme_compressible_stiffness_family_fixture
     use, intrinsic :: iso_c_binding, only: c_double
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use compressible_stiffness_family_assembly, only: &
-        assemble_compressible_family_stiffness_resolved
+        assemble_compressible_family_stiffness_fixed_layout
     use phase_assembly_policy, only: phase_assembly_transformed
     use radial_space_policy, only: radial_space_config_t
     implicit none
@@ -19,6 +19,10 @@ contains
         integer, parameter :: trial_m(2) = [1, 2]
         integer, parameter :: trial_n(2) = [1, -2]
         integer, parameter :: parity(2) = [1, 2]
+        integer, parameter :: element_to_global(8, 3) = reshape([ &
+            0, 0, 1, 2, 5, 6, 11, 12, &
+            1, 2, 3, 4, 7, 8, 13, 14, &
+            3, 4, 0, 0, 9, 10, 15, 16], [8, 3])
         type(radial_space_config_t) :: radial_space
         real(dp) :: fields(2, 2, 13, 3), drive(2, 2, 3)
         real(dp) :: jacobian_radial(2, 2, 3), jacobian_theta(2, 2, 3)
@@ -29,10 +33,11 @@ contains
         call build_active_fields(active, fields, drive, jacobian_radial, &
             jacobian_theta, jacobian_zeta, gamma_pressure)
         stored_power = [0.01_dp, -0.015_dp] * active
-        call assemble_compressible_family_stiffness_resolved(fields, drive, &
+        call assemble_compressible_family_stiffness_fixed_layout(fields, drive, &
             jacobian_radial, jacobian_theta, jacobian_zeta, gamma_pressure, &
             trial_m, trial_n, parity, stored_power, 3, radial_space, &
-            1.0_dp / 3.0_dp, phase_assembly_transformed, stiffness, info)
+            1.0_dp / 3.0_dp, phase_assembly_transformed, element_to_global, &
+            stiffness, info)
         energy = 0.0_c_double
         if (info /= 0) return
         energy = weighted_stiffness(stiffness)

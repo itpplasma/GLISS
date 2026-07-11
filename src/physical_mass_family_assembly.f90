@@ -1,8 +1,10 @@
 module physical_mass_family_assembly
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use dynamic_family_layout, only: add_dynamic_element, &
-        build_dynamic_family_layout, dynamic_family_layout_t, dynamic_layout_ok
+    use dynamic_family_layout, only: add_mapped_dynamic_element, &
+        build_dynamic_element_map, build_resolved_dynamic_family_layout, &
+        dynamic_element_map_is_valid, dynamic_family_layout_t, &
+        dynamic_layout_ok
     use mass_density_policy, only: evaluate_mass_density, mass_density_ok, &
         mass_density_profile_t
     use phase_assembly_policy, only: phase_assembly_direct, &
@@ -10,6 +12,8 @@ module physical_mass_family_assembly
     use physical_mass_assembly, only: &
         assemble_physical_mass_surface_resolved
     use radial_space_policy, only: radial_space_config_t
+    use trial_space_topology, only: build_trial_space_topology, &
+        trial_space_topology_t, trial_topology_ok
     implicit none
     private
 
@@ -17,6 +21,7 @@ module physical_mass_family_assembly
 
     public :: assemble_physical_family_mass
     public :: assemble_physical_family_mass_resolved
+    public :: assemble_physical_family_mass_fixed_layout
 
 contains
 
@@ -33,11 +38,15 @@ contains
         real(dp), allocatable, intent(out) :: mass(:, :)
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
+        type(trial_space_topology_t) :: topology
         real(dp), allocatable :: density_kg_m3(:)
         real(dp) :: radial_coordinate
         integer :: interval
 
-        call build_dynamic_family_layout(size(trial_m), size(fields, 4), &
+        call build_trial_space_topology(trial_m, trial_n, trial_parity, &
+            topology, info)
+        if (info /= trial_topology_ok) return
+        call build_resolved_dynamic_family_layout(topology, size(fields, 4), &
             layout, info)
         if (info /= dynamic_layout_ok) return
         allocate (density_kg_m3(layout%intervals))
@@ -68,16 +77,50 @@ contains
         real(dp), intent(out) :: mass(:, :)
         integer, intent(out) :: info
         type(dynamic_family_layout_t) :: layout
+        type(trial_space_topology_t) :: topology
+        integer, allocatable :: element_to_global(:, :)
+
+        call build_trial_space_topology(trial_m, trial_n, trial_parity, &
+            topology, info)
+        if (info /= trial_topology_ok) return
+        call build_resolved_dynamic_family_layout(topology, size(fields, 4), &
+            layout, info)
+        if (info /= dynamic_layout_ok) return
+        if (any(shape(mass) /= layout%total_unknowns)) then
+            info = -1
+            return
+        end if
+        call build_dynamic_element_map(layout, element_to_global, info)
+        if (info /= dynamic_layout_ok) return
+        call assemble_physical_family_mass_fixed_layout(fields, density_kg_m3, &
+            trial_m, trial_n, trial_parity, stored_power, field_periods, &
+            radial_space, radial_step, phase_assembly, element_to_global, &
+            mass, info)
+    end subroutine assemble_physical_family_mass_resolved
+
+    subroutine assemble_physical_family_mass_fixed_layout(fields, &
+            density_kg_m3, trial_m, trial_n, trial_parity, stored_power, &
+            field_periods, radial_space, radial_step, phase_assembly, &
+            element_to_global, mass, info)
+        real(dp), intent(in) :: fields(:, :, :, :), density_kg_m3(:)
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: stored_power(:)
+        integer, intent(in) :: field_periods, phase_assembly
+        type(radial_space_config_t), intent(in) :: radial_space
+        real(dp), intent(in) :: radial_step
+        integer, intent(in) :: element_to_global(:, :)
+        real(dp), intent(out) :: mass(:, :)
+        integer, intent(out) :: info
         real(dp) :: element(4 * size(trial_m), 4 * size(trial_m))
         real(dp) :: radial_coordinate
         integer :: interval
 
-        call validate_resolved_inputs(fields, density_kg_m3, trial_m, &
+        call validate_fixed_inputs(fields, density_kg_m3, trial_m, &
             trial_n, trial_parity, stored_power, field_periods, radial_step, &
-            phase_assembly, mass, layout, info)
+            phase_assembly, element_to_global, mass, info)
         if (info /= 0) return
         mass = 0.0_dp
-        do interval = 1, layout%intervals
+        do interval = 1, size(fields, 4)
             radial_coordinate = (real(interval, dp) - 0.5_dp) * radial_step
             call assemble_physical_mass_surface_resolved( &
                 fields(:, :, :, interval), density_kg_m3(interval), trial_m, &
@@ -85,33 +128,29 @@ contains
                 radial_space, radial_coordinate, radial_step, phase_assembly, &
                 element, info)
             if (info /= 0) return
-            call add_dynamic_element(layout, interval, element, mass, info)
+            call add_mapped_dynamic_element(element_to_global(:, interval), &
+                element, mass, info)
             if (info /= dynamic_layout_ok) return
         end do
         info = 0
-    end subroutine assemble_physical_family_mass_resolved
+    end subroutine assemble_physical_family_mass_fixed_layout
 
-    subroutine validate_resolved_inputs(fields, density_kg_m3, trial_m, &
+    subroutine validate_fixed_inputs(fields, density_kg_m3, trial_m, &
             trial_n, trial_parity, stored_power, field_periods, radial_step, &
-            phase_assembly, mass, layout, info)
+            phase_assembly, element_to_global, mass, info)
         real(dp), intent(in) :: fields(:, :, :, :), density_kg_m3(:)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         real(dp), intent(in) :: stored_power(:), radial_step
         integer, intent(in) :: field_periods, phase_assembly
+        integer, intent(in) :: element_to_global(:, :)
         real(dp), intent(in) :: mass(:, :)
-        type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
         integer :: trials, intervals
 
         info = -1
         trials = size(trial_m)
         intervals = size(fields, 4)
-        call build_dynamic_family_layout(trials, intervals, layout, info)
-        if (info /= dynamic_layout_ok) then
-            info = -1
-            return
-        end if
-        info = -1
+        if (trials < 1 .or. intervals < 1) return
         if (size(trial_n) /= trials .or. size(trial_parity) /= trials) return
         if (size(stored_power) /= trials) return
         if (size(density_kg_m3) /= intervals) return
@@ -123,9 +162,10 @@ contains
         if (field_periods < 1) return
         if (phase_assembly /= phase_assembly_transformed .and. &
             phase_assembly /= phase_assembly_direct) return
-        if (size(mass, 1) /= layout%total_unknowns) return
-        if (size(mass, 2) /= layout%total_unknowns) return
+        if (size(mass, 1) /= size(mass, 2)) return
+        if (.not. dynamic_element_map_is_valid(element_to_global, trials, &
+            intervals, size(mass, 1))) return
         info = 0
-    end subroutine validate_resolved_inputs
+    end subroutine validate_fixed_inputs
 
 end module physical_mass_family_assembly

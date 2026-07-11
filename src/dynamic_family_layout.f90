@@ -1,5 +1,6 @@
 module dynamic_family_layout
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use trial_space_topology, only: trial_space_topology_t
     implicit none
     private
 
@@ -13,11 +14,18 @@ module dynamic_family_layout
         integer :: eta_unknowns = 0
         integer :: mu_unknowns = 0
         integer :: total_unknowns = 0
+        integer :: active_count(3) = 0
+        logical, allocatable :: active(:, :)
+        integer, allocatable :: active_rank(:, :)
     end type dynamic_family_layout_t
 
     public :: build_dynamic_family_layout
+    public :: build_resolved_dynamic_family_layout
     public :: build_dynamic_block_permutation
+    public :: build_dynamic_element_map
     public :: add_dynamic_element
+    public :: add_mapped_dynamic_element
+    public :: dynamic_element_map_is_valid
     public :: eta_global_index
     public :: mu_global_index
     public :: normal_global_index
@@ -30,59 +38,136 @@ contains
         real(dp), intent(in) :: element(:, :)
         real(dp), intent(inout) :: matrix(:, :)
         integer, intent(out) :: info
-        integer :: local_a, local_b, global_a, global_b
+        integer :: local_a
+        integer :: local_to_global(size(element, 1))
 
         info = dynamic_layout_invalid
         if (.not. dynamic_layout_is_consistent(layout)) return
         if (interval < 1 .or. interval > layout%intervals) return
         if (any(shape(element) /= 4 * layout%trials)) return
         if (any(shape(matrix) /= layout%total_unknowns)) return
+        do local_a = 1, size(element, 1)
+            local_to_global(local_a) = &
+                element_global_index(layout, interval, local_a)
+        end do
+        call add_mapped_dynamic_element(local_to_global, element, matrix, info)
+    end subroutine add_dynamic_element
+
+    subroutine add_mapped_dynamic_element(local_to_global, element, matrix, &
+            info)
+        integer, intent(in) :: local_to_global(:)
+        real(dp), intent(in) :: element(:, :)
+        real(dp), intent(inout) :: matrix(:, :)
+        integer, intent(out) :: info
+        integer :: local_a, local_b, global_a, global_b
+
+        info = dynamic_layout_invalid
+        if (any(shape(element) /= size(local_to_global))) return
+        if (size(matrix, 1) /= size(matrix, 2)) return
+        if (any(local_to_global < 0)) return
+        if (any(local_to_global > size(matrix, 1))) return
         do local_b = 1, size(element, 2)
-            global_b = element_global_index(layout, interval, local_b)
+            global_b = local_to_global(local_b)
             if (global_b == 0) cycle
             do local_a = 1, size(element, 1)
-                global_a = element_global_index(layout, interval, local_a)
+                global_a = local_to_global(local_a)
                 if (global_a == 0) cycle
                 matrix(global_a, global_b) = matrix(global_a, global_b) &
                     + element(local_a, local_b)
             end do
         end do
         info = dynamic_layout_ok
-    end subroutine add_dynamic_element
+    end subroutine add_mapped_dynamic_element
+
+    subroutine build_dynamic_element_map(layout, element_to_global, info)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        integer, allocatable, intent(out) :: element_to_global(:, :)
+        integer, intent(out) :: info
+        integer :: interval, local
+
+        info = dynamic_layout_invalid
+        if (.not. dynamic_layout_is_consistent(layout)) return
+        allocate (element_to_global(4 * layout%trials, layout%intervals))
+        do interval = 1, layout%intervals
+            do local = 1, size(element_to_global, 1)
+                element_to_global(local, interval) = &
+                    element_global_index(layout, interval, local)
+            end do
+        end do
+        info = dynamic_layout_ok
+    end subroutine build_dynamic_element_map
+
+    pure function dynamic_element_map_is_valid(element_to_global, trials, &
+            intervals, total_unknowns) result(valid)
+        integer, intent(in) :: element_to_global(:, :)
+        integer, intent(in) :: trials, intervals, total_unknowns
+        logical :: valid
+        integer :: global
+
+        valid = .false.
+        if (trials < 1 .or. intervals < 2 .or. total_unknowns < 1) return
+        if (any(shape(element_to_global) /= [4 * trials, intervals])) return
+        if (any(element_to_global < 0)) return
+        if (any(element_to_global > total_unknowns)) return
+        if (maxval(element_to_global) /= total_unknowns) return
+        do global = 1, total_unknowns
+            if (.not. any(element_to_global == global)) return
+        end do
+        valid = .true.
+    end function dynamic_element_map_is_valid
 
     subroutine build_dynamic_block_permutation(layout, widths, permutation, &
             info)
         type(dynamic_family_layout_t), intent(in) :: layout
         integer, allocatable, intent(out) :: widths(:), permutation(:)
         integer, intent(out) :: info
-        integer :: base, cell, trial
+        integer :: block_count, cell, edge_width, position, regular_width
 
         info = dynamic_layout_invalid
         if (.not. dynamic_layout_is_consistent(layout)) return
-        allocate (widths(layout%intervals), &
-            permutation(layout%total_unknowns))
-        widths(1:layout%intervals - 1) = 3 * layout%trials
-        widths(layout%intervals) = 2 * layout%trials
+        regular_width = sum(layout%active_count)
+        edge_width = sum(layout%active_count(2:3))
+        block_count = layout%intervals - 1
+        if (edge_width > 0) block_count = layout%intervals
+        allocate (widths(block_count), permutation(layout%total_unknowns))
+        widths(1:layout%intervals - 1) = regular_width
+        if (edge_width > 0) widths(block_count) = edge_width
+        position = 0
         do cell = 1, layout%intervals - 1
-            base = 3 * layout%trials * (cell - 1)
-            do trial = 1, layout%trials
-                permutation(base + trial) = &
-                    normal_global_index(layout, cell, trial)
-                permutation(base + layout%trials + trial) = &
-                    eta_global_index(layout, cell, trial)
-                permutation(base + 2 * layout%trials + trial) = &
-                    mu_global_index(layout, cell, trial)
-            end do
+            call append_cell_indices(layout, cell, .true., permutation, &
+                position)
         end do
-        base = 3 * layout%trials * (layout%intervals - 1)
-        do trial = 1, layout%trials
-            permutation(base + trial) = &
-                eta_global_index(layout, layout%intervals, trial)
-            permutation(base + layout%trials + trial) = &
-                mu_global_index(layout, layout%intervals, trial)
-        end do
+        if (edge_width > 0) call append_cell_indices(layout, &
+            layout%intervals, .false., permutation, position)
+        if (position /= layout%total_unknowns) return
         info = dynamic_layout_ok
     end subroutine build_dynamic_block_permutation
+
+    pure subroutine append_cell_indices(layout, cell, include_normal, &
+            permutation, position)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        integer, intent(in) :: cell
+        logical, intent(in) :: include_normal
+        integer, intent(inout) :: permutation(:), position
+        integer :: component, index, trial
+
+        do component = 1, 3
+            if (component == 1 .and. .not. include_normal) cycle
+            do trial = 1, layout%trials
+                select case (component)
+                case (1)
+                    index = normal_global_index_unchecked(layout, cell, trial)
+                case (2)
+                    index = eta_global_index_unchecked(layout, cell, trial)
+                case (3)
+                    index = mu_global_index_unchecked(layout, cell, trial)
+                end select
+                if (index == 0) cycle
+                position = position + 1
+                permutation(position) = index
+            end do
+        end do
+    end subroutine append_cell_indices
 
     pure function element_global_index(layout, interval, local) result(index)
         type(dynamic_family_layout_t), intent(in) :: layout
@@ -93,13 +178,13 @@ contains
         trial = modulo(local - 1, layout%trials) + 1
         select case (component_block)
         case (1)
-            index = normal_global_index(layout, interval - 1, trial)
+            index = normal_global_index_unchecked(layout, interval - 1, trial)
         case (2)
-            index = normal_global_index(layout, interval, trial)
+            index = normal_global_index_unchecked(layout, interval, trial)
         case (3)
-            index = eta_global_index(layout, interval, trial)
+            index = eta_global_index_unchecked(layout, interval, trial)
         case (4)
-            index = mu_global_index(layout, interval, trial)
+            index = mu_global_index_unchecked(layout, interval, trial)
         case default
             index = 0
         end select
@@ -110,36 +195,61 @@ contains
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
 
+        type(trial_space_topology_t) :: topology
+
+        info = dynamic_layout_invalid
+        if (trials < 1) return
+        allocate (topology%active(3, trials), source=.true.)
+        call build_resolved_dynamic_family_layout(topology, intervals, &
+            layout, info)
+    end subroutine build_dynamic_family_layout
+
+    pure subroutine build_resolved_dynamic_family_layout(topology, intervals, &
+            layout, info)
+        type(trial_space_topology_t), intent(in) :: topology
+        integer, intent(in) :: intervals
+        type(dynamic_family_layout_t), intent(out) :: layout
+        integer, intent(out) :: info
+
         layout = dynamic_family_layout_t()
         info = dynamic_layout_invalid
-        if (trials < 1 .or. intervals < 2) return
-        layout%trials = trials
+        if (.not. allocated(topology%active)) return
+        if (size(topology%active, 1) /= 3 &
+            .or. size(topology%active, 2) < 1) return
+        if (intervals < 2 .or. .not. any(topology%active)) return
+        layout%trials = size(topology%active, 2)
         layout%intervals = intervals
-        layout%normal_unknowns = trials * (intervals - 1)
-        layout%eta_unknowns = trials * intervals
-        layout%mu_unknowns = trials * intervals
+        allocate (layout%active, source=topology%active)
+        call build_activity_ranks(layout)
+        layout%normal_unknowns = layout%active_count(1) * (intervals - 1)
+        layout%eta_unknowns = layout%active_count(2) * intervals
+        layout%mu_unknowns = layout%active_count(3) * intervals
         layout%total_unknowns = layout%normal_unknowns &
             + layout%eta_unknowns + layout%mu_unknowns
         info = dynamic_layout_ok
-    end subroutine build_dynamic_family_layout
+    end subroutine build_resolved_dynamic_family_layout
+
+    pure subroutine build_activity_ranks(layout)
+        type(dynamic_family_layout_t), intent(inout) :: layout
+        integer :: component, rank, trial
+
+        allocate (layout%active_rank(3, layout%trials), source=0)
+        do component = 1, 3
+            rank = 0
+            do trial = 1, layout%trials
+                if (.not. layout%active(component, trial)) cycle
+                rank = rank + 1
+                layout%active_rank(component, trial) = rank
+            end do
+            layout%active_count(component) = rank
+        end do
+    end subroutine build_activity_ranks
 
     pure function dynamic_layout_is_consistent(layout) result(consistent)
         type(dynamic_family_layout_t), intent(in) :: layout
-        type(dynamic_family_layout_t) :: expected
         logical :: consistent
-        integer :: info
 
-        call build_dynamic_family_layout(layout%trials, layout%intervals, &
-            expected, info)
-        consistent = info == dynamic_layout_ok
-        if (.not. consistent) return
-        consistent = layout%normal_unknowns == expected%normal_unknowns
-        if (.not. consistent) return
-        consistent = layout%eta_unknowns == expected%eta_unknowns
-        if (.not. consistent) return
-        consistent = layout%mu_unknowns == expected%mu_unknowns
-        if (.not. consistent) return
-        consistent = layout%total_unknowns == expected%total_unknowns
+        consistent = layout_metadata_is_consistent(layout)
     end function dynamic_layout_is_consistent
 
     pure function normal_global_index(layout, node, trial) result(index)
@@ -148,10 +258,23 @@ contains
         integer :: index
 
         index = 0
+        if (.not. layout_metadata_is_consistent(layout)) return
+        index = normal_global_index_unchecked(layout, node, trial)
+    end function normal_global_index
+
+    pure function normal_global_index_unchecked(layout, node, trial) &
+            result(index)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        integer, intent(in) :: node, trial
+        integer :: index
+
+        index = 0
         if (node <= 0 .or. node >= layout%intervals) return
         if (trial < 1 .or. trial > layout%trials) return
-        index = (node - 1) * layout%trials + trial
-    end function normal_global_index
+        if (.not. layout%active(1, trial)) return
+        index = (node - 1) * layout%active_count(1) &
+            + layout%active_rank(1, trial)
+    end function normal_global_index_unchecked
 
     pure function eta_global_index(layout, cell, trial) result(index)
         type(dynamic_family_layout_t), intent(in) :: layout
@@ -159,12 +282,11 @@ contains
         integer :: index
 
         index = 0
-        if (cell < 1 .or. cell > layout%intervals) return
-        if (trial < 1 .or. trial > layout%trials) return
-        index = layout%normal_unknowns + (cell - 1) * layout%trials + trial
+        if (.not. layout_metadata_is_consistent(layout)) return
+        index = eta_global_index_unchecked(layout, cell, trial)
     end function eta_global_index
 
-    pure function mu_global_index(layout, cell, trial) result(index)
+    pure function eta_global_index_unchecked(layout, cell, trial) result(index)
         type(dynamic_family_layout_t), intent(in) :: layout
         integer, intent(in) :: cell, trial
         integer :: index
@@ -172,8 +294,92 @@ contains
         index = 0
         if (cell < 1 .or. cell > layout%intervals) return
         if (trial < 1 .or. trial > layout%trials) return
-        index = layout%normal_unknowns + layout%eta_unknowns &
-            + (cell - 1) * layout%trials + trial
+        if (.not. layout%active(2, trial)) return
+        index = layout%normal_unknowns &
+            + (cell - 1) * layout%active_count(2) &
+            + layout%active_rank(2, trial)
+    end function eta_global_index_unchecked
+
+    pure function mu_global_index(layout, cell, trial) result(index)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        integer, intent(in) :: cell, trial
+        integer :: index
+
+        index = 0
+        if (.not. layout_metadata_is_consistent(layout)) return
+        index = mu_global_index_unchecked(layout, cell, trial)
     end function mu_global_index
+
+    pure function mu_global_index_unchecked(layout, cell, trial) result(index)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        integer, intent(in) :: cell, trial
+        integer :: index
+
+        index = 0
+        if (cell < 1 .or. cell > layout%intervals) return
+        if (trial < 1 .or. trial > layout%trials) return
+        if (.not. layout%active(3, trial)) return
+        index = layout%normal_unknowns + layout%eta_unknowns &
+            + (cell - 1) * layout%active_count(3) &
+            + layout%active_rank(3, trial)
+    end function mu_global_index_unchecked
+
+    pure function layout_activity_is_shaped(layout) result(valid)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        logical :: valid
+
+        valid = allocated(layout%active)
+        if (.not. valid) return
+        valid = size(layout%active, 1) == 3
+        if (.not. valid) return
+        valid = size(layout%active, 2) == layout%trials
+        if (.not. valid) return
+        valid = allocated(layout%active_rank)
+        if (.not. valid) return
+        valid = all(shape(layout%active_rank) == [3, layout%trials])
+    end function layout_activity_is_shaped
+
+    pure function layout_metadata_is_consistent(layout) result(valid)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        logical :: valid
+
+        valid = layout_activity_is_shaped(layout)
+        if (.not. valid) return
+        valid = layout%trials >= 1 .and. layout%intervals >= 2
+        if (.not. valid) return
+        valid = any(layout%active)
+        if (.not. valid) return
+        valid = activity_ranks_are_consistent(layout)
+        if (.not. valid) return
+        valid = layout%normal_unknowns == layout%active_count(1) &
+            * (layout%intervals - 1)
+        if (.not. valid) return
+        valid = layout%eta_unknowns == layout%active_count(2) &
+            * layout%intervals
+        if (.not. valid) return
+        valid = layout%mu_unknowns == layout%active_count(3) &
+            * layout%intervals
+        if (.not. valid) return
+        valid = layout%total_unknowns == layout%normal_unknowns &
+            + layout%eta_unknowns + layout%mu_unknowns
+    end function layout_metadata_is_consistent
+
+    pure function activity_ranks_are_consistent(layout) result(valid)
+        type(dynamic_family_layout_t), intent(in) :: layout
+        logical :: valid
+        integer :: component, rank, trial
+
+        valid = .false.
+        do component = 1, 3
+            rank = 0
+            do trial = 1, layout%trials
+                if (layout%active(component, trial)) rank = rank + 1
+                if (layout%active_rank(component, trial) /= merge(rank, 0, &
+                    layout%active(component, trial))) return
+            end do
+            if (layout%active_count(component) /= rank) return
+        end do
+        valid = .true.
+    end function activity_ranks_are_consistent
 
 end module dynamic_family_layout

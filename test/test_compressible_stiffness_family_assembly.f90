@@ -3,10 +3,11 @@ program test_compressible_stiffness_family_assembly
     use compressible_stiffness_assembly, only: &
         assemble_compressible_stiffness_surface_resolved
     use compressible_stiffness_family_assembly, only: &
-        assemble_compressible_family_stiffness
+        assemble_compressible_family_stiffness, &
+        assemble_compressible_family_stiffness_fixed_layout
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
-        dynamic_family_layout_t, eta_global_index, mu_global_index, &
-        normal_global_index
+        build_dynamic_element_map, dynamic_family_layout_t, eta_global_index, &
+        mu_global_index, normal_global_index
     use mass_density_policy, only: mass_density_profile_t
     use phase_assembly_policy, only: phase_assembly_direct, &
         phase_assembly_transformed
@@ -55,6 +56,10 @@ program test_compressible_stiffness_family_assembly
         "global compressible stiffness is not symmetric")
     call check_variable_block_structure(transformed, layout)
     call check_physical_generalized_problem(fields, transformed, layout)
+    call check_fixed_layout_rejection(fields, drive, jacobian_radial, &
+        jacobian_theta, jacobian_zeta, gamma_pressure, layout)
+    call check_zero_family_problem(fields, drive, jacobian_radial, &
+        jacobian_theta, jacobian_zeta, gamma_pressure)
 
     call build_probe(probe)
     matrix_energy = dot_product(probe, matmul(transformed, probe))
@@ -92,6 +97,76 @@ program test_compressible_stiffness_family_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_fixed_layout_rejection(local_fields, local_drive, &
+            jacobian_s, jacobian_t, jacobian_z, gamma_pressure, local_layout)
+        real(dp), intent(in) :: local_fields(:, :, :, :), local_drive(:, :, :)
+        real(dp), intent(in) :: jacobian_s(:, :, :), jacobian_t(:, :, :)
+        real(dp), intent(in) :: jacobian_z(:, :, :), gamma_pressure(:, :, :)
+        type(dynamic_family_layout_t), intent(in) :: local_layout
+        integer, allocatable :: element_map(:, :)
+        real(dp) :: rejected(local_layout%total_unknowns, &
+            local_layout%total_unknowns)
+        integer :: local_info
+
+        call build_dynamic_element_map(local_layout, element_map, local_info)
+        call require(local_info == 0, "fixed stiffness element map failed")
+        element_map(1, 1) = -1
+        rejected = 7.0_dp
+        call assemble_compressible_family_stiffness_fixed_layout(local_fields, &
+            local_drive, jacobian_s, jacobian_t, jacobian_z, gamma_pressure, &
+            trial_m, trial_n, trial_parity, stored_power, 3, radial_space, &
+            0.25_dp, phase_assembly_transformed, element_map, rejected, &
+            local_info)
+        call require(local_info /= 0, &
+            "invalid fixed stiffness layout was accepted")
+        call require(all(rejected == 7.0_dp), &
+            "rejected fixed stiffness layout modified the matrix")
+    end subroutine check_fixed_layout_rejection
+
+    subroutine check_zero_family_problem(local_fields, local_drive, &
+            jacobian_s, jacobian_t, jacobian_z, gamma_pressure)
+        real(dp), intent(in) :: local_fields(:, :, :, :), local_drive(:, :, :)
+        real(dp), intent(in) :: jacobian_s(:, :, :), jacobian_t(:, :, :)
+        real(dp), intent(in) :: jacobian_z(:, :, :), gamma_pressure(:, :, :)
+        type(dynamic_family_layout_t) :: direct_layout, zero_layout
+        type(mass_density_profile_t) :: density
+        real(dp), allocatable :: direct_k(:, :), transformed_k(:, :)
+        real(dp), allocatable :: mass(:, :), eigenvalues(:), eigenvectors(:, :)
+        integer, parameter :: zero_m(2) = 0, zero_n(2) = 0
+        integer, parameter :: zero_parity(2) = [1, 2]
+        real(dp), parameter :: zero_power(2) = 0.0_dp
+        integer :: local_info
+
+        call assemble_compressible_family_stiffness(local_fields, local_drive, &
+            jacobian_s, jacobian_t, jacobian_z, gamma_pressure, zero_m, &
+            zero_n, zero_parity, zero_power, 3, radial_space, 0.25_dp, &
+            phase_assembly_direct, direct_k, direct_layout, local_info)
+        call require(local_info == 0, "direct zero-family stiffness failed")
+        call assemble_compressible_family_stiffness(local_fields, local_drive, &
+            jacobian_s, jacobian_t, jacobian_z, gamma_pressure, zero_m, &
+            zero_n, zero_parity, zero_power, 3, radial_space, 0.25_dp, &
+            phase_assembly_transformed, transformed_k, zero_layout, local_info)
+        call require(local_info == 0, &
+            "transformed zero-family stiffness failed")
+        call require(zero_layout%total_unknowns == 11 .and. &
+            direct_layout%total_unknowns == 11, &
+            "zero-family stiffness retained identically zero trials")
+        call require_close(direct_k, transformed_k, 1.0e-12_dp, &
+            "zero-family stiffness phase backends differ")
+        call require_close(transformed_k, transpose(transformed_k), 1.0e-13_dp, &
+            "zero-family stiffness is not symmetric")
+        allocate (density%s(3), density%kilograms_per_cubic_metre(3))
+        density%s = [0.0_dp, 0.5_dp, 1.0_dp]
+        density%kilograms_per_cubic_metre = [2.0_dp, 3.0_dp, 5.0_dp]
+        call assemble_physical_family_mass(local_fields, density, zero_m, &
+            zero_n, zero_parity, zero_power, 3, radial_space, 0.25_dp, &
+            phase_assembly_transformed, mass, zero_layout, local_info)
+        call require(local_info == 0, "zero-family physical mass failed")
+        call solve_symmetric_generalized(transformed_k, mass, eigenvalues, &
+            eigenvectors, local_info)
+        call require(local_info == 0, "zero-family dense K/M solve failed")
+    end subroutine check_zero_family_problem
 
     subroutine assemble(local_fields, local_drive, local_jacobian_radial, &
             local_jacobian_theta, local_jacobian_zeta, local_gamma_pressure, &

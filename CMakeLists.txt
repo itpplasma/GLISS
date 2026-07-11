@@ -308,6 +308,7 @@ if(GLISS_ENABLE_ENZYME)
     add_enzyme_fortran_test(enzyme_physical_mass_family_gradient
         SOURCES
             src/fourier_phase_kind.f90
+            src/trial_space_topology.f90
             src/dynamic_family_layout.f90
             src/mass_density_policy.f90
             src/phase_assembly_policy.f90
@@ -339,6 +340,7 @@ if(GLISS_ENABLE_ENZYME)
     add_enzyme_fortran_test(enzyme_compressible_stiffness_family_gradient
         SOURCES
             src/fourier_phase_kind.f90
+            src/trial_space_topology.f90
             src/dynamic_family_layout.f90
             src/phase_assembly_policy.f90
             src/phase_factor_topology.f90
