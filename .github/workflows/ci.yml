@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   gfortran:
@@ -21,3 +22,109 @@ jobs:
         run: cmake --build build
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran cmake ninja-build \
+            liblapack-dev libnetcdf-dev pkg-config
+      - name: Configure with warnings as errors
+        run: cmake -S . -B build -G Ninja -DCMAKE_Fortran_FLAGS=-Werror
+      - name: Build
+        run: cmake --build build
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install fprettify
+        run: pip install fprettify
+      - name: Format check (informational)
+        # Canonical formatting is `fo fmt` (native formatter; this repo has
+        # no .fprettify.rc, so fo does not fall back to fprettify). fo is a
+        # group-internal tool and is not installed in public CI. Stock
+        # fprettify also cannot reproduce this repo's style: it forces no
+        # space around `//` and a mandatory space before a bare
+        # continuation `&`, both used throughout this tree. So this job
+        # reports drift for visibility without gating the build.
+        continue-on-error: true
+        run: |
+          diff="$(fprettify --line-length 88 --indent 4 --diff --recursive src app test)"
+          if [ -n "$diff" ]; then
+            echo "$diff"
+            echo "::warning::fprettify reports formatting drift (informational only)"
+            exit 1
+          fi
+
+  flang:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LLVM 22 (flang)
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 22
+          sudo apt-get install -y flang-22
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build \
+            liblapack-dev libnetcdf-dev pkg-config
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_Fortran_COMPILER=flang-22
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # Opt-in derivative-verification job: builds the Enzyme LLVM plugin from
+  # source against LLVM 22 and runs GLISS's enzyme_* differentiation tests.
+  # Enzyme is not apt-installable and a from-source build takes tens of
+  # minutes, so this must never run on push/pull_request. Trigger manually
+  # from the Actions tab (workflow_dispatch) when Enzyme-covered code changes.
+  enzyme:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LLVM 22 (flang, opt, llvm-link, dev headers)
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 22
+          sudo apt-get install -y flang-22 llvm-22-dev libzstd-dev
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc g++ \
+            liblapack-dev libnetcdf-dev pkg-config
+      - name: Build Enzyme plugin
+        run: |
+          # Pinned to the latest EnzymeAD/Enzyme release at the time this
+          # job was written (2026-07-10). Must track a version that builds
+          # against LLVM 22 to match the flang-22 front end below --
+          # cmake/EnzymeFortran.cmake requires opt/llvm-link's LLVM major
+          # version to equal the flang major version. Bump this tag if
+          # LLVM 22 support requires a newer Enzyme release.
+          git clone --branch v0.0.281 --depth 1 \
+            https://github.com/EnzymeAD/Enzyme.git enzyme-src
+          cmake -S enzyme-src/enzyme -B enzyme-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_DIR=/usr/lib/llvm-22/lib/cmake/llvm
+          cmake --build enzyme-build --target LLVMEnzyme-22
+      - name: Configure with Enzyme
+        env:
+          ENZYME_PLUGIN: ${{ github.workspace }}/enzyme-build/Enzyme/LLVMEnzyme-22.so
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_Fortran_COMPILER=flang-22 \
+            -DGLISS_ENABLE_ENZYME=ON
+      - name: Build
+        run: cmake --build build
+      - name: Test Enzyme derivatives
+        run: ctest --test-dir build -R enzyme --output-on-failure
