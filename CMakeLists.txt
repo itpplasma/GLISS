@@ -12,7 +12,6 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 endif()
 
 add_library(gliss
-    src/gliss_capi.f90
     src/gvec_cas3d_adapter.f90
     src/netcdf_c_bindings.f90
     src/netcdf_c_api.f90
@@ -57,11 +56,14 @@ target_link_libraries(gliss PUBLIC
     LAPACK::LAPACK
     PkgConfig::NETCDF_C)
 set_target_properties(gliss PROPERTIES
-    Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules")
+    Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules"
+    POSITION_INDEPENDENT_CODE ON)
 target_include_directories(gliss PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/modules>")
 
 add_library(gliss_c SHARED src/gliss_capi.f90)
+add_dependencies(gliss_c gliss)
+target_link_libraries(gliss_c PRIVATE gliss)
 
 add_executable(gliss_demo app/gliss_demo.f90)
 target_link_libraries(gliss_demo PRIVATE gliss)

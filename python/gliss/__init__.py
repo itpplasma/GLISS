@@ -1,8 +1,9 @@
 """Python skeleton for GLISS, the Global Linear Ideal Stability Solver.
 
-Only ``version()`` is implemented, proving ctypes linkage to the compiled
-Fortran C API (``src/gliss_capi.f90``, CMake target ``gliss_c``). Build the
-shared library with CMake before calling it.
+``version()`` and the Mercier stability bindings (``mercier_profile``,
+``mercier_objective``) proving ctypes linkage to the compiled Fortran C API
+(``src/gliss_capi.f90``, CMake target ``gliss_c``) are implemented. Build the
+shared library with CMake before calling any of them.
 """
 import ctypes
 import ctypes.util
@@ -35,3 +36,8 @@ def version():
     buffer = ctypes.create_string_buffer(32)
     library.gliss_version(buffer, len(buffer))
     return buffer.value.decode("ascii")
+
+
+from .mercier import mercier_objective, mercier_profile  # noqa: E402
+
+__all__ = ["version", "mercier_profile", "mercier_objective"]
