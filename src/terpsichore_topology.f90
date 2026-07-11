@@ -1,4 +1,6 @@
 module terpsichore_topology
+    use fourier_phase_kind, only: parity_xi_cosine => phase_cosine, &
+        parity_xi_sine => phase_sine
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     implicit none
@@ -6,8 +8,8 @@ module terpsichore_topology
 
     integer, parameter, public :: terpsichore_topology_ok = 0
     integer, parameter, public :: terpsichore_topology_invalid = -1
-    integer, parameter, public :: parity_xi_cosine = 1
-    integer, parameter, public :: parity_xi_sine = 2
+    public :: parity_xi_cosine
+    public :: parity_xi_sine
 
     type, public :: terpsichore_topology_config_t
         integer :: equilibrium_periods = 0

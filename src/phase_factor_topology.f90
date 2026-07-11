@@ -1,4 +1,5 @@
 module phase_factor_topology
+    use fourier_phase_kind, only: phase_cosine, phase_sine
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, &
         ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64
@@ -7,8 +8,8 @@ module phase_factor_topology
 
     integer, parameter, public :: phase_factor_ok = 0
     integer, parameter, public :: phase_factor_invalid = -1
-    integer, parameter, public :: phase_cosine = 1
-    integer, parameter, public :: phase_sine = 2
+    public :: phase_cosine
+    public :: phase_sine
     real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
 
     type, public :: phase_envelope_table_t
@@ -36,8 +37,8 @@ contains
         integer :: mode, residue, sign
 
         info = phase_factor_invalid
-        if (field_periods < 2) return
-        if (family_index < 1 .or. family_index > field_periods / 2) return
+        if (field_periods < 1) return
+        if (family_index < 0 .or. family_index > field_periods / 2) return
         if (size(mode_m) == 0 .or. size(mode_m) /= size(mode_n)) return
         do mode = 1, size(mode_m)
             residue = modulo(mode_n(mode), field_periods)
@@ -84,7 +85,7 @@ contains
         info = phase_factor_invalid
         cosine = ieee_value(cosine, ieee_quiet_nan)
         sine = ieee_value(sine, ieee_quiet_nan)
-        if (table%field_periods < 2) return
+        if (table%field_periods < 1) return
         if (.not. allocated(table%envelope_poloidal)) return
         if (.not. allocated(table%envelope_toroidal)) return
         if (.not. allocated(table%base_sign)) return

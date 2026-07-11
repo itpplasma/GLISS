@@ -2,7 +2,7 @@ program test_mode_topology
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use mode_topology, only: axis_form_function, &
         axis_form_function_slope, build_mode_family, family_count, &
-        mode_family_t, modes_coupled
+        mode_family_t, modes_coupled, nonzero_family_count
     implicit none
 
     type(mode_family_t) :: family, other
@@ -10,15 +10,18 @@ program test_mode_topology
     integer :: covered(-8:8)
     real(dp) :: s, step, central
 
-    do periods = 2, 12
-        if (family_count(periods) /= periods / 2) then
-            call fail("family count is not floor(NT/2)")
+    do periods = 1, 12
+        if (family_count(periods) /= periods / 2 + 1) then
+            call fail("family count does not include the zero family")
+        end if
+        if (nonzero_family_count(periods) /= periods / 2) then
+            call fail("nonzero family count is not floor(NT/2)")
         end if
     end do
 
     do periods = 2, 8
         covered = 0
-        do index_a = 1, family_count(periods)
+        do index_a = 1, nonzero_family_count(periods)
             call build_mode_family(periods, index_a, 2, 8, family, info)
             if (info /= 0) call fail("valid family was rejected")
             if (size(family%toroidal) == 0) call fail("family is empty")
@@ -38,7 +41,7 @@ program test_mode_topology
                 covered(family%toroidal(i)) = &
                     covered(family%toroidal(i)) + 1
             end do
-            do index_b = index_a + 1, family_count(periods)
+            do index_b = index_a + 1, nonzero_family_count(periods)
                 call build_mode_family(periods, index_b, 2, 8, other, info)
                 if (info /= 0) call fail("valid comparison family was rejected")
                 do i = 1, size(family%toroidal)
@@ -59,8 +62,13 @@ program test_mode_topology
         end do
     end do
 
-    call build_mode_family(3, 0, 2, 2, family, info)
-    if (info == 0) call fail("zero family index was accepted")
+    call check_zero_family()
+    if (modes_coupled(0, 0, 0)) call fail("zero periods coupled modes")
+    if (modes_coupled(0, 0, -1)) call fail("negative periods coupled modes")
+    call build_mode_family(3, -1, 2, 2, family, info)
+    if (info == 0) call fail("negative family index was accepted")
+    call build_mode_family(3, 2, 2, 2, family, info)
+    if (info == 0) call fail("family index above maximum was accepted")
     call build_mode_family(3, 1, -1, 2, family, info)
     if (info == 0) call fail("negative truncation was accepted")
 
@@ -82,6 +90,35 @@ program test_mode_topology
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_zero_family()
+        type(mode_family_t) :: zero_family, nonzero_family
+        integer :: i, j, local_info
+
+        call build_mode_family(3, 0, 2, 3, zero_family, local_info)
+        if (local_info /= 0) call fail("zero family was rejected")
+        if (size(zero_family%poloidal) /= 8) &
+            call fail("zero family has the wrong size")
+        if (any(modulo(zero_family%toroidal, 3) /= 0)) &
+            call fail("zero family contains another residue")
+        if (count(zero_family%poloidal == 0 .and. &
+            zero_family%toroidal == 0) /= 1) &
+            call fail("zero harmonic is not represented once")
+        if (any(zero_family%poloidal == 0 .and. &
+            zero_family%toroidal < 0)) &
+            call fail("zero family duplicates negative axis modes")
+        call build_mode_family(3, 1, 2, 3, nonzero_family, local_info)
+        if (local_info /= 0) call fail("nonzero family comparison failed")
+        do i = 1, size(zero_family%toroidal)
+            do j = 1, size(nonzero_family%toroidal)
+                if (modes_coupled(zero_family%toroidal(i), &
+                    nonzero_family%toroidal(j), 3)) &
+                    call fail("zero and nonzero families are coupled")
+            end do
+        end do
+        call build_mode_family(1, 0, 1, 1, zero_family, local_info)
+        if (local_info /= 0) call fail("one-period zero family was rejected")
+    end subroutine check_zero_family
 
     subroutine fail(message)
         character(len=*), intent(in) :: message

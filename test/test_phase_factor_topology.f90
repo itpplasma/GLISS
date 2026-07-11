@@ -11,6 +11,8 @@ program test_phase_factor_topology
     integer, parameter :: mode_m(4) = [1, 2, 3, 4]
     integer, parameter :: mode_n(4) = [1, -1, 4, -4]
     integer, parameter :: self_conjugate_n(2) = [2, -2]
+    integer, parameter :: zero_m(3) = [0, 1, 2]
+    integer, parameter :: zero_n(3) = [0, 3, -3]
     type(phase_envelope_table_t) :: table
     real(dp) :: theta, zeta, cosine, sine, phase
     integer :: info, mode
@@ -55,8 +57,30 @@ program test_phase_factor_topology
             "self-conjugate sine reconstruction failed")
     end do
     call build_phase_envelope_table(1, 0, 0, [0], [0], table, info)
-    call require(info == phase_factor_invalid, &
-        "single-period envelope topology was accepted")
+    call require(info == phase_factor_ok, &
+        "single-period zero-family topology was rejected")
+    call evaluate_phase_envelope(table, 1, theta, zeta, cosine, sine, info)
+    call require(info == phase_factor_ok, &
+        "single-period zero-family phase evaluation failed")
+    call require(abs(cosine - 1.0_dp) < 1.0e-14_dp, &
+        "zero harmonic cosine is wrong")
+    call require(abs(sine) < 1.0e-14_dp, "zero harmonic sine is wrong")
+    call build_phase_envelope_table(3, 0, 1, zero_m, zero_n, &
+        table, info)
+    call require(info == phase_factor_ok, &
+        "multi-period zero-family topology was rejected")
+    do mode = 1, 3
+        call evaluate_phase_envelope(table, mode, theta, zeta, cosine, sine, &
+            info)
+        phase = two_pi * (real(zero_m(mode), dp) * theta &
+            - real(zero_n(mode), dp) * zeta / 3.0_dp)
+        call require(info == phase_factor_ok, &
+            "zero-family phase-envelope evaluation failed")
+        call require(abs(cosine - cos(phase)) < 1.0e-14_dp, &
+            "zero-family cosine reconstruction failed")
+        call require(abs(sine - sin(phase)) < 1.0e-14_dp, &
+            "zero-family sine reconstruction failed")
+    end do
     call build_phase_envelope_table(3, 1, 0, [0], [0], table, info)
     call require(info == phase_factor_invalid, &
         "mode outside the family was accepted")

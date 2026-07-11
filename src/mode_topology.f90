@@ -12,6 +12,7 @@ module mode_topology
 
     public :: build_mode_family
     public :: family_count
+    public :: nonzero_family_count
     public :: modes_coupled
     public :: axis_form_function
     public :: axis_form_function_slope
@@ -22,14 +23,25 @@ contains
         integer, intent(in) :: field_periods
         integer :: count
 
-        count = field_periods / 2
+        count = 0
+        if (field_periods >= 1) count = nonzero_family_count(field_periods) + 1
     end function family_count
+
+    pure function nonzero_family_count(field_periods) result(count)
+        integer, intent(in) :: field_periods
+        integer :: count
+
+        count = 0
+        if (field_periods >= 1) count = field_periods / 2
+    end function nonzero_family_count
 
     pure function modes_coupled(first, second, field_periods) &
             result(coupled)
         integer, intent(in) :: first, second, field_periods
         logical :: coupled
 
+        coupled = .false.
+        if (field_periods < 1) return
         coupled = mod(abs(first - second), field_periods) == 0 .or. &
             mod(abs(first + second), field_periods) == 0
     end function modes_coupled
@@ -43,9 +55,9 @@ contains
         integer :: m, n, count
 
         info = -1
-        if (field_periods < 2) return
-        if (family_index < 1 .or. &
-            family_index > family_count(field_periods)) return
+        if (field_periods < 1) return
+        if (family_index < 0 .or. &
+            family_index > nonzero_family_count(field_periods)) return
         if (poloidal_max < 0 .or. toroidal_max < 0) return
         family%field_periods = field_periods
         family%family_index = family_index
