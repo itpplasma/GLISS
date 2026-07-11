@@ -142,6 +142,10 @@ name = "terpsichore_reduced_mass"
 main = "test_terpsichore_reduced_mass.f90"
 
 [[test]]
+name = "terpsichore_reduced_mass_family_assembly"
+main = "test_terpsichore_reduced_mass_family_assembly.f90"
+
+[[test]]
 name = "nonuniform_derivative"
 main = "test_nonuniform_derivative.f90"
 

@@ -10,6 +10,7 @@ module terpsichore_reduced_mass
     integer, parameter, public :: terpsichore_reduced_invalid = -1
 
     public :: assemble_terpsichore_reduced_mass_element
+    public :: assemble_terpsichore_reduced_mass_element_resolved
     public :: benchmark_terpsichore_reduced_mass_energy
     public :: terpsichore_reduced_element_energy
 
@@ -26,6 +27,28 @@ contains
         real(dp), intent(in) :: normalized_radial_weight
         real(dp), allocatable, intent(out) :: mass(:, :)
         integer, intent(out) :: info
+        integer :: mode_count
+
+        info = terpsichore_reduced_invalid
+        if (.not. valid_reduced_inputs(signed_bjac, flux_t_slope, &
+            normal_phase, tangential_phase, normal_radial_factor, &
+            normalized_radial_weight)) return
+        mode_count = size(normal_phase, 1)
+        allocate (mass(3 * mode_count, 3 * mode_count))
+        call assemble_terpsichore_reduced_mass_element_resolved(signed_bjac, &
+            flux_t_slope, normal_phase, tangential_phase, &
+            normal_radial_factor, normalized_radial_weight, mass, info)
+    end subroutine assemble_terpsichore_reduced_mass_element
+
+    pure subroutine assemble_terpsichore_reduced_mass_element_resolved( &
+            signed_bjac, flux_t_slope, normal_phase, tangential_phase, &
+            normal_radial_factor, normalized_radial_weight, mass, info)
+        real(dp), intent(in) :: signed_bjac(:), flux_t_slope
+        real(dp), intent(in) :: normal_phase(:, :), tangential_phase(:, :)
+        real(dp), intent(in) :: normal_radial_factor(:)
+        real(dp), intent(in) :: normalized_radial_weight
+        real(dp), intent(out) :: mass(:, :)
+        integer, intent(out) :: info
         real(dp) :: normal_value, tangential_value, weight
         integer :: first, mode_count, point, second
 
@@ -34,7 +57,8 @@ contains
             normal_phase, tangential_phase, normal_radial_factor, &
             normalized_radial_weight)) return
         mode_count = size(normal_phase, 1)
-        allocate (mass(3 * mode_count, 3 * mode_count), source=0.0_dp)
+        if (any(shape(mass) /= 3 * mode_count)) return
+        mass = 0.0_dp
         do point = 1, size(signed_bjac)
             weight = normalized_radial_weight * abs(signed_bjac(point)) &
                 / real(size(signed_bjac), dp)
@@ -54,7 +78,7 @@ contains
             end do
         end do
         info = terpsichore_reduced_ok
-    end subroutine assemble_terpsichore_reduced_mass_element
+    end subroutine assemble_terpsichore_reduced_mass_element_resolved
 
     pure function terpsichore_reduced_element_energy(signed_bjac, &
             flux_t_slope, normal_phase, tangential_phase, &
