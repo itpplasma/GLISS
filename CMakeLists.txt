@@ -23,11 +23,13 @@ add_library(gliss
     src/block_tridiagonal.f90
     src/generalized_block_solver.f90
     src/eigenvalue_tracking.f90
+    src/dynamic_family_layout.f90
     src/family_point_assembly.f90
     src/local_mode_model.f90
     src/mass_density_policy.f90
     src/phase_assembly_policy.f90
     src/physical_mass_assembly.f90
+    src/physical_mass_family_assembly.f90
     src/physical_mass_kernel.f90
     src/nonuniform_derivative.f90
     src/mode_topology.f90
@@ -165,6 +167,17 @@ if(BUILD_TESTING)
     target_link_libraries(test_physical_mass_assembly PRIVATE gliss)
     add_test(NAME physical_mass_assembly COMMAND test_physical_mass_assembly)
 
+    add_executable(test_dynamic_family_layout
+        test/test_dynamic_family_layout.f90)
+    target_link_libraries(test_dynamic_family_layout PRIVATE gliss)
+    add_test(NAME dynamic_family_layout COMMAND test_dynamic_family_layout)
+
+    add_executable(test_physical_mass_family_assembly
+        test/test_physical_mass_family_assembly.f90)
+    target_link_libraries(test_physical_mass_family_assembly PRIVATE gliss)
+    add_test(NAME physical_mass_family_assembly
+        COMMAND test_physical_mass_family_assembly)
+
     add_executable(test_mode_topology test/test_mode_topology.f90)
     target_link_libraries(test_mode_topology PRIVATE gliss)
     add_test(NAME mode_topology COMMAND test_mode_topology)
@@ -239,4 +252,16 @@ if(GLISS_ENABLE_ENZYME)
             src/physical_mass_assembly.f90
             test/enzyme_physical_mass_assembly_fixture.f90
             test/enzyme_physical_mass_assembly_gradient.f90)
+    add_enzyme_fortran_test(enzyme_physical_mass_family_gradient
+        SOURCES
+            src/dynamic_family_layout.f90
+            src/mass_density_policy.f90
+            src/phase_assembly_policy.f90
+            src/phase_factor_topology.f90
+            src/physical_mass_kernel.f90
+            src/radial_space_policy.f90
+            src/physical_mass_assembly.f90
+            src/physical_mass_family_assembly.f90
+            test/enzyme_physical_mass_family_fixture.f90
+            test/enzyme_physical_mass_family_gradient.f90)
 endif()
