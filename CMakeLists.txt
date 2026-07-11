@@ -27,6 +27,7 @@ add_library(gliss
     src/eigenvalue_tracking.f90
     src/dynamic_family_layout.f90
     src/family_point_assembly.f90
+    src/helical_cylinder_limit.f90
     src/local_mode_model.f90
     src/mass_density_policy.f90
     src/phase_assembly_policy.f90
@@ -116,6 +117,11 @@ if(BUILD_TESTING)
     add_executable(test_local_mode test/test_local_mode.f90)
     target_link_libraries(test_local_mode PRIVATE gliss)
     add_test(NAME local_mode COMMAND test_local_mode)
+
+    add_executable(test_helical_cylinder_limit
+        test/test_helical_cylinder_limit.f90)
+    target_link_libraries(test_helical_cylinder_limit PRIVATE gliss)
+    add_test(NAME helical_cylinder_limit COMMAND test_helical_cylinder_limit)
 
     add_executable(test_eigen_sensitivity test/test_eigen_sensitivity.f90)
     target_link_libraries(test_eigen_sensitivity PRIVATE gliss)
@@ -348,6 +354,10 @@ if(GLISS_ENABLE_ENZYME)
             src/physical_constants.f90
             src/local_mode_model.f90
             test/enzyme_drive_gradient.f90)
+    add_enzyme_fortran_test(enzyme_helical_cylinder_gradient
+        SOURCES
+            src/helical_cylinder_limit.f90
+            test/enzyme_helical_cylinder_gradient.f90)
     add_enzyme_fortran_test(enzyme_phase_assembly_gradient
         SOURCES
             src/fourier_phase_kind.f90

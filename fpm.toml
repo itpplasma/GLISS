@@ -18,6 +18,10 @@ name = "local_mode"
 main = "test_local_mode.f90"
 
 [[test]]
+name = "helical_cylinder_limit"
+main = "test_helical_cylinder_limit.f90"
+
+[[test]]
 name = "eigen_sensitivity"
 main = "test_eigen_sensitivity.f90"
 
