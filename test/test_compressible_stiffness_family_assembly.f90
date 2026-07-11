@@ -156,6 +156,9 @@ contains
             "zero-family stiffness phase backends differ")
         call require_close(transformed_k, transpose(transformed_k), 1.0e-13_dp, &
             "zero-family stiffness is not symmetric")
+        call check_zero_tangential_stiffness(transformed_k, zero_layout)
+        call check_zero_gamma_tangential(local_fields, local_drive, &
+            jacobian_s, jacobian_t, jacobian_z, gamma_pressure)
         allocate (density%s(3), density%kilograms_per_cubic_metre(3))
         density%s = [0.0_dp, 0.5_dp, 1.0_dp]
         density%kilograms_per_cubic_metre = [2.0_dp, 3.0_dp, 5.0_dp]
@@ -167,6 +170,46 @@ contains
             eigenvectors, local_info)
         call require(local_info == 0, "zero-family dense K/M solve failed")
     end subroutine check_zero_family_problem
+
+    subroutine check_zero_tangential_stiffness(stiffness, local_layout)
+        real(dp), intent(in) :: stiffness(:, :)
+        type(dynamic_family_layout_t), intent(in) :: local_layout
+        real(dp) :: scale
+        integer :: eta_start, eta_end, mu_start
+
+        eta_start = local_layout%normal_unknowns + 1
+        eta_end = local_layout%normal_unknowns + local_layout%eta_unknowns
+        mu_start = eta_end + 1
+        scale = max(1.0_dp, maxval(abs(stiffness)))
+        call require(maxval(abs(stiffness(mu_start:, :))) &
+            < 1.0e-13_dp * scale, &
+            "zero-harmonic mu directions have nonzero stiffness")
+        call require(maxval(abs(stiffness(eta_start:eta_end, :))) &
+            > 1.0e-10_dp * scale, &
+            "3-D zero-harmonic eta compression was lost")
+    end subroutine check_zero_tangential_stiffness
+
+    subroutine check_zero_gamma_tangential(local_fields, local_drive, &
+            jacobian_s, jacobian_t, jacobian_z, gamma_pressure)
+        real(dp), intent(in) :: local_fields(:, :, :, :), local_drive(:, :, :)
+        real(dp), intent(in) :: jacobian_s(:, :, :), jacobian_t(:, :, :)
+        real(dp), intent(in) :: jacobian_z(:, :, :), gamma_pressure(:, :, :)
+        real(dp), allocatable :: stiffness(:, :)
+        type(dynamic_family_layout_t) :: local_layout
+        integer :: local_info, tangential_start
+
+        call assemble_compressible_family_stiffness(local_fields, local_drive, &
+            jacobian_s, jacobian_t, jacobian_z, 0.0_dp * gamma_pressure, &
+            [0, 0], [0, 0], [1, 2], [0.0_dp, 0.0_dp], 3, radial_space, &
+            0.25_dp, phase_assembly_transformed, stiffness, local_layout, &
+            local_info)
+        call require(local_info == 0, &
+            "zero-gamma zero-family stiffness assembly failed")
+        tangential_start = local_layout%normal_unknowns + 1
+        call require(maxval(abs(stiffness(tangential_start:, :))) &
+            < 1.0e-13_dp * max(1.0_dp, maxval(abs(stiffness))), &
+            "zero-gamma zero-harmonic tangential stiffness is nonzero")
+    end subroutine check_zero_gamma_tangential
 
     subroutine assemble(local_fields, local_drive, local_jacobian_radial, &
             local_jacobian_theta, local_jacobian_zeta, local_gamma_pressure, &
