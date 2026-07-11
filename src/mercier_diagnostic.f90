@@ -15,6 +15,14 @@ module mercier_diagnostic
     real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
     real(dp), parameter :: mu0 = 2.0_dp * two_pi * 1.0e-7_dp
 
+    type, public :: mercier_d_terms_t
+        real(dp) :: shear, current, well, geodesic, mercier
+    end type mercier_d_terms_t
+
+    type, public :: mercier_gradient_t
+        real(dp) :: d_iota_slope, d_pressure_slope
+    end type mercier_gradient_t
+
     type, public :: mercier_result_t
         real(dp), allocatable :: s(:)
         real(dp), allocatable :: d_shear(:)
@@ -22,6 +30,8 @@ module mercier_diagnostic
         real(dp), allocatable :: d_well(:)
         real(dp), allocatable :: d_geodesic(:)
         real(dp), allocatable :: d_mercier(:)
+        real(dp), allocatable :: d_mercier_d_iota_slope(:)
+        real(dp), allocatable :: d_mercier_d_pressure_slope(:)
         real(dp), allocatable :: iota_deviation(:)
         real(dp), allocatable :: boozer_deviation(:)
         real(dp), allocatable :: force_balance_residual(:)
@@ -47,6 +57,8 @@ module mercier_diagnostic
 
     public :: compute_mercier
     public :: build_kernel_geometry
+    public :: mercier_d_terms
+    public :: mercier_d_terms_gradient
 
 contains
 
@@ -363,11 +375,13 @@ contains
         real(dp), allocatable :: beta_theta(:, :), beta_zeta(:, :)
         real(dp), allocatable :: mu0_j_dot_b(:, :), grad_psi(:, :)
         real(dp), allocatable :: b_squared(:, :)
-        real(dp) :: field_periods, psi_slope, psi_curvature, iota_psi
-        real(dp) :: dp_dpsi, d2v_dpsi2, current_slope_ratio
+        real(dp) :: field_periods, psi_slope, psi_curvature
+        real(dp) :: d2v_dpsi2, current_slope_ratio
         real(dp) :: integral_xi, integral_inverse, integral_bsq
         real(dp) :: integral_jb, integral_jb_squared, n_grid
         real(dp) :: pressure_term, toroidal_term, poloidal_term
+        type(mercier_d_terms_t) :: d_terms
+        type(mercier_gradient_t) :: grad
 
         field_periods = real(equilibrium%field_periods, dp)
         n_grid = real(size(surface%jacobian), dp)
@@ -382,34 +396,36 @@ contains
         b_squared = surface%mod_b**2
         psi_slope = flux_slope / two_pi
         psi_curvature = flux_curvature / two_pi
-        iota_psi = iota_slope / psi_slope
-        dp_dpsi = mu0 * pressure_slope / psi_slope
         grad_psi = abs(psi_slope) * surface%area_element &
             / abs(surface%jacobian)
 
-        result%d_shear(i) = iota_psi**2 / (16.0_dp * acos(-1.0_dp)**2)
         current_slope_ratio = covariant_theta_slope / (two_pi * psi_slope)
         integral_xi = field_periods * sum(surface%area_element &
             * (mu0_j_dot_b - current_slope_ratio * b_squared) &
             / grad_psi**3) / n_grid
-        result%d_current(i) = -sign(1.0_dp, covariant_zeta) &
-            / two_pi**4 * iota_psi * integral_xi
         d2v_dpsi2 = (volume_curvature * psi_slope &
             - volume_slope * psi_curvature) / psi_slope**3
         integral_inverse = field_periods * sum(surface%area_element &
             / (b_squared * grad_psi)) / n_grid
         integral_bsq = field_periods * sum(surface%area_element &
             * b_squared / grad_psi**3) / n_grid
-        result%d_well(i) = dp_dpsi * (sign(1.0_dp, psi_slope) * d2v_dpsi2 &
-            - dp_dpsi * integral_inverse) * integral_bsq / two_pi**6
         integral_jb = field_periods * sum(surface%area_element &
             * mu0_j_dot_b / grad_psi**3) / n_grid
         integral_jb_squared = field_periods * sum(surface%area_element &
             * mu0_j_dot_b**2 / (b_squared * grad_psi**3)) / n_grid
-        result%d_geodesic(i) = (integral_jb**2 &
-            - integral_bsq * integral_jb_squared) / two_pi**6
-        result%d_mercier(i) = result%d_shear(i) + result%d_current(i) &
-            + result%d_well(i) + result%d_geodesic(i)
+        d_terms = mercier_d_terms(iota_slope, pressure_slope, psi_slope, &
+            covariant_zeta, integral_xi, d2v_dpsi2, integral_inverse, &
+            integral_bsq, integral_jb, integral_jb_squared)
+        result%d_shear(i) = d_terms%shear
+        result%d_current(i) = d_terms%current
+        result%d_well(i) = d_terms%well
+        result%d_geodesic(i) = d_terms%geodesic
+        result%d_mercier(i) = d_terms%mercier
+        grad = mercier_d_terms_gradient(iota_slope, pressure_slope, &
+            psi_slope, covariant_zeta, integral_xi, d2v_dpsi2, &
+            integral_inverse, integral_bsq)
+        result%d_mercier_d_iota_slope(i) = grad%d_iota_slope
+        result%d_mercier_d_pressure_slope(i) = grad%d_pressure_slope
         call filter_gauge_kernel(equilibrium, theta, zeta, &
             grid_mean(surface%jacobian * surface%b_theta), flux_slope, &
             beta_positions, beta_filtered)
@@ -427,6 +443,48 @@ contains
             + abs(poloidal_term), &
             1.0e-14_dp * abs(flux_slope * covariant_zeta))
     end subroutine assemble_surface_terms
+
+    pure function mercier_d_terms(iota_slope, pressure_slope, psi_slope, &
+            covariant_zeta, integral_xi, d2v_dpsi2, integral_inverse, &
+            integral_bsq, integral_jb, integral_jb_squared) result(d_terms)
+        real(dp), intent(in) :: iota_slope, pressure_slope, psi_slope
+        real(dp), intent(in) :: covariant_zeta, integral_xi, d2v_dpsi2
+        real(dp), intent(in) :: integral_inverse, integral_bsq
+        real(dp), intent(in) :: integral_jb, integral_jb_squared
+        type(mercier_d_terms_t) :: d_terms
+        real(dp) :: iota_psi, dp_dpsi
+
+        iota_psi = iota_slope / psi_slope
+        dp_dpsi = mu0 * pressure_slope / psi_slope
+        d_terms%shear = iota_psi**2 / (16.0_dp * acos(-1.0_dp)**2)
+        d_terms%current = -sign(1.0_dp, covariant_zeta) &
+            / two_pi**4 * iota_psi * integral_xi
+        d_terms%well = dp_dpsi * (sign(1.0_dp, psi_slope) * d2v_dpsi2 &
+            - dp_dpsi * integral_inverse) * integral_bsq / two_pi**6
+        d_terms%geodesic = (integral_jb**2 &
+            - integral_bsq * integral_jb_squared) / two_pi**6
+        d_terms%mercier = d_terms%shear + d_terms%current &
+            + d_terms%well + d_terms%geodesic
+    end function mercier_d_terms
+
+    pure function mercier_d_terms_gradient(iota_slope, pressure_slope, &
+            psi_slope, covariant_zeta, integral_xi, d2v_dpsi2, &
+            integral_inverse, integral_bsq) result(grad)
+        real(dp), intent(in) :: iota_slope, pressure_slope, psi_slope
+        real(dp), intent(in) :: covariant_zeta, integral_xi, d2v_dpsi2
+        real(dp), intent(in) :: integral_inverse, integral_bsq
+        type(mercier_gradient_t) :: grad
+        real(dp) :: dp_dpsi
+
+        dp_dpsi = mu0 * pressure_slope / psi_slope
+        grad%d_iota_slope = 2.0_dp * iota_slope &
+            / (16.0_dp * acos(-1.0_dp)**2 * psi_slope**2) &
+            - sign(1.0_dp, covariant_zeta) * integral_xi &
+            / (two_pi**4 * psi_slope)
+        grad%d_pressure_slope = (sign(1.0_dp, psi_slope) * d2v_dpsi2 &
+            - 2.0_dp * integral_inverse * dp_dpsi) * integral_bsq &
+            / two_pi**6 * (mu0 / psi_slope)
+    end function mercier_d_terms_gradient
 
     subroutine load_surface(equilibrium, i, theta, zeta, surface, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
@@ -694,6 +752,8 @@ contains
         allocate (result%s(ns), result%d_shear(ns), result%d_current(ns))
         allocate (result%d_well(ns), result%d_geodesic(ns))
         allocate (result%d_mercier(ns), result%iota_deviation(ns))
+        allocate (result%d_mercier_d_iota_slope(ns))
+        allocate (result%d_mercier_d_pressure_slope(ns))
         allocate (result%boozer_deviation(ns))
         allocate (result%force_balance_residual(ns))
         allocate (result%jacobian_identity_deviation(ns))
