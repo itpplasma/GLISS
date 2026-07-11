@@ -32,6 +32,7 @@ module mercier_diagnostic
         real(dp), allocatable :: d_mercier(:)
         real(dp), allocatable :: d_mercier_d_iota_slope(:)
         real(dp), allocatable :: d_mercier_d_pressure_slope(:)
+        real(dp), allocatable :: d_mercier_d_pressure_slope_full(:)
         real(dp), allocatable :: iota_deviation(:)
         real(dp), allocatable :: boozer_deviation(:)
         real(dp), allocatable :: force_balance_residual(:)
@@ -39,7 +40,7 @@ module mercier_diagnostic
         real(dp), allocatable :: beta_chart_deviation(:)
     end type mercier_result_t
 
-    type :: surface_data_t
+    type, public :: surface_data_t
         real(dp), allocatable :: jacobian(:, :), g_tt(:, :), g_tz(:, :)
         real(dp), allocatable :: g_zz(:, :), b_theta(:, :), b_zeta(:, :)
         real(dp), allocatable :: g_st(:, :), g_sz(:, :)
@@ -59,6 +60,7 @@ module mercier_diagnostic
     public :: build_kernel_geometry
     public :: mercier_d_terms
     public :: mercier_d_terms_gradient
+    public :: mercier_surface_terms
 
 contains
 
@@ -372,22 +374,73 @@ contains
         real(dp), intent(in) :: pressure_slope, iota_slope
         type(mercier_result_t), intent(inout) :: result
         real(dp), allocatable :: beta_values(:, :), beta_filtered(:, :)
+        real(dp) :: pressure_term, toroidal_term, poloidal_term
+        real(dp) :: d_pressure_slope_full
+        type(mercier_d_terms_t) :: d_terms
+        type(mercier_gradient_t) :: grad
+
+        call mercier_surface_terms(equilibrium, surface, theta, zeta, &
+            covariant_theta, covariant_zeta, covariant_theta_slope, &
+            covariant_zeta_slope, flux_slope, flux_curvature, &
+            volume_slope, volume_curvature, pressure_slope, iota_slope, &
+            d_terms, grad, d_pressure_slope_full, beta_values)
+        result%d_shear(i) = d_terms%shear
+        result%d_current(i) = d_terms%current
+        result%d_well(i) = d_terms%well
+        result%d_geodesic(i) = d_terms%geodesic
+        result%d_mercier(i) = d_terms%mercier
+        result%d_mercier_d_iota_slope(i) = grad%d_iota_slope
+        result%d_mercier_d_pressure_slope(i) = grad%d_pressure_slope
+        result%d_mercier_d_pressure_slope_full(i) = d_pressure_slope_full
+        call filter_gauge_kernel(equilibrium, theta, zeta, &
+            grid_mean(surface%jacobian * surface%b_theta), flux_slope, &
+            beta_positions, beta_filtered)
+        result%beta_chart_deviation(i) = &
+            maxval(abs(beta_filtered - beta_values)) &
+            / max(maxval(abs(beta_values)), &
+            1.0e-9_dp * abs(covariant_zeta))
+        pressure_term = mu0 * pressure_slope * grid_mean(surface%jacobian)
+        toroidal_term = flux_slope * covariant_zeta_slope
+        poloidal_term = grid_mean(surface%jacobian * surface%b_theta) &
+            * covariant_theta_slope
+        result%force_balance_residual(i) = &
+            abs(pressure_term + toroidal_term + poloidal_term) &
+            / max(abs(pressure_term) + abs(toroidal_term) &
+            + abs(poloidal_term), &
+            1.0e-14_dp * abs(flux_slope * covariant_zeta))
+    end subroutine assemble_surface_terms
+
+    subroutine mercier_surface_terms(equilibrium, surface, theta, zeta, &
+            covariant_theta, covariant_zeta, covariant_theta_slope, &
+            covariant_zeta_slope, flux_slope, flux_curvature, &
+            volume_slope, volume_curvature, pressure_slope, iota_slope, &
+            d_terms, grad, d_pressure_slope_full, beta_values)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        type(surface_data_t), intent(in) :: surface
+        real(dp), intent(in) :: theta(:), zeta(:)
+        real(dp), intent(in) :: covariant_theta, covariant_zeta
+        real(dp), intent(in) :: covariant_theta_slope, covariant_zeta_slope
+        real(dp), intent(in) :: flux_slope, flux_curvature
+        real(dp), intent(in) :: volume_slope, volume_curvature
+        real(dp), intent(in) :: pressure_slope, iota_slope
+        type(mercier_d_terms_t), intent(out) :: d_terms
+        type(mercier_gradient_t), intent(out) :: grad
+        real(dp), intent(out) :: d_pressure_slope_full
+        real(dp), allocatable, intent(out) :: beta_values(:, :)
         real(dp), allocatable :: beta_theta(:, :), beta_zeta(:, :)
         real(dp), allocatable :: mu0_j_dot_b(:, :), grad_psi(:, :)
         real(dp), allocatable :: b_squared(:, :)
         real(dp) :: field_periods, psi_slope, psi_curvature
-        real(dp) :: d2v_dpsi2, current_slope_ratio
+        real(dp) :: poloidal_flux_slope, d2v_dpsi2, current_slope_ratio
         real(dp) :: integral_xi, integral_inverse, integral_bsq
         real(dp) :: integral_jb, integral_jb_squared, n_grid
-        real(dp) :: pressure_term, toroidal_term, poloidal_term
-        type(mercier_d_terms_t) :: d_terms
-        type(mercier_gradient_t) :: grad
 
         field_periods = real(equilibrium%field_periods, dp)
         n_grid = real(size(surface%jacobian), dp)
+        poloidal_flux_slope = grid_mean(surface%jacobian * surface%b_theta)
         call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
-            grid_mean(surface%jacobian * surface%b_theta), flux_slope, &
+            poloidal_flux_slope, flux_slope, &
             beta_values, beta_theta, beta_zeta)
         mu0_j_dot_b = ((beta_zeta - covariant_zeta_slope) &
             * covariant_theta &
@@ -416,33 +469,54 @@ contains
         d_terms = mercier_d_terms(iota_slope, pressure_slope, psi_slope, &
             covariant_zeta, integral_xi, d2v_dpsi2, integral_inverse, &
             integral_bsq, integral_jb, integral_jb_squared)
-        result%d_shear(i) = d_terms%shear
-        result%d_current(i) = d_terms%current
-        result%d_well(i) = d_terms%well
-        result%d_geodesic(i) = d_terms%geodesic
-        result%d_mercier(i) = d_terms%mercier
         grad = mercier_d_terms_gradient(iota_slope, pressure_slope, &
             psi_slope, covariant_zeta, integral_xi, d2v_dpsi2, &
             integral_inverse, integral_bsq)
-        result%d_mercier_d_iota_slope(i) = grad%d_iota_slope
-        result%d_mercier_d_pressure_slope(i) = grad%d_pressure_slope
-        call filter_gauge_kernel(equilibrium, theta, zeta, &
-            grid_mean(surface%jacobian * surface%b_theta), flux_slope, &
-            beta_positions, beta_filtered)
-        result%beta_chart_deviation(i) = &
-            maxval(abs(beta_filtered - beta_values)) &
-            / max(maxval(abs(beta_values)), &
-            1.0e-9_dp * abs(covariant_zeta))
-        pressure_term = mu0 * pressure_slope * grid_mean(surface%jacobian)
-        toroidal_term = flux_slope * covariant_zeta_slope
-        poloidal_term = grid_mean(surface%jacobian * surface%b_theta) &
-            * covariant_theta_slope
-        result%force_balance_residual(i) = &
-            abs(pressure_term + toroidal_term + poloidal_term) &
-            / max(abs(pressure_term) + abs(toroidal_term) &
-            + abs(poloidal_term), &
-            1.0e-14_dp * abs(flux_slope * covariant_zeta))
-    end subroutine assemble_surface_terms
+        d_pressure_slope_full = grad%d_pressure_slope &
+            + pressure_implicit_gradient(equilibrium, surface, theta, &
+            zeta, poloidal_flux_slope, flux_slope, covariant_theta, &
+            covariant_zeta, mu0_j_dot_b, psi_slope, field_periods, &
+            n_grid, iota_slope, integral_jb, integral_bsq)
+    end subroutine mercier_surface_terms
+
+    function pressure_implicit_gradient(equilibrium, surface, theta, zeta, &
+            poloidal_flux_slope, toroidal_flux_slope, covariant_theta, &
+            covariant_zeta, mu0_j_dot_b, psi_slope, field_periods, &
+            n_grid, iota_slope, integral_jb, integral_bsq) &
+            result(contribution)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        type(surface_data_t), intent(in) :: surface
+        real(dp), intent(in) :: theta(:), zeta(:)
+        real(dp), intent(in) :: poloidal_flux_slope, toroidal_flux_slope
+        real(dp), intent(in) :: covariant_theta, covariant_zeta
+        real(dp), intent(in) :: mu0_j_dot_b(:, :), psi_slope
+        real(dp), intent(in) :: field_periods, n_grid, iota_slope
+        real(dp), intent(in) :: integral_jb, integral_bsq
+        real(dp) :: contribution
+        real(dp), allocatable :: discard_values(:, :), d_beta_theta(:, :)
+        real(dp), allocatable :: d_beta_zeta(:, :), d_mu0_j_dot_b(:, :)
+        real(dp), allocatable :: grad_psi(:, :), b_squared(:, :)
+        real(dp) :: d_integral_mu0jb, d_integral_jb_squared, iota_psi
+
+        call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
+            0.0_dp, 0.0_dp, 1.0_dp, poloidal_flux_slope, &
+            toroidal_flux_slope, discard_values, d_beta_theta, d_beta_zeta)
+        d_mu0_j_dot_b = (d_beta_zeta * covariant_theta &
+            - d_beta_theta * covariant_zeta) / surface%jacobian
+        grad_psi = abs(psi_slope) * surface%area_element &
+            / abs(surface%jacobian)
+        b_squared = surface%mod_b**2
+        d_integral_mu0jb = field_periods * sum(surface%area_element &
+            * d_mu0_j_dot_b / grad_psi**3) / n_grid
+        d_integral_jb_squared = field_periods * sum(surface%area_element &
+            * 2.0_dp * mu0_j_dot_b * d_mu0_j_dot_b &
+            / (b_squared * grad_psi**3)) / n_grid
+        iota_psi = iota_slope / psi_slope
+        contribution = (-sign(1.0_dp, covariant_zeta) / two_pi**4 &
+            * iota_psi + 2.0_dp * integral_jb / two_pi**6) &
+            * d_integral_mu0jb &
+            - integral_bsq / two_pi**6 * d_integral_jb_squared
+    end function pressure_implicit_gradient
 
     pure function mercier_d_terms(iota_slope, pressure_slope, psi_slope, &
             covariant_zeta, integral_xi, d2v_dpsi2, integral_inverse, &
@@ -754,6 +828,7 @@ contains
         allocate (result%d_mercier(ns), result%iota_deviation(ns))
         allocate (result%d_mercier_d_iota_slope(ns))
         allocate (result%d_mercier_d_pressure_slope(ns))
+        allocate (result%d_mercier_d_pressure_slope_full(ns))
         allocate (result%boozer_deviation(ns))
         allocate (result%force_balance_residual(ns))
         allocate (result%jacobian_identity_deviation(ns))
