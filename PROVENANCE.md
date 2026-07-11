@@ -4,6 +4,18 @@ Module-to-source map.  Equation-level traceability with executable
 Wolfram gates is maintained in the research repository's dossier; this
 file records which published work each module implements.
 
+## Compatibility-source policy
+
+TERPSICHORE revision `04dcf9af` is distributed under Apache-2.0 and carries
+an EPFL NOTICE.  GLISS currently incorporates no TERPSICHORE source file or
+translated source block.  The repository is used to establish observable
+switch semantics, data conventions, formulas, and regression targets.
+Implementations are normally derived into GLISS's own variables, module
+boundaries, algorithms, and tests.  Literal reuse is allowed only when the
+affected file is identified as Apache-2.0 material and retains the applicable
+copyright, license header, NOTICE attribution, and modified-file notice.  Such
+reuse must also be recorded here.
+
 | Module | Implements | Sources |
 |---|---|---|
 | `src/gvec_cas3d_types.f90`, `src/gvec_cas3d_netcdf.f90`, `src/gvec_cas3d_reader.f90` | GVEC CAS3D NetCDF export schema, `(s,m,n)` storage, one-period phase convention | GVEC documentation (CAS3D interface); audited exporter behavior |
