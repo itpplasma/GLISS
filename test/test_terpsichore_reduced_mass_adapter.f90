@@ -4,8 +4,10 @@ program test_terpsichore_reduced_mass_adapter
     use fourier_phase_kind, only: phase_sine
     use terpsichore_matrix_fixture, only: &
         read_terpsichore_fixed_boundary_fixture, &
+        read_terpsichore_fixed_boundary_potential_fixture, &
         terpsichore_matrix_fixture_invalid, terpsichore_matrix_fixture_ok, &
-        terpsichore_matrix_fixture_t
+        terpsichore_matrix_fixture_t, &
+        terpsichore_potential_metadata_is_valid
     use terpsichore_reduced_mass_adapter, only: &
         assemble_terpsichore_fixture_reduced_mass, &
         terpsichore_reduced_adapter_ok
@@ -14,6 +16,7 @@ program test_terpsichore_reduced_mass_adapter
     implicit none
 
     call test_fixture_reader()
+    call test_potential_fixture_reader()
     call test_fixture_adapter()
     call test_fixture_rejections()
     write (*, "(a)") "PASS"
@@ -46,35 +49,103 @@ contains
             "TERPSICHORE BJAC ordering is wrong")
     end subroutine test_fixture_reader
 
-    subroutine write_fixture(unit)
+    subroutine write_fixture(unit, modelk)
         integer, intent(in) :: unit
-        real(dp) :: s(0:3), pth(3), fpp(4), ftp(4), profile(3)
-        real(dp) :: parity, ql(2), bjac(4, 0:3)
-        integer :: mode_m(2), mode_n(2), point, surface
+        integer, intent(in), optional :: modelk
+        real(dp) :: s(0:3), pth(3), fpp(4), ftp(4)
+        real(dp) :: current_i(3), current_j(3), pressure_slope(3)
+        real(dp) :: parity, ql(2), bjac(4, 0:3), surface_field(4, 0:3)
+        real(dp) :: cell(4, 3), radial_surface(4), radial_cell(3)
+        real(dp) :: mode_surface(2, 0:3)
+        integer :: mode_m(2), mode_n(2), point, surface_index
+        integer :: legacy_modelk
 
         s = [0.0_dp, 0.2_dp, 0.6_dp, 1.0_dp]
         pth = 0.0_dp
-        fpp = 0.0_dp
+        fpp = [0.2_dp, 0.25_dp, 0.3_dp, 0.35_dp]
         ftp = [1.0_dp, 1.1_dp, 1.2_dp, 1.3_dp]
-        profile = 0.0_dp
+        current_i = 0.1_dp
+        current_j = 0.6_dp
+        pressure_slope = -0.01_dp
+        legacy_modelk = 0
+        if (present(modelk)) legacy_modelk = modelk
         parity = 0.0_dp
         mode_m = [1, 2]
         mode_n = [0, 1]
         ql = [0.5_dp, 0.0_dp]
-        do surface = 0, 3
+        do surface_index = 0, 3
             do point = 1, 4
-                bjac(point, surface) = -1.0_dp &
+                bjac(point, surface_index) = -1.0_dp &
                     - 0.1_dp * real(point - 1, dp) &
-                    - 0.1_dp * real(surface, dp)
+                    - 0.1_dp * real(surface_index, dp)
             end do
         end do
         bjac(:, 0) = 0.0_dp
         write (unit) 3, 2, 2, 1, 1, 2
-        write (unit) s, pth, fpp, ftp, profile, profile, profile, parity
+        write (unit) s, pth, fpp, ftp, current_j, current_i, pressure_slope, &
+            parity
         write (unit) mode_m, mode_n, ql
         write (unit) 0.0_dp
-        write (unit) bjac
+        surface_field = 1.25_dp
+        write (unit) bjac, surface_field, surface_field + 1.0_dp, &
+            surface_field + 2.0_dp, surface_field + 3.0_dp
+        radial_surface = [0.1_dp, 0.2_dp, 0.3_dp, 0.4_dp]
+        radial_cell = [0.5_dp, 0.6_dp, 0.7_dp]
+        mode_surface = 0.0_dp
+        write (unit) 2, mode_m, mode_n, mode_surface, surface_field + 4.0_dp, &
+            radial_surface, radial_surface + 0.5_dp, radial_cell, radial_cell, &
+            1.0_dp, 2.0_dp
+        cell = 0.5_dp
+        write (unit) cell, cell + 0.1_dp, cell + 1.0_dp, cell + 0.2_dp, &
+            cell + 0.3_dp, cell + 2.0_dp, 0.75_dp, legacy_modelk
     end subroutine write_fixture
+
+    subroutine test_potential_fixture_reader()
+        type(terpsichore_matrix_fixture_t) :: fixture
+        integer :: info, modelk, unit
+
+        do modelk = 0, 3
+            open (newunit=unit, status="scratch", form="unformatted", &
+                access="sequential")
+            call write_fixture(unit, modelk)
+            rewind (unit)
+            call read_terpsichore_fixed_boundary_potential_fixture(unit, 0, &
+                fixture, info)
+            close (unit)
+            call require(info == terpsichore_matrix_fixture_ok, &
+                "valid TERPSICHORE potential fixture was rejected")
+            call require(fixture%legacy_modelk == modelk, &
+                "raw TERPSICHORE MODELK is wrong")
+        end do
+        call require(abs(fixture%flux_p_slope(2) - 0.25_dp) < 1.0e-14_dp, &
+            "TERPSICHORE poloidal flux slope is wrong")
+        call require(abs(fixture%current_i(2) - 0.1_dp) < 1.0e-14_dp, &
+            "TERPSICHORE I current profile is wrong")
+        call require(abs(fixture%current_j(2) - 0.6_dp) < 1.0e-14_dp, &
+            "TERPSICHORE J current profile is wrong")
+        call require(abs(fixture%pressure_slope(2) + 0.01_dp) < 1.0e-14_dp, &
+            "TERPSICHORE pressure slope is wrong")
+        call require(abs(fixture%flux_t_curve(3) - 0.3_dp) < 1.0e-14_dp, &
+            "TERPSICHORE toroidal flux derivative is wrong")
+        call require(abs(fixture%flux_p_curve(3) - 0.8_dp) < 1.0e-14_dp, &
+            "TERPSICHORE poloidal flux derivative is wrong")
+        call require(abs(fixture%signed_bjac_radial(2, 3) - 5.25_dp) &
+            < 1.0e-14_dp, "TERPSICHORE Jacobian derivative is wrong")
+        call require(abs(fixture%sigma_b_s(1, 0) - 1.25_dp) < 1.0e-14_dp, &
+            "TERPSICHORE sigma-Bs field is wrong")
+        call require(abs(fixture%metric_ss_over_jacobian(1, 1) - 2.25_dp) &
+            < 1.0e-14_dp, "TERPSICHORE GSSL field is wrong")
+        call require(abs(fixture%metric_st_over_jacobian(1, 1) - 3.25_dp) &
+            < 1.0e-14_dp, "TERPSICHORE GSTL field is wrong")
+        call require(abs(fixture%metric_tt_over_jacobian(1, 3) - 4.25_dp) &
+            < 1.0e-14_dp, "TERPSICHORE GTTL field is wrong")
+        call require(abs(fixture%sigma_b(4, 2) - 1.5_dp) < 1.0e-14_dp, &
+            "TERPSICHORE sigma-B field is wrong")
+        call require(abs(fixture%parallel_current(1, 1) - 2.5_dp) &
+            < 1.0e-14_dp, "TERPSICHORE parallel current is wrong")
+        call require(abs(fixture%current_factor - 0.75_dp) < 1.0e-14_dp, &
+            "TERPSICHORE current factor is wrong")
+    end subroutine test_potential_fixture_reader
 
     subroutine test_fixture_adapter()
         type(terpsichore_matrix_fixture_t) :: fixture
@@ -124,6 +195,11 @@ contains
             "oversized phase storage was accepted")
         call require_header_rejected([996, 1, 1, 1, 1, 3], &
             "oversized dense matrix was accepted")
+        fixture = terpsichore_matrix_fixture_t(intervals=64, &
+            poloidal_points=300, toroidal_points=100, stability_periods=1, &
+            field_periods=1, modes=2)
+        call require(.not. terpsichore_potential_metadata_is_valid(fixture), &
+            "oversized aggregate potential storage was accepted")
         call build_adapter_fixture(fixture)
         fixture%stability_periods = 2
         call assemble_terpsichore_fixture_reduced_mass(fixture, mass, &

@@ -121,6 +121,12 @@ target_link_libraries(gliss_terpsichore_reduced_mass PRIVATE gliss)
 set_target_properties(gliss_terpsichore_reduced_mass PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
+add_executable(gliss_terpsichore_potential_inspect
+    app/gliss_terpsichore_potential_inspect.f90)
+target_link_libraries(gliss_terpsichore_potential_inspect PRIVATE gliss)
+set_target_properties(gliss_terpsichore_potential_inspect PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
 if(BUILD_TESTING)
     add_executable(test_local_mode test/test_local_mode.f90)
     target_link_libraries(test_local_mode PRIVATE gliss)
