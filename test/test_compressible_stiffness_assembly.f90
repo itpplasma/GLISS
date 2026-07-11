@@ -323,10 +323,10 @@ contains
         end if
         values(1) = xi
         values(2) = xi_derivative * 2.0_dp * acos(-1.0_dp) * mode_m
-        values(3) = xi_derivative * -2.0_dp * acos(-1.0_dp) * mode_n / 3.0_dp
+        values(3) = -xi_derivative * 2.0_dp * acos(-1.0_dp) * mode_n / 3.0_dp
         values(4) = tangential
         values(5) = tangential_derivative * 2.0_dp * acos(-1.0_dp) * mode_m
-        values(6) = tangential_derivative * -2.0_dp * acos(-1.0_dp) &
+        values(6) = -tangential_derivative * 2.0_dp * acos(-1.0_dp) &
             * mode_n / 3.0_dp
     end subroutine evaluate_phases
 
