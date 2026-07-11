@@ -262,6 +262,10 @@ if(BUILD_TESTING)
     target_link_libraries(test_mercier_diagnostic PRIVATE gliss_test_support)
     add_test(NAME mercier_diagnostic COMMAND test_mercier_diagnostic)
 
+    add_executable(test_mercier_gradient test/test_mercier_gradient.f90)
+    target_link_libraries(test_mercier_gradient PRIVATE gliss)
+    add_test(NAME mercier_gradient COMMAND test_mercier_gradient)
+
     add_executable(test_field_profile_identities
         test/test_field_profile_identities.f90)
     target_link_libraries(test_field_profile_identities PRIVATE
