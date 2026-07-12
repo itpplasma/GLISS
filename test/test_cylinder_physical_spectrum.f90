@@ -322,6 +322,15 @@ contains
             info)
         call require(info == compressible_geometry_invalid_input, &
             "negative pressure beyond the floor was not rejected")
+        ! vacuum equilibria carry exactly zero pressure
+        equilibrium%pressure = 0.0_dp
+        call build_compressible_geometry(equilibrium, n_angle, n_angle, &
+            adiabatic_index, jacobian_s, jacobian_t, jacobian_z, gamma_p, &
+            info)
+        call require(info == compressible_geometry_ok, &
+            "vacuum zero pressure was rejected")
+        call require(all(gamma_p == 0.0_dp), &
+            "vacuum gamma*p is not identically zero")
     end subroutine check_bridge_rejections
 
     subroutine require_convergent(errors, ratio, message)

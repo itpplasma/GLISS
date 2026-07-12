@@ -44,12 +44,13 @@ contains
         ns = size(equilibrium%s)
         if (ns < 5) return
         if (.not. all(ieee_is_finite(equilibrium%pressure))) return
+        ! vacuum exports carry exactly zero pressure and keep gamma*p
+        ! identically zero; spline exports undershoot slightly below
+        ! zero where the edge pressure vanishes, so undershoot within a
+        ! relative noise floor is accepted and clamped out of gamma*p,
+        ! keeping the compression energy positive semidefinite.
         pressure_scale = maxval(equilibrium%pressure)
-        if (pressure_scale <= 0.0_dp) return
-        ! spline exports undershoot slightly below zero where the edge
-        ! pressure vanishes; accept undershoot within a relative noise
-        ! floor and clamp it out of gamma*p so the compression energy
-        ! stays positive semidefinite.
+        if (pressure_scale < 0.0_dp) return
         if (any(equilibrium%pressure &
             < -1.0e-3_dp * pressure_scale)) return
 
