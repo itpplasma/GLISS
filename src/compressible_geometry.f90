@@ -33,6 +33,7 @@ contains
         real(dp), allocatable :: slope_grid(:, :), value_grid(:, :)
         real(dp), allocatable :: grid_theta(:, :), grid_zeta(:, :)
         real(dp), allocatable :: discard_a(:, :), discard_b(:, :)
+        real(dp) :: pressure_scale
         integer :: ns, i, rec_info
 
         info = compressible_geometry_invalid_input
@@ -42,7 +43,15 @@ contains
         if (adiabatic_index < 0.0_dp) return
         ns = size(equilibrium%s)
         if (ns < 5) return
-        if (any(equilibrium%pressure < 0.0_dp)) return
+        if (.not. all(ieee_is_finite(equilibrium%pressure))) return
+        pressure_scale = maxval(equilibrium%pressure)
+        if (pressure_scale <= 0.0_dp) return
+        ! spline exports undershoot slightly below zero where the edge
+        ! pressure vanishes; accept undershoot within a relative noise
+        ! floor and clamp it out of gamma*p so the compression energy
+        ! stays positive semidefinite.
+        if (any(equilibrium%pressure &
+            < -1.0e-3_dp * pressure_scale)) return
 
         call build_angular_grids(n_theta, n_zeta, theta, zeta)
         call differentiate_pair(equilibrium%s, equilibrium%jacobian, &
@@ -70,7 +79,7 @@ contains
             jacobian_theta(:, :, i) = grid_theta
             jacobian_zeta(:, :, i) = grid_zeta
             gamma_pressure_pa(:, :, i) = adiabatic_index &
-                * equilibrium%pressure(i)
+                * max(equilibrium%pressure(i), 0.0_dp)
         end do
         info = compressible_geometry_ok
     end subroutine build_compressible_geometry

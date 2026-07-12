@@ -304,12 +304,24 @@ contains
             -1.0_dp, jacobian_s, jacobian_t, jacobian_z, gamma_p, info)
         call require(info == compressible_geometry_invalid_input, &
             "negative adiabatic index was not rejected")
-        equilibrium%pressure(1) = -1.0_dp
+        ! edge spline undershoot within the relative noise floor is
+        ! accepted and clamped out of gamma*p; undershoot beyond the
+        ! floor is rejected.
+        equilibrium%pressure(size(equilibrium%pressure)) = &
+            -1.0e-4_dp * maxval(equilibrium%pressure)
+        call build_compressible_geometry(equilibrium, n_angle, n_angle, &
+            adiabatic_index, jacobian_s, jacobian_t, jacobian_z, gamma_p, &
+            info)
+        call require(info == compressible_geometry_ok, &
+            "sub-floor pressure undershoot was rejected")
+        call require(all(gamma_p(:, :, size(equilibrium%pressure)) &
+            == 0.0_dp), "pressure undershoot was not clamped")
+        equilibrium%pressure(1) = -0.01_dp * maxval(equilibrium%pressure)
         call build_compressible_geometry(equilibrium, n_angle, n_angle, &
             adiabatic_index, jacobian_s, jacobian_t, jacobian_z, gamma_p, &
             info)
         call require(info == compressible_geometry_invalid_input, &
-            "negative pressure was not rejected")
+            "negative pressure beyond the floor was not rejected")
     end subroutine check_bridge_rejections
 
     subroutine require_convergent(errors, ratio, message)
