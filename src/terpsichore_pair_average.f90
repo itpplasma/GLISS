@@ -24,11 +24,11 @@ contains
     ! so the cost is O(points * table + modes^2) per field instead of
     ! O(points * modes^2).
     subroutine terpsichore_pair_averages(field, poloidal_points, &
-            toroidal_points, field_periods, mode_m, mode_n, &
-            normal_normal, normal_tangent, tangent_tangent, info)
+            toroidal_points, stability_periods, field_periods, mode_m, &
+            mode_n, normal_normal, normal_tangent, tangent_tangent, info)
         real(dp), intent(in) :: field(:)
         integer, intent(in) :: poloidal_points, toroidal_points
-        integer, intent(in) :: field_periods
+        integer, intent(in) :: stability_periods, field_periods
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(out) :: normal_normal(:, :)
         real(dp), intent(out) :: normal_tangent(:, :)
@@ -42,7 +42,7 @@ contains
         modes = size(mode_m)
         if (size(mode_n) /= modes .or. modes < 1) return
         if (poloidal_points < 1 .or. toroidal_points < 1) return
-        if (field_periods < 1) return
+        if (stability_periods < 1 .or. field_periods < 1) return
         if (size(field) /= poloidal_points * toroidal_points) return
         if (.not. all(ieee_is_finite(field))) return
         if (any(shape(normal_normal) /= modes)) return
@@ -52,8 +52,8 @@ contains
         m_span = 2 * maxval(abs(mode_m))
         n_span = 2 * maxval(abs(mode_n))
         call build_field_transforms(field, poloidal_points, &
-            toroidal_points, field_periods, m_span, n_span, cos_table, &
-            sin_table)
+            toroidal_points, stability_periods, field_periods, m_span, &
+            n_span, cos_table, sin_table)
 
         do b = 1, modes
             do a = 1, modes
@@ -75,12 +75,15 @@ contains
 
     ! cos_table(dm, dn) = s Sum_p field(p) cos(dm theta_p - dn zeta_p)
     ! for dm >= 0; negative dm is served by the lookup parity flip.
+    ! The toroidal mode numbers count per stability period, so zeta
+    ! carries the stability-over-field-period ratio.
     subroutine build_field_transforms(field, poloidal_points, &
-            toroidal_points, field_periods, m_span, n_span, cos_table, &
-            sin_table)
+            toroidal_points, stability_periods, field_periods, m_span, &
+            n_span, cos_table, sin_table)
         real(dp), intent(in) :: field(:)
         integer, intent(in) :: poloidal_points, toroidal_points
-        integer, intent(in) :: field_periods, m_span, n_span
+        integer, intent(in) :: stability_periods, field_periods
+        integer, intent(in) :: m_span, n_span
         real(dp), allocatable, intent(out) :: cos_table(:, :)
         real(dp), allocatable, intent(out) :: sin_table(:, :)
         real(dp), allocatable :: stage_cos(:, :), stage_sin(:, :)
@@ -113,7 +116,7 @@ contains
         scale = 2.0_dp / real(poloidal_points * toroidal_points, dp)
         do dn = -n_span, n_span
             do k = 1, toroidal_points
-                zeta = two_pi * real(k - 1, dp) &
+                zeta = two_pi * real((k - 1) * stability_periods, dp) &
                     / real(toroidal_points * field_periods, dp)
                 angle = -real(dn, dp) * zeta
                 cos_z = cos(angle)

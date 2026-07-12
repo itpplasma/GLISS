@@ -68,7 +68,8 @@ contains
             call terpsichore_pair_averages( &
                 abs(fixture%signed_bjac(:, interval)), &
                 fixture%poloidal_points, fixture%toroidal_points, &
-                fixture%field_periods, fixture%mode_m, fixture%mode_n, &
+                fixture%stability_periods, fixture%field_periods, &
+                fixture%mode_m, fixture%mode_n, &
                 normal_normal, normal_tangent, tangent_tangent, info)
             if (info /= terpsichore_pair_ok) then
                 info = terpsichore_reduced_adapter_invalid

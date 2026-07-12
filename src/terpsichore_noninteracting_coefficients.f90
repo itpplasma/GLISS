@@ -101,7 +101,8 @@ contains
         do kind = 0, 7
             call terpsichore_pair_averages(field_grid(:, kind), &
                 fixture%poloidal_points, fixture%toroidal_points, &
-                fixture%field_periods, fixture%mode_m, fixture%mode_n, &
+                fixture%stability_periods, fixture%field_periods, &
+                fixture%mode_m, fixture%mode_n, &
                 normal_normal, normal_tangent, tangent_tangent, &
                 pair_status)
             if (pair_status /= terpsichore_pair_ok) then
@@ -239,7 +240,10 @@ contains
         j = modulo(point - 1, fixture%poloidal_points)
         k = (point - 1) / fixture%poloidal_points
         theta = two_pi * real(j, dp) / real(fixture%poloidal_points, dp)
-        zeta = two_pi * real(k, dp) &
+        ! the stored toroidal mode numbers count per stability period,
+        ! so the toroidal angle scales by stability over field periods
+        ! (equal here); at n = 0 this reduces to the physical angle.
+        zeta = two_pi * real(k * fixture%stability_periods, dp) &
             / real(fixture%toroidal_points * fixture%field_periods, dp)
         angle = real(fixture%mode_m(mode), dp) * theta &
             - real(fixture%mode_n(mode), dp) * zeta
