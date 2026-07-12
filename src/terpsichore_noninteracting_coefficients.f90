@@ -164,17 +164,20 @@ contains
         real(dp), intent(out) :: coefficient(0:, :, :)
         real(dp) :: field(0:7), normal_a, normal_b, tangent_a, tangent_b
         real(dp) :: scale
-        integer :: a, b, point
+        integer :: a, b, point, replica
 
         coefficient = 0.0_dp
         scale = 2.0_dp / real(fixture%poloidal_points &
-            * fixture%toroidal_points, dp)
+            * fixture%toroidal_points * fixture%stability_periods, dp)
+        do replica = 0, fixture%stability_periods - 1
         do point = 1, fixture%poloidal_points * fixture%toroidal_points
             call build_point_fields(fixture, interval, point, field)
             do b = 1, fixture%modes
-                call phase_values(fixture, point, b, normal_b, tangent_b)
+                call phase_values(fixture, point, replica, b, normal_b, &
+                    tangent_b)
                 do a = 1, fixture%modes
-                    call phase_values(fixture, point, a, normal_a, tangent_a)
+                    call phase_values(fixture, point, replica, a, &
+                        normal_a, tangent_a)
                     coefficient(0, a, b) = coefficient(0, a, b) &
                         + scale * field(0) * normal_a * normal_b
                     coefficient(1, a, b) = coefficient(1, a, b) &
@@ -193,6 +196,7 @@ contains
                         + scale * field(7) * normal_a * normal_b
                 end do
             end do
+        end do
         end do
         call build_composite_coefficient(fixture, interval, coefficient)
     end subroutine build_interval_coefficients
@@ -230,9 +234,14 @@ contains
             * fixture%signed_bjac_radial(point, interval)
     end subroutine build_point_fields
 
-    pure subroutine phase_values(fixture, point, mode, normal, tangent)
+    ! phases at absolute toroidal mode numbers; the replica argument
+    ! shifts the point into later stability periods so the direct
+    ! oracle can quadrature the full torus (the one-period sum aliases
+    ! pair channels whose toroidal number is not stability-divisible).
+    pure subroutine phase_values(fixture, point, replica, mode, normal, &
+            tangent)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture
-        integer, intent(in) :: point, mode
+        integer, intent(in) :: point, replica, mode
         real(dp), intent(out) :: normal, tangent
         real(dp) :: angle, theta, zeta
         integer :: j, k
@@ -240,11 +249,9 @@ contains
         j = modulo(point - 1, fixture%poloidal_points)
         k = (point - 1) / fixture%poloidal_points
         theta = two_pi * real(j, dp) / real(fixture%poloidal_points, dp)
-        ! the stored toroidal mode numbers count per stability period,
-        ! so the toroidal angle scales by stability over field periods
-        ! (equal here); at n = 0 this reduces to the physical angle.
-        zeta = two_pi * real(k * fixture%stability_periods, dp) &
-            / real(fixture%toroidal_points * fixture%field_periods, dp)
+        zeta = two_pi * (real(k, dp) &
+            / real(fixture%toroidal_points, dp) + real(replica, dp)) &
+            / real(fixture%field_periods, dp)
         angle = real(fixture%mode_m(mode), dp) * theta &
             - real(fixture%mode_n(mode), dp) * zeta
         normal = sin(angle)

@@ -52,7 +52,7 @@ contains
         m_span = 2 * maxval(abs(mode_m))
         n_span = 2 * maxval(abs(mode_n))
         call build_field_transforms(field, poloidal_points, &
-            toroidal_points, stability_periods, field_periods, m_span, &
+            toroidal_points, field_periods, m_span, &
             n_span, cos_table, sin_table)
 
         do b = 1, modes
@@ -61,10 +61,25 @@ contains
                 dn = mode_n(a) - mode_n(b)
                 sm = mode_m(a) + mode_m(b)
                 sn = mode_n(a) + mode_n(b)
-                call lookup(cos_table, sin_table, n_span, dm, dn, &
-                    cos_diff, sin_diff)
-                call lookup(cos_table, sin_table, n_span, sm, sn, &
-                    cos_sum, sin_sum)
+                ! the equilibrium fields are stability-periodic, so a
+                ! pair channel whose toroidal number is not divisible
+                ! by the stability periods averages to zero over the
+                ! full torus; evaluating it on the one-period grid
+                ! would alias instead.
+                if (modulo(dn, stability_periods) == 0) then
+                    call lookup(cos_table, sin_table, n_span, dm, dn, &
+                        cos_diff, sin_diff)
+                else
+                    cos_diff = 0.0_dp
+                    sin_diff = 0.0_dp
+                end if
+                if (modulo(sn, stability_periods) == 0) then
+                    call lookup(cos_table, sin_table, n_span, sm, sn, &
+                        cos_sum, sin_sum)
+                else
+                    cos_sum = 0.0_dp
+                    sin_sum = 0.0_dp
+                end if
                 normal_normal(a, b) = 0.5_dp * (cos_diff - cos_sum)
                 normal_tangent(a, b) = 0.5_dp * (sin_diff + sin_sum)
                 tangent_tangent(a, b) = 0.5_dp * (cos_diff + cos_sum)
@@ -74,15 +89,16 @@ contains
     end subroutine terpsichore_pair_averages
 
     ! cos_table(dm, dn) = s Sum_p field(p) cos(dm theta_p - dn zeta_p)
-    ! for dm >= 0; negative dm is served by the lookup parity flip.
-    ! The toroidal mode numbers count per stability period, so zeta
-    ! carries the stability-over-field-period ratio.
+    ! for dm >= 0 and absolute toroidal numbers dn on the one-period
+    ! grid; negative dm is served by the lookup parity flip.  Only
+    ! stability-divisible dn are consumed, where the one-period sum
+    ! equals the full-torus average.
     subroutine build_field_transforms(field, poloidal_points, &
-            toroidal_points, stability_periods, field_periods, m_span, &
+            toroidal_points, field_periods, m_span, &
             n_span, cos_table, sin_table)
         real(dp), intent(in) :: field(:)
         integer, intent(in) :: poloidal_points, toroidal_points
-        integer, intent(in) :: stability_periods, field_periods
+        integer, intent(in) :: field_periods
         integer, intent(in) :: m_span, n_span
         real(dp), allocatable, intent(out) :: cos_table(:, :)
         real(dp), allocatable, intent(out) :: sin_table(:, :)
@@ -116,7 +132,7 @@ contains
         scale = 2.0_dp / real(poloidal_points * toroidal_points, dp)
         do dn = -n_span, n_span
             do k = 1, toroidal_points
-                zeta = two_pi * real((k - 1) * stability_periods, dp) &
+                zeta = two_pi * real(k - 1, dp) &
                     / real(toroidal_points * field_periods, dp)
                 angle = -real(dn, dp) * zeta
                 cos_z = cos(angle)
