@@ -1,5 +1,7 @@
 program gliss_spectrum
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: iso_c_binding, only: c_int
     use compressible_geometry, only: build_compressible_geometry, &
         compressible_geometry_ok
     use compressible_stiffness_family_assembly, only: &
@@ -33,48 +35,62 @@ program gliss_spectrum
     real(dp), allocatable :: jacobian_z(:, :, :), gamma_p(:, :, :)
     integer, allocatable :: mode_m(:), mode_n(:)
     real(dp) :: adiabatic_index, density_kg_m3, zero_floor
-    integer :: info, i, arguments, comma
+    integer :: info, i, j, arguments, comma
     integer :: family_index, poloidal_max, toroidal_max
     logical :: generated_family
 
+    interface
+        subroutine terminate_process(status) bind(C, name="exit")
+            import c_int
+            integer(c_int), value :: status
+        end subroutine terminate_process
+    end interface
+
     arguments = command_argument_count()
     if (arguments < 5) then
-        write (error_unit, "(a)") &
-            "usage: gliss_spectrum EXPORT_FILE GAMMA DENSITY FLOOR " // &
-            "m,n [m,n ...] | --family INDEX MMAX NMAX"
-        error stop 1
+        call fail_usage("missing required arguments")
     end if
-    call get_command_argument(1, filename)
-    call get_command_argument(2, token)
-    read (token, *) adiabatic_index
-    call get_command_argument(3, token)
-    read (token, *) density_kg_m3
-    call get_command_argument(4, token)
-    read (token, *) zero_floor
-    call get_command_argument(5, token)
+    call read_argument(1, "EXPORT_FILE", filename)
+    call read_real_argument(2, "GAMMA", adiabatic_index)
+    call read_real_argument(3, "DENSITY", density_kg_m3)
+    call read_real_argument(4, "FLOOR", zero_floor)
+    if (adiabatic_index <= 0.0_dp) call fail_usage("GAMMA must be positive")
+    if (density_kg_m3 <= 0.0_dp) call fail_usage("DENSITY must be positive")
+    if (zero_floor <= 0.0_dp) call fail_usage("FLOOR must be positive")
+    call read_argument(5, "mode or --family", token)
     generated_family = trim(token) == "--family"
     if (generated_family) then
         if (arguments /= 8) then
-            write (error_unit, "(a)") "--family requires INDEX MMAX NMAX"
-            error stop 1
+            call fail_usage("--family requires exactly INDEX MMAX NMAX")
         end if
-        call get_command_argument(6, token)
-        read (token, *) family_index
-        call get_command_argument(7, token)
-        read (token, *) poloidal_max
-        call get_command_argument(8, token)
-        read (token, *) toroidal_max
+        call read_integer_argument(6, "INDEX", family_index)
+        call read_integer_argument(7, "MMAX", poloidal_max)
+        call read_integer_argument(8, "NMAX", toroidal_max)
+        if (family_index < 0) call fail_usage("INDEX must be nonnegative")
+        if (poloidal_max < 0) call fail_usage("MMAX must be nonnegative")
+        if (toroidal_max < 0) call fail_usage("NMAX must be nonnegative")
     else
         allocate (mode_m(arguments - 4), mode_n(arguments - 4))
         do i = 5, arguments
-            call get_command_argument(i, token)
+            call read_argument(i, "mode", token)
             comma = index(token, ",")
-            if (comma <= 1) then
-                write (error_unit, "(a)") "modes must be given as m,n"
-                error stop 1
-            end if
-            read (token(1:comma - 1), *) mode_m(i - 4)
-            read (token(comma + 1:), *) mode_n(i - 4)
+            if (comma <= 1 .or. comma == len_trim(token)) &
+                call fail_usage("modes must be given as m,n")
+            if (index(token(comma + 1:), ",") > 0) &
+                call fail_usage("modes must contain exactly one comma")
+            call parse_integer(token(:comma - 1), "poloidal mode", &
+                mode_m(i - 4))
+            call parse_integer(token(comma + 1:), "toroidal mode", &
+                mode_n(i - 4))
+            if (mode_m(i - 4) < 0) &
+                call fail_usage("poloidal mode m must be nonnegative")
+            if (mode_m(i - 4) == 0 .and. mode_n(i - 4) < 0) &
+                call fail_usage("axis modes require nonnegative n")
+            do j = 1, i - 5
+                if (mode_m(j) == mode_m(i - 4) .and. &
+                    mode_n(j) == mode_n(i - 4)) &
+                    call fail_usage("duplicate mode")
+            end do
         end do
     end if
 
@@ -108,12 +124,72 @@ program gliss_spectrum
 
     write (*, "(a)") "chart_metric,field_periods,modes,parity_class," // &
         "adiabatic_index,density_kg_m3,unknowns,negative_count," // &
-        "floor_count,lowest_eigenvalue,certificate"
+        "floor_count,lowest_eigenvalue,certificate,eigenpair_residual," // &
+        "eigenpair_resolution,inertia_interval"
     do i = 1, 2
         call report_class(i)
     end do
 
 contains
+
+    subroutine fail_usage(message)
+        character(len=*), intent(in) :: message
+
+        write (error_unit, "(a)") "gliss_spectrum: " // trim(message)
+        write (error_unit, "(a)") &
+            "usage: gliss_spectrum EXPORT_FILE GAMMA DENSITY FLOOR " // &
+            "m,n [m,n ...] | --family INDEX MMAX NMAX"
+        call terminate_process(2_c_int)
+    end subroutine fail_usage
+
+    subroutine read_argument(position, name, value)
+        integer, intent(in) :: position
+        character(len=*), intent(in) :: name
+        character(len=*), intent(out) :: value
+        integer :: status
+
+        call get_command_argument(position, value, status=status)
+        if (status /= 0) call fail_usage(trim(name) // " is too long")
+        if (len_trim(value) == 0) call fail_usage(trim(name) // " is empty")
+    end subroutine read_argument
+
+    subroutine read_real_argument(position, name, value)
+        integer, intent(in) :: position
+        character(len=*), intent(in) :: name
+        real(dp), intent(out) :: value
+
+        call read_argument(position, name, token)
+        call parse_real(token, name, value)
+    end subroutine read_real_argument
+
+    subroutine read_integer_argument(position, name, value)
+        integer, intent(in) :: position
+        character(len=*), intent(in) :: name
+        integer, intent(out) :: value
+
+        call read_argument(position, name, token)
+        call parse_integer(token, name, value)
+    end subroutine read_integer_argument
+
+    subroutine parse_real(text, name, value)
+        character(len=*), intent(in) :: text, name
+        real(dp), intent(out) :: value
+        integer :: status
+
+        read (text, *, iostat=status) value
+        if (status /= 0) call fail_usage(trim(name) // " must be a number")
+        if (.not. ieee_is_finite(value)) &
+            call fail_usage(trim(name) // " must be finite")
+    end subroutine parse_real
+
+    subroutine parse_integer(text, name, value)
+        character(len=*), intent(in) :: text, name
+        integer, intent(out) :: value
+        integer :: status
+
+        read (text, *, iostat=status) value
+        if (status /= 0) call fail_usage(trim(name) // " must be an integer")
+    end subroutine parse_integer
 
     subroutine report_class(parity_class)
         integer, intent(in) :: parity_class
@@ -125,7 +201,8 @@ contains
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
         integer, allocatable :: trial_parity(:), permutation(:), widths(:)
         real(dp), allocatable :: stored_power(:)
-        real(dp) :: step, lowest, certificate
+        real(dp) :: step, lowest, certificate, residual, resolution
+        real(dp) :: inertia_interval
         integer :: ns, status
 
         ns = size(equilibrium%s)
@@ -185,34 +262,38 @@ contains
             error stop 1
         end if
         call resolve_lowest(k_blocks, m_blocks, summary, lowest, &
-            certificate)
+            inertia_interval, residual, resolution)
+        certificate = inertia_interval + residual + resolution
         write (*, "(l1, a, i0, a, i0, a, i0, a, es9.2, a, es9.2, a, i0, " // &
-            "a, i0, a, i0, a, es24.16, a, es9.2)") &
+            "a, i0, a, i0, a, es24.16, 4(a, es9.2))") &
             equilibrium%has_chart_metric, ",", equilibrium%field_periods, &
             ",", size(mode_m), ",", parity_class, ",", adiabatic_index, &
             ",", density_kg_m3, ",", layout%total_unknowns, ",", &
             summary%negative_count, ",", summary%zero_count, ",", lowest, &
-            ",", certificate
+            ",", certificate, ",", residual, ",", resolution, ",", &
+            inertia_interval
     end subroutine report_class
 
     subroutine resolve_lowest(k_blocks, m_blocks, summary, lowest, &
-            certificate)
+            inertia_interval, residual, resolution)
         type(variable_block_tridiagonal_t), intent(in) :: k_blocks, m_blocks
         type(variable_spectrum_summary_t), intent(in) :: summary
-        real(dp), intent(out) :: lowest, certificate
+        real(dp), intent(out) :: lowest, inertia_interval, residual, resolution
         real(dp), allocatable :: vector(:)
-        real(dp) :: lower, upper, middle, residual, resolution, shift
+        real(dp) :: lower, upper, middle, shift
         integer :: status, count, iteration
 
         if (summary%negative_count == 0) then
             if (.not. summary%has_positive) then
                 lowest = 0.0_dp
-                certificate = summary%zero_floor
+                inertia_interval = summary%zero_floor
+                residual = 0.0_dp
+                resolution = 0.0_dp
                 return
             end if
             shift = 0.5_dp * (summary%first_positive_lower &
                 + summary%first_positive_upper)
-            certificate = summary%first_positive_upper &
+            inertia_interval = summary%first_positive_upper &
                 - summary%first_positive_lower
         else
             lower = -2.0_dp * summary%zero_floor
@@ -244,7 +325,7 @@ contains
                 end if
             end do
             shift = lower
-            certificate = upper - lower
+            inertia_interval = upper - lower
         end if
         call iterate_variable_generalized_eigenvalue(k_blocks, m_blocks, &
             shift, lowest, vector, residual, resolution, status)
@@ -252,7 +333,6 @@ contains
             write (error_unit, "(a, i0)") "inverse iteration error ", status
             error stop 1
         end if
-        certificate = certificate + residual + resolution
     end subroutine resolve_lowest
 
 end program gliss_spectrum

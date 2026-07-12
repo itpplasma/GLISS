@@ -152,6 +152,29 @@ set_target_properties(gliss_terpsichore_noninteracting_stiffness PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 if(BUILD_TESTING)
+    function(add_spectrum_cli_rejection name expected)
+        add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:gliss_spectrum>
+            "-DEXPECTED=gliss_spectrum: ${expected}"
+            "-DARGUMENTS=${ARGN}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    endfunction()
+
+    add_spectrum_cli_rejection(spectrum_cli_bad_gamma
+        "GAMMA must be a number" missing.nc bad 1.0 1.0 1,1)
+    add_spectrum_cli_rejection(spectrum_cli_nonfinite_floor
+        "FLOOR must be finite" missing.nc 1.6666666666666667 1.0 NaN 1,1)
+    add_spectrum_cli_rejection(spectrum_cli_zero_density
+        "DENSITY must be positive" missing.nc 1.6666666666666667 0.0 1.0 1,1)
+    add_spectrum_cli_rejection(spectrum_cli_negative_m
+        "poloidal mode m must be nonnegative"
+        missing.nc 1.6666666666666667 1.0 1.0 -1,1)
+    add_spectrum_cli_rejection(spectrum_cli_duplicate_mode
+        "duplicate mode" missing.nc 1.6666666666666667 1.0 1.0 1,1 1,1)
+    add_spectrum_cli_rejection(spectrum_cli_incomplete_family
+        "--family requires exactly INDEX MMAX NMAX"
+        missing.nc 1.6666666666666667 1.0 1.0 --family 0 8)
+
     add_executable(test_local_mode test/test_local_mode.f90)
     target_link_libraries(test_local_mode PRIVATE gliss)
     add_test(NAME local_mode COMMAND test_local_mode)
