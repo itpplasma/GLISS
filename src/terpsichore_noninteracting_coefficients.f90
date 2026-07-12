@@ -6,6 +6,8 @@ module terpsichore_noninteracting_coefficients
     use terpsichore_model_policy, only: decode_terpsichore_model, &
         potential_model_non_interacting, terpsichore_model_config_t, &
         terpsichore_model_ok
+    use terpsichore_pair_average, only: terpsichore_pair_averages, &
+        terpsichore_pair_ok
     implicit none
     private
 
@@ -14,6 +16,7 @@ module terpsichore_noninteracting_coefficients
     real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
 
     public :: build_terpsichore_noninteracting_coefficients
+    public :: build_terpsichore_noninteracting_coefficients_direct
 
 contains
 
@@ -44,12 +47,79 @@ contains
             [10, fixture%modes, fixture%modes, fixture%intervals])) return
         coefficients = 0.0_dp
         do interval = 1, fixture%intervals
+            call build_interval_coefficients_fast(fixture, interval, &
+                coefficients(:, :, :, interval), info)
+            if (info /= terpsichore_coefficients_ok) return
+        end do
+        info = terpsichore_coefficients_invalid
+        if (.not. all(ieee_is_finite(coefficients))) return
+        info = terpsichore_coefficients_ok
+    end subroutine build_coefficients_resolved
+
+    ! naive point-pair oracle, O(points modes^2) per interval; retained
+    ! for the equivalence test against the transform path.
+    subroutine build_terpsichore_noninteracting_coefficients_direct( &
+            fixture, coefficients, info)
+        type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        real(dp), allocatable, intent(out) :: coefficients(:, :, :, :)
+        integer, intent(out) :: info
+        integer :: allocation_status, interval
+
+        info = terpsichore_coefficients_invalid
+        if (.not. fixture_selects_noninteracting(fixture)) return
+        allocate (coefficients(0:9, fixture%modes, fixture%modes, &
+            fixture%intervals), stat=allocation_status)
+        if (allocation_status /= 0) return
+        coefficients = 0.0_dp
+        do interval = 1, fixture%intervals
             call build_interval_coefficients(fixture, interval, &
                 coefficients(:, :, :, interval))
         end do
         if (.not. all(ieee_is_finite(coefficients))) return
         info = terpsichore_coefficients_ok
-    end subroutine build_coefficients_resolved
+    end subroutine build_terpsichore_noninteracting_coefficients_direct
+
+    subroutine build_interval_coefficients_fast(fixture, interval, &
+            coefficient, info)
+        type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        integer, intent(in) :: interval
+        real(dp), intent(out) :: coefficient(0:, :, :)
+        integer, intent(out) :: info
+        real(dp) :: field_grid(fixture%poloidal_points &
+            * fixture%toroidal_points, 0:7)
+        real(dp) :: normal_normal(fixture%modes, fixture%modes)
+        real(dp) :: normal_tangent(fixture%modes, fixture%modes)
+        real(dp) :: tangent_tangent(fixture%modes, fixture%modes)
+        real(dp) :: point_field(0:7)
+        integer :: kind, point, pair_status
+
+        do point = 1, fixture%poloidal_points * fixture%toroidal_points
+            call build_point_fields(fixture, interval, point, point_field)
+            field_grid(point, :) = point_field
+        end do
+        coefficient = 0.0_dp
+        do kind = 0, 7
+            call terpsichore_pair_averages(field_grid(:, kind), &
+                fixture%poloidal_points, fixture%toroidal_points, &
+                fixture%field_periods, fixture%mode_m, fixture%mode_n, &
+                normal_normal, normal_tangent, tangent_tangent, &
+                pair_status)
+            if (pair_status /= terpsichore_pair_ok) then
+                info = terpsichore_coefficients_invalid
+                return
+            end if
+            select case (kind)
+            case (1, 4)
+                coefficient(kind, :, :) = normal_tangent
+            case (3)
+                coefficient(kind, :, :) = tangent_tangent
+            case default
+                coefficient(kind, :, :) = normal_normal
+            end select
+        end do
+        call build_composite_coefficient(fixture, interval, coefficient)
+        info = terpsichore_coefficients_ok
+    end subroutine build_interval_coefficients_fast
 
     pure function fixture_selects_noninteracting(fixture) result(valid)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture

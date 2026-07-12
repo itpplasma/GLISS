@@ -9,6 +9,7 @@ module terpsichore_reduced_mass
     integer, parameter, public :: terpsichore_reduced_ok = 0
     integer, parameter, public :: terpsichore_reduced_invalid = -1
 
+    public :: add_reduced_values
     public :: assemble_terpsichore_reduced_mass_element
     public :: assemble_terpsichore_reduced_mass_element_resolved
     public :: benchmark_terpsichore_reduced_mass_energy

@@ -2,6 +2,10 @@ program test_terpsichore_noninteracting_stiffness
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use dynamic_family_layout, only: dynamic_family_layout_t
     use terpsichore_matrix_fixture, only: terpsichore_matrix_fixture_t
+    use terpsichore_noninteracting_coefficients, only: &
+        build_terpsichore_noninteracting_coefficients, &
+        build_terpsichore_noninteracting_coefficients_direct, &
+        terpsichore_coefficients_ok
     use terpsichore_noninteracting_stiffness, only: &
         assemble_terpsichore_noninteracting_fixed_boundary_stiffness, &
         terpsichore_noninteracting_ok
@@ -10,6 +14,7 @@ program test_terpsichore_noninteracting_stiffness
     type(terpsichore_matrix_fixture_t) :: fixture
     type(dynamic_family_layout_t) :: layout
     real(dp), allocatable :: expected(:, :), stiffness(:, :)
+    real(dp), allocatable :: fast(:, :, :, :), direct(:, :, :, :)
     integer :: info
 
     call build_constant_fixture(fixture)
@@ -22,6 +27,17 @@ program test_terpsichore_noninteracting_stiffness
         "non-interacting fixed-boundary layout is wrong")
     call require(maxval(abs(stiffness - expected)) < 2.0e-12_dp, &
         "non-interacting analytical matrix is wrong")
+    call build_terpsichore_noninteracting_coefficients(fixture, fast, &
+        info)
+    call require(info == terpsichore_coefficients_ok, &
+        "transform coefficient path failed")
+    call build_terpsichore_noninteracting_coefficients_direct(fixture, &
+        direct, info)
+    call require(info == terpsichore_coefficients_ok, &
+        "direct coefficient oracle failed")
+    call require(maxval(abs(fast - direct)) < 1.0e-13_dp &
+        * max(1.0_dp, maxval(abs(direct))), &
+        "transform coefficients disagree with the point-pair oracle")
     fixture%legacy_modelk = 2
     call assemble_terpsichore_noninteracting_fixed_boundary_stiffness( &
         fixture, stiffness, layout, info)

@@ -12,8 +12,10 @@ module terpsichore_matrix_fixture
     integer, parameter :: maximum_angular_points = 999
     integer, parameter :: maximum_modes = 10000
     integer, parameter :: maximum_fixture_values = 50000000
-    integer, parameter :: maximum_phase_values = 10000000
-    integer, parameter :: maximum_dense_order = 4000
+    ! the shipped 191-mode QAS3 deck needs 2.3e8 phase values (1.8 GB)
+    ! and dense order 34399; both stay below the int32 index ceiling.
+    integer, parameter :: maximum_phase_values = 300000000
+    integer, parameter :: maximum_dense_order = 40000
     integer, parameter :: maximum_potential_values = 20000000
 
     type, public :: terpsichore_matrix_fixture_t

@@ -46,6 +46,7 @@ add_library(gliss
     src/symmetric_pivot_inertia.f90
     src/terpsichore_model_policy.f90
     src/terpsichore_normalization.f90
+    src/terpsichore_pair_average.f90
     src/terpsichore_matrix_fixture.f90
     src/terpsichore_noninteracting_coefficients.f90
     src/terpsichore_noninteracting_stiffness.f90
@@ -117,6 +118,12 @@ set_target_properties(gliss_family PROPERTIES
 add_executable(gliss_spectrum app/gliss_spectrum.f90)
 target_link_libraries(gliss_spectrum PRIVATE gliss)
 set_target_properties(gliss_spectrum PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_terpsichore_eigen
+    app/gliss_terpsichore_eigen.f90)
+target_link_libraries(gliss_terpsichore_eigen PRIVATE gliss)
+set_target_properties(gliss_terpsichore_eigen PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gvec_cas3d_integrate app/gvec_cas3d_integrate.f90)
