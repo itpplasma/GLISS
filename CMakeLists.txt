@@ -21,6 +21,7 @@ add_library(gliss
     src/gvec_cas3d_integrals.f90
     src/gvec_cas3d_types.f90
     src/block_tridiagonal.f90
+    src/compressible_geometry.f90
     src/compressible_stiffness_assembly.f90
     src/compressible_stiffness_family_assembly.f90
     src/generalized_block_solver.f90
@@ -111,6 +112,11 @@ set_target_properties(gliss_field_profiles PROPERTIES
 add_executable(gliss_family app/gliss_family.f90)
 target_link_libraries(gliss_family PRIVATE gliss)
 set_target_properties(gliss_family PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_spectrum app/gliss_spectrum.f90)
+target_link_libraries(gliss_spectrum PRIVATE gliss)
+set_target_properties(gliss_spectrum PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gvec_cas3d_integrate app/gvec_cas3d_integrate.f90)
@@ -281,6 +287,13 @@ if(BUILD_TESTING)
     add_test(NAME zero_family_homogeneous_spectrum
         COMMAND test_zero_family_homogeneous_spectrum)
 
+    add_executable(test_cylinder_physical_spectrum
+        test/test_cylinder_physical_spectrum.f90)
+    target_link_libraries(test_cylinder_physical_spectrum PRIVATE
+        gliss_test_support)
+    add_test(NAME cylinder_physical_spectrum
+        COMMAND test_cylinder_physical_spectrum)
+
     add_executable(test_mode_topology test/test_mode_topology.f90)
     target_link_libraries(test_mode_topology PRIVATE gliss)
     add_test(NAME mode_topology COMMAND test_mode_topology)
@@ -425,6 +438,7 @@ if(GLISS_ENABLE_ENZYME)
             src/fourier_phase_kind.f90
             src/trial_space_topology.f90
             src/dynamic_family_layout.f90
+            src/terpsichore_reduced_layout.f90
             src/terpsichore_reduced_mass.f90
             src/terpsichore_reduced_mass_family_assembly.f90
             test/enzyme_terpsichore_reduced_mass_family_fixture.f90

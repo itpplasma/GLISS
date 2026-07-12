@@ -78,44 +78,58 @@ contains
             * s_value) / (2.0_dp * pi * b_axial)
     end function iota_of
 
-    pure function b_axial_scaled(radius, pressure_fraction) result(value)
+    pure function b_axial_scaled(radius, pressure_fraction, &
+            poloidal_scale) result(value)
         real(dp), intent(in) :: radius, pressure_fraction
-        real(dp) :: value
+        real(dp), intent(in), optional :: poloidal_scale
+        real(dp) :: value, poloidal
 
+        poloidal = 1.0_dp
+        if (present(poloidal_scale)) poloidal = poloidal_scale
         value = sqrt(b_axial**2 + 2.0_dp * (1.0_dp - pressure_fraction) &
+            * poloidal**2 &
             * (integral_at(minor_radius) - integral_at(radius)))
     end function b_axial_scaled
 
-    pure function pressure_scaled(radius, pressure_fraction) result(value)
+    pure function pressure_scaled(radius, pressure_fraction, &
+            poloidal_scale) result(value)
         real(dp), intent(in) :: radius, pressure_fraction
-        real(dp) :: value
+        real(dp), intent(in), optional :: poloidal_scale
+        real(dp) :: value, poloidal
 
-        value = pressure_fraction * (integral_at(minor_radius) &
+        poloidal = 1.0_dp
+        if (present(poloidal_scale)) poloidal = poloidal_scale
+        value = pressure_fraction * poloidal**2 * (integral_at(minor_radius) &
             - integral_at(radius)) / mu0 + 1.0e2_dp
     end function pressure_scaled
 
-    pure function iota_scaled(s_value, pressure_fraction) result(value)
+    pure function iota_scaled(s_value, pressure_fraction, &
+            poloidal_scale) result(value)
         real(dp), intent(in) :: s_value, pressure_fraction
-        real(dp) :: value
+        real(dp), intent(in), optional :: poloidal_scale
+        real(dp) :: value, poloidal
         real(dp) :: radius
 
+        poloidal = 1.0_dp
+        if (present(poloidal_scale)) poloidal = poloidal_scale
         radius = radius_of(s_value)
-        value = period_length * b_poloidal(radius) / (2.0_dp * pi &
-            * radius * b_axial_scaled(radius, pressure_fraction))
+        value = period_length * poloidal * b_poloidal(radius) / (2.0_dp * pi &
+            * radius * b_axial_scaled(radius, pressure_fraction, poloidal))
     end function iota_scaled
 
     subroutine create_cylinder_fixture(filename, chart_shift, surfaces, &
-            pressure_scale)
+            pressure_scale, poloidal_scale)
         character(len=*), intent(in) :: filename
         real(dp), intent(in), optional :: chart_shift
         integer, intent(in), optional :: surfaces
         real(dp), intent(in), optional :: pressure_scale
+        real(dp), intent(in), optional :: poloidal_scale
         integer :: ncid, id_nfp, id_beta, id_winding, id_m, id_n, id_rho
         integer :: id_profiles(profile_count)
         integer :: id_cos(field_count), id_sin(field_count)
         integer :: id_chart(4)
         real(dp), allocatable :: s_values(:)
-        real(dp) :: shift, fraction
+        real(dp) :: shift, fraction, poloidal
         logical :: shifted
         integer :: ns, i
 
@@ -126,6 +140,8 @@ contains
         if (shifted) shift = chart_shift
         fraction = 1.0_dp
         if (present(pressure_scale)) fraction = pressure_scale
+        poloidal = 1.0_dp
+        if (present(poloidal_scale)) poloidal = poloidal_scale
         allocate (s_values(ns))
         do i = 1, ns
             s_values(i) = (real(i, dp) - 0.5_dp) / real(ns, dp)
@@ -141,9 +157,10 @@ contains
         call require_netcdf(nc_put_integer(ncid, id_m, [0, 1]))
         call require_netcdf(nc_put_integer(ncid, id_n, [0, 1, -1]))
         call require_netcdf(nc_put_real(ncid, id_rho, sqrt(s_values)))
-        call write_fixture_profiles(ncid, id_profiles, s_values, fraction)
+        call write_fixture_profiles(ncid, id_profiles, s_values, fraction, &
+            poloidal)
         call write_fixture_fields(ncid, id_cos, id_sin, s_values, &
-            shifted, shift, fraction)
+            shifted, shift, fraction, poloidal)
         if (shifted) call write_chart_metric(ncid, id_chart, s_values, &
             shift)
         call require_netcdf(nc_close_file(ncid))
@@ -205,10 +222,10 @@ contains
     end subroutine define_fixture_variables
 
     subroutine write_fixture_profiles(ncid, id_profiles, s_values, &
-            fraction)
+            fraction, poloidal)
         integer, intent(in) :: ncid, id_profiles(profile_count)
         real(dp), intent(in) :: s_values(:)
-        real(dp), intent(in) :: fraction
+        real(dp), intent(in) :: fraction, poloidal
         real(dp) :: profile_values(size(s_values)), radius
         integer :: profile, i
 
@@ -217,23 +234,26 @@ contains
                 radius = radius_of(s_values(i))
                 select case (trim(profile_names(profile)))
                 case ("p")
-                    profile_values(i) = pressure_scaled(radius, fraction)
+                    profile_values(i) = pressure_scaled(radius, fraction, &
+                        poloidal)
                 case ("B_theta_avg")
                     profile_values(i) = 2.0_dp * pi * radius &
-                        * b_poloidal(radius)
+                        * poloidal * b_poloidal(radius)
                 case ("B_zeta_avg")
                     profile_values(i) = period_length &
-                        * b_axial_scaled(radius, fraction)
+                        * b_axial_scaled(radius, fraction, poloidal)
                 case ("Phi")
                     profile_values(i) = pi * minor_radius**2 &
-                        * axial_flux_mean(s_values(i), fraction)
+                        * axial_flux_mean(s_values(i), fraction, poloidal)
                 case ("chi")
-                    profile_values(i) = minor_radius**2 * period_length &
+                    profile_values(i) = poloidal * minor_radius**2 &
+                        * period_length &
                         * (b_linear * s_values(i) &
                         + 0.5_dp * b_cubic * minor_radius**2 &
                         * s_values(i)**2) / 2.0_dp
                 case ("iota")
-                    profile_values(i) = iota_scaled(s_values(i), fraction)
+                    profile_values(i) = iota_scaled(s_values(i), fraction, &
+                        poloidal)
                 end select
             end do
             call require_netcdf(nc_put_real(ncid, id_profiles(profile), &
@@ -241,32 +261,32 @@ contains
         end do
     end subroutine write_fixture_profiles
 
-    pure function axial_flux_mean(s_value, fraction) result(value)
-        real(dp), intent(in) :: s_value, fraction
+    pure function axial_flux_mean(s_value, fraction, poloidal) result(value)
+        real(dp), intent(in) :: s_value, fraction, poloidal
         real(dp) :: value
         integer, parameter :: intervals = 200
         real(dp) :: step, sigma, weight
         integer :: i
 
         step = s_value / real(intervals, dp)
-        value = b_axial_scaled(radius_of(0.0_dp), fraction) &
-            + b_axial_scaled(radius_of(s_value), fraction)
+        value = b_axial_scaled(radius_of(0.0_dp), fraction, poloidal) &
+            + b_axial_scaled(radius_of(s_value), fraction, poloidal)
         do i = 1, intervals - 1
             sigma = real(i, dp) * step
             weight = merge(4.0_dp, 2.0_dp, mod(i, 2) == 1)
             value = value + weight * b_axial_scaled(radius_of(sigma), &
-                fraction)
+                fraction, poloidal)
         end do
         value = value * step / 3.0_dp
     end function axial_flux_mean
 
     subroutine write_fixture_fields(ncid, id_cos, id_sin, s_values, &
-            shifted, shift, fraction)
+            shifted, shift, fraction, poloidal)
         integer, intent(in) :: ncid
         integer, intent(in) :: id_cos(field_count), id_sin(field_count)
         real(dp), intent(in) :: s_values(:)
         logical, intent(in) :: shifted
-        real(dp), intent(in) :: shift, fraction
+        real(dp), intent(in) :: shift, fraction, poloidal
         real(dp) :: cosine(nn, nm, size(s_values))
         real(dp) :: sine(nn, nm, size(s_values))
         real(dp) :: radius
@@ -279,8 +299,9 @@ contains
                 radius = radius_of(s_values(i))
                 select case (trim(field_names(field)))
                 case ("mod_B")
-                    cosine(1, 1, i) = sqrt(b_poloidal(radius)**2 &
-                        + b_axial_scaled(radius, fraction)**2)
+                    cosine(1, 1, i) = sqrt((poloidal &
+                        * b_poloidal(radius))**2 &
+                        + b_axial_scaled(radius, fraction, poloidal)**2)
                 case ("Jac")
                     cosine(1, 1, i) = -pi * minor_radius**2 * period_length
                 case ("g_tt")
@@ -288,11 +309,11 @@ contains
                 case ("g_zz")
                     cosine(1, 1, i) = period_length**2
                 case ("B_contra_t")
-                    cosine(1, 1, i) = b_poloidal(radius) &
+                    cosine(1, 1, i) = poloidal * b_poloidal(radius) &
                         / (2.0_dp * pi * radius)
                 case ("B_contra_z")
-                    cosine(1, 1, i) = b_axial_scaled(radius, fraction) &
-                        / period_length
+                    cosine(1, 1, i) = b_axial_scaled(radius, fraction, &
+                        poloidal) / period_length
                 case ("xhat")
                     cosine(3, 1, i) = axis_radius
                     cosine(2, 2, i) = radius / 2.0_dp

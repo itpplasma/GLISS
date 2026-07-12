@@ -122,6 +122,10 @@ name = "zero_family_homogeneous_spectrum"
 main = "test_zero_family_homogeneous_spectrum.f90"
 
 [[test]]
+name = "cylinder_physical_spectrum"
+main = "test_cylinder_physical_spectrum.f90"
+
+[[test]]
 name = "mode_topology"
 main = "test_mode_topology.f90"
 

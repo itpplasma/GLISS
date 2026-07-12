@@ -59,7 +59,9 @@ module mercier_diagnostic
     end type surface_profiles_t
 
     public :: compute_mercier
+    public :: build_angular_grids
     public :: build_kernel_geometry
+    public :: differentiate_pair
     public :: mercier_d_terms
     public :: mercier_d_terms_gradient
     public :: mercier_surface_terms
