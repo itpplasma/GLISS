@@ -41,6 +41,7 @@ add_library(gliss
     src/trial_space_topology.f90
     src/phase_factor_topology.f90
     src/physical_constants.f90
+    src/radial_slice_interpolation.f90
     src/radial_space_policy.f90
     src/perpendicular_kinetic_kernel.f90
     src/symmetric_pivot_inertia.f90

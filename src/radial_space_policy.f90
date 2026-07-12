@@ -16,6 +16,14 @@ module radial_space_policy
         integer :: form_policy = form_identity
         integer :: axis_constraint = constraint_eliminate
         integer :: edge_constraint = constraint_eliminate
+        ! 1 = documented CAS3D midpoint rule; 2 = two-point Gauss with
+        ! linearly interpolated coefficient slices (E5 opt-in).  The
+        ! family assembly resolves each quadrature node into the
+        ! evaluation coordinate and weight fraction consumed by the
+        ! elements; the defaults are the midpoint rule.
+        integer :: quadrature_points = 1
+        real(dp) :: evaluation_coordinate = 0.5_dp
+        real(dp) :: weight_fraction = 1.0_dp
     end type radial_space_config_t
 
     public :: evaluate_normal_basis
@@ -34,6 +42,14 @@ contains
             config%form_policy /= form_s_power_edge) return
         if (config%axis_constraint /= constraint_eliminate) return
         if (config%edge_constraint /= constraint_eliminate) return
+        if (config%quadrature_points /= 1 .and. &
+            config%quadrature_points /= 2) return
+        if (.not. ieee_is_finite(config%evaluation_coordinate)) return
+        if (config%evaluation_coordinate <= 0.0_dp .or. &
+            config%evaluation_coordinate >= 1.0_dp) return
+        if (.not. ieee_is_finite(config%weight_fraction)) return
+        if (config%weight_fraction <= 0.0_dp .or. &
+            config%weight_fraction > 1.0_dp) return
         info = radial_space_ok
     end subroutine validate_radial_space
 

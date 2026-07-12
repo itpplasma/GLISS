@@ -99,7 +99,8 @@ contains
         real(dp) :: theta, zeta, weight
         integer :: j, k, period
 
-        weight = radial_step / real(size(fields, 1) * size(fields, 2) &
+        weight = radial_step * radial_space%weight_fraction &
+            / real(size(fields, 1) * size(fields, 2) &
             * field_periods, dp)
         do period = 0, field_periods - 1
             do k = 1, size(fields, 2)
@@ -141,7 +142,8 @@ contains
         basis = 0.0_dp
         do trial = 1, trials
             call evaluate_normal_basis(radial_space, trial_m(trial), &
-                radial_coordinate, radial_step, 0.5_dp, normal_values, &
+                radial_coordinate, radial_step, &
+                radial_space%evaluation_coordinate, normal_values, &
                 normal_derivatives, info, stored_power(trial))
             if (info /= radial_space_ok) return
             phase = two_pi * (real(trial_m(trial), dp) * theta &
@@ -172,7 +174,8 @@ contains
         real(dp) :: theta, zeta, weight
         integer :: j, k
 
-        weight = radial_step / real(size(fields, 1) * size(fields, 2), dp)
+        weight = radial_step * radial_space%weight_fraction &
+            / real(size(fields, 1) * size(fields, 2), dp)
         do k = 1, size(fields, 2)
             zeta = real(k - 1, dp) / real(size(fields, 2), dp)
             do j = 1, size(fields, 1)
@@ -227,7 +230,8 @@ contains
 
         do trial = 1, size(trial_m)
             call evaluate_normal_basis(radial_space, trial_m(trial), &
-                radial_coordinate, radial_step, 0.5_dp, normal_values, &
+                radial_coordinate, radial_step, &
+                radial_space%evaluation_coordinate, normal_values, &
                 normal_derivatives, info, stored_power(trial))
             if (info /= radial_space_ok) return
             factors(:, trial) = [normal_values(1), normal_values(2), &
