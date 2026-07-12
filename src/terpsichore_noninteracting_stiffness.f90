@@ -157,8 +157,7 @@ contains
                 call set_transpose_pair(element, a, modes + b, &
                     normal_cross(fixture, coefficient, interval, a, b, &
                     factors%derivative_scale, factors%radial_weight, &
-                    factors%current_flux, factors%current_curve, &
-                    factors%radial_metric))
+                    factors%current_flux, factors%radial_metric))
                 call set_transpose_pair(element, a, 2 * modes + b, &
                     left_tangential(fixture, coefficient, interval, a, b, &
                     factors%derivative_scale, factors%radial_weight, &
@@ -202,13 +201,13 @@ contains
     end function normal_diagonal
 
     pure function normal_cross(fixture, coefficient, interval, a, b, &
-            derivative_scale, radial_weight, current_flux, current_curve, &
+            derivative_scale, radial_weight, current_flux, &
             radial_metric) result(value)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture
         real(dp), intent(in) :: coefficient(0:, :, :)
         integer, intent(in) :: interval, a, b
         real(dp), intent(in) :: derivative_scale, radial_weight, current_flux
-        real(dp), intent(in) :: current_curve, radial_metric
+        real(dp), intent(in) :: radial_metric
         real(dp) :: left_parallel, right_parallel, scale, value
         real(dp) :: coupling, midpoint
 
