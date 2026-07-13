@@ -63,6 +63,8 @@ add_library(gliss
     src/terpsichore_topology.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
+    src/boundary/starwall_mesh_geometry.f90
+    src/boundary/starwall_ideal_vacuum.f90
     src/vacuum_schur.f90
     src/variable_block_tridiagonal.f90
     src/variable_generalized_solver.f90
@@ -258,6 +260,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_local_mode PRIVATE gliss)
     add_test(NAME local_mode COMMAND test_local_mode)
     add_test(NAME local_mode_diagnostic COMMAND gliss_local_mode_diagnostic)
+
+    add_executable(test_starwall_ideal_vacuum
+        test/boundary/test_starwall_ideal_vacuum.f90)
+    target_link_libraries(test_starwall_ideal_vacuum PRIVATE gliss)
+    add_test(NAME starwall_ideal_vacuum COMMAND test_starwall_ideal_vacuum)
     add_test(NAME local_mode_diagnostic_cli_extra COMMAND ${CMAKE_COMMAND}
         -DPROGRAM=$<TARGET_FILE:gliss_local_mode_diagnostic>
         "-DEXPECTED=gliss_local_mode_diagnostic: no arguments are accepted"

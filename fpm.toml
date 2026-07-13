@@ -22,6 +22,10 @@ name = "vacuum_schur"
 main = "test_vacuum_schur.f90"
 
 [[test]]
+name = "starwall_ideal_vacuum"
+main = "boundary/test_starwall_ideal_vacuum.f90"
+
+[[test]]
 name = "helical_cylinder_limit"
 main = "test_helical_cylinder_limit.f90"
 
