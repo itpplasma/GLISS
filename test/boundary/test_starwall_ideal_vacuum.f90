@@ -1,6 +1,8 @@
 program test_starwall_ideal_vacuum
     use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use starwall_cylinder_limit, only: build_circular_torus, &
+        coaxial_cylinder_energy, cylinder_gate_ok, poloidal_cosine
     use starwall_ideal_vacuum, only: assemble_starwall_ideal_vacuum, &
         starwall_degenerate_surface, starwall_invalid_input, starwall_ok, &
         starwall_surfaces_not_nested
@@ -25,8 +27,10 @@ contains
         real(dp) :: energy, expected, fp, length, relative_error
         integer :: harmonic, info
 
-        call torus(major_radius, plasma_radius, nu, nv, plasma)
-        call torus(major_radius, wall_radius, nu, nv, wall)
+        call build_circular_torus(major_radius, plasma_radius, nu, nv, plasma, info)
+        call require(info == cylinder_gate_ok, "plasma fixture construction failed")
+        call build_circular_torus(major_radius, wall_radius, nu, nv, wall, info)
+        call require(info == cylinder_gate_ok, "wall fixture construction failed")
         length = 2.0_dp * pi * major_radius
         fp = length * plasma_radius
         call assemble_starwall_ideal_vacuum(plasma, fp, 0.0_dp, stiffness, &
@@ -44,18 +48,19 @@ contains
         displacement = 1.0_dp
         energy = 0.5_dp * dot_product(displacement, &
             matmul(stiffness, displacement))
-        expected = pi * fp**2 / (length * log(wall_radius / plasma_radius))
+        expected = coaxial_cylinder_energy(fp, length, plasma_radius, &
+            wall_radius, 0)
         relative_error = abs(energy / expected - 1.0_dp)
         call require(relative_error < 0.04_dp, &
             "Lust-Martensen energy misses the cylindrical limit")
 
         harmonic = 2
-        call cosine_mode(nu, nv, harmonic, displacement)
+        call poloidal_cosine(nu, nv, harmonic, displacement, info)
+        call require(info == cylinder_gate_ok, "mode construction failed")
         energy = 0.5_dp * dot_product(displacement, &
             matmul(stiffness, displacement))
-        expected = pi * real(harmonic, dp) * fp**2 / (2.0_dp * length) &
-            * (wall_radius**(2 * harmonic) + plasma_radius**(2 * harmonic)) &
-            / (wall_radius**(2 * harmonic) - plasma_radius**(2 * harmonic))
+        expected = coaxial_cylinder_energy(fp, length, plasma_radius, &
+            wall_radius, harmonic)
         relative_error = abs(energy / expected - 1.0_dp)
         call require(relative_error < 0.04_dp, &
             "periodic vacuum energy misses the cylindrical limit")
@@ -69,12 +74,16 @@ contains
         real(dp) :: far_energy, fp, near_energy, open_energy
         integer :: info
 
-        call torus(8.0_dp, 1.0_dp, nu, nv, plasma)
-        call torus(8.0_dp, 1.3_dp, nu, nv, near_wall)
-        call torus(8.0_dp, 2.0_dp, nu, nv, far_wall)
+        call build_circular_torus(8.0_dp, 1.0_dp, nu, nv, plasma, info)
+        call require(info == cylinder_gate_ok, "plasma fixture construction failed")
+        call build_circular_torus(8.0_dp, 1.3_dp, nu, nv, near_wall, info)
+        call require(info == cylinder_gate_ok, "near-wall construction failed")
+        call build_circular_torus(8.0_dp, 2.0_dp, nu, nv, far_wall, info)
+        call require(info == cylinder_gate_ok, "far-wall construction failed")
         fp = 16.0_dp * pi
         allocate (displacement(nu * nv))
-        call cosine_mode(nu, nv, 1, displacement)
+        call poloidal_cosine(nu, nv, 1, displacement, info)
+        call require(info == cylinder_gate_ok, "mode construction failed")
         call assemble_starwall_ideal_vacuum(plasma, fp, 0.0_dp, stiffness, &
             response, info, near_wall)
         call require(info == starwall_ok, "near-wall assembly failed")
@@ -100,8 +109,10 @@ contains
         real(dp), allocatable :: stiffness(:, :), response(:, :)
         integer :: info
 
-        call torus(8.0_dp, 1.0_dp, 6, 8, plasma)
-        call torus(8.0_dp, 0.5_dp, 6, 8, wall)
+        call build_circular_torus(8.0_dp, 1.0_dp, 6, 8, plasma, info)
+        call require(info == cylinder_gate_ok, "plasma fixture construction failed")
+        call build_circular_torus(8.0_dp, 0.5_dp, 6, 8, wall, info)
+        call require(info == cylinder_gate_ok, "inner-wall construction failed")
         call assemble_starwall_ideal_vacuum(plasma, 1.0_dp, 0.0_dp, stiffness, &
             response, info, wall)
         call require(info == starwall_surfaces_not_nested, &
@@ -117,38 +128,6 @@ contains
         call require(info == starwall_degenerate_surface, &
             "a degenerate plasma surface was accepted")
     end subroutine test_invalid_surfaces
-
-    subroutine torus(major_radius, minor_radius, nu, nv, surface)
-        real(dp), intent(in) :: major_radius, minor_radius
-        integer, intent(in) :: nu, nv
-        real(dp), allocatable, intent(out) :: surface(:, :, :)
-        real(dp) :: phi, radius, theta
-        integer :: i, k
-
-        allocate (surface(3, nu, nv))
-        do k = 1, nv
-            phi = 2.0_dp * pi * real(k - 1, dp) / real(nv, dp)
-            do i = 1, nu
-                theta = 2.0_dp * pi * real(i - 1, dp) / real(nu, dp)
-                radius = major_radius + minor_radius * cos(theta)
-                surface(:, i, k) = [radius * cos(phi), radius * sin(phi), &
-                    minor_radius * sin(theta)]
-            end do
-        end do
-    end subroutine torus
-
-    subroutine cosine_mode(nu, nv, harmonic, values)
-        integer, intent(in) :: nu, nv, harmonic
-        real(dp), intent(out) :: values(nu * nv)
-        integer :: i, k
-
-        do k = 1, nv
-            do i = 1, nu
-                values(i + nu * (k - 1)) = cos(2.0_dp * pi &
-                    * real(harmonic * (i - 1), dp) / real(nu, dp))
-            end do
-        end do
-    end subroutine cosine_mode
 
     subroutine require(condition, message)
         logical, intent(in) :: condition

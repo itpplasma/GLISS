@@ -63,6 +63,7 @@ add_library(gliss
     src/terpsichore_topology.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
+    src/boundary/starwall_cylinder_limit.f90
     src/boundary/starwall_mesh_geometry.f90
     src/boundary/starwall_ideal_vacuum.f90
     src/vacuum_schur.f90
@@ -120,6 +121,12 @@ add_executable(gliss_vacuum_schur_diagnostic
     app/gliss_vacuum_schur_diagnostic.f90)
 target_link_libraries(gliss_vacuum_schur_diagnostic PRIVATE gliss)
 set_target_properties(gliss_vacuum_schur_diagnostic PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_starwall_diagnostic
+    app/gliss_starwall_diagnostic.f90)
+target_link_libraries(gliss_starwall_diagnostic PRIVATE gliss)
+set_target_properties(gliss_starwall_diagnostic PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gliss_mercier app/gliss_mercier.f90)
@@ -265,6 +272,11 @@ if(BUILD_TESTING)
         test/boundary/test_starwall_ideal_vacuum.f90)
     target_link_libraries(test_starwall_ideal_vacuum PRIVATE gliss)
     add_test(NAME starwall_ideal_vacuum COMMAND test_starwall_ideal_vacuum)
+    add_test(NAME starwall_diagnostic_cli_extra COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_starwall_diagnostic>
+        "-DEXPECTED=gliss_starwall_diagnostic: no arguments are accepted"
+        "-DARGUMENTS=extra"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
     add_test(NAME local_mode_diagnostic_cli_extra COMMAND ${CMAKE_COMMAND}
         -DPROGRAM=$<TARGET_FILE:gliss_local_mode_diagnostic>
         "-DEXPECTED=gliss_local_mode_diagnostic: no arguments are accepted"

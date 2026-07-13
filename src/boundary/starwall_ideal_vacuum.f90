@@ -72,7 +72,7 @@ contains
             call build_triangles(wall, 2, wall_triangles, info)
             if (info /= starwall_ok) return
             if (.not. nested_surfaces(plasma, wall, plasma_triangles, &
-                    wall_triangles)) then
+                wall_triangles)) then
                 info = starwall_surfaces_not_nested
                 return
             end if

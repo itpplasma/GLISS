@@ -62,15 +62,15 @@ contains
         distance_second = plane_distances(second, first(:, 1), normal_first)
         distance_first = plane_distances(first, second(:, 1), normal_second)
         if (same_strict_sign(distance_second, tolerance * norm2(normal_first)) &
-                .or. same_strict_sign(distance_first, &
-                tolerance * norm2(normal_second))) then
+            .or. same_strict_sign(distance_first, &
+            tolerance * norm2(normal_second))) then
             intersect = .false.
             return
         end if
 
         normal_scale = norm2(normal_first) * norm2(normal_second)
         if (norm2(cross_product(normal_first, normal_second)) &
-                <= 4096.0_dp * epsilon(1.0_dp) * normal_scale) then
+            <= 4096.0_dp * epsilon(1.0_dp) * normal_scale) then
             if (maxval(abs(distance_second)) > tolerance * norm2(normal_first)) then
                 intersect = .false.
             else
