@@ -1,6 +1,7 @@
 module variable_generalized_solver
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use stable_reduction, only: stable_dot_product
     use variable_block_tridiagonal, only: &
         apply_variable_block_tridiagonal, factorize_variable_shifted, &
@@ -66,17 +67,21 @@ contains
     end subroutine variable_generalized_diagnostics
 
     subroutine iterate_variable_generalized_eigenvalue(stiffness, mass, &
-            shift, eigenvalue, vector, residual, resolution, info)
+            shift, eigenvalue, vector, residual, resolution, info, controls)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: shift
         real(dp), intent(out) :: eigenvalue, residual, resolution
         real(dp), allocatable, intent(out) :: vector(:)
         integer, intent(out) :: info
+        type(fixed_boundary_solver_controls_t), intent(in), optional :: controls
         type(variable_block_factor_t) :: factor
+        type(fixed_boundary_solver_controls_t) :: stopping
         real(dp), allocatable :: iterate(:)
         real(dp) :: previous
         integer :: iteration, n
 
+        stopping = fixed_boundary_solver_controls_t()
+        if (present(controls)) stopping = controls
         call factorize_generalized_shift(stiffness, mass, shift, factor, info)
         if (info /= variable_generalized_ok) return
         n = sum(stiffness%widths)
@@ -85,15 +90,15 @@ contains
         call normalize_variable_mass(vector, mass, info)
         if (info /= variable_generalized_ok) return
         previous = huge(1.0_dp)
-        do iteration = 1, 500
+        do iteration = 1, stopping%inverse_iteration_limit
             call update_variable_iterate(stiffness, mass, factor, vector, &
                 iterate, eigenvalue, residual, resolution, info)
             if (info /= variable_generalized_ok) return
             if (iteration_converged(eigenvalue, previous, residual, &
-                resolution)) exit
+                resolution, stopping)) exit
             previous = eigenvalue
         end do
-        if (iteration > 500) then
+        if (iteration > stopping%inverse_iteration_limit) then
             info = variable_generalized_no_convergence
             return
         end if
@@ -390,15 +395,17 @@ contains
     end subroutine absolute_shifted_action
 
     pure function iteration_converged(eigenvalue, previous, residual, &
-            resolution) &
+            resolution, controls) &
             result(converged)
         real(dp), intent(in) :: eigenvalue, previous, residual, resolution
+        type(fixed_boundary_solver_controls_t), intent(in) :: controls
         logical :: converged
 
-        converged = abs(eigenvalue - previous) <= max(1.0e-13_dp &
+        converged = abs(eigenvalue - previous) <= max( &
+            controls%eigenvalue_relative &
             * max(1.0_dp, abs(eigenvalue)), resolution)
         if (.not. converged) return
-        converged = residual <= max(1.0e-12_dp &
+        converged = residual <= max(controls%residual_relative &
             * max(1.0_dp, abs(eigenvalue)), resolution)
     end function iteration_converged
 

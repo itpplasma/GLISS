@@ -37,6 +37,7 @@ from .stability import (
     StabilityProblem,
     StabilityResult,
 )
+from .solver import SolverTolerances
 
 _CONFIGURATION_SCHEMA = "gliss.stability.configuration"
 _RUN_SCHEMA = "gliss.stability.run"
@@ -52,6 +53,7 @@ class StabilityConfiguration:
     density_kg_m3: float = 1.0
     zero_floor: float = 1.0
     radial_quadrature: str = "midpoint"
+    solver_tolerances: SolverTolerances = SolverTolerances()
 
     def __post_init__(self) -> None:
         if not isinstance(self.radial_quadrature, str):
@@ -73,6 +75,8 @@ class StabilityConfiguration:
         if floor > 0.125 * np.finfo(np.float64).max:
             raise ValueError("zero_floor is too large for spectrum certification")
         object.__setattr__(self, "zero_floor", floor)
+        if not isinstance(self.solver_tolerances, SolverTolerances):
+            raise TypeError("solver_tolerances must be a gliss.SolverTolerances")
 
     def create_problem(self, equilibrium: Any) -> StabilityProblem:
         """Create an assembled problem from this immutable configuration."""
@@ -83,11 +87,12 @@ class StabilityConfiguration:
             self.density_kg_m3,
             self.zero_floor,
             self.radial_quadrature,
+            self.solver_tolerances,
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Return the canonical version-1 configuration document."""
-        return {
+        """Return the canonical versioned configuration document."""
+        document = {
             "schema": _CONFIGURATION_SCHEMA,
             "schema_version": SCHEMA_VERSION,
             "boundary_condition": "fixed",
@@ -97,11 +102,15 @@ class StabilityConfiguration:
             "zero_floor": self.zero_floor,
             "radial_quadrature": self.radial_quadrature,
         }
+        if self.solver_tolerances != SolverTolerances.historical_defaults():
+            document["schema_version"] = 2
+            document["solver_tolerances"] = self.solver_tolerances.to_dict()
+        return document
 
     @classmethod
     def from_dict(cls, document: Mapping[str, Any]) -> "StabilityConfiguration":
-        """Validate and construct a version-1 configuration document."""
-        expected = {
+        """Validate and construct a versioned configuration document."""
+        base = {
             "schema",
             "schema_version",
             "boundary_condition",
@@ -111,8 +120,12 @@ class StabilityConfiguration:
             "zero_floor",
             "radial_quadrature",
         }
+        if not isinstance(document, dict):
+            raise ValueError("configuration must be an object")
+        version = document.get("schema_version")
+        expected = base | ({"solver_tolerances"} if version == 2 else set())
         value = fields(document, expected, "configuration")
-        schema(value, _CONFIGURATION_SCHEMA, "configuration")
+        schema(value, _CONFIGURATION_SCHEMA, "configuration", (1, 2))
         if value["boundary_condition"] != "fixed":
             raise ValueError("configuration.boundary_condition must be 'fixed'")
         try:
@@ -122,6 +135,11 @@ class StabilityConfiguration:
                 density_kg_m3=value["density_kg_m3"],
                 zero_floor=value["zero_floor"],
                 radial_quadrature=value["radial_quadrature"],
+                solver_tolerances=(
+                    SolverTolerances.from_dict(value["solver_tolerances"])
+                    if version == 2
+                    else SolverTolerances.historical_defaults()
+                ),
             )
         except (TypeError, ValueError) as error:
             raise ValueError(f"configuration: {error}") from error
@@ -187,10 +205,13 @@ class RunManifest:
         return self.to_dict() == other.to_dict()
 
     def to_dict(self) -> Dict[str, Any]:
-        """Return the canonical version-1 run document."""
+        """Return the canonical versioned run document."""
+        configuration = self.configuration.to_dict()
+        result = stability_result_to_dict(self.result)
+        version = max(configuration["schema_version"], result["schema_version"])
         return {
             "schema": _RUN_SCHEMA,
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": version,
             "equilibrium": {
                 "format": _EQUILIBRIUM_FORMAT,
                 "schema_version": self.equilibrium_schema_version,
@@ -205,8 +226,8 @@ class RunManifest:
                 "numpy": self.numpy_version,
                 "python": self.python_version,
             },
-            "configuration": self.configuration.to_dict(),
-            "result": stability_result_to_dict(self.result),
+            "configuration": configuration,
+            "result": result,
         }
 
     def write(self, path: PathLike) -> None:
@@ -215,12 +236,12 @@ class RunManifest:
 
     @classmethod
     def read(cls, path: PathLike) -> "RunManifest":
-        """Read and strictly validate a version-1 run manifest."""
+        """Read and strictly validate a versioned run manifest."""
         return cls.from_dict(read_json(path))
 
     @classmethod
     def from_dict(cls, document: Mapping[str, Any]) -> "RunManifest":
-        """Validate and construct a version-1 run manifest document."""
+        """Validate and construct a versioned run manifest document."""
         expected = {
             "schema",
             "schema_version",
@@ -230,7 +251,7 @@ class RunManifest:
             "result",
         }
         value = fields(document, expected, "run")
-        schema(value, _RUN_SCHEMA, "run")
+        run_version = schema(value, _RUN_SCHEMA, "run", (1, 2))
         equilibrium = fields(
             value["equilibrium"],
             {"format", "schema_version", "filename", "size_bytes", "sha256"},
@@ -256,6 +277,12 @@ class RunManifest:
             raise ValueError("run.software.gliss_abi is incompatible; expected 1")
         configuration = StabilityConfiguration.from_dict(value["configuration"])
         result = stability_result_from_dict(value["result"])
+        nested_versions = {
+            value["configuration"]["schema_version"],
+            value["result"]["schema_version"],
+        }
+        if run_version != max(nested_versions):
+            raise ValueError("run.schema_version does not match nested documents")
         _validate_result_configuration(configuration, result)
         return cls(
             equilibrium_filename=string(
@@ -294,7 +321,13 @@ def _validate_result_configuration(
     reference = result.classes[0]
     if reference.modes != configuration.modes:
         raise ValueError("result modes do not match configuration modes")
-    names = ("adiabatic_index", "density_kg_m3", "zero_floor", "radial_quadrature")
+    names = (
+        "adiabatic_index",
+        "density_kg_m3",
+        "zero_floor",
+        "radial_quadrature",
+        "solver_tolerances",
+    )
     for name in names:
         if getattr(reference, name) != getattr(configuration, name):
             raise ValueError(f"result {name} does not match configuration {name}")

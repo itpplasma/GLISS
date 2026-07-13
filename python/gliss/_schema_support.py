@@ -107,12 +107,18 @@ def fields(value: Any, expected: set, context: str) -> Mapping[str, Any]:
     return value
 
 
-def schema(value: Mapping[str, Any], expected: str, context: str) -> None:
+def schema(
+    value: Mapping[str, Any], expected: str, context: str, versions=(1,)
+) -> int:
     if value["schema"] != expected:
         raise ValueError(f"{context}.schema must be {expected!r}")
     version = value["schema_version"]
-    if isinstance(version, bool) or not isinstance(version, int) or version != 1:
-        raise ValueError(f"{context}.schema_version is {version!r}; expected 1")
+    if isinstance(version, bool) or not isinstance(version, int) or version not in versions:
+        expected_versions = " or ".join(str(item) for item in versions)
+        raise ValueError(
+            f"{context}.schema_version is {version!r}; expected {expected_versions}"
+        )
+    return version
 
 
 def integer(value: Any, name: str, minimum: int = 0) -> int:

@@ -33,25 +33,20 @@ from .stability import SpectrumResult, StabilityResult
 FULL_RESULT_SCHEMA = "gliss.stability.full-result"
 FULL_RUN_SCHEMA = "gliss.stability.full-run"
 _METADATA_NAME = "metadata.json"
-_ARRAY_ATTRIBUTES = (
-    "eigenvalues",
-    "rayleigh_quotients",
-    "residuals",
-    "resolutions",
-    "eigenvectors",
+_ARRAY_ATTRIBUTES = tuple(
+    "eigenvalues rayleigh_quotients residuals resolutions eigenvectors".split()
 )
-_STORAGE = {
-    "format": "zip-npy",
-    "array_dtype": "<f8",
-    "array_order": "eigenpair-component",
-    "compression": "stored",
-}
+_STORAGE = dict(
+    format="zip-npy",
+    array_dtype="<f8",
+    array_order="eigenpair-component",
+    compression="stored",
+)
 _MAX_METADATA_BYTES = 16 * 1024 * 1024
 
 
 def _certified_result(result: FullStabilityResult) -> StabilityResult:
-    classes = result.classes
-    return StabilityResult((classes[0].certified_lowest, classes[1].certified_lowest))
+    return StabilityResult(tuple(item.certified_lowest for item in result.classes))
 
 
 def _unknown_count(certified: SpectrumResult, context: str) -> int:
@@ -109,11 +104,12 @@ def _validate_full_result(result: FullStabilityResult) -> StabilityResult:
 
 def _full_result_metadata(result: FullStabilityResult) -> Dict[str, Any]:
     certified = _validate_full_result(result)
+    certified_document = stability_result_to_dict(certified)
     return {
         "schema": FULL_RESULT_SCHEMA,
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": certified_document["schema_version"],
         "storage": dict(_STORAGE),
-        "certified_result": stability_result_to_dict(certified),
+        "certified_result": certified_document,
     }
 
 
@@ -280,12 +276,17 @@ def _parse_result_metadata(document: Any) -> StabilityResult:
         {"schema", "schema_version", "storage", "certified_result"},
         "full result",
     )
-    schema(value, FULL_RESULT_SCHEMA, "full result")
+    version = schema(value, FULL_RESULT_SCHEMA, "full result", (1, 2))
     storage = fields(value["storage"], set(_STORAGE), "full result.storage")
     for name, expected in _STORAGE.items():
         if storage[name] != expected:
             raise ValueError(f"full result.storage.{name} must be {expected!r}")
-    return stability_result_from_dict(value["certified_result"])
+    certified_document = value["certified_result"]
+    if not isinstance(certified_document, dict):
+        raise ValueError("full result.certified_result must be an object")
+    if certified_document.get("schema_version") != version:
+        raise ValueError("full result schema_version does not match certified result")
+    return stability_result_from_dict(certified_document)
 
 
 def _read_array(
@@ -352,13 +353,13 @@ def _read_full_result(
 
 
 def write_full_result(result: FullStabilityResult, path: PathLike) -> None:
-    """Atomically write a deterministic version-1 full-spectrum container."""
+    """Atomically write a deterministic versioned full-spectrum container."""
     metadata = _full_result_metadata(result)
     _write_container(path, metadata, result)
 
 
 def read_full_result(path: PathLike) -> FullStabilityResult:
-    """Read and strictly validate a version-1 full-spectrum container."""
+    """Read and strictly validate a versioned full-spectrum container."""
     source = document_path(path, "input")
     with _open_archive(source) as archive:
         return _read_full_result(archive, _read_metadata(archive, source), source)
@@ -440,7 +441,7 @@ class FullRunManifest:
 
     @classmethod
     def read(cls, path: PathLike) -> "FullRunManifest":
-        """Read and strictly validate a version-1 full-run container."""
+        """Read and strictly validate a versioned full-run container."""
         source = document_path(path, "input")
         with _open_archive(source) as archive:
             metadata = _read_metadata(archive, source)
@@ -456,7 +457,7 @@ class FullRunManifest:
                 },
                 "full run",
             )
-            schema(value, FULL_RUN_SCHEMA, "full run")
+            schema(value, FULL_RUN_SCHEMA, "full run", (1, 2))
             result = _read_full_result(archive, value["result"], source)
             base_document = dict(value)
             base_document["schema"] = "gliss.stability.run"

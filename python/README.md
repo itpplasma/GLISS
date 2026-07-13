@@ -158,6 +158,39 @@ normal coefficients, `eta`, then compressional `mu`. The `normal`, `eta` and
 `mu` properties return the corresponding views. If the zero floor contains
 the entire spectrum, `has_eigenvector` is false and the eigenvector is empty.
 
+The historical stopping controls are explicit and immutable:
+
+```python
+controls = gliss.SolverTolerances(
+    eigenvalue_relative=1.0e-13,
+    residual_relative=1.0e-12,
+    negative_bracket_relative=1.0e-9,
+    negative_bracket_floor=1.0e-3,
+    inverse_iteration_limit=500,
+    bracket_iteration_limit=200,
+)
+
+with gliss.Equilibrium("equilibrium_export.nc") as equilibrium:
+    with gliss.StabilityProblem(
+        equilibrium,
+        modes=[(1, 1), (2, 1)],
+        solver_tolerances=controls,
+    ) as problem:
+        result = problem.solve()
+```
+
+Inverse iteration stops when the eigenvalue change is no larger than
+`max(eigenvalue_relative * max(1, abs(omega_squared)), resolution)` and the
+backward residual is no larger than the analogous `residual_relative` bound.
+The negative-eigenvalue inertia bracket stops at
+`negative_bracket_relative * abs(midpoint) + negative_bracket_floor *
+zero_floor`.  The iteration limits bound those two loops.  All tolerances must
+be finite and positive; limits are signed 32-bit integers of at least one.
+Changing them does not change the matrices, radial discretization, floor-band
+classification or normalization.  Omitting them selects the exact constants
+used before this API was exposed.  Each `SpectrumResult` reports the controls
+that produced it.
+
 Evaluate the physical terms before closing the assembled problem:
 
 ```python
@@ -291,7 +324,7 @@ full_manifest = gliss.FullRunManifest.read("full-run.gliss")
 full_manifest.verify_equilibrium("equilibrium_export.nc")
 ```
 
-Schema `gliss.stability.full-result`, version 1, stores the certified result
+Schema `gliss.stability.full-result` stores the certified result
 metadata and every eigenvalue, Rayleigh quotient, residual, resolution and
 eigenvector for both parity classes. Arrays are uncompressed little-endian
 NumPy binary64 records in eigenpair-major order. Reading never enables NumPy
@@ -299,15 +332,19 @@ pickle support. Values and signed zeros round-trip exactly, returned arrays
 are read-only, and rewriting an unchanged result produces the same container
 bytes.
 
-Schema `gliss.stability.full-run`, version 1, adds the configuration,
+Schema `gliss.stability.full-run` adds the configuration,
 equilibrium SHA-256 and software provenance to the same full-spectrum data.
 It is self-contained except for the checksummed NetCDF equilibrium. Use
 `write_full_run_manifest()` when no assembled problem is available; use
 `StabilityProblem.write_full_manifest()` to reject an equilibrium file that
 changed after assembly.
 
-Full-spectrum readers require the exact set of version-1 entries, stored
-without compression or encryption. They reject invalid entry sets, malformed
+The historical controls write schema version 1 byte-for-byte.  Non-default
+solver controls write version 2 and are embedded in the configuration and
+each certified parity result.  Readers accept both versions and recover the
+historical controls when reading version 1.  Full-spectrum readers require the
+exact entry set for the declared version, stored without compression or
+encryption. They reject invalid entry sets, malformed
 metadata, incompatible versions, wrong array types or shapes, inconsistent
 diagnostics, and truncated payloads.
 Writes stream arrays directly into a temporary container in the destination

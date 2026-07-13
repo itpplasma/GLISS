@@ -67,12 +67,47 @@ def test_configuration_round_trip_is_deterministic(configuration, tmp_path):
     assert document["boundary_condition"] == "fixed"
 
 
+def test_schema_two_round_trip_preserves_solver_tolerances(configuration, result):
+    tolerances = gliss.SolverTolerances(
+        eigenvalue_relative=2.0e-13,
+        residual_relative=3.0e-12,
+        negative_bracket_relative=4.0e-9,
+        negative_bracket_floor=5.0e-3,
+        inverse_iteration_limit=321,
+        bracket_iteration_limit=123,
+    )
+    configured = replace(configuration, solver_tolerances=tolerances)
+    configured_document = configured.to_dict()
+    assert configured_document["schema_version"] == 2
+    assert gliss.StabilityConfiguration.from_dict(configured_document) == configured
+
+    controlled_result = gliss.StabilityResult(
+        tuple(replace(item, solver_tolerances=tolerances) for item in result.classes)
+    )
+    result_document = controlled_result.to_dict()
+    assert result_document["schema_version"] == 2
+    loaded = gliss.StabilityResult.read_dict(result_document)
+    assert all(item.solver_tolerances == tolerances for item in loaded.classes)
+
+
+def test_schema_one_reads_historical_solver_tolerances(configuration, result):
+    assert configuration.to_dict()["schema_version"] == 1
+    assert result.to_dict()["schema_version"] == 1
+    loaded_configuration = gliss.StabilityConfiguration.from_dict(
+        configuration.to_dict()
+    )
+    loaded_result = gliss.StabilityResult.read_dict(result.to_dict())
+    defaults = gliss.SolverTolerances.historical_defaults()
+    assert loaded_configuration.solver_tolerances == defaults
+    assert all(item.solver_tolerances == defaults for item in loaded_result.classes)
+
+
 @pytest.mark.parametrize(
     ("change", "match"),
     [
         (lambda value: value.update(extra=1), "unknown field 'extra'"),
         (lambda value: value.pop("modes"), "missing field 'modes'"),
-        (lambda value: value.update(schema_version=2), "schema_version.*expected 1"),
+        (lambda value: value.update(schema_version=3), "schema_version.*expected 1 or 2"),
         (lambda value: value.update(boundary_condition="free"), "fixed"),
         (lambda value: value.update(density_kg_m3=float("nan")), "finite"),
         (lambda value: value.update(modes=[[1, 1], [1, 1]]), "duplicate"),

@@ -78,6 +78,7 @@ add_library(gliss
     src/vacuum_schur.f90
     src/variable_block_tridiagonal.f90
     src/stable_reduction.f90
+    src/fixed_boundary_solver_controls.f90
     src/variable_generalized_solver.f90
     src/variable_spectrum_analysis.f90
     src/dense_spectrum_support.f90
@@ -107,6 +108,7 @@ add_library(gliss_c SHARED
     src/gliss_equilibrium_io_capi.f90
     src/gliss_capi.f90
     src/gliss_spectrum_capi.f90
+    src/gliss_solver_controls_capi.f90
     src/gliss_energy_capi.f90
     src/gliss_full_spectrum_capi.f90)
 add_dependencies(gliss_c gliss)

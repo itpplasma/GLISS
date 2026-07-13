@@ -16,6 +16,8 @@ module fixed_boundary_spectrum
     use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
         fixed_boundary_bracket_ok
     use fixed_boundary_input_validation, only: valid_fixed_boundary_inputs
+    use fixed_boundary_solver_controls, only: &
+        fixed_boundary_solver_controls_t, valid_fixed_boundary_solver_controls
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use mass_density_policy, only: mass_density_ok, &
         mass_density_profile_t, validate_mass_density_profile
@@ -64,6 +66,7 @@ module fixed_boundary_spectrum
         real(dp) :: adiabatic_index = 0.0_dp
         real(dp) :: density_kg_m3 = 0.0_dp
         real(dp) :: zero_floor = 0.0_dp
+        type(fixed_boundary_solver_controls_t) :: solver_controls
         integer, allocatable :: mode_m(:)
         integer, allocatable :: mode_n(:)
         type(fixed_boundary_class_problem_t) :: classes(2)
@@ -107,6 +110,7 @@ module fixed_boundary_spectrum
     public :: diagnose_fixed_boundary_energy
     public :: fixed_boundary_energy_terms_t
     public :: fixed_boundary_unknown_count
+    public :: set_fixed_boundary_solver_controls
     public :: solve_fixed_boundary_class
     public :: solve_fixed_boundary_full_spectrum
 
@@ -309,12 +313,24 @@ contains
         end if
         result%negative_count = summary%negative_count
         result%floor_count = summary%zero_count
-        call resolve_lowest(problem%classes(parity_class), summary, result, &
-            info)
+        call resolve_lowest(problem%classes(parity_class), summary, &
+            problem%solver_controls, result, info)
         if (info /= fixed_boundary_ok) return
         result%certificate = result%inertia_interval &
             + result%eigenpair_residual + result%eigenpair_resolution
     end subroutine solve_fixed_boundary_class
+
+    subroutine set_fixed_boundary_solver_controls(problem, controls, info)
+        type(fixed_boundary_problem_t), intent(inout) :: problem
+        type(fixed_boundary_solver_controls_t), intent(in) :: controls
+        integer, intent(out) :: info
+
+        info = fixed_boundary_invalid
+        if (.not. problem%ready) return
+        if (.not. valid_fixed_boundary_solver_controls(controls)) return
+        problem%solver_controls = controls
+        info = fixed_boundary_ok
+    end subroutine set_fixed_boundary_solver_controls
 
     subroutine initialize_result(problem, parity_class, result)
         type(fixed_boundary_problem_t), intent(in) :: problem
@@ -405,9 +421,10 @@ contains
         end if
     end subroutine solve_fixed_boundary_full_spectrum
 
-    subroutine resolve_lowest(class_problem, summary, result, info)
+    subroutine resolve_lowest(class_problem, summary, controls, result, info)
         type(fixed_boundary_class_problem_t), intent(in) :: class_problem
         type(variable_spectrum_summary_t), intent(in) :: summary
+        type(fixed_boundary_solver_controls_t), intent(in) :: controls
         type(fixed_boundary_spectrum_result_t), intent(inout) :: result
         integer, intent(out) :: info
         real(dp), allocatable :: solver_vector(:)
@@ -427,7 +444,7 @@ contains
         else
             call bracket_lowest_negative(class_problem%stiffness, &
                 class_problem%mass, summary%zero_floor, shift, &
-                result%inertia_interval, info)
+                result%inertia_interval, info, controls)
             if (info /= fixed_boundary_bracket_ok) then
                 info = fixed_boundary_solver_error
                 return
@@ -436,7 +453,8 @@ contains
         call iterate_variable_generalized_eigenvalue( &
             class_problem%stiffness, class_problem%mass, shift, &
             result%lowest_eigenvalue, solver_vector, &
-            result%eigenpair_residual, result%eigenpair_resolution, info)
+            result%eigenpair_residual, result%eigenpair_resolution, info, &
+            controls)
         if (info /= variable_generalized_ok) then
             info = fixed_boundary_solver_error
             return

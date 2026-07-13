@@ -121,6 +121,16 @@ typedef struct gliss_energy_terms {
     double closure_tolerance;
 } gliss_energy_terms;
 
+typedef struct gliss_solver_tolerances {
+    size_t struct_size;
+    double eigenvalue_relative;
+    double residual_relative;
+    double negative_bracket_relative;
+    double negative_bracket_floor;
+    int32_t inverse_iteration_limit;
+    int32_t bracket_iteration_limit;
+} gliss_solver_tolerances;
+
 /* A fixed-boundary problem copies and assembles all data it needs, so the
  * equilibrium may be destroyed after successful construction. mode_m and
  * mode_n are mode_count contiguous int32_t values. radial_quadrature is 1 for
@@ -140,6 +150,16 @@ gliss_status gliss_stability_problem_create(
 
 gliss_status gliss_stability_problem_destroy(
     gliss_stability_problem **problem,
+    char *error,
+    size_t error_capacity);
+
+/* Replace only the stopping controls of an assembled problem. The historical
+ * defaults are 1e-13, 1e-12, 1e-9, 1e-3, 500 and 200 in field order. Set
+ * tolerances->struct_size to sizeof(*tolerances). Matrices, discretization,
+ * floor-band classification and normalization are unchanged. */
+gliss_status gliss_stability_problem_set_solver_tolerances(
+    gliss_stability_problem *problem,
+    const gliss_solver_tolerances *tolerances,
     char *error,
     size_t error_capacity);
 

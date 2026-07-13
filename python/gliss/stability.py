@@ -1,7 +1,7 @@
 """Fixed-boundary ideal-MHD stability problems backed by the GLISS C ABI."""
 
 import ctypes
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence, Tuple, TYPE_CHECKING
 
@@ -18,6 +18,11 @@ from .equilibrium import (
     _stable_file_digest,
 )
 from ._stability_input import mode_integer, real_parameter, validate_modes
+from .solver import (
+    SolverTolerances,
+    bind_solver_tolerances,
+    configure_solver_tolerances,
+)
 
 _mode_integer = mode_integer
 _real_parameter = real_parameter
@@ -85,6 +90,7 @@ def _bind(library: Any) -> None:
         ctypes.c_size_t,
     )
     library.gliss_stability_problem_create.restype = ctypes.c_int
+    bind_solver_tolerances(library)
     library.gliss_stability_problem_destroy.argtypes = (
         ctypes.POINTER(ctypes.c_void_p),
         ctypes.c_void_p,
@@ -137,6 +143,7 @@ class SpectrumResult:
     mu_unknowns: int
     has_chart_metric: bool
     has_eigenvector: bool
+    solver_tolerances: SolverTolerances = field(default_factory=SolverTolerances)
     eigenvalue_unit: str = "s^-2"
     boundary_condition: str = "fixed"
     normalization: str = "x.T @ M @ x = 1"
@@ -173,7 +180,7 @@ class StabilityResult:
         return min(self.classes, key=lambda result: result.lowest_eigenvalue)
 
     def to_dict(self) -> dict:
-        """Return the canonical version-1 result document."""
+        """Return the canonical versioned result document."""
         from ._result_schema import stability_result_to_dict
 
         return stability_result_to_dict(self)
@@ -191,6 +198,13 @@ class StabilityResult:
 
         return read_stability_result(path)
 
+    @classmethod
+    def read_dict(cls, document: Any) -> "StabilityResult":
+        """Strictly validate a versioned result document in memory."""
+        from ._result_schema import stability_result_from_dict
+
+        return stability_result_from_dict(document)
+
 
 class StabilityProblem:
     """Reusable assembled fixed-boundary ideal-MHD eigenproblem."""
@@ -203,6 +217,7 @@ class StabilityProblem:
         density_kg_m3: float = 1.0,
         zero_floor: float = 1.0,
         radial_quadrature: str = "midpoint",
+        solver_tolerances: SolverTolerances = SolverTolerances(),
     ):
         if not isinstance(equilibrium, Equilibrium):
             raise TypeError("equilibrium must be a gliss.Equilibrium")
@@ -223,6 +238,9 @@ class StabilityProblem:
         if self.zero_floor > 0.125 * np.finfo(np.float64).max:
             raise ValueError("zero_floor is too large for spectrum certification")
         self.radial_quadrature = radial_quadrature
+        if not isinstance(solver_tolerances, SolverTolerances):
+            raise TypeError("solver_tolerances must be a gliss.SolverTolerances")
+        self.solver_tolerances = solver_tolerances
         self.equilibrium_path = Path(equilibrium.path)
         size, digest = _stable_file_digest(
             self.equilibrium_path, equilibrium._source_identity
@@ -232,6 +250,7 @@ class StabilityProblem:
         _bind(self._library)
         self._handle = ctypes.c_void_p()
         self._create(equilibrium)
+        self._set_solver_tolerances()
 
     def _create(self, equilibrium: Equilibrium) -> None:
         count = len(self.modes)
@@ -259,6 +278,15 @@ class StabilityProblem:
         _raise_for_status(status, error, "gliss_stability_problem_create")
         if self._handle.value is None:
             raise GlissInternalError("GLISS returned a null stability problem handle")
+
+    def _set_solver_tolerances(self) -> None:
+        try:
+            configure_solver_tolerances(
+                self._library, self._handle, self.solver_tolerances
+            )
+        except Exception:
+            self.close()
+            raise
 
     @property
     def closed(self) -> bool:
@@ -302,6 +330,7 @@ class StabilityProblem:
             self.density_kg_m3,
             self.zero_floor,
             self.radial_quadrature,
+            self.solver_tolerances,
         )
 
     def write_manifest(self, path: Any, result: StabilityResult) -> "RunManifest":
@@ -461,6 +490,7 @@ class StabilityProblem:
             mu_unknowns=summary.mu_unknowns,
             has_chart_metric=bool(summary.has_chart_metric),
             has_eigenvector=bool(summary.has_eigenvector),
+            solver_tolerances=self.solver_tolerances,
         )
 
     def _require_open(self) -> None:

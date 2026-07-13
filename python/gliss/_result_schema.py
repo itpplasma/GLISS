@@ -20,6 +20,7 @@ from .stability import (
     SpectrumResult,
     StabilityResult,
 )
+from .solver import SolverTolerances
 
 RESULT_SCHEMA = "gliss.stability.result"
 _SPECTRUM_FIELDS = {
@@ -50,10 +51,11 @@ _SPECTRUM_FIELDS = {
     "coordinate_handedness",
     "fourier_convention",
 }
+_SPECTRUM_FIELDS_V2 = _SPECTRUM_FIELDS | {"solver_tolerances"}
 
 
 def _spectrum_to_dict(result: SpectrumResult) -> Dict[str, Any]:
-    return {
+    document = {
         "parity_class": result.parity_class,
         "field_periods": result.field_periods,
         "modes": [list(mode) for mode in result.modes],
@@ -81,6 +83,9 @@ def _spectrum_to_dict(result: SpectrumResult) -> Dict[str, Any]:
         "coordinate_handedness": result.coordinate_handedness,
         "fourier_convention": result.fourier_convention,
     }
+    if result.solver_tolerances != SolverTolerances.historical_defaults():
+        document["solver_tolerances"] = result.solver_tolerances.to_dict()
+    return document
 
 
 def _problem_metadata(value: Mapping[str, Any], context: str) -> tuple:
@@ -160,9 +165,10 @@ def _certificate_components(value: Mapping[str, Any], context: str) -> Dict[str,
     return components
 
 
-def _spectrum_from_dict(document: Any, index: int) -> SpectrumResult:
+def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResult:
     context = f"result.classes[{index}]"
-    value = fields(document, _SPECTRUM_FIELDS, context)
+    expected = _SPECTRUM_FIELDS_V2 if version == 2 else _SPECTRUM_FIELDS
+    value = fields(document, expected, context)
     parity = integer(value["parity_class"], f"{context}.parity_class", 1)
     if parity not in (1, 2):
         raise ValueError(f"{context}.parity_class must be 1 or 2")
@@ -203,16 +209,27 @@ def _spectrum_from_dict(document: Any, index: int) -> SpectrumResult:
         mu_unknowns=counts[2],
         has_chart_metric=chart_metric,
         has_eigenvector=has_vector,
+        solver_tolerances=(
+            SolverTolerances.from_dict(value["solver_tolerances"])
+            if version == 2
+            else SolverTolerances.historical_defaults()
+        ),
     )
 
 
 def stability_result_to_dict(result: StabilityResult) -> Dict[str, Any]:
-    """Return a validated canonical version-1 result document."""
+    """Return a validated canonical versioned result document."""
     if not isinstance(result, StabilityResult):
         raise TypeError("result must be a gliss.StabilityResult")
+    version = 2 if any(
+        item.solver_tolerances != SolverTolerances.historical_defaults()
+        for item in result.classes
+    ) else SCHEMA_VERSION
+    if version == 2 and len({item.solver_tolerances for item in result.classes}) != 1:
+        raise ValueError("result parity classes have inconsistent solver tolerances")
     document = {
         "schema": RESULT_SCHEMA,
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": version,
         "classes": [_spectrum_to_dict(item) for item in result.classes],
     }
     stability_result_from_dict(document)
@@ -220,14 +237,17 @@ def stability_result_to_dict(result: StabilityResult) -> Dict[str, Any]:
 
 
 def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
-    """Validate and construct a version-1 result document."""
+    """Validate and construct a versioned result document."""
     value = fields(document, {"schema", "schema_version", "classes"}, "result")
-    schema(value, RESULT_SCHEMA, "result")
+    version = schema(value, RESULT_SCHEMA, "result", (1, 2))
     classes = value["classes"]
     if not isinstance(classes, list) or len(classes) != 2:
         raise ValueError("result.classes must contain parity classes 1 then 2")
     result = StabilityResult(
-        (_spectrum_from_dict(classes[0], 0), _spectrum_from_dict(classes[1], 1))
+        (
+            _spectrum_from_dict(classes[0], 0, version),
+            _spectrum_from_dict(classes[1], 1, version),
+        )
     )
     if tuple(item.parity_class for item in result.classes) != (1, 2):
         raise ValueError("result parity classes must be 1 then 2")
@@ -242,6 +262,7 @@ def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
             "density_kg_m3",
             "zero_floor",
             "has_chart_metric",
+            "solver_tolerances",
         )
         if any(getattr(item, name) != getattr(reference, name) for name in shared):
             raise ValueError("result parity classes have inconsistent problem metadata")
@@ -249,10 +270,10 @@ def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
 
 
 def write_stability_result(result: StabilityResult, path: PathLike) -> None:
-    """Atomically write a canonical version-1 result document."""
+    """Atomically write a canonical versioned result document."""
     write_json(path, stability_result_to_dict(result))
 
 
 def read_stability_result(path: PathLike) -> StabilityResult:
-    """Read and strictly validate a version-1 result document."""
+    """Read and strictly validate a versioned result document."""
     return stability_result_from_dict(read_json(path))

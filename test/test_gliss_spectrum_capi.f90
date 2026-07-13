@@ -8,6 +8,7 @@ program test_gliss_spectrum_capi
     implicit none
 
     integer(c_int), parameter :: status_ok = 0
+    integer(c_int), parameter :: status_compute_error = 2
     integer(c_int), parameter :: status_capacity = 3
     integer(c_int), parameter :: status_invalid_argument = 4
     character(len=*), parameter :: fixture = "spectrum_capi_cylinder.nc"
@@ -55,6 +56,16 @@ program test_gliss_spectrum_capi
         real(c_double) :: closure_tolerance
     end type energy_terms_c
 
+    type, bind(c) :: solver_tolerances_c
+        integer(c_size_t) :: struct_size
+        real(c_double) :: eigenvalue_relative
+        real(c_double) :: residual_relative
+        real(c_double) :: negative_bracket_relative
+        real(c_double) :: negative_bracket_floor
+        integer(c_int) :: inverse_iteration_limit
+        integer(c_int) :: bracket_iteration_limit
+    end type solver_tolerances_c
+
     character(c_char), target :: path(len(fixture)), error_buffer(256)
     integer(c_int), target :: mode_m(2) = [1_c_int, 2_c_int]
     integer(c_int), target :: mode_n(2) = [1_c_int, 1_c_int]
@@ -63,6 +74,7 @@ program test_gliss_spectrum_capi
     integer(c_size_t), target :: eigenvalues_written, eigenvectors_written
     type(spectrum_summary_c), target :: summary
     type(energy_terms_c), target :: energy
+    type(solver_tolerances_c), target :: tolerances
     real(c_double), allocatable, target :: eigenvector(:), sentinel(:)
     real(c_double), allocatable, target :: eigenvalues(:), eigenvectors(:)
     real(c_double), allocatable, target :: residuals(:), resolutions(:)
@@ -108,6 +120,16 @@ program test_gliss_spectrum_capi
             integer(c_size_t), value :: error_capacity
             integer(c_int) :: result
         end function problem_destroy
+
+        function problem_set_solver_tolerances(handle, tolerances, &
+                error_pointer, error_capacity) bind(c, &
+                name="gliss_stability_problem_set_solver_tolerances") &
+                result(result)
+            import c_int, c_ptr, c_size_t
+            type(c_ptr), value :: handle, tolerances, error_pointer
+            integer(c_size_t), value :: error_capacity
+            integer(c_int) :: result
+        end function problem_set_solver_tolerances
 
         function problem_unknown_count(handle, parity_class, unknown_count, &
                 error_pointer, error_capacity) &
@@ -194,6 +216,27 @@ program test_gliss_spectrum_capi
         int(size(error_buffer), c_size_t))
     call require(status == status_ok, "problem creation failed")
     call require(c_associated(problem), "problem handle is null")
+    tolerances%struct_size = c_sizeof(tolerances)
+    tolerances%eigenvalue_relative = 1.0e-13_c_double
+    tolerances%residual_relative = 1.0e-12_c_double
+    tolerances%negative_bracket_relative = 1.0e-9_c_double
+    tolerances%negative_bracket_floor = 1.0e-3_c_double
+    tolerances%inverse_iteration_limit = 500_c_int
+    tolerances%bracket_iteration_limit = 200_c_int
+    status = problem_set_solver_tolerances(problem, c_null_ptr, &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "null solver tolerances were accepted")
+    tolerances%residual_relative = ieee_value(0.0_c_double, ieee_quiet_nan)
+    status = problem_set_solver_tolerances(problem, c_loc(tolerances), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "nonfinite solver tolerance was accepted")
+    tolerances%residual_relative = 1.0e-12_c_double
+    tolerances%bracket_iteration_limit = 1_c_int
+    status = problem_set_solver_tolerances(problem, c_loc(tolerances), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_ok, "bracket iteration limit was rejected")
     status = equilibrium_destroy(c_loc(equilibrium), c_loc(error_buffer), &
         int(size(error_buffer), c_size_t))
     call require(status == status_ok, "early equilibrium destroy failed")
@@ -210,6 +253,17 @@ program test_gliss_spectrum_capi
     sentinel = 7.0_c_double
     eigenvector = sentinel
     summary%struct_size = c_sizeof(summary)
+    status = problem_solve_class(problem, 1_c_int, unknowns, &
+        c_loc(eigenvector), c_loc(written), c_loc(summary), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_compute_error, &
+        "bracket iteration limit did not reach the block solve")
+    call require(all(eigenvector == sentinel), &
+        "failed limited solve modified the eigenvector")
+    tolerances%bracket_iteration_limit = 200_c_int
+    status = problem_set_solver_tolerances(problem, c_loc(tolerances), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_ok, "historical solver controls were rejected")
     status = problem_solve_class(problem, 1_c_int, unknowns - 1_c_size_t, &
         c_loc(eigenvector), c_loc(written), c_loc(summary), &
         c_loc(error_buffer), int(size(error_buffer), c_size_t))

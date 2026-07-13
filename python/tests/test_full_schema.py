@@ -115,6 +115,31 @@ def test_full_result_round_trip_is_exact_read_only_and_deterministic(
             assert not array.flags.writeable
 
 
+def test_full_result_schema_two_preserves_solver_tolerances(full_result, tmp_path):
+    tolerances = gliss.SolverTolerances(residual_relative=2.0e-12)
+    classes = tuple(
+        replace(
+            item,
+            certified_lowest=replace(
+                item.certified_lowest, solver_tolerances=tolerances
+            ),
+        )
+        for item in full_result.classes
+    )
+    controlled = gliss.FullStabilityResult(classes)
+    path = tmp_path / "controlled-full-result.gliss"
+    controlled.write(path)
+
+    with zipfile.ZipFile(path) as archive:
+        metadata = json.loads(archive.read("metadata.json"))
+    assert metadata["schema_version"] == 2
+    loaded = gliss.FullStabilityResult.read(path)
+    assert all(
+        item.certified_lowest.solver_tolerances == tolerances
+        for item in loaded.classes
+    )
+
+
 @pytest.mark.parametrize(
     ("mutate", "match"),
     [

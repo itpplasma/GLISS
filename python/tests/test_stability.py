@@ -32,6 +32,7 @@ class FakeLibrary:
     def __init__(self):
         self.problem_creates = 0
         self.problem_destroys = 0
+        self.solver_tolerances = gliss.SolverTolerances()
         self.has_eigenvector = True
         self.gliss_equilibrium_create = FakeFunction(self.equilibrium_create)
         self.gliss_equilibrium_destroy = FakeFunction(self.equilibrium_destroy)
@@ -40,6 +41,9 @@ class FakeLibrary:
         self.gliss_equilibrium_write = FakeFunction(self.equilibrium_write)
         self.gliss_mercier_profile_context = FakeFunction(self.mercier_profile)
         self.gliss_stability_problem_create = FakeFunction(self.problem_create)
+        self.gliss_stability_problem_set_solver_tolerances = FakeFunction(
+            self.problem_set_solver_tolerances
+        )
         self.gliss_stability_problem_destroy = FakeFunction(self.problem_destroy)
         self.gliss_stability_problem_unknown_count = FakeFunction(
             self.problem_unknown_count
@@ -99,6 +103,21 @@ class FakeLibrary:
         handle._obj.value = None
         if error is not None:
             error.value = b""
+        return 0
+
+    def problem_set_solver_tolerances(
+        self, handle, tolerances, error, error_capacity
+    ):
+        values = tolerances._obj
+        self.solver_tolerances = gliss.SolverTolerances(
+            values.eigenvalue_relative,
+            values.residual_relative,
+            values.negative_bracket_relative,
+            values.negative_bracket_floor,
+            values.inverse_iteration_limit,
+            values.bracket_iteration_limit,
+        )
+        error.value = b""
         return 0
 
     def problem_unknown_count(
@@ -273,6 +292,7 @@ def test_stability_problem_lifecycle_and_results(contexts):
         ("zero_floor", np.finfo(np.float64).max, "too large"),
         ("radial_quadrature", "unknown", "midpoint"),
         ("radial_quadrature", 1, "string"),
+        ("solver_tolerances", {}, "gliss.SolverTolerances"),
     ],
 )
 def test_stability_problem_rejects_invalid_inputs(contexts, keyword, value, match):
@@ -354,6 +374,59 @@ def test_stability_problem_is_public():
     assert gliss.SpectrumResult is SpectrumResult
     assert gliss.FullSpectrumResult is FullSpectrumResult
     assert gliss.FullStabilityResult is FullStabilityResult
+    assert gliss.SolverTolerances() == gliss.SolverTolerances.historical_defaults()
+
+
+@pytest.mark.parametrize(
+    ("keyword", "value", "error", "match"),
+    [
+        ("eigenvalue_relative", 0.0, ValueError, "positive"),
+        ("residual_relative", float("nan"), ValueError, "finite"),
+        ("negative_bracket_relative", "tight", TypeError, "real number"),
+        ("negative_bracket_floor", True, TypeError, "real number"),
+        ("inverse_iteration_limit", 0, ValueError, "at least 1"),
+        ("bracket_iteration_limit", 2.5, TypeError, "integer"),
+    ],
+)
+def test_solver_tolerances_reject_invalid_inputs(keyword, value, error, match):
+    with pytest.raises(error, match=match):
+        gliss.SolverTolerances(**{keyword: value})
+
+
+def test_stability_problem_applies_and_reports_solver_tolerances(contexts):
+    library, equilibrium = contexts
+    tolerances = gliss.SolverTolerances(
+        eigenvalue_relative=2.0e-13,
+        residual_relative=3.0e-12,
+        negative_bracket_relative=4.0e-9,
+        negative_bracket_floor=5.0e-3,
+        inverse_iteration_limit=321,
+        bracket_iteration_limit=123,
+    )
+    with StabilityProblem(
+        equilibrium, modes=[(1, 1), (2, 1)], solver_tolerances=tolerances
+    ) as problem:
+        result = problem.solve()
+
+    assert library.solver_tolerances == tolerances
+    assert problem.configuration.solver_tolerances == tolerances
+    assert all(item.solver_tolerances == tolerances for item in result.classes)
+
+
+def test_stability_problem_cleans_up_after_rejected_solver_tolerances(contexts):
+    library, equilibrium = contexts
+
+    def reject(*args):
+        args[2].value = b"solver tolerances rejected"
+        return 4
+
+    library.gliss_stability_problem_set_solver_tolerances = FakeFunction(reject)
+    controls = gliss.SolverTolerances(residual_relative=2.0e-12)
+    with pytest.raises(gliss.GlissArgumentError, match="tolerances rejected"):
+        StabilityProblem(
+            equilibrium, modes=[(1, 1)], solver_tolerances=controls
+        )
+    assert library.problem_destroys == 1
 
 
 def test_stability_problem_exposes_full_spectrum(contexts):
