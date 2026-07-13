@@ -101,6 +101,19 @@ class FullStabilityResult:
             key=lambda result: result.certified_lowest.lowest_eigenvalue,
         )
 
+    def write(self, path: Any) -> None:
+        """Atomically write a deterministic full-spectrum container."""
+        from .full_schema import write_full_result
+
+        write_full_result(self, path)
+
+    @classmethod
+    def read(cls, path: Any) -> "FullStabilityResult":
+        """Read and strictly validate a full-spectrum container."""
+        from .full_schema import read_full_result
+
+        return read_full_result(path)
+
 
 def solve_full_spectrum(problem: StabilityProblem) -> FullStabilityResult:
     problem._require_open()

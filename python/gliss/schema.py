@@ -216,7 +216,11 @@ class RunManifest:
     @classmethod
     def read(cls, path: PathLike) -> "RunManifest":
         """Read and strictly validate a version-1 run manifest."""
-        document = read_json(path)
+        return cls.from_dict(read_json(path))
+
+    @classmethod
+    def from_dict(cls, document: Mapping[str, Any]) -> "RunManifest":
+        """Validate and construct a version-1 run manifest document."""
         expected = {
             "schema",
             "schema_version",
@@ -327,8 +331,7 @@ def _equilibrium_metadata(path: Path) -> Tuple[int, int, str]:
     return schema_version, size_bytes, digest
 
 
-def _write_run_manifest(
-    path: PathLike,
+def _create_run_manifest(
     equilibrium_path: PathLike,
     configuration: StabilityConfiguration,
     result: StabilityResult,
@@ -353,7 +356,7 @@ def _write_run_manifest(
         raise GlissIOError("equilibrium export differs from problem input")
     from . import __version__
 
-    manifest = RunManifest(
+    return RunManifest(
         equilibrium_filename=export.name,
         equilibrium_size_bytes=equilibrium_size,
         equilibrium_sha256=equilibrium_digest,
@@ -365,6 +368,21 @@ def _write_run_manifest(
         gliss_abi_version=1,
         numpy_version=np.__version__,
         python_version=platform.python_version(),
+    )
+
+
+def _write_run_manifest(
+    path: PathLike,
+    equilibrium_path: PathLike,
+    configuration: StabilityConfiguration,
+    result: StabilityResult,
+    expected_equilibrium: Optional[Tuple[int, int, str]] = None,
+) -> RunManifest:
+    manifest = _create_run_manifest(
+        equilibrium_path,
+        configuration,
+        result,
+        expected_equilibrium,
     )
     manifest.write(path)
     return manifest

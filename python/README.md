@@ -230,8 +230,8 @@ fixed boundary, mode pairs, physical scalars and radial quadrature. Result
 schema `gliss.stability.result`, version 1, stores both parity classes with all
 reported conventions, certificate terms and read-only eigenvectors. A round
 trip preserves every binary64 value. Rewriting an unchanged object produces
-the same bytes. This schema stores the certified active pair; dense full
-spectra are not written by version 1.
+the same bytes. This JSON schema stores the certified active pair only. It is
+unchanged by the separate full-spectrum format.
 
 Run schema `gliss.stability.run`, version 1, embeds the configuration and
 result. It records the equilibrium export format, base filename, byte count
@@ -245,6 +245,44 @@ separate checksummed artifact.
 the file from which the problem was assembled. It refuses the manifest if the
 file at that path has changed. The standalone `write_run_manifest()` collects
 the same metadata from a stable file snapshot.
+
+Complete spectra use a binary container because an eigenvector matrix has
+quadratic size:
+
+```python
+with gliss.Equilibrium("equilibrium_export.nc") as equilibrium:
+    with configuration.create_problem(equilibrium) as problem:
+        full_result = problem.solve_full_spectrum()
+        full_result.write("full-result.gliss")
+        problem.write_full_manifest("full-run.gliss", full_result)
+
+restored_full = gliss.FullStabilityResult.read("full-result.gliss")
+full_manifest = gliss.FullRunManifest.read("full-run.gliss")
+full_manifest.verify_equilibrium("equilibrium_export.nc")
+```
+
+Schema `gliss.stability.full-result`, version 1, stores the certified result
+metadata and every eigenvalue, Rayleigh quotient, residual, resolution and
+eigenvector for both parity classes. Arrays are uncompressed little-endian
+NumPy binary64 records in eigenpair-major order. Reading never enables NumPy
+pickle support. Values and signed zeros round-trip exactly, returned arrays
+are read-only, and rewriting an unchanged result produces the same container
+bytes.
+
+Schema `gliss.stability.full-run`, version 1, adds the configuration,
+equilibrium SHA-256 and software provenance to the same full-spectrum data.
+It is self-contained except for the checksummed NetCDF equilibrium. Use
+`write_full_run_manifest()` when no assembled problem is available; use
+`StabilityProblem.write_full_manifest()` to reject an equilibrium file that
+changed after assembly.
+
+Full-spectrum readers require the exact set of version-1 entries, stored
+without compression or encryption. They reject invalid entry sets, malformed
+metadata, incompatible versions, wrong array types or shapes, inconsistent
+diagnostics, and truncated payloads.
+Writes stream arrays directly into a temporary container in the destination
+directory and replace the destination only after the complete file is closed
+and synchronized. A failed write leaves an existing destination unchanged.
 
 Writers use an atomic replacement in the destination directory. Readers
 require UTF-8 JSON objects and reject duplicate or unknown fields, missing

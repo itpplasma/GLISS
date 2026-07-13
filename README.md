@@ -25,7 +25,8 @@ The Python package is the primary user interface. Install it with
 profile and objective through NumPy. Development main also provides reusable
 `Equilibrium` and fixed-boundary `StabilityProblem` contexts with typed,
 certified lowest-eigenpair results, opt-in full spectra with per-pair
-diagnostics, and atomic versioned equilibrium export.
+diagnostics, deterministic full-spectrum run containers, and atomic versioned
+equilibrium export.
 See the [Python guide](python/README.md) for examples, conventions, input and
 output contracts, and the optional SIMSOPT adapter.
 

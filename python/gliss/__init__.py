@@ -115,6 +115,7 @@ from .schema import (  # noqa: E402
     StabilityConfiguration,
     write_run_manifest,
 )
+from .full_schema import FullRunManifest, write_full_run_manifest  # noqa: E402
 
 __all__ = [
     "__version__",
@@ -129,6 +130,7 @@ __all__ = [
     "get_include",
     "FullSpectrumResult",
     "FullStabilityResult",
+    "FullRunManifest",
     "mercier_objective",
     "mercier_profile",
     "SpectrumResult",
@@ -138,4 +140,5 @@ __all__ = [
     "StabilityResult",
     "version",
     "write_run_manifest",
+    "write_full_run_manifest",
 ]

@@ -465,6 +465,33 @@ def test_stability_problem_exposes_configuration_and_manifest(
     assert gliss.RunManifest.read(path) == manifest
 
 
+def test_stability_problem_writes_full_manifest(contexts, tmp_path, monkeypatch):
+    _, equilibrium = contexts
+    monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.1")
+    path = tmp_path / "full-run.gliss"
+    with StabilityProblem(
+        equilibrium, modes=[(1, 1), (2, 1)], density_kg_m3=2.0
+    ) as problem:
+        result = problem.solve_full_spectrum()
+        manifest = problem.write_full_manifest(path, result)
+
+    assert path.is_file()
+    assert gliss.FullRunManifest.read(path) == manifest
+
+
+def test_full_problem_manifest_rejects_changed_source(contexts, tmp_path, monkeypatch):
+    _, equilibrium = contexts
+    monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.1")
+    with StabilityProblem(
+        equilibrium, modes=[(1, 1), (2, 1)], density_kg_m3=2.0
+    ) as problem:
+        result = problem.solve_full_spectrum()
+        equilibrium.path.write_bytes(b"changed")
+        with pytest.raises(gliss.GlissIOError, match="differs from problem input"):
+            problem.write_full_manifest(tmp_path / "full-run.gliss", result)
+    assert not (tmp_path / "full-run.gliss").exists()
+
+
 def test_problem_manifest_rejects_changed_source(contexts, tmp_path, monkeypatch):
     _, equilibrium = contexts
     monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.1")

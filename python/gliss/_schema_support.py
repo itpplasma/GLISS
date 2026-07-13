@@ -110,10 +110,9 @@ def fields(value: Any, expected: set, context: str) -> Mapping[str, Any]:
 def schema(value: Mapping[str, Any], expected: str, context: str) -> None:
     if value["schema"] != expected:
         raise ValueError(f"{context}.schema must be {expected!r}")
-    if value["schema_version"] != SCHEMA_VERSION:
-        raise ValueError(
-            f"{context}.schema_version is {value['schema_version']!r}; expected 1"
-        )
+    version = value["schema_version"]
+    if isinstance(version, bool) or not isinstance(version, int) or version != 1:
+        raise ValueError(f"{context}.schema_version is {version!r}; expected 1")
 
 
 def integer(value: Any, name: str, minimum: int = 0) -> int:

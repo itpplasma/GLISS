@@ -22,6 +22,7 @@ from .equilibrium import (
 )
 
 if TYPE_CHECKING:
+    from .full_schema import FullRunManifest
     from .full_spectrum import FullSpectrumResult, FullStabilityResult
     from .schema import RunManifest, StabilityConfiguration
 
@@ -359,6 +360,20 @@ class StabilityProblem:
         from .schema import _write_run_manifest
 
         return _write_run_manifest(
+            path,
+            self.equilibrium_path,
+            self.configuration,
+            result,
+            self._equilibrium_metadata,
+        )
+
+    def write_full_manifest(
+        self, path: Any, result: "FullStabilityResult"
+    ) -> "FullRunManifest":
+        """Write a portable manifest containing both complete spectra."""
+        from .full_schema import _write_full_run_manifest
+
+        return _write_full_run_manifest(
             path,
             self.equilibrium_path,
             self.configuration,
