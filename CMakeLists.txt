@@ -66,6 +66,7 @@ add_library(gliss
     src/boundary/starwall_cylinder_limit.f90
     src/boundary/starwall_mesh_geometry.f90
     src/boundary/starwall_ideal_vacuum.f90
+    src/boundary/starwall_fourier_coupling.f90
     src/vacuum_schur.f90
     src/variable_block_tridiagonal.f90
     src/variable_generalized_solver.f90
@@ -272,6 +273,11 @@ if(BUILD_TESTING)
         test/boundary/test_starwall_ideal_vacuum.f90)
     target_link_libraries(test_starwall_ideal_vacuum PRIVATE gliss)
     add_test(NAME starwall_ideal_vacuum COMMAND test_starwall_ideal_vacuum)
+    add_executable(test_starwall_fourier_coupling
+        test/boundary/test_starwall_fourier_coupling.f90)
+    target_link_libraries(test_starwall_fourier_coupling PRIVATE gliss)
+    add_test(NAME starwall_fourier_coupling
+        COMMAND test_starwall_fourier_coupling)
     add_test(NAME starwall_diagnostic_cli_extra COMMAND ${CMAKE_COMMAND}
         -DPROGRAM=$<TARGET_FILE:gliss_starwall_diagnostic>
         "-DEXPECTED=gliss_starwall_diagnostic: no arguments are accepted"
