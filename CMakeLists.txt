@@ -486,6 +486,16 @@ if(BUILD_TESTING)
     target_link_libraries(test_suydam_marginal PRIVATE gliss_test_support)
     add_test(NAME suydam_marginal_m4 COMMAND test_suydam_marginal 4)
     add_test(NAME suydam_marginal_m6 COMMAND test_suydam_marginal 6)
+    add_test(NAME suydam_marginal_cli_bad_mode COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:test_suydam_marginal>
+        "-DEXPECTED=test_suydam_marginal: MODE must be 4 or 6"
+        "-DARGUMENTS=5"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    add_test(NAME suydam_marginal_cli_extra COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:test_suydam_marginal>
+        "-DEXPECTED=test_suydam_marginal: usage:"
+        "-DARGUMENTS=4;out.csv;extra"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
 
     add_executable(test_eigenvalue_tracking
         test/test_eigenvalue_tracking.f90)

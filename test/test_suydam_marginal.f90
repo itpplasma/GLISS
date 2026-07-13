@@ -21,17 +21,12 @@ program test_suydam_marginal
     integer, parameter :: n_theta = 32, n_zeta = 32
     integer, parameter :: resolutions(3) = [96, 192, 384]
     character(len=32) :: fixture
-    character(len=16) :: mode_argument
+    character(len=1024) :: output_path
     real(dp) :: boundary(3)
-    integer :: mode, level, status
-    logical :: ok
+    integer :: mode, level
+    logical :: ok, output_requested
 
-    call get_command_argument(1, mode_argument, status=status)
-    call require(status == 0, "mode argument is unavailable")
-    call require(len_trim(mode_argument) > 0, "mode argument is missing")
-    read (mode_argument, *, iostat=status) mode
-    call require(status == 0, "mode argument is invalid")
-    call require(mode == 4 .or. mode == 6, "mode argument is unsupported")
+    call parse_arguments(mode, output_requested, output_path)
     write (fixture, "('suydam_marginal_',i0,'.nc')") mode
 
     do level = 1, 3
@@ -49,9 +44,61 @@ program test_suydam_marginal
     call require(boundary(3) - kappa_star < 0.75_dp * &
         (boundary(1) - kappa_star), &
         "the boundary does not contract toward the threshold")
+    if (output_requested) call write_results(mode, boundary, output_path)
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine parse_arguments(mode, write_output, path)
+        integer, intent(out) :: mode
+        logical, intent(out) :: write_output
+        character(len=*), intent(out) :: path
+        character(len=32) :: mode_argument
+        integer :: status
+
+        if (command_argument_count() < 1 .or. command_argument_count() > 2) &
+            call fail_cli("usage: test_suydam_marginal MODE [OUTPUT_CSV]")
+        call get_command_argument(1, mode_argument, status=status)
+        if (status /= 0 .or. len_trim(mode_argument) == 0) &
+            call fail_cli("MODE is unavailable")
+        read (mode_argument, *, iostat=status) mode
+        if (status /= 0) call fail_cli("MODE must be an integer")
+        if (mode /= 4 .and. mode /= 6) call fail_cli("MODE must be 4 or 6")
+        write_output = command_argument_count() == 2
+        path = ""
+        if (.not. write_output) return
+        call get_command_argument(2, path, status=status)
+        if (status /= 0) call fail_cli("output path is unavailable")
+        if (len_trim(path) == 0) call fail_cli("output path is empty")
+    end subroutine parse_arguments
+
+    subroutine write_results(mode, boundaries, path)
+        integer, intent(in) :: mode
+        real(dp), intent(in) :: boundaries(:)
+        character(len=*), intent(in) :: path
+        integer :: i, status, unit
+
+        open (newunit=unit, file=trim(path), status="replace", action="write", &
+            iostat=status)
+        if (status /= 0) call fail_cli("output CSV cannot be opened")
+        write (unit, "(a)") "poloidal_mode,radial_surfaces," // &
+            "marginal_pressure_scale,analytic_kappa_star"
+        do i = 1, size(boundaries)
+            write (unit, "(i0,',',i0,2(',',es24.16))", iostat=status) &
+                mode, resolutions(i), boundaries(i), kappa_star
+            if (status /= 0) call fail_cli("output CSV write failed")
+        end do
+        close (unit, iostat=status)
+        if (status /= 0) call fail_cli("output CSV close failed")
+    end subroutine write_results
+
+    subroutine fail_cli(message)
+        character(len=*), intent(in) :: message
+
+        write (error_unit, "(a)") "test_suydam_marginal: " // message
+        flush (error_unit)
+        stop 2
+    end subroutine fail_cli
 
     subroutine bisect_marginal(mode, surfaces, marginal, bracketed)
         integer, intent(in) :: mode, surfaces
