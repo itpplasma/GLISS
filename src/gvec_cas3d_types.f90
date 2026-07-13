@@ -94,7 +94,7 @@ contains
         if (size(harmonic%cosine, 3) /= size(toroidal_modes)) return
         if (any(shape(harmonic%cosine) /= shape(harmonic%sine))) return
         scale = max(maxval(abs(harmonic%cosine)), maxval(abs(harmonic%sine)))
-        tolerance = 100.0_dp * epsilon(1.0_dp) * max(1.0_dp, scale)
+        tolerance = 1.0e-8_dp * max(1.0_dp, scale)
         do i = 1, size(toroidal_modes)
             if (toroidal_modes(i) == 0) cycle
             if (maxval(abs(harmonic%cosine(:, :, i))) > tolerance) return
