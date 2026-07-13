@@ -14,6 +14,9 @@
 - Add opt-in complete fixed-boundary spectra with independently recomputed
   Rayleigh quotients, backward residuals and roundoff resolutions for every
   eigenpair.
+- Add five-term fixed-boundary energy decomposition through the C and Python
+  interfaces, with independent total and kinetic forms, Rayleigh quotient and
+  checked floating-point closure.
 - Add deterministic version-1 full-spectrum result and run containers with
   exact binary64 arrays, strict archive validation and atomic writes.
 - Add deterministic version-1 configuration and result files with strict

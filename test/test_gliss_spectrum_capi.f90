@@ -1,5 +1,6 @@
 program test_gliss_spectrum_capi
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, &
+        ieee_value
     use, intrinsic :: iso_c_binding, only: c_associated, c_char, c_double, &
         c_f_pointer, c_int, c_loc, c_null_ptr, c_ptr, c_size_t, c_sizeof
     use, intrinsic :: iso_fortran_env, only: error_unit
@@ -40,6 +41,20 @@ program test_gliss_spectrum_capi
         real(c_double) :: inertia_interval
     end type spectrum_summary_c
 
+    type, bind(c) :: energy_terms_c
+        integer(c_size_t) :: struct_size
+        real(c_double) :: field_line_bending
+        real(c_double) :: magnetic_shear
+        real(c_double) :: magnetic_compression
+        real(c_double) :: pressure_drive
+        real(c_double) :: plasma_compressibility
+        real(c_double) :: potential_energy
+        real(c_double) :: kinetic_energy
+        real(c_double) :: rayleigh_quotient
+        real(c_double) :: closure_error
+        real(c_double) :: closure_tolerance
+    end type energy_terms_c
+
     character(c_char), target :: path(len(fixture)), error_buffer(256)
     integer(c_int), target :: mode_m(2) = [1_c_int, 2_c_int]
     integer(c_int), target :: mode_n(2) = [1_c_int, 1_c_int]
@@ -47,6 +62,7 @@ program test_gliss_spectrum_capi
     integer(c_size_t), target :: unknowns, written
     integer(c_size_t), target :: eigenvalues_written, eigenvectors_written
     type(spectrum_summary_c), target :: summary
+    type(energy_terms_c), target :: energy
     real(c_double), allocatable, target :: eigenvector(:), sentinel(:)
     real(c_double), allocatable, target :: eigenvalues(:), eigenvectors(:)
     real(c_double), allocatable, target :: residuals(:), resolutions(:)
@@ -131,6 +147,16 @@ program test_gliss_spectrum_capi
             integer(c_size_t), value :: error_capacity
             integer(c_int) :: result
         end function problem_full_spectrum
+
+        function problem_energy(handle, parity_class, vector_count, vector, &
+                terms, error_pointer, error_capacity) &
+                bind(c, name="gliss_stability_problem_energy") result(result)
+            import c_int, c_ptr, c_size_t
+            type(c_ptr), value :: handle, vector, terms, error_pointer
+            integer(c_int), value :: parity_class
+            integer(c_size_t), value :: vector_count, error_capacity
+            integer(c_int) :: result
+        end function problem_energy
     end interface
 
     call create_cylinder_fixture(fixture)
@@ -218,6 +244,53 @@ program test_gliss_spectrum_capi
     call require(summary%certificate == summary%inertia_interval &
         + summary%eigenpair_residual + summary%eigenpair_resolution, &
         "C API certificate components do not close")
+
+    energy%struct_size = c_sizeof(energy)
+    status = problem_energy(problem, 1_c_int, unknowns, c_loc(eigenvector), &
+        c_loc(energy), c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_ok, "C API energy decomposition failed")
+    call require(abs(energy%kinetic_energy - 1.0_c_double) < 1.0e-11_c_double, &
+        "C API energy vector is not mass normalized")
+    call require(abs(energy%rayleigh_quotient - summary%lowest_eigenvalue) &
+        <= 1.0e-10_c_double * abs(summary%lowest_eigenvalue), &
+        "C API energy quotient differs from the eigenvalue")
+    call require(energy%closure_error <= energy%closure_tolerance, &
+        "C API energy terms do not close")
+    status = problem_energy(problem, 1_c_int, unknowns - 1_c_size_t, &
+        c_loc(eigenvector), c_loc(energy), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "C API energy accepted the wrong vector size")
+    status = problem_energy(problem, 1_c_int, unknowns, c_null_ptr, &
+        c_loc(energy), c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "C API energy accepted a null vector")
+    sentinel = eigenvector
+    eigenvector(1) = ieee_value(0.0_c_double, ieee_quiet_nan)
+    status = problem_energy(problem, 1_c_int, unknowns, c_loc(eigenvector), &
+        c_loc(energy), c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "C API energy accepted a nonfinite vector")
+    eigenvector = 0.0_c_double
+    status = problem_energy(problem, 1_c_int, unknowns, c_loc(eigenvector), &
+        c_loc(energy), c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "C API energy accepted a zero-norm vector")
+    eigenvector = sentinel
+    status = problem_energy(problem, 0_c_int, unknowns, c_loc(eigenvector), &
+        c_loc(energy), c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "C API energy accepted an invalid parity class")
+    energy%struct_size = 0_c_size_t
+    status = problem_energy(problem, 1_c_int, unknowns, c_loc(eigenvector), &
+        c_loc(energy), c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "C API energy accepted an incompatible struct size")
+    energy%struct_size = c_sizeof(energy)
+    status = problem_energy(problem, 1_c_int, unknowns, c_loc(eigenvector), &
+        c_null_ptr, c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "C API energy accepted a null output")
 
     allocate (eigenvalues(unknowns), residuals(unknowns), &
         resolutions(unknowns), rayleigh_quotients(unknowns), &

@@ -1,14 +1,21 @@
 module fixed_boundary_spectrum
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use compressible_geometry, only: build_compressible_geometry, &
         compressible_geometry_ok
     use compressible_stiffness_family_assembly, only: &
-        assemble_compressible_family_stiffness
+        assemble_compressible_family_stiffness_with_terms, &
+        compressible_family_allocation_error
     use dense_spectrum_support, only: dense_spectrum_allocation, &
         dense_spectrum_ok, diagnose_dense_spectrum, unpermute_dense_vectors
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
         dynamic_family_layout_t, dynamic_layout_ok
+    use fixed_boundary_energy, only: diagnose_fixed_boundary_energy_store, &
+        fixed_boundary_energy_allocation, fixed_boundary_energy_invalid, &
+        fixed_boundary_energy_ok, fixed_boundary_energy_store_t, &
+        fixed_boundary_energy_terms_t, pack_fixed_boundary_energy_store
+    use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
+        fixed_boundary_bracket_ok
+    use fixed_boundary_input_validation, only: valid_fixed_boundary_inputs
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use mass_density_policy, only: mass_density_ok, &
         mass_density_profile_t, validate_mass_density_profile
@@ -22,8 +29,7 @@ module fixed_boundary_spectrum
         variable_block_allocation, variable_block_ok, &
         variable_block_to_dense, variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
-        iterate_variable_generalized_eigenvalue, variable_generalized_ok, &
-        variable_generalized_inertia
+        iterate_variable_generalized_eigenvalue, variable_generalized_ok
     use variable_spectrum_analysis, only: analyze_variable_spectrum, &
         variable_spectrum_ok, variable_spectrum_summary_t
     implicit none
@@ -46,6 +52,7 @@ module fixed_boundary_spectrum
         integer, allocatable :: permutation(:)
         type(variable_block_tridiagonal_t) :: stiffness
         type(variable_block_tridiagonal_t) :: mass
+        type(fixed_boundary_energy_store_t) :: energy
     end type fixed_boundary_class_problem_t
 
     type, public :: fixed_boundary_problem_t
@@ -97,6 +104,8 @@ module fixed_boundary_spectrum
     end type fixed_boundary_full_spectrum_t
 
     public :: build_fixed_boundary_problem
+    public :: diagnose_fixed_boundary_energy
+    public :: fixed_boundary_energy_terms_t
     public :: fixed_boundary_unknown_count
     public :: solve_fixed_boundary_class
     public :: solve_fixed_boundary_full_spectrum
@@ -117,7 +126,7 @@ contains
         integer :: parity_class
 
         info = fixed_boundary_invalid
-        if (.not. valid_problem_inputs(adiabatic_index, density_kg_m3, &
+        if (.not. valid_fixed_boundary_inputs(adiabatic_index, density_kg_m3, &
             zero_floor, mode_m, mode_n, radial_quadrature)) return
         if (equilibrium%field_periods < 1) return
         call build_kernel_geometry(equilibrium, fixed_boundary_n_theta, &
@@ -152,33 +161,6 @@ contains
         info = fixed_boundary_ok
     end subroutine build_fixed_boundary_problem
 
-    function valid_problem_inputs(adiabatic_index, density_kg_m3, zero_floor, &
-            mode_m, mode_n, radial_quadrature) result(valid)
-        real(dp), intent(in) :: adiabatic_index, density_kg_m3, zero_floor
-        integer, intent(in) :: mode_m(:), mode_n(:), radial_quadrature
-        logical :: valid
-        integer :: first, second
-
-        valid = .false.
-        if (.not. ieee_is_finite(adiabatic_index)) return
-        if (.not. ieee_is_finite(density_kg_m3)) return
-        if (.not. ieee_is_finite(zero_floor)) return
-        if (adiabatic_index < 0.0_dp) return
-        if (density_kg_m3 <= 0.0_dp .or. zero_floor <= 0.0_dp) return
-        if (zero_floor > 0.125_dp * huge(zero_floor)) return
-        if (size(mode_m) < 1 .or. size(mode_m) /= size(mode_n)) return
-        if (radial_quadrature < 1 .or. radial_quadrature > 2) return
-        do first = 1, size(mode_m)
-            if (mode_m(first) < 0) return
-            if (mode_m(first) == 0 .and. mode_n(first) < 0) return
-            do second = 1, first - 1
-                if (mode_m(first) == mode_m(second) &
-                    .and. mode_n(first) == mode_n(second)) return
-            end do
-        end do
-        valid = .true.
-    end function valid_problem_inputs
-
     subroutine assemble_class(equilibrium, fields, drive, jacobian_s, &
             jacobian_t, jacobian_z, gamma_p, density_kg_m3, mode_m, mode_n, &
             radial_quadrature, parity_class, class_problem, info)
@@ -194,7 +176,8 @@ contains
         type(dynamic_family_layout_t) :: layout, mass_layout
         type(mass_density_profile_t) :: density
         type(radial_space_config_t) :: radial_space
-        real(dp), allocatable :: stiffness(:, :), mass(:, :)
+        real(dp), allocatable :: stiffness(:, :), stiffness_terms(:, :, :)
+        real(dp), allocatable :: mass(:, :)
         real(dp), allocatable :: stored_power(:)
         integer, allocatable :: trial_parity(:), widths(:)
         real(dp) :: radial_step
@@ -211,13 +194,17 @@ contains
             return
         end if
         radial_step = 1.0_dp / real(size(equilibrium%s), dp)
-        call assemble_compressible_family_stiffness(fields, drive, &
+        call assemble_compressible_family_stiffness_with_terms(fields, drive, &
             jacobian_s, jacobian_t, jacobian_z, gamma_p, mode_m, mode_n, &
             trial_parity, stored_power, equilibrium%field_periods, &
             radial_space, radial_step, phase_assembly_transformed, stiffness, &
-            layout, info)
+            stiffness_terms, layout, info)
         if (info /= 0) then
-            info = fixed_boundary_assembly_error
+            if (info == compressible_family_allocation_error) then
+                info = fixed_boundary_allocation_error
+            else
+                info = fixed_boundary_assembly_error
+            end if
             return
         end if
         call assemble_physical_family_mass(fields, density, mode_m, mode_n, &
@@ -234,7 +221,39 @@ contains
         end if
         call pack_class_matrices(stiffness, mass, layout, class_problem, &
             widths, info)
+        if (info /= fixed_boundary_ok) return
+        call pack_fixed_boundary_energy_store(stiffness_terms, &
+            class_problem%permutation, widths, class_problem%energy, info)
+        if (info /= fixed_boundary_energy_ok) &
+            info = fixed_boundary_assembly_error
     end subroutine assemble_class
+
+    subroutine diagnose_fixed_boundary_energy(problem, parity_class, vector, &
+            result, info)
+        type(fixed_boundary_problem_t), intent(in) :: problem
+        integer, intent(in) :: parity_class
+        real(dp), intent(in) :: vector(:)
+        type(fixed_boundary_energy_terms_t), intent(out) :: result
+        integer, intent(out) :: info
+
+        info = fixed_boundary_invalid
+        if (.not. problem%ready) return
+        if (parity_class < 1 .or. parity_class > 2) return
+        call diagnose_fixed_boundary_energy_store( &
+            problem%classes(parity_class)%stiffness, &
+            problem%classes(parity_class)%mass, &
+            problem%classes(parity_class)%energy, &
+            problem%classes(parity_class)%permutation, vector, result, info)
+        if (info == fixed_boundary_energy_ok) then
+            info = fixed_boundary_ok
+        else if (info == fixed_boundary_energy_allocation) then
+            info = fixed_boundary_allocation_error
+        else if (info == fixed_boundary_energy_invalid) then
+            info = fixed_boundary_invalid
+        else
+            info = fixed_boundary_solver_error
+        end if
+    end subroutine diagnose_fixed_boundary_energy
 
     subroutine pack_class_matrices(stiffness, mass, layout, class_problem, &
             widths, info)
@@ -406,9 +425,13 @@ contains
             result%inertia_interval = summary%first_positive_upper &
                 - summary%first_positive_lower
         else
-            call bracket_lowest_negative(class_problem, summary%zero_floor, &
-                shift, result%inertia_interval, info)
-            if (info /= fixed_boundary_ok) return
+            call bracket_lowest_negative(class_problem%stiffness, &
+                class_problem%mass, summary%zero_floor, shift, &
+                result%inertia_interval, info)
+            if (info /= fixed_boundary_bracket_ok) then
+                info = fixed_boundary_solver_error
+                return
+            end if
         end if
         call iterate_variable_generalized_eigenvalue( &
             class_problem%stiffness, class_problem%mass, shift, &
@@ -423,56 +446,6 @@ contains
         result%has_eigenvector = .true.
         info = fixed_boundary_ok
     end subroutine resolve_lowest
-
-    subroutine bracket_lowest_negative(class_problem, zero_floor, shift, &
-            interval, info)
-        type(fixed_boundary_class_problem_t), intent(in) :: class_problem
-        real(dp), intent(in) :: zero_floor
-        real(dp), intent(out) :: shift, interval
-        integer, intent(out) :: info
-        real(dp) :: lower, upper, middle
-        integer :: count, iteration
-
-        lower = -2.0_dp * zero_floor
-        do iteration = 1, 200
-            call variable_generalized_inertia(class_problem%stiffness, &
-                class_problem%mass, lower, count, info)
-            if (info /= variable_generalized_ok) then
-                lower = lower * (1.0_dp + 1.0e-8_dp)
-                cycle
-            end if
-            if (count == 0) exit
-            lower = 2.0_dp * lower
-        end do
-        if (iteration > 200) then
-            info = fixed_boundary_solver_error
-            return
-        end if
-        upper = -zero_floor
-        do iteration = 1, 200
-            middle = 0.5_dp * (lower + upper)
-            if (upper - lower <= 1.0e-9_dp * abs(middle) &
-                + 1.0e-3_dp * zero_floor) exit
-            call variable_generalized_inertia(class_problem%stiffness, &
-                class_problem%mass, middle, count, info)
-            if (info /= variable_generalized_ok) then
-                middle = middle * (1.0_dp + 1.0e-8_dp)
-                cycle
-            end if
-            if (count == 0) then
-                lower = middle
-            else
-                upper = middle
-            end if
-        end do
-        if (iteration > 200) then
-            info = fixed_boundary_solver_error
-            return
-        end if
-        shift = lower
-        interval = upper - lower
-        info = fixed_boundary_ok
-    end subroutine bracket_lowest_negative
 
     subroutine unpermute_vector(permuted, permutation, original)
         real(dp), intent(in) :: permuted(:)

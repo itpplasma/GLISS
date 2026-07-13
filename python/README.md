@@ -158,6 +158,36 @@ normal coefficients, `eta`, then compressional `mu`. The `normal`, `eta` and
 `mu` properties return the corresponding views. If the zero floor contains
 the entire spectrum, `has_eigenvector` is false and the eigenvector is empty.
 
+Evaluate the physical terms before closing the assembled problem:
+
+```python
+with gliss.Equilibrium("equilibrium_export.nc") as equilibrium:
+    with gliss.StabilityProblem(equilibrium, modes=[(1, 1), (2, 1)]) as problem:
+        mode = problem.solve_class(parity_class=1)
+        energy = problem.energy(1, mode.eigenvector)
+
+print(energy.components)
+print(energy.potential_energy, energy.kinetic_energy)
+print(energy.rayleigh_quotient, mode.lowest_eigenvalue)
+```
+
+`EnergyTerms.components` contains field-line bending, magnetic shear,
+magnetic compression, pressure drive and plasma compressibility, in that
+order. Every term except pressure drive is a positive quadratic form. The
+pressure-drive term can have either sign. GLISS reports the raw forms
+`x.T @ K @ x` and `x.T @ M @ x`, without a factor of one half. Their quotient
+is `omega^2`. For a solver eigenvector, the kinetic form is one and the
+quotient agrees with `lowest_eigenvalue` within its numerical certificate.
+
+`potential_energy` is evaluated from the assembled total operator rather than
+constructed from the five reported terms. `closure_error` is their absolute
+difference, and `closure_tolerance` is the floating-point acceptance bound.
+Python rejects a result that does not close, has a nonpositive kinetic form,
+contains a nonfinite value or makes a nominally positive term significantly
+negative. Input vectors must be finite, one-dimensional and contain exactly
+the parity class's number of unknowns. Noncontiguous array inputs are copied
+to native `float64`; returned `EnergyTerms` objects own no native memory.
+
 Request every eigenpair only when the dense cost is acceptable:
 
 ```python

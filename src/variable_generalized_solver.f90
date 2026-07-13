@@ -1,6 +1,7 @@
 module variable_generalized_solver
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use stable_reduction, only: stable_dot_product
     use variable_block_tridiagonal, only: &
         apply_variable_block_tridiagonal, factorize_variable_shifted, &
         solve_variable_factored, validate_variable_blocks, &
@@ -387,26 +388,6 @@ contains
             first = last + 1
         end do
     end subroutine absolute_shifted_action
-
-    pure function stable_dot_product(first, second) result(product)
-        real(dp), intent(in) :: first(:), second(:)
-        real(dp) :: product, correction, term, updated
-        integer :: i
-
-        product = 0.0_dp
-        correction = 0.0_dp
-        do i = 1, size(first)
-            term = first(i) * second(i)
-            updated = product + term
-            if (abs(product) >= abs(term)) then
-                correction = correction + (product - updated) + term
-            else
-                correction = correction + (term - updated) + product
-            end if
-            product = updated
-        end do
-        product = product + correction
-    end function stable_dot_product
 
     pure function iteration_converged(eigenvalue, previous, residual, &
             resolution) &

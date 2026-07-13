@@ -1,9 +1,6 @@
 """Fixed-boundary ideal-MHD stability problems backed by the GLISS C ABI."""
 
 import ctypes
-import math
-import numbers
-import operator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence, Tuple, TYPE_CHECKING
@@ -20,14 +17,18 @@ from .equilibrium import (
     _raise_for_status,
     _stable_file_digest,
 )
+from ._stability_input import mode_integer, real_parameter, validate_modes
+
+_mode_integer = mode_integer
+_real_parameter = real_parameter
+_validate_modes = validate_modes
 
 if TYPE_CHECKING:
+    from .energy import EnergyTerms
     from .full_schema import FullRunManifest
     from .full_spectrum import FullSpectrumResult, FullStabilityResult
     from .schema import RunManifest, StabilityConfiguration
 
-_INT32_MIN = -(2**31)
-_INT32_MAX = 2**31 - 1
 _QUADRATURE = {"midpoint": 1, "gauss2": 2}
 
 
@@ -109,58 +110,6 @@ def _bind(library: Any) -> None:
         ctypes.c_size_t,
     )
     library.gliss_stability_problem_solve_class.restype = ctypes.c_int
-
-
-def _real_parameter(value: Any, name: str, allow_zero: bool) -> float:
-    if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Real):
-        raise TypeError(f"{name} must be a real number")
-    result = float(value)
-    if not math.isfinite(result):
-        raise ValueError(f"{name} must be finite")
-    if allow_zero:
-        if result < 0.0:
-            raise ValueError(f"{name} must be nonnegative")
-    elif result <= 0.0:
-        raise ValueError(f"{name} must be positive")
-    return result
-
-
-def _mode_integer(value: Any, name: str) -> int:
-    if isinstance(value, (bool, np.bool_)):
-        raise TypeError(f"{name} must be an integer")
-    try:
-        result = operator.index(value)
-    except TypeError as error:
-        raise TypeError(f"{name} must be an integer") from error
-    if not _INT32_MIN <= result <= _INT32_MAX:
-        raise ValueError(f"{name} must fit a signed 32-bit integer")
-    return result
-
-
-def _validate_modes(modes: Sequence[Tuple[int, int]]) -> Tuple[Tuple[int, int], ...]:
-    try:
-        entries = tuple(modes)
-    except TypeError as error:
-        raise TypeError("modes must be a sequence of (m, n) pairs") from error
-    if not entries:
-        raise ValueError("modes must not be empty")
-    result = []
-    seen = set()
-    for index, entry in enumerate(entries):
-        if not isinstance(entry, (tuple, list)) or len(entry) != 2:
-            raise TypeError(f"modes[{index}] must be an (m, n) pair")
-        m_value = _mode_integer(entry[0], f"modes[{index}] poloidal mode")
-        n_value = _mode_integer(entry[1], f"modes[{index}] toroidal mode")
-        if m_value < 0:
-            raise ValueError(f"modes[{index}] poloidal mode must be nonnegative")
-        if m_value == 0 and n_value < 0:
-            raise ValueError(f"modes[{index}] axis mode requires nonnegative n")
-        pair = (m_value, n_value)
-        if pair in seen:
-            raise ValueError(f"duplicate mode {pair!r}")
-        seen.add(pair)
-        result.append(pair)
-    return tuple(result)
 
 
 @dataclass(frozen=True)
@@ -263,14 +212,14 @@ class StabilityProblem:
             raise TypeError("radial_quadrature must be a string")
         if radial_quadrature not in _QUADRATURE:
             raise ValueError("radial_quadrature must be 'midpoint' or 'gauss2'")
-        self.modes = _validate_modes(modes)
-        self.adiabatic_index = _real_parameter(
+        self.modes = validate_modes(modes)
+        self.adiabatic_index = real_parameter(
             adiabatic_index, "adiabatic_index", allow_zero=True
         )
-        self.density_kg_m3 = _real_parameter(
+        self.density_kg_m3 = real_parameter(
             density_kg_m3, "density_kg_m3", allow_zero=False
         )
-        self.zero_floor = _real_parameter(zero_floor, "zero_floor", allow_zero=False)
+        self.zero_floor = real_parameter(zero_floor, "zero_floor", allow_zero=False)
         if self.zero_floor > 0.125 * np.finfo(np.float64).max:
             raise ValueError("zero_floor is too large for spectrum certification")
         self.radial_quadrature = radial_quadrature
@@ -389,7 +338,7 @@ class StabilityProblem:
     def solve_class(self, parity_class: int) -> SpectrumResult:
         """Solve and certify one parity class, numbered 1 or 2."""
         self._require_open()
-        parity_class = _mode_integer(parity_class, "parity_class")
+        parity_class = mode_integer(parity_class, "parity_class")
         if parity_class not in (1, 2):
             raise ValueError("parity_class must be 1 or 2")
         count = self._unknown_count(parity_class)
@@ -425,6 +374,12 @@ class StabilityProblem:
         from .full_spectrum import solve_full_spectrum_class
 
         return solve_full_spectrum_class(self, parity_class)
+
+    def energy(self, parity_class: int, vector: Any) -> "EnergyTerms":
+        """Evaluate physical energy terms for one displacement vector."""
+        from .energy import diagnose_energy
+
+        return diagnose_energy(self, parity_class, vector)
 
     def _unknown_count(self, parity_class: int) -> int:
         count = ctypes.c_size_t()

@@ -7,12 +7,15 @@ int main(void) {
     gliss_equilibrium *equilibrium = NULL;
     gliss_stability_problem *problem = NULL;
     gliss_spectrum_summary summary;
+    gliss_energy_terms energy;
     size_t surfaces = 1;
     int32_t schema_version = -1;
     char error[128];
 
     memset(&summary, 0, sizeof(summary));
     summary.struct_size = sizeof(summary);
+    memset(&energy, 0, sizeof(energy));
+    energy.struct_size = sizeof(energy);
 
     if (gliss_abi_version() != GLISS_ABI_VERSION) {
         return 1;
@@ -48,6 +51,14 @@ int main(void) {
             problem, 1, 0, NULL, NULL, NULL, NULL, 0, NULL, &surfaces,
             &surfaces, error, sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT) {
         return 9;
+    }
+    if (gliss_stability_problem_energy(
+            problem, 1, 0, NULL, &energy, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 10;
+    }
+    if (energy.struct_size != sizeof(gliss_energy_terms)) {
+        return 11;
     }
     return 0;
 }

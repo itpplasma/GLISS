@@ -1,6 +1,7 @@
 module compressible_stiffness_assembly
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use compressible_stiffness_validation, only: &
+        validate_compressible_stiffness_inputs
     use phase_assembly_policy, only: phase_assembly_direct, &
         phase_assembly_transformed
     use phase_factor_topology, only: phase_cosine, &
@@ -14,7 +15,8 @@ module compressible_stiffness_assembly
     implicit none
     private
 
-    integer, parameter :: response_count = 5
+    integer, parameter, public :: compressible_stiffness_term_count = 5
+    integer, parameter :: response_count = compressible_stiffness_term_count
     integer, parameter :: xi_value = 1, xi_radial = 2
     integer, parameter :: xi_theta = 3, xi_zeta = 4, eta_value = 5
     integer, parameter :: eta_theta = 6, eta_zeta = 7
@@ -45,7 +47,8 @@ contains
         integer, intent(out) :: info
         integer :: dimension
 
-        call validate_inputs(fields, drive, signed_sqrtg_radial, &
+        call validate_compressible_stiffness_inputs(fields, drive, &
+            signed_sqrtg_radial, &
             signed_sqrtg_theta, signed_sqrtg_zeta, gamma_pressure_pa, &
             trial_m, trial_n, trial_parity, stored_power, field_periods, &
             radial_step, phase_assembly, info)
@@ -63,7 +66,8 @@ contains
             drive, signed_sqrtg_radial, signed_sqrtg_theta, &
             signed_sqrtg_zeta, gamma_pressure_pa, trial_m, trial_n, &
             trial_parity, stored_power, field_periods, radial_space, &
-            radial_coordinate, radial_step, phase_assembly, stiffness, info)
+            radial_coordinate, radial_step, phase_assembly, stiffness, info, &
+            stiffness_terms)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         real(dp), intent(in) :: signed_sqrtg_radial(:, :)
         real(dp), intent(in) :: signed_sqrtg_theta(:, :)
@@ -76,8 +80,10 @@ contains
         real(dp), intent(in) :: radial_coordinate, radial_step
         real(dp), intent(out) :: stiffness(:, :)
         integer, intent(out) :: info
+        real(dp), optional, intent(out) :: stiffness_terms(:, :, :)
 
-        call validate_inputs(fields, drive, signed_sqrtg_radial, &
+        call validate_compressible_stiffness_inputs(fields, drive, &
+            signed_sqrtg_radial, &
             signed_sqrtg_theta, signed_sqrtg_zeta, gamma_pressure_pa, &
             trial_m, trial_n, trial_parity, stored_power, field_periods, &
             radial_step, phase_assembly, info)
@@ -86,24 +92,34 @@ contains
             info = -1
             return
         end if
+        if (present(stiffness_terms)) then
+            if (any(shape(stiffness_terms) /= &
+                [size(stiffness, 1), size(stiffness, 2), response_count])) then
+                info = -1
+                return
+            end if
+            stiffness_terms = 0.0_dp
+        end if
         stiffness = 0.0_dp
         if (phase_assembly == phase_assembly_direct) then
             call assemble_direct(fields, drive, signed_sqrtg_radial, &
                 signed_sqrtg_theta, signed_sqrtg_zeta, gamma_pressure_pa, &
                 trial_m, trial_n, trial_parity, stored_power, field_periods, &
-                radial_space, radial_coordinate, radial_step, stiffness, info)
+                radial_space, radial_coordinate, radial_step, stiffness, info, &
+                stiffness_terms)
         else
             call assemble_transformed(fields, drive, signed_sqrtg_radial, &
                 signed_sqrtg_theta, signed_sqrtg_zeta, gamma_pressure_pa, &
                 trial_m, trial_n, trial_parity, stored_power, field_periods, &
-                radial_space, radial_coordinate, radial_step, stiffness, info)
+                radial_space, radial_coordinate, radial_step, stiffness, info, &
+                stiffness_terms)
         end if
     end subroutine assemble_compressible_stiffness_surface_resolved
 
     subroutine assemble_direct(fields, drive, jacobian_radial, &
             jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
             trial_parity, stored_power, field_periods, radial_space, &
-            radial_coordinate, radial_step, stiffness, info)
+            radial_coordinate, radial_step, stiffness, info, stiffness_terms)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         real(dp), intent(in) :: jacobian_radial(:, :), jacobian_theta(:, :)
         real(dp), intent(in) :: jacobian_zeta(:, :), gamma_pressure(:, :)
@@ -114,6 +130,7 @@ contains
         real(dp), intent(in) :: radial_coordinate, radial_step
         real(dp), intent(inout) :: stiffness(:, :)
         integer, intent(out) :: info
+        real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
         real(dp) :: theta, zeta, weight
         integer :: j, k, period
 
@@ -132,7 +149,7 @@ contains
                         gamma_pressure(j, k), trial_m, trial_n, trial_parity, &
                         stored_power, field_periods, radial_space, &
                         radial_coordinate, radial_step, theta, zeta, weight, &
-                        stiffness, info)
+                        stiffness, info, stiffness_terms)
                     if (info /= 0) return
                 end do
             end do
@@ -144,7 +161,7 @@ contains
             jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
             trial_parity, stored_power, field_periods, radial_space, &
             radial_coordinate, radial_step, theta, zeta, weight, stiffness, &
-            info)
+            info, stiffness_terms)
         real(dp), intent(in) :: fields(:), drive, jacobian_radial
         real(dp), intent(in) :: jacobian_theta, jacobian_zeta, gamma_pressure
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
@@ -155,6 +172,7 @@ contains
         real(dp), intent(in) :: weight
         real(dp), intent(inout) :: stiffness(:, :)
         integer, intent(out) :: info
+        real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
         real(dp) :: responses(response_count, 2, size(stiffness, 1))
         real(dp) :: values(response_count, size(stiffness, 1)), phase
         integer :: degree, trial, trials
@@ -174,14 +192,14 @@ contains
                 + responses(:, phase_sine, degree) * sin(phase)
         end do
         call accumulate_response_values(values, drive, gamma_pressure, &
-            fields(7), weight, stiffness)
+            fields(7), weight, stiffness, stiffness_terms)
         info = 0
     end subroutine accumulate_direct_point
 
     subroutine assemble_transformed(fields, drive, jacobian_radial, &
             jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
             trial_parity, stored_power, field_periods, radial_space, &
-            radial_coordinate, radial_step, stiffness, info)
+            radial_coordinate, radial_step, stiffness, info, stiffness_terms)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         real(dp), intent(in) :: jacobian_radial(:, :), jacobian_theta(:, :)
         real(dp), intent(in) :: jacobian_zeta(:, :), gamma_pressure(:, :)
@@ -192,6 +210,7 @@ contains
         real(dp), intent(in) :: radial_coordinate, radial_step
         real(dp), intent(inout) :: stiffness(:, :)
         integer, intent(out) :: info
+        real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
         real(dp) :: theta, zeta, weight
         integer :: j, k
 
@@ -207,7 +226,7 @@ contains
                     gamma_pressure(j, k), trial_m, trial_n, trial_parity, &
                     stored_power, field_periods, radial_space, &
                     radial_coordinate, radial_step, theta, zeta, weight, &
-                    stiffness, info)
+                    stiffness, info, stiffness_terms)
                 if (info /= 0) return
             end do
         end do
@@ -218,7 +237,7 @@ contains
             jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
             trial_parity, stored_power, field_periods, radial_space, &
             radial_coordinate, radial_step, theta, zeta, weight, stiffness, &
-            info)
+            info, stiffness_terms)
         real(dp), intent(in) :: fields(:), drive, jacobian_radial
         real(dp), intent(in) :: jacobian_theta, jacobian_zeta, gamma_pressure
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
@@ -229,6 +248,7 @@ contains
         real(dp), intent(in) :: weight
         real(dp), intent(inout) :: stiffness(:, :)
         integer, intent(out) :: info
+        real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
         real(dp) :: responses(response_count, 2, size(stiffness, 1))
         real(dp) :: cosine(size(trial_m)), sine(size(trial_m)), phase
         integer :: trial
@@ -247,7 +267,7 @@ contains
         end do
         call accumulate_response_coefficients(responses, cosine, sine, &
             trial_n, field_periods, drive, gamma_pressure, fields(7), weight, &
-            stiffness)
+            stiffness, stiffness_terms)
         info = 0
     end subroutine accumulate_transformed_point
 
@@ -373,11 +393,12 @@ contains
     end subroutine build_energy_responses
 
     subroutine accumulate_response_values(responses, drive, gamma_pressure, &
-            signed_sqrtg, weight, stiffness)
+            signed_sqrtg, weight, stiffness, stiffness_terms)
         real(dp), intent(in) :: responses(:, :), drive, gamma_pressure
         real(dp), intent(in) :: signed_sqrtg, weight
         real(dp), intent(inout) :: stiffness(:, :)
-        real(dp) :: factors(response_count)
+        real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
+        real(dp) :: contributions(response_count), factors(response_count)
         integer :: a, b
 
         factors = response_factors(drive, gamma_pressure, signed_sqrtg)
@@ -385,18 +406,25 @@ contains
             do a = 1, size(stiffness, 1)
                 stiffness(a, b) = stiffness(a, b) + weight &
                     * sum(factors * responses(:, a) * responses(:, b))
+                if (present(stiffness_terms)) then
+                    contributions = factors * responses(:, a) * responses(:, b)
+                    stiffness_terms(a, b, :) = stiffness_terms(a, b, :) &
+                        + weight * contributions
+                end if
             end do
         end do
     end subroutine accumulate_response_values
 
     subroutine accumulate_response_coefficients(responses, cosine, sine, &
             trial_n, field_periods, drive, gamma_pressure, signed_sqrtg, &
-            weight, stiffness)
+            weight, stiffness, stiffness_terms)
         real(dp), intent(in) :: responses(:, :, :), cosine(:), sine(:)
         integer, intent(in) :: trial_n(:), field_periods
         real(dp), intent(in) :: drive, gamma_pressure, signed_sqrtg, weight
         real(dp), intent(inout) :: stiffness(:, :)
-        real(dp) :: factors(response_count), products(2, 2), contribution
+        real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
+        real(dp) :: contributions(response_count), factors(response_count)
+        real(dp) :: products(2, 2), contribution
         integer :: a, b, kind_a, kind_b, trial_a, trial_b, trials
 
         trials = size(trial_n)
@@ -409,14 +437,24 @@ contains
                     sine(trial_a), cosine(trial_b), sine(trial_b), &
                     trial_n(trial_a), trial_n(trial_b), field_periods, products)
                 contribution = 0.0_dp
+                if (present(stiffness_terms)) contributions = 0.0_dp
                 do kind_b = phase_cosine, phase_sine
                     do kind_a = phase_cosine, phase_sine
                         contribution = contribution + products(kind_a, kind_b) &
                             * sum(factors * responses(:, kind_a, a) &
                             * responses(:, kind_b, b))
+                        if (present(stiffness_terms)) &
+                            contributions = contributions &
+                            + products(kind_a, kind_b) * factors &
+                            * responses(:, kind_a, a) &
+                            * responses(:, kind_b, b)
                     end do
                 end do
                 stiffness(a, b) = stiffness(a, b) + weight * contribution
+                if (present(stiffness_terms)) then
+                    stiffness_terms(a, b, :) = stiffness_terms(a, b, :) &
+                        + weight * contributions
+                end if
             end do
         end do
     end subroutine accumulate_response_coefficients
@@ -430,53 +468,5 @@ contains
         factors(4) = -drive * abs(signed_sqrtg) / vacuum_permeability
         factors(5) = gamma_pressure * abs(signed_sqrtg)
     end function response_factors
-
-    subroutine validate_inputs(fields, drive, jacobian_radial, &
-            jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
-            trial_parity, stored_power, field_periods, radial_step, &
-            phase_assembly, info)
-        real(dp), intent(in) :: fields(:, :, :), drive(:, :)
-        real(dp), intent(in) :: jacobian_radial(:, :), jacobian_theta(:, :)
-        real(dp), intent(in) :: jacobian_zeta(:, :), gamma_pressure(:, :)
-        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
-        real(dp), intent(in) :: stored_power(:), radial_step
-        integer, intent(in) :: field_periods, phase_assembly
-        integer, intent(out) :: info
-        integer :: angular_shape(2), trials
-
-        info = -1
-        trials = size(trial_m)
-        angular_shape = [size(fields, 1), size(fields, 2)]
-        if (trials < 1 .or. size(trial_n) /= trials) return
-        if (size(trial_parity) /= trials .or. size(stored_power) /= trials) &
-            return
-        if (any(trial_m < 0)) return
-        if (any(trial_parity < 1) .or. any(trial_parity > 2)) return
-        if (.not. all(ieee_is_finite(stored_power))) return
-        if (field_periods < 1) return
-        if (phase_assembly /= phase_assembly_transformed .and. &
-            phase_assembly /= phase_assembly_direct) return
-        if (size(fields, 1) < 1 .or. size(fields, 2) < 1) return
-        if (size(fields, 3) < 13) return
-        if (any(shape(drive) /= angular_shape)) return
-        if (any(shape(jacobian_radial) /= angular_shape)) return
-        if (any(shape(jacobian_theta) /= angular_shape)) return
-        if (any(shape(jacobian_zeta) /= angular_shape)) return
-        if (any(shape(gamma_pressure) /= angular_shape)) return
-        if (.not. all(ieee_is_finite(fields(:, :, 1:13)))) return
-        if (.not. all(ieee_is_finite(drive))) return
-        if (.not. all(ieee_is_finite(jacobian_radial))) return
-        if (.not. all(ieee_is_finite(jacobian_theta))) return
-        if (.not. all(ieee_is_finite(jacobian_zeta))) return
-        if (.not. all(ieee_is_finite(gamma_pressure))) return
-        if (any(gamma_pressure < 0.0_dp)) return
-        if (.not. ieee_is_finite(radial_step) .or. radial_step <= 0.0_dp) &
-            return
-        if (any(fields(:, :, 7) == 0.0_dp)) return
-        if (any(fields(:, :, 8) <= 0.0_dp)) return
-        if (any(fields(:, :, 9) <= 0.0_dp)) return
-        if (any(fields(:, :, 1)**2 + fields(:, :, 2)**2 <= 0.0_dp)) return
-        info = 0
-    end subroutine validate_inputs
 
 end module compressible_stiffness_assembly

@@ -104,6 +104,7 @@ from .equilibrium import (  # noqa: E402
     GlissInternalError,
 )
 from .mercier import mercier_objective, mercier_profile  # noqa: E402
+from .energy import EnergyTerms  # noqa: E402
 from .stability import (  # noqa: E402
     SpectrumResult,
     StabilityProblem,
@@ -120,6 +121,7 @@ from .full_schema import FullRunManifest, write_full_run_manifest  # noqa: E402
 __all__ = [
     "__version__",
     "Equilibrium",
+    "EnergyTerms",
     "GlissAllocationError",
     "GlissArgumentError",
     "GlissCapacityError",

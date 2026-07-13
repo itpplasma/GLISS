@@ -29,6 +29,7 @@ add_library(gliss
     src/gvec_cas3d_types.f90
     src/block_tridiagonal.f90
     src/compressible_geometry.f90
+    src/compressible_stiffness_validation.f90
     src/compressible_stiffness_assembly.f90
     src/compressible_stiffness_family_assembly.f90
     src/generalized_block_solver.f90
@@ -76,9 +77,13 @@ add_library(gliss
     src/boundary/starwall_fourier_coupling.f90
     src/vacuum_schur.f90
     src/variable_block_tridiagonal.f90
+    src/stable_reduction.f90
     src/variable_generalized_solver.f90
     src/variable_spectrum_analysis.f90
     src/dense_spectrum_support.f90
+    src/fixed_boundary_energy.f90
+    src/fixed_boundary_eigen_bracket.f90
+    src/fixed_boundary_input_validation.f90
     src/fixed_boundary_spectrum.f90
     src/newcomb_limit.f90
     src/family_assembly.f90
@@ -102,6 +107,7 @@ add_library(gliss_c SHARED
     src/gliss_equilibrium_io_capi.f90
     src/gliss_capi.f90
     src/gliss_spectrum_capi.f90
+    src/gliss_energy_capi.f90
     src/gliss_full_spectrum_capi.f90)
 add_dependencies(gliss_c gliss)
 target_link_libraries(gliss_c PRIVATE gliss)

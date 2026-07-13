@@ -107,6 +107,20 @@ typedef struct gliss_spectrum_summary {
     double inertia_interval;
 } gliss_spectrum_summary;
 
+typedef struct gliss_energy_terms {
+    size_t struct_size;
+    double field_line_bending;
+    double magnetic_shear;
+    double magnetic_compression;
+    double pressure_drive;
+    double plasma_compressibility;
+    double potential_energy;
+    double kinetic_energy;
+    double rayleigh_quotient;
+    double closure_error;
+    double closure_tolerance;
+} gliss_energy_terms;
+
 /* A fixed-boundary problem copies and assembles all data it needs, so the
  * equilibrium may be destroyed after successful construction. mode_m and
  * mode_n are mode_count contiguous int32_t values. radial_quadrature is 1 for
@@ -149,6 +163,19 @@ gliss_status gliss_stability_problem_solve_class(
     double *eigenvector,
     size_t *written,
     gliss_spectrum_summary *summary,
+    char *error,
+    size_t error_capacity);
+
+/* Evaluate the five physical contributions to x^T K x, the independent total
+ * x^T K x, x^T M x and their quotient for one caller-owned vector in dynamic
+ * component order. Set terms->struct_size to sizeof(*terms). vector_count must
+ * equal gliss_stability_problem_unknown_count for parity_class. */
+gliss_status gliss_stability_problem_energy(
+    const gliss_stability_problem *problem,
+    int32_t parity_class,
+    size_t vector_count,
+    const double *vector,
+    gliss_energy_terms *terms,
     char *error,
     size_t error_capacity);
 

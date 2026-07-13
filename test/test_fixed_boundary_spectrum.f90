@@ -7,6 +7,7 @@ program test_fixed_boundary_spectrum
         dense_spectrum_ok, unpermute_dense_vectors
     use fixed_boundary_spectrum, only: build_fixed_boundary_problem, &
         fixed_boundary_invalid, fixed_boundary_ok, &
+        fixed_boundary_energy_terms_t, diagnose_fixed_boundary_energy, &
         fixed_boundary_full_spectrum_t, fixed_boundary_problem_t, &
         fixed_boundary_spectrum_result_t, solve_fixed_boundary_class, &
         solve_fixed_boundary_full_spectrum
@@ -22,6 +23,7 @@ program test_fixed_boundary_spectrum
     type(fixed_boundary_problem_t) :: problem
     type(fixed_boundary_spectrum_result_t) :: first, second, repeated
     type(fixed_boundary_full_spectrum_t) :: full, full_repeated
+    type(fixed_boundary_energy_terms_t) :: energy
     integer :: info
 
     call create_cylinder_fixture(fixture)
@@ -37,6 +39,10 @@ program test_fixed_boundary_spectrum
     call require(info == fixed_boundary_ok, "class-two solve failed")
     call check_result(first, 1)
     call check_result(second, 2)
+    call diagnose_fixed_boundary_energy(problem, 1, first%eigenvector, &
+        energy, info)
+    call require(info == fixed_boundary_ok, "energy decomposition failed")
+    call check_energy(energy, first%lowest_eigenvalue)
     call require(abs(first%lowest_eigenvalue - legacy_lowest(1)) &
         <= legacy_relative_tolerance * abs(legacy_lowest(1)), &
         "class-one result changed from the legacy CLI")
@@ -74,6 +80,33 @@ program test_fixed_boundary_spectrum
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_energy(terms, eigenvalue)
+        type(fixed_boundary_energy_terms_t), intent(in) :: terms
+        real(dp), intent(in) :: eigenvalue
+        real(dp) :: positive_scale
+
+        positive_scale = max(1.0_dp, abs(terms%potential_energy))
+        call require(terms%kinetic_energy > 0.0_dp, &
+            "kinetic energy is not positive")
+        call require(abs(terms%kinetic_energy - 1.0_dp) < 1.0e-11_dp, &
+            "eigenvector is not mass normalized")
+        call require(abs(terms%rayleigh_quotient - eigenvalue) &
+            <= 1.0e-10_dp * max(1.0_dp, abs(eigenvalue)), &
+            "energy quotient differs from the eigenvalue")
+        call require(terms%closure_error <= terms%closure_tolerance, &
+            "energy terms do not close")
+        call require(terms%field_line_bending >= -1.0e-12_dp * positive_scale, &
+            "field-line bending energy is negative")
+        call require(terms%magnetic_shear >= -1.0e-12_dp * positive_scale, &
+            "magnetic shear energy is negative")
+        call require(terms%magnetic_compression &
+            >= -1.0e-12_dp * positive_scale, &
+            "magnetic compression energy is negative")
+        call require(terms%plasma_compressibility &
+            >= -1.0e-12_dp * positive_scale, &
+            "plasma compressibility energy is negative")
+    end subroutine check_energy
 
     subroutine check_result(result, parity_class)
         type(fixed_boundary_spectrum_result_t), intent(in) :: result
@@ -177,6 +210,7 @@ contains
         type(gvec_cas3d_equilibrium_t), intent(in) :: local_equilibrium
         type(fixed_boundary_problem_t) :: invalid_problem
         type(fixed_boundary_spectrum_result_t) :: invalid_result
+        type(fixed_boundary_energy_terms_t) :: invalid_energy
         real(dp) :: nan
         integer :: status
 
@@ -211,6 +245,20 @@ contains
         call solve_fixed_boundary_full_spectrum(problem, 0, full, status)
         call require(status == fixed_boundary_invalid, &
             "full spectrum accepted an invalid parity class")
+        call diagnose_fixed_boundary_energy(problem, 0, first%eigenvector, &
+            invalid_energy, status)
+        call require(status == fixed_boundary_invalid, &
+            "energy decomposition accepted an invalid parity class")
+        call diagnose_fixed_boundary_energy(problem, 1, &
+            first%eigenvector(:size(first%eigenvector) - 1), invalid_energy, &
+            status)
+        call require(status == fixed_boundary_invalid, &
+            "energy decomposition accepted the wrong vector size")
+        first%eigenvector(1) = nan
+        call diagnose_fixed_boundary_energy(problem, 1, first%eigenvector, &
+            invalid_energy, status)
+        call require(status == fixed_boundary_invalid, &
+            "energy decomposition accepted a nonfinite vector")
     end subroutine check_invalid_inputs
 
     subroutine delete_fixture()

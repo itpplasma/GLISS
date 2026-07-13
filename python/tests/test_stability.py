@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import gliss
+from gliss.energy import _bind as _bind_energy
 from gliss.full_spectrum import (
     FullSpectrumResult,
     FullStabilityResult,
@@ -49,6 +50,7 @@ class FakeLibrary:
         self.gliss_stability_problem_full_spectrum = FakeFunction(
             self.problem_full_spectrum
         )
+        self.gliss_stability_problem_energy = FakeFunction(self.problem_energy)
 
     def equilibrium_create(self, path, length, handle, error, error_capacity):
         handle._obj.value = 10
@@ -175,6 +177,30 @@ class FakeLibrary:
         )
         eigenvalues_written._obj.value = count
         eigenvectors_written._obj.value = eigenvector_capacity
+        error.value = b""
+        return 0
+
+    def problem_energy(
+        self,
+        handle,
+        parity_class,
+        vector_count,
+        vector,
+        terms,
+        error,
+        error_capacity,
+    ):
+        values = terms._obj
+        values.field_line_bending = 2.0
+        values.magnetic_shear = 3.0
+        values.magnetic_compression = 4.0
+        values.pressure_drive = -5.0
+        values.plasma_compressibility = 1.0
+        values.potential_energy = 5.0
+        values.kinetic_energy = 1.0
+        values.rayleigh_quotient = 5.0
+        values.closure_error = 0.0
+        values.closure_tolerance = 1.0e-12
         error.value = b""
         return 0
 
@@ -365,6 +391,88 @@ def test_stability_problem_exposes_both_full_spectra(contexts):
     assert result.lowest.certified_lowest.parity_class == 2
 
 
+def test_stability_problem_exposes_energy_decomposition(contexts):
+    _, equilibrium = contexts
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        result = problem.solve_class(1)
+        energy = problem.energy(1, result.eigenvector)
+
+    assert isinstance(energy, gliss.EnergyTerms)
+    assert energy.components == (2.0, 3.0, 4.0, -5.0, 1.0)
+    assert energy.potential_energy == sum(energy.components)
+    assert energy.kinetic_energy == 1.0
+    assert energy.rayleigh_quotient == 5.0
+    assert energy.closure_error <= energy.closure_tolerance
+
+
+@pytest.mark.parametrize(
+    ("parity_class", "vector", "error", "match"),
+    [
+        (True, np.ones(6), TypeError, "integer"),
+        (3, np.ones(6), ValueError, "1 or 2"),
+        (1, np.ones((2, 3)), ValueError, "one-dimensional"),
+        (1, np.ones(5), ValueError, "6 entries"),
+        (1, np.array([1, 2, 3, 4, 5, np.nan]), ValueError, "finite"),
+        (1, np.zeros(6), ValueError, "positive kinetic norm"),
+        (1, np.ones(6, dtype=bool), TypeError, "real numbers"),
+        (1, np.ones(6, dtype=complex), TypeError, "real numbers"),
+        (1, [1, 2, 3, 4, 5, "bad"], TypeError, "real numbers"),
+    ],
+)
+def test_stability_problem_rejects_invalid_energy_inputs(
+    contexts, parity_class, vector, error, match
+):
+    _, equilibrium = contexts
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        with pytest.raises(error, match=match):
+            problem.energy(parity_class, vector)
+
+
+def test_stability_problem_energy_accepts_noncontiguous_vector(contexts):
+    _, equilibrium = contexts
+    vector = np.arange(1.0, 13.0)[::2]
+    assert not vector.flags.c_contiguous
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        energy = problem.energy(1, vector)
+    assert energy.rayleigh_quotient == 5.0
+
+
+def test_stability_problem_energy_rejects_closed_problem(contexts):
+    _, equilibrium = contexts
+    problem = StabilityProblem(equilibrium, modes=[(1, 1)])
+    problem.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        problem.energy(1, np.ones(6))
+
+
+def test_stability_problem_energy_reports_allocation_failure(
+    contexts, monkeypatch
+):
+    _, equilibrium = contexts
+
+    def fail_allocation(*args, **kwargs):
+        raise MemoryError
+
+    monkeypatch.setattr("gliss.energy.np.asarray", fail_allocation)
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        with pytest.raises(gliss.GlissAllocationError, match="energy vector"):
+            problem.energy(1, np.ones(6))
+
+
+def test_stability_problem_energy_rejects_inconsistent_native_terms(contexts):
+    library, equilibrium = contexts
+
+    def inconsistent(*args):
+        status = library.problem_energy(*args)
+        args[4]._obj.potential_energy = 6.0
+        return status
+
+    library.gliss_stability_problem_energy = FakeFunction(inconsistent)
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        with pytest.raises(gliss.GlissInternalError, match="do not close"):
+            problem.energy(1, np.ones(6))
+
+
 def test_stability_problem_rejects_invalid_full_spectrum_sizes(contexts):
     library, equilibrium = contexts
 
@@ -513,3 +621,8 @@ def test_stability_bind_reports_missing_native_symbols():
 def test_full_spectrum_bind_reports_missing_native_symbol():
     with pytest.raises(OSError, match="full stability spectrum.*matching"):
         _bind_full_spectrum(object())
+
+
+def test_energy_bind_reports_missing_native_symbol():
+    with pytest.raises(OSError, match="energy decomposition.*matching"):
+        _bind_energy(object())

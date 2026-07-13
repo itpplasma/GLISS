@@ -4,6 +4,7 @@ program test_compressible_stiffness_family_assembly
         assemble_compressible_stiffness_surface_resolved
     use compressible_stiffness_family_assembly, only: &
         assemble_compressible_family_stiffness, &
+        assemble_compressible_family_stiffness_with_terms, &
         assemble_compressible_family_stiffness_fixed_layout
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
         build_dynamic_element_map, dynamic_family_layout_t, eta_global_index, &
@@ -32,6 +33,7 @@ program test_compressible_stiffness_family_assembly
     real(dp), allocatable :: jacobian_theta(:, :, :), jacobian_zeta(:, :, :)
     real(dp), allocatable :: gamma_pressure(:, :, :), direct(:, :)
     real(dp), allocatable :: transformed(:, :), zero(:, :), doubled(:, :)
+    real(dp), allocatable :: decomposed(:, :), terms(:, :, :)
     real(dp) :: probe(22), matrix_energy, element_energy
     type(dynamic_family_layout_t) :: layout, direct_layout
     type(radial_space_config_t) :: radial_space
@@ -54,6 +56,17 @@ program test_compressible_stiffness_family_assembly
         "global direct and transformed stiffness matrices differ")
     call require_close(transformed, transpose(transformed), 1.0e-13_dp, &
         "global compressible stiffness is not symmetric")
+    call assemble_compressible_family_stiffness_with_terms(fields, drive, &
+        jacobian_radial, jacobian_theta, jacobian_zeta, gamma_pressure, &
+        trial_m, trial_n, trial_parity, stored_power, 3, radial_space, &
+        0.25_dp, phase_assembly_transformed, decomposed, terms, layout, info)
+    call require(info == 0, "term-resolved stiffness assembly failed")
+    call require(size(terms, 3) == 5, "stiffness term count is wrong")
+    call require_close(decomposed, transformed, 1.0e-14_dp, &
+        "term-resolved assembly changed the stiffness")
+    call require_close(sum(terms, dim=3), decomposed, 1.0e-14_dp, &
+        "stiffness terms do not sum to the assembled operator")
+    call check_term_symmetry(terms)
     call check_variable_block_structure(transformed, layout)
     call check_physical_generalized_problem(fields, transformed, layout)
     call check_fixed_layout_rejection(fields, drive, jacobian_radial, &
@@ -97,6 +110,17 @@ program test_compressible_stiffness_family_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_term_symmetry(local_terms)
+        real(dp), intent(in) :: local_terms(:, :, :)
+        integer :: term
+
+        do term = 1, size(local_terms, 3)
+            call require_close(local_terms(:, :, term), &
+                transpose(local_terms(:, :, term)), 1.0e-13_dp, &
+                "a stiffness energy term is not symmetric")
+        end do
+    end subroutine check_term_symmetry
 
     subroutine check_fixed_layout_rejection(local_fields, local_drive, &
             jacobian_s, jacobian_t, jacobian_z, gamma_pressure, local_layout)
