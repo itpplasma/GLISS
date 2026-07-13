@@ -274,6 +274,17 @@ def convert_geometry(
     if nfp < 1 or surfaces < 5:
         raise ValueError("VMEC input must contain at least five half-grid surfaces")
     s = _array(source, "s_b", (surfaces,))
+    indices = np.asarray(source.compute_surfs)
+    available = int(source.ns_in)
+    if (
+        indices.shape != (surfaces,)
+        or not np.issubdtype(indices.dtype, np.integer)
+        or np.any(indices < 0)
+        or np.any(indices >= available)
+        or np.any(indices[1:] <= indices[:-1])
+    ):
+        raise ValueError("booz_xform returned invalid radial surface indices")
+    indices = indices.astype(np.int64, copy=False)
     expected_s = (np.arange(surfaces) + 0.5) / surfaces
     if np.max(np.abs(s - expected_s)) > 1.0e-10:
         raise ValueError("VMEC half-grid is not uniformly spaced in normalized flux")
@@ -341,9 +352,9 @@ def convert_geometry(
     ii_tz = second(rtz, ztz, -ptz, rt, rz, phi_t, phi_z)
     ii_zz = second(rzz, zzz, -pzz, rz, rz, phi_z, phi_z)
     phip = _array(source, "phip")
-    if phip.shape != (surfaces + 1,):
+    if phip.shape != (available + 1,):
         raise ValueError("booz_xform returned phip on an unsupported radial grid")
-    phip_half = 0.5 * (phip[:-1] + phip[1:])[:, None, None]
+    phip_half = 0.5 * (phip[indices] + phip[indices + 1])[:, None, None]
     gm_values = ev(gm)
     jacobian = phip_half * gm_values
     geometry_jacobian_residual = _relative_max(geometry_jacobian, jacobian)
@@ -354,7 +365,8 @@ def convert_geometry(
         )
     current_i = _array(source, "Boozer_I", (surfaces,))[:, None, None]
     current_g = _array(source, "Boozer_G", (surfaces,))[:, None, None]
-    rotational_transform = _array(source, "iota", (surfaces,))[:, None, None]
+    rotational_transform = _array(source, "iota", (available,))[indices]
+    rotational_transform = rotational_transform[:, None, None]
     contra_t = rotational_transform / gm_values
     contra_z = 1.0 / gm_values
     field_strength = ev(mod_b)
@@ -406,15 +418,15 @@ def convert_geometry(
     for name, (cosine, sine) in harmonics.items():
         _require_parity(name, cosine, sine)
 
-    phi = _array(source, "phi", (surfaces + 1,))
-    chi = _array(source, "chi", (surfaces + 1,))
-    pressure = _array(source, "pres", (surfaces + 1,))[1:]
+    phi = _array(source, "phi", (available + 1,))
+    chi = _array(source, "chi", (available + 1,))
+    pressure = _array(source, "pres", (available + 1,))[indices + 1]
     profiles = {
         "p": pressure,
         "B_theta_avg": -_TWO_PI * current_i[:, 0, 0],
         "B_zeta_avg": -_TWO_PI / nfp * current_g[:, 0, 0],
-        "Phi": -0.5 * (phi[:-1] + phi[1:]),
-        "chi": 0.5 * (chi[:-1] + chi[1:]),
+        "Phi": -0.5 * (phi[indices] + phi[indices + 1]),
+        "chi": 0.5 * (chi[indices] + chi[indices + 1]),
         "iota": rotational_transform[:, 0, 0],
     }
     phi_slope = np.gradient(profiles["Phi"], s, edge_order=2)[:, None, None]

@@ -43,6 +43,7 @@ converted = gliss.convert_vmec(
     Path("W7X_gliss.nc"),
     poloidal_max=7,
     toroidal_max=7,
+    radial_surfaces=40,
 )
 with gliss.Equilibrium(converted) as equilibrium:
     s, d_mercier = equilibrium.mercier_profile()
@@ -61,6 +62,15 @@ an incompatible chart. Mode limits are integers from 0 through 64. The
 default 7 by 7 truncation is deliberate: higher modes can amplify radial
 noise in a surface-by-surface Boozer transform. Increase them only after a
 convergence check.
+
+By default, conversion retains every VMEC half-grid surface. The optional
+`radial_surfaces` argument performs centered subsampling without interpolation.
+The requested count must be at least five, divide the available half-grid
+count, and give an odd stride. For example, 40 is valid for a file with 200
+half-grid surfaces. These rules keep the selected points on the exact uniform
+midpoint grid assumed by the radial finite elements. Invalid counts are
+rejected before the transform runs or an output is created. The source and
+retained surface counts are stored in the output attributes.
 
 The generated file supports GLISS's fixed-boundary operators. It does not
 contain a vacuum-region mesh or conducting-wall model for free-boundary work.

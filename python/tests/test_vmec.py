@@ -11,6 +11,7 @@ from gliss._vmec_geometry import ConvertedGeometry, _EVEN_FIELDS, _ODD_FIELDS
 class _Transform:
     nfp = 3
     asym = False
+    ns_in = 15
 
     def __init__(self):
         self.verbose = 1
@@ -18,6 +19,7 @@ class _Transform:
         self.nboz = 0
         self.read_arguments = None
         self.ran = False
+        self.compute_surfs = np.arange(self.ns_in, dtype=np.int32)
 
     def read_wout(self, path, flux):
         self.read_arguments = (path, flux)
@@ -72,7 +74,9 @@ def test_convert_vmec_rejects_overwriting_its_input(tmp_path):
     assert source.read_bytes() == b"preserve"
 
 
-@pytest.mark.parametrize("name", ["poloidal_max", "toroidal_max", "transform_factor"])
+@pytest.mark.parametrize(
+    "name", ["poloidal_max", "toroidal_max", "transform_factor", "radial_surfaces"]
+)
 def test_convert_vmec_rejects_boolean_integer_options(tmp_path, name):
     source = tmp_path / "wout.nc"
     source.write_bytes(b"input")
@@ -93,13 +97,20 @@ def test_convert_vmec_is_atomic_and_writes_reader_schema(tmp_path, monkeypatch):
     monkeypatch.setattr(vmec, "_metadata", lambda path, reader: 0.02)
     monkeypatch.setattr(vmec, "convert_geometry", lambda *args: _geometry())
 
-    result = vmec.convert_vmec(source, destination, poloidal_max=2, toroidal_max=1)
+    result = vmec.convert_vmec(
+        source,
+        destination,
+        poloidal_max=2,
+        toroidal_max=1,
+        radial_surfaces=5,
+    )
 
     assert result == destination
     assert transform.verbose == 0
     assert transform.read_arguments == (str(source), True)
     assert transform.mboz == 12
     assert transform.nboz == 8
+    np.testing.assert_array_equal(transform.compute_surfs, [1, 4, 7, 10, 13])
     assert transform.ran
     assert not list(tmp_path.glob(".converted.nc.*.tmp"))
     with netcdf_file(destination, "r", mmap=False) as file:
@@ -107,11 +118,36 @@ def test_convert_vmec_is_atomic_and_writes_reader_schema(tmp_path, monkeypatch):
         assert file.gliss_schema_version == b"1"
         assert file.stellarator_symmetry == b"True"
         assert file.creator == b"gliss.convert_vmec"
+        assert int(file.vmec_half_grid_surfaces) == 15
+        assert int(file.booz_xform_surfaces) == 5
         assert float(file.conversion_residual_toroidal_flux) == 0.0
         assert int(file.variables["N_FP"].data) == 3
         assert file.variables["Jac_mnc"].data.shape == (5, 3, 3)
         assert "Jac_mns" not in file.variables
         assert file.variables["g_st_mns"].data.shape == (5, 3, 3)
+
+
+@pytest.mark.parametrize(("available", "radial_surfaces"), [(15, 6), (30, 5)])
+def test_convert_vmec_rejects_noncentered_radial_subsampling(
+    tmp_path, monkeypatch, available, radial_surfaces
+):
+    source = tmp_path / "wout.nc"
+    source.write_bytes(b"input")
+    destination = tmp_path / "converted.nc"
+    transform = _Transform()
+    transform.ns_in = available
+    monkeypatch.setattr(
+        vmec,
+        "_dependencies",
+        lambda: (type("Module", (), {"Booz_xform": lambda: transform}), netcdf_file),
+    )
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: 0.02)
+
+    with pytest.raises(ValueError, match="radial_surfaces"):
+        vmec.convert_vmec(source, destination, radial_surfaces=radial_surfaces)
+
+    assert not transform.ran
+    assert not destination.exists()
 
 
 def test_convert_vmec_removes_partial_output_after_write_failure(tmp_path, monkeypatch):

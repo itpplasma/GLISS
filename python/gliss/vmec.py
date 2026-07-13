@@ -4,7 +4,7 @@ import operator
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 
@@ -89,6 +89,27 @@ def _metadata(path: Path, netcdf_file: Any) -> float:
         raise ValueError(f"cannot read standard VMEC NetCDF file {path}") from error
 
 
+def _select_surfaces(transform: Any, radial_surfaces: Optional[int]) -> None:
+    if radial_surfaces is None:
+        return
+    available = int(transform.ns_in)
+    if available < 1:
+        raise ValueError("booz_xform reported no VMEC half-grid surfaces")
+    if available % radial_surfaces:
+        raise ValueError(
+            "radial_surfaces must divide the VMEC half-grid surface count"
+        )
+    stride = available // radial_surfaces
+    if stride % 2 == 0:
+        raise ValueError(
+            "radial_surfaces must give an odd centered-subsampling stride"
+        )
+    first = (stride - 1) // 2
+    transform.compute_surfs = np.arange(
+        first, available, stride, dtype=np.int32
+    )
+
+
 def _write(
     path: Path,
     converted: Any,
@@ -99,6 +120,7 @@ def _write(
     netcdf_file: Any,
     source_name: str = "",
     transform_resolution: tuple[int, int] = (0, 0),
+    radial_resolution: tuple[int, int] = (0, 0),
     booz_xform_version: str = "unknown",
 ) -> None:
     n_modes = np.concatenate((np.arange(n_max + 1), np.arange(-n_max, 0)))
@@ -113,6 +135,8 @@ def _write(
         file.vmec_source = source_name.encode("utf-8")
         file.booz_xform_mboz = transform_resolution[0]
         file.booz_xform_nboz = transform_resolution[1]
+        file.vmec_half_grid_surfaces = radial_resolution[0]
+        file.booz_xform_surfaces = radial_resolution[1]
         file.booz_xform_version = booz_xform_version.encode("ascii")
         for name, value in converted.residuals.items():
             setattr(file, f"conversion_residual_{name}", np.float64(value))
@@ -145,19 +169,25 @@ def convert_vmec(
     poloidal_max: int = 7,
     toroidal_max: int = 7,
     transform_factor: int = 4,
+    radial_surfaces: Optional[int] = None,
     overwrite: bool = False,
 ) -> Path:
     """Convert a stellarator-symmetric VMEC ``wout`` file for GLISS.
 
     The result uses the left-handed, one-field-period Boozer convention of
-    pyGVEC's CAS3D exporter. Existing outputs are preserved unless
-    ``overwrite=True``.
+    pyGVEC's CAS3D exporter. ``radial_surfaces`` optionally selects an exact
+    centered uniform subset of the VMEC half grid. Existing outputs are
+    preserved unless ``overwrite=True``.
     """
     source_path = _path(input_path, "input_path", True)
     destination = _path(output_path, "output_path", False)
     poloidal_max = _integer(poloidal_max, "poloidal_max", 0, 64)
     toroidal_max = _integer(toroidal_max, "toroidal_max", 0, 64)
     transform_factor = _integer(transform_factor, "transform_factor", 2, 16)
+    if radial_surfaces is not None:
+        radial_surfaces = _integer(
+            radial_surfaces, "radial_surfaces", 5, 1_000_000
+        )
     if not isinstance(overwrite, bool):
         raise TypeError("overwrite must be a bool")
     if destination.exists() and not overwrite:
@@ -174,6 +204,10 @@ def convert_vmec(
     transform.verbose = 0
     try:
         transform.read_wout(os.fspath(source_path), True)
+    except Exception as error:
+        raise RuntimeError(f"cannot load VMEC equilibrium {source_path}") from error
+    _select_surfaces(transform, radial_surfaces)
+    try:
         transform.mboz = transform_factor * (poloidal_max + 1)
         transform.nboz = transform_factor * (toroidal_max + 1)
         transform.run()
@@ -200,6 +234,7 @@ def convert_vmec(
             netcdf_file,
             source_path.name,
             (int(transform.mboz), int(transform.nboz)),
+            (int(transform.ns_in), int(converted.s.size)),
             getattr(booz_xform, "__version__", "unknown"),
         )
         os.replace(temporary, destination)
