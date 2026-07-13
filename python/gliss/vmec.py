@@ -142,8 +142,8 @@ def convert_vmec(
     input_path: PathLike,
     output_path: PathLike,
     *,
-    poloidal_max: int = 8,
-    toroidal_max: int = 8,
+    poloidal_max: int = 7,
+    toroidal_max: int = 7,
     transform_factor: int = 4,
     overwrite: bool = False,
 ) -> Path:

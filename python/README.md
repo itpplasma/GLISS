@@ -41,8 +41,8 @@ import gliss
 converted = gliss.convert_vmec(
     Path("wout_W7X.nc"),
     Path("W7X_gliss.nc"),
-    poloidal_max=8,
-    toroidal_max=8,
+    poloidal_max=7,
+    toroidal_max=7,
 )
 with gliss.Equilibrium(converted) as equilibrium:
     s, d_mercier = equilibrium.mercier_profile()
@@ -58,7 +58,7 @@ The importer currently accepts fixed-boundary, stellarator-symmetric VMEC
 files with `signgs=-1` and a successful `ier_flag`. It rejects asymmetric and
 reversed-field-pinch files instead of applying the symmetric GLISS operator to
 an incompatible chart. Mode limits are integers from 0 through 64. The
-default 8 by 8 truncation is deliberate: higher modes can amplify radial
+default 7 by 7 truncation is deliberate: higher modes can amplify radial
 noise in a surface-by-surface Boozer transform. Increase them only after a
 convergence check.
 
