@@ -8,10 +8,20 @@ program test_terpsichore_pseudoplasma_stiffness
     use terpsichore_pseudoplasma_stiffness, only: &
         assemble_terpsichore_pseudoplasma_stiffness, &
         pseudoplasma_stiffness_ok
+    use dynamic_family_layout, only: dynamic_family_layout_t, &
+        normal_global_index
+    use fourier_phase_kind, only: phase_sine
+    use terpsichore_matrix_fixture, only: terpsichore_matrix_fixture_t
+    use terpsichore_pseudoplasma_coupling, only: &
+        add_terpsichore_pseudoplasma_schur, pseudoplasma_coupling_invalid, &
+        pseudoplasma_coupling_ok
+    use terpsichore_reduced_layout, only: &
+        build_terpsichore_reduced_free_boundary_layout
     use vacuum_schur, only: eliminate_vacuum, vacuum_schur_ok
     implicit none
 
     call test_analytic_matrix()
+    call test_plasma_coupling()
     call test_fixture_reader()
     call test_invalid_fixture()
     call test_invalid_fixture_records()
@@ -49,6 +59,47 @@ contains
             - (16.5_dp - 15.5_dp**2 / 33.0_dp)) < 1.0e-14_dp, &
             "pseudoplasma interface energy is wrong")
     end subroutine test_analytic_matrix
+
+    subroutine test_plasma_coupling()
+        type(terpsichore_pseudoplasma_fixture_t) :: vacuum
+        type(terpsichore_matrix_fixture_t) :: plasma
+        type(dynamic_family_layout_t) :: layout
+        real(dp), allocatable :: effective(:, :), response(:, :)
+        real(dp), allocatable :: stiffness(:, :)
+        integer, allocatable :: element_map(:, :)
+        integer :: edge, info
+
+        call build_fixture(vacuum)
+        plasma%intervals = vacuum%plasma_intervals
+        plasma%modes = vacuum%modes
+        allocate (plasma%mode_m, source=vacuum%mode_m)
+        allocate (plasma%mode_n, source=vacuum%mode_n)
+        call build_terpsichore_reduced_free_boundary_layout(plasma%mode_m, &
+            plasma%mode_n, [phase_sine], plasma%intervals, layout, &
+            element_map, info)
+        allocate (stiffness(layout%total_unknowns, layout%total_unknowns), &
+            source=0.0_dp)
+        call add_terpsichore_pseudoplasma_schur(plasma, vacuum, layout, &
+            stiffness, effective, response, info)
+        call require(info == pseudoplasma_coupling_ok, &
+            "compatible plasma-vacuum coupling failed")
+        edge = normal_global_index(layout, layout%intervals, 1)
+        call require(abs(stiffness(edge, edge) &
+            - (16.5_dp - 15.5_dp**2 / 33.0_dp)) < 1.0e-14_dp, &
+            "vacuum Schur energy was not added at the plasma edge")
+        call require(count(abs(stiffness) > 1.0e-14_dp) == 1, &
+            "vacuum Schur energy changed a non-interface unknown")
+        call require(abs(response(1, 1) - 15.5_dp / 33.0_dp) &
+            < 1.0e-14_dp, "vacuum minimizing response has the wrong sign")
+        plasma%mode_m(1) = 2
+        stiffness = 0.0_dp
+        call add_terpsichore_pseudoplasma_schur(plasma, vacuum, layout, &
+            stiffness, effective, response, info)
+        call require(info == pseudoplasma_coupling_invalid, &
+            "mismatched plasma and vacuum modes were accepted")
+        call require(all(stiffness == 0.0_dp), &
+            "rejected vacuum coupling changed the plasma matrix")
+    end subroutine test_plasma_coupling
 
     subroutine test_fixture_reader()
         type(terpsichore_pseudoplasma_fixture_t) :: source, restored

@@ -53,10 +53,13 @@ add_library(gliss
     src/terpsichore_noninteracting_stiffness.f90
     src/terpsichore_pseudoplasma_fixture.f90
     src/terpsichore_pseudoplasma_stiffness.f90
+    src/terpsichore_pseudoplasma_coupling.f90
+    src/terpsichore_eigen_diagnostics.f90
     src/terpsichore_reduced_layout.f90
     src/terpsichore_reduced_mass.f90
     src/terpsichore_reduced_mass_adapter.f90
     src/terpsichore_reduced_mass_family_assembly.f90
+    src/terpsichore_solution_fixture.f90
     src/terpsichore_topology.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
@@ -475,6 +478,47 @@ if(BUILD_TESTING)
         -DPROGRAM=$<TARGET_FILE:gliss_terpsichore_pseudoplasma_stiffness>
         "-DEXPECTED=usage: gliss_terpsichore_pseudoplasma_stiffness FORT.24"
         "-DARGUMENTS=one;two"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+
+    add_executable(test_terpsichore_solution_fixture
+        test/test_terpsichore_solution_fixture.f90)
+    target_link_libraries(test_terpsichore_solution_fixture PRIVATE gliss)
+    add_test(NAME terpsichore_solution_fixture
+        COMMAND test_terpsichore_solution_fixture)
+
+    add_executable(test_terpsichore_eigen_diagnostics
+        test/test_terpsichore_eigen_diagnostics.f90)
+    target_link_libraries(test_terpsichore_eigen_diagnostics PRIVATE gliss)
+    add_test(NAME terpsichore_eigen_diagnostics
+        COMMAND test_terpsichore_eigen_diagnostics)
+    add_test(NAME terpsichore_eigen_cli_missing
+        COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_terpsichore_eigen>
+        "-DEXPECTED=usage: gliss_terpsichore_eigen FORT.23 IVAC [FORT.24]"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    add_test(NAME terpsichore_eigen_cli_bad_ivac
+        COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_terpsichore_eigen>
+        "-DEXPECTED=IVAC must be a nonnegative decimal integer"
+        "-DARGUMENTS=unused;1x"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    add_test(NAME terpsichore_eigen_cli_negative_ivac
+        COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_terpsichore_eigen>
+        "-DEXPECTED=IVAC must be a nonnegative decimal integer"
+        "-DARGUMENTS=unused;-1"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    add_test(NAME terpsichore_eigen_cli_missing_vacuum
+        COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_terpsichore_eigen>
+        "-DEXPECTED=IVAC>0 requires FORT.24"
+        "-DARGUMENTS=unused;1"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    add_test(NAME terpsichore_eigen_cli_extra_fixed
+        COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_terpsichore_eigen>
+        "-DEXPECTED=IVAC=0 does not accept FORT.24"
+        "-DARGUMENTS=unused;0;unused"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
 
     add_executable(test_terpsichore_normalization

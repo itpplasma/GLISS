@@ -166,6 +166,14 @@ name = "terpsichore_pseudoplasma_stiffness"
 main = "test_terpsichore_pseudoplasma_stiffness.f90"
 
 [[test]]
+name = "terpsichore_solution_fixture"
+main = "test_terpsichore_solution_fixture.f90"
+
+[[test]]
+name = "terpsichore_eigen_diagnostics"
+main = "test_terpsichore_eigen_diagnostics.f90"
+
+[[test]]
 name = "terpsichore_normalization"
 main = "test_terpsichore_normalization.f90"
 

@@ -11,7 +11,8 @@ module terpsichore_pseudoplasma_fixture
     integer, parameter :: maximum_intervals = 996
     integer, parameter :: maximum_modes = 10000
     integer, parameter :: maximum_coefficients = 50000000
-    integer, parameter :: maximum_matrix_entries = 16000000
+    ! The shipped 191-mode, 16-cell QAS3 vacuum has 37.4 million entries.
+    integer, parameter :: maximum_matrix_entries = 50000000
     integer, parameter :: maximum_mode_number = 1000000
 
     type, public :: terpsichore_pseudoplasma_fixture_t
