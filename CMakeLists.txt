@@ -102,6 +102,12 @@ target_link_libraries(gliss_newcomb PRIVATE gliss)
 set_target_properties(gliss_newcomb PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
+add_executable(gliss_local_mode_diagnostic
+    app/gliss_local_mode_diagnostic.f90)
+target_link_libraries(gliss_local_mode_diagnostic PRIVATE gliss)
+set_target_properties(gliss_local_mode_diagnostic PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
 add_executable(gliss_mercier app/gliss_mercier.f90)
 target_link_libraries(gliss_mercier PRIVATE gliss)
 set_target_properties(gliss_mercier PROPERTIES
@@ -233,6 +239,12 @@ if(BUILD_TESTING)
     add_executable(test_local_mode test/test_local_mode.f90)
     target_link_libraries(test_local_mode PRIVATE gliss)
     add_test(NAME local_mode COMMAND test_local_mode)
+    add_test(NAME local_mode_diagnostic COMMAND gliss_local_mode_diagnostic)
+    add_test(NAME local_mode_diagnostic_cli_extra COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_local_mode_diagnostic>
+        "-DEXPECTED=gliss_local_mode_diagnostic: no arguments are accepted"
+        "-DARGUMENTS=extra"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
 
     add_executable(test_helical_cylinder_limit
         test/test_helical_cylinder_limit.f90)
