@@ -13,6 +13,7 @@ program test_vacuum_schur
         -0.2_dp, 0.3_dp], [2, 2])
 
     call test_exact_elimination()
+    call test_rectangular_coupling()
     call test_fixed_boundary_limit()
     call test_invalid_inputs()
     write (*, "(a)") "PASS"
@@ -49,6 +50,34 @@ contains
         call require(abs(full_energy - reduced_energy) < 1.0e-14_dp, &
             "reduced energy does not equal stationary full energy")
     end subroutine test_exact_elimination
+
+    subroutine test_rectangular_coupling()
+        real(dp), parameter :: plasma_three(3, 3) = reshape([ &
+            4.0_dp, 1.0_dp, 0.2_dp, 1.0_dp, 3.0_dp, -0.1_dp, &
+            0.2_dp, -0.1_dp, 2.0_dp], [3, 3])
+        real(dp), parameter :: coupling_three(3, 2) = reshape([ &
+            0.4_dp, 0.1_dp, -0.3_dp, -0.2_dp, 0.3_dp, 0.25_dp], [3, 2])
+        real(dp), allocatable :: effective(:, :), response(:, :)
+        real(dp) :: inverse(2, 2), expected_response(2, 3)
+        real(dp) :: expected_effective(3, 3)
+        integer :: info
+
+        inverse = reshape([2.0_dp, -0.5_dp, -0.5_dp, 3.0_dp], [2, 2]) &
+            / 5.75_dp
+        expected_response = -matmul(inverse, transpose(coupling_three))
+        expected_effective = plasma_three + &
+            matmul(coupling_three, expected_response)
+        call eliminate_vacuum(plasma_three, vacuum, coupling_three, effective, &
+            response, info)
+        call require(info == vacuum_schur_ok, &
+            "rectangular-coupling elimination failed")
+        call require(all(shape(response) == [2, 3]), &
+            "rectangular vacuum response has the wrong shape")
+        call require(maxval(abs(response - expected_response)) < 1.0e-14_dp, &
+            "rectangular vacuum response is transposed or incorrect")
+        call require(maxval(abs(effective - expected_effective)) < 1.0e-14_dp, &
+            "rectangular Schur complement is incorrect")
+    end subroutine test_rectangular_coupling
 
     subroutine test_fixed_boundary_limit()
         real(dp), allocatable :: effective(:, :), response(:, :)
