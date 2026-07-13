@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(gliss VERSION 0.0.1 LANGUAGES Fortran)
+project(gliss VERSION 0.0.1 LANGUAGES C Fortran)
 
 include(CTest)
 find_package(LAPACK REQUIRED)
@@ -8,9 +8,12 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(NETCDF_C REQUIRED IMPORTED_TARGET netcdf)
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-    add_compile_options(-Wall -Wextra -Wno-compare-reals)
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wall>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wextra>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wno-compare-reals>)
     if(SKBUILD)
-        add_compile_options(-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.)
+        add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.>)
     endif()
 endif()
 
@@ -96,6 +99,7 @@ target_link_libraries(gliss_c PRIVATE gliss)
 install(TARGETS gliss_c
     LIBRARY DESTINATION gliss
     RUNTIME DESTINATION gliss)
+install(FILES include/gliss.h DESTINATION include)
 
 add_executable(gliss_demo app/gliss_demo.f90)
 target_link_libraries(gliss_demo PRIVATE gliss)
@@ -342,6 +346,15 @@ if(BUILD_TESTING)
 
     add_library(gliss_test_support test/cylinder_fixture.f90)
     target_link_libraries(gliss_test_support PUBLIC gliss)
+
+    add_executable(test_gliss_capi test/test_gliss_capi.f90)
+    target_link_libraries(test_gliss_capi PRIVATE gliss_c gliss_test_support)
+    add_test(NAME gliss_capi COMMAND test_gliss_capi)
+
+    add_executable(test_gliss_header cmake/test_gliss_header.c)
+    target_include_directories(test_gliss_header PRIVATE include)
+    target_link_libraries(test_gliss_header PRIVATE gliss_c)
+    add_test(NAME gliss_header COMMAND test_gliss_header)
 
     add_executable(test_export_assembly test/test_export_assembly.f90)
     target_link_libraries(test_export_assembly PRIVATE gliss_test_support)

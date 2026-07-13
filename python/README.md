@@ -41,6 +41,34 @@ quadrature sizes must be positive integers. Invalid Python arguments raise
 `TypeError`, `ValueError`, or `FileNotFoundError`; invalid exports and solver
 failures raise `RuntimeError` with the native status code.
 
+### Reusing an equilibrium
+
+The development API for version 0.0.2 can load an export once and reuse its
+native data:
+
+```python
+from pathlib import Path
+
+from gliss import Equilibrium
+
+with Equilibrium(Path("equilibrium_export.nc")) as equilibrium:
+    s_64, d_64 = equilibrium.mercier_profile(n_theta=64, n_zeta=64)
+    s_128, d_128 = equilibrium.mercier_profile(n_theta=128, n_zeta=128)
+```
+
+`Equilibrium.close()` releases the native allocation and is safe to call more
+than once. The context manager calls it on exit. Operations on a closed object
+raise `RuntimeError`. Several contexts may coexist; calls using the same
+context must not overlap. Concurrent context creation also requires a
+thread-safe NetCDF C library.
+
+The returned arrays are independent, writable NumPy arrays owned by Python.
+No Fortran allocation crosses the ABI. Native failures map to subclasses of
+`gliss.GlissError`: `GlissIOError`, `GlissComputationError`,
+`GlissCapacityError`, `GlissArgumentError`, `GlissAllocationError`, and
+`GlissInternalError`. The one-shot `mercier_profile()` function uses the same
+context internally and remains convenient for a single evaluation.
+
 ## SIMSOPT
 
 Install the optional dependency and import the adapter explicitly:
@@ -76,3 +104,12 @@ GLISS_LIB=$PWD/build/libgliss_c.so python -c \
 
 `GLISS_LIB` deliberately overrides the bundled library. This is a development
 and debugging facility, not required for normal use.
+
+The installed C header is `gliss.h`. ABI version 1 defines fixed numeric status
+values, opaque equilibrium handles, caller-owned output arrays, `size_t`
+capacities, and caller-provided error buffers. An error buffer may be omitted
+only by passing both a null pointer and zero capacity. Destroy accepts a null
+handle and clears a live handle, which makes cleanup idempotent when callers
+retain one authoritative handle variable. Existing ABI-v1 symbols and status
+values remain unchanged when new functions are added; an incompatible change
+requires a new ABI version.

@@ -1,4 +1,8 @@
-"""Python interface to the Global Linear Ideal Stability Solver."""
+"""Python interface to the Global Linear Ideal Stability Solver.
+
+Equilibria have explicit, context-managed native lifetimes. One-shot Mercier
+functions remain available for scripts that evaluate an export once.
+"""
 
 import atexit
 import ctypes
@@ -58,7 +62,7 @@ def _load_library():
     return library
 
 
-def version():
+def version() -> str:
     """Return the version of the loaded GLISS shared library."""
     library = _load_library()
     library.gliss_version.argtypes = (ctypes.c_char_p, ctypes.c_int)
@@ -68,6 +72,29 @@ def version():
     return buffer.value.decode("ascii")
 
 
+from .equilibrium import (  # noqa: E402
+    Equilibrium,
+    GlissAllocationError,
+    GlissArgumentError,
+    GlissCapacityError,
+    GlissComputationError,
+    GlissError,
+    GlissIOError,
+    GlissInternalError,
+)
 from .mercier import mercier_objective, mercier_profile  # noqa: E402
 
-__all__ = ["__version__", "mercier_objective", "mercier_profile", "version"]
+__all__ = [
+    "__version__",
+    "Equilibrium",
+    "GlissAllocationError",
+    "GlissArgumentError",
+    "GlissCapacityError",
+    "GlissComputationError",
+    "GlissError",
+    "GlissIOError",
+    "GlissInternalError",
+    "mercier_objective",
+    "mercier_profile",
+    "version",
+]
