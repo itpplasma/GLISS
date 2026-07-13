@@ -282,6 +282,29 @@ negative. Input vectors must be finite, one-dimensional and contain exactly
 the parity class's number of unknowns. Noncontiguous array inputs are copied
 to native `float64`; returned `EnergyTerms` objects own no native memory.
 
+Differentiate the assembled Rayleigh quotient with respect to the same
+displacement coefficients:
+
+```python
+tangent = [1.0] * mode.eigenvector.size
+directional_derivative = problem.rayleigh_jvp(
+    1, mode.eigenvector, tangent
+)
+gradient = problem.rayleigh_vjp(1, mode.eigenvector)
+```
+
+The native VJP evaluates
+`2 * (K @ x - q * M @ x) / (x.T @ M @ x)`, where `q` is the Rayleigh
+quotient. The JVP contracts that gradient with the supplied tangent. These
+are exact actions of the assembled symmetric matrices, not finite
+differences. The VJP is a read-only `float64` array in dynamic component
+order and accepts an optional scalar `cotangent`. Both actions preserve the
+scale invariance of the quotient, so the gradient is orthogonal to `x`.
+
+These methods differentiate only with respect to the displacement vector.
+They do not yet differentiate the equilibrium, mode set, boundary condition
+or solver controls. Configuration switches, parity and topology remain fixed.
+
 Request every eigenpair only when the dense cost is acceptable:
 
 ```python

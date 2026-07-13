@@ -30,10 +30,10 @@ from .equilibrium import (
     _file_identity,
     _stable_file_digest,
 )
+from ._stability_input import real_parameter as _real_parameter
+from ._stability_input import validate_modes as _validate_modes
 from .stability import (
     _QUADRATURE,
-    _real_parameter,
-    _validate_modes,
     StabilityProblem,
     StabilityResult,
 )

@@ -14,13 +14,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 import numpy as np
 
 from ._result_schema import stability_result_from_dict, stability_result_to_dict
-from ._schema_support import (
-    SCHEMA_VERSION,
-    _unique_object,
-    document_path,
-    fields,
-    schema,
-)
+from ._schema_support import _unique_object, document_path, fields, schema
 from .equilibrium import GlissAllocationError, GlissInternalError, PathLike
 from .full_spectrum import (
     FullSpectrumResult,
@@ -46,7 +40,9 @@ _MAX_METADATA_BYTES = 16 * 1024 * 1024
 
 
 def _certified_result(result: FullStabilityResult) -> StabilityResult:
-    return StabilityResult(tuple(item.certified_lowest for item in result.classes))
+    return StabilityResult(
+        (result.classes[0].certified_lowest, result.classes[1].certified_lowest)
+    )
 
 
 def _unknown_count(certified: SpectrumResult, context: str) -> int:

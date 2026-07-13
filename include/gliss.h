@@ -199,6 +199,22 @@ gliss_status gliss_stability_problem_energy(
     char *error,
     size_t error_capacity);
 
+/* Apply the reverse derivative of x^T K x / x^T M x with respect to the
+ * displacement coefficients in dynamic component order. The primal vector
+ * must have positive kinetic norm. gradient_capacity must equal the unknown
+ * count. The output is cotangent times 2 (K x - q M x) / (x^T M x), where
+ * q is the Rayleigh quotient. No output is modified on failure. */
+gliss_status gliss_stability_problem_rayleigh_vjp(
+    const gliss_stability_problem *problem,
+    int32_t parity_class,
+    size_t vector_count,
+    const double *vector,
+    double cotangent,
+    size_t gradient_capacity,
+    double *gradient,
+    char *error,
+    size_t error_capacity);
+
 /* Compute every generalized eigenpair with a dense LAPACK solve. This is an
  * explicit O(unknowns^3)-time, O(unknowns^2)-memory operation; use
  * gliss_stability_problem_solve_class when only the certified lowest pair is

@@ -92,7 +92,7 @@ def diagnose_energy(
     if parity not in (1, 2):
         raise ValueError("parity_class must be 1 or 2")
     count = problem._unknown_count(parity)
-    values = _energy_vector(vector, count)
+    values = _coefficient_vector(vector, count, "energy vector", True)
     _bind(problem._library)
     native = _EnergyTerms(struct_size=ctypes.sizeof(_EnergyTerms))
     error = _error_buffer()
@@ -109,30 +109,32 @@ def diagnose_energy(
     return _validated_terms(native)
 
 
-def _energy_vector(vector: Any, count: int) -> np.ndarray:
+def _coefficient_vector(
+    vector: Any, count: int, name: str, require_nonzero: bool
+) -> np.ndarray:
     try:
         try:
             raw = np.asarray(vector)
         except (TypeError, ValueError) as error:
-            raise TypeError("energy vector must be an array of real numbers") from error
+            raise TypeError(f"{name} must be an array of real numbers") from error
         if np.issubdtype(raw.dtype, np.bool_) or np.iscomplexobj(raw):
-            raise TypeError("energy vector entries must be real numbers")
+            raise TypeError(f"{name} entries must be real numbers")
         try:
             values = np.asarray(raw, dtype=np.float64)
         except (TypeError, ValueError) as error:
-            raise TypeError("energy vector entries must be real numbers") from error
+            raise TypeError(f"{name} entries must be real numbers") from error
         if values.ndim != 1:
-            raise ValueError("energy vector must be one-dimensional")
+            raise ValueError(f"{name} must be one-dimensional")
         if values.size != count:
-            raise ValueError(f"energy vector must contain {count} entries")
+            raise ValueError(f"{name} must contain {count} entries")
         if not np.all(np.isfinite(values)):
-            raise ValueError("energy vector must contain only finite values")
-        if not np.any(values):
-            raise ValueError("energy vector must have positive kinetic norm")
+            raise ValueError(f"{name} must contain only finite values")
+        if require_nonzero and not np.any(values):
+            raise ValueError(f"{name} must have positive kinetic norm")
         return np.ascontiguousarray(values)
     except MemoryError as error:
         raise GlissAllocationError(
-            f"failed to allocate energy vector with {count} entries"
+            f"failed to allocate {name} with {count} entries"
         ) from error
 
 

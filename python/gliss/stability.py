@@ -23,10 +23,8 @@ from .solver import (
     bind_solver_tolerances,
     configure_solver_tolerances,
 )
-
-_mode_integer = mode_integer
-_real_parameter = real_parameter
-_validate_modes = validate_modes
+from .derivatives import rayleigh_jvp as _rayleigh_jvp
+from .derivatives import rayleigh_vjp as _rayleigh_vjp
 
 if TYPE_CHECKING:
     from .energy import EnergyTerms
@@ -409,6 +407,9 @@ class StabilityProblem:
         from .energy import diagnose_energy
 
         return diagnose_energy(self, parity_class, vector)
+
+    rayleigh_jvp = _rayleigh_jvp
+    rayleigh_vjp = _rayleigh_vjp
 
     def _unknown_count(self, parity_class: int) -> int:
         count = ctypes.c_size_t()

@@ -14,9 +14,9 @@ from ._schema_support import (
     write_json,
 )
 from .equilibrium import PathLike
+from ._stability_input import validate_modes as _validate_modes
 from .stability import (
     _QUADRATURE,
-    _validate_modes,
     SpectrumResult,
     StabilityResult,
 )

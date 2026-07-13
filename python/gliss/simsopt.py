@@ -16,7 +16,7 @@ to write a new export and update ``export_path`` so the next ``J()``
 call picks it up.
 """
 
-from simsopt._core.optimizable import Optimizable
+from simsopt._core.optimizable import Optimizable  # type: ignore[import-not-found]
 
 from .mercier import mercier_objective
 

@@ -17,7 +17,8 @@ from .equilibrium import (
     _error_buffer,
     _raise_for_status,
 )
-from .stability import SpectrumResult, _mode_integer
+from ._stability_input import mode_integer as _mode_integer
+from .stability import SpectrumResult
 
 if TYPE_CHECKING:
     from .stability import StabilityProblem

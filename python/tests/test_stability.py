@@ -55,6 +55,9 @@ class FakeLibrary:
             self.problem_full_spectrum
         )
         self.gliss_stability_problem_energy = FakeFunction(self.problem_energy)
+        self.gliss_stability_problem_rayleigh_vjp = FakeFunction(
+            self.problem_rayleigh_vjp
+        )
 
     def equilibrium_create(self, path, length, handle, error, error_capacity):
         handle._obj.value = 10
@@ -220,6 +223,23 @@ class FakeLibrary:
         values.rayleigh_quotient = 5.0
         values.closure_error = 0.0
         values.closure_tolerance = 1.0e-12
+        error.value = b""
+        return 0
+
+    def problem_rayleigh_vjp(
+        self,
+        handle,
+        parity_class,
+        vector_count,
+        vector,
+        cotangent,
+        gradient_capacity,
+        gradient,
+        error,
+        error_capacity,
+    ):
+        values = np.ctypeslib.as_array(gradient, shape=(gradient_capacity,))
+        values[:] = cotangent * np.arange(1.0, gradient_capacity + 1.0)
         error.value = b""
         return 0
 
@@ -544,6 +564,55 @@ def test_stability_problem_energy_rejects_inconsistent_native_terms(contexts):
     with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
         with pytest.raises(gliss.GlissInternalError, match="do not close"):
             problem.energy(1, np.ones(6))
+
+
+def test_stability_problem_exposes_rayleigh_jvp_and_vjp(contexts):
+    _, equilibrium = contexts
+    vector = np.arange(1.0, 7.0)
+    tangent = np.arange(6.0, 0.0, -1.0)
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        gradient = problem.rayleigh_vjp(1, vector, cotangent=2.0)
+        derivative = problem.rayleigh_jvp(1, vector, tangent)
+
+    np.testing.assert_array_equal(gradient, 2.0 * np.arange(1.0, 7.0))
+    assert not gradient.flags.writeable
+    assert derivative == np.dot(np.arange(1.0, 7.0), tangent)
+
+
+@pytest.mark.parametrize(
+    ("operation", "value", "error", "match"),
+    [
+        ("vjp", True, TypeError, "cotangent"),
+        ("vjp", float("nan"), ValueError, "finite"),
+        ("jvp", np.ones(5), ValueError, "6 entries"),
+        ("jvp", np.full(6, np.inf), ValueError, "finite"),
+        ("jvp", np.ones((2, 3)), ValueError, "one-dimensional"),
+    ],
+)
+def test_stability_problem_rejects_invalid_rayleigh_actions(
+    contexts, operation, value, error, match
+):
+    _, equilibrium = contexts
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        with pytest.raises(error, match=match):
+            if operation == "vjp":
+                problem.rayleigh_vjp(1, np.ones(6), cotangent=value)
+            else:
+                problem.rayleigh_jvp(1, np.ones(6), value)
+
+
+def test_stability_problem_rejects_nonfinite_native_rayleigh_action(contexts):
+    library, equilibrium = contexts
+
+    def nonfinite(*args):
+        status = library.problem_rayleigh_vjp(*args)
+        np.ctypeslib.as_array(args[6], shape=(args[5],))[0] = np.nan
+        return status
+
+    library.gliss_stability_problem_rayleigh_vjp = FakeFunction(nonfinite)
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        with pytest.raises(gliss.GlissInternalError, match="nonfinite"):
+            problem.rayleigh_vjp(1, np.ones(6))
 
 
 def test_stability_problem_rejects_invalid_full_spectrum_sizes(contexts):

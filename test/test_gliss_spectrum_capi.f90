@@ -75,7 +75,8 @@ program test_gliss_spectrum_capi
     type(spectrum_summary_c), target :: summary
     type(energy_terms_c), target :: energy
     type(solver_tolerances_c), target :: tolerances
-    real(c_double), allocatable, target :: eigenvector(:), sentinel(:)
+    real(c_double), allocatable, target :: eigenvector(:), gradient(:)
+    real(c_double), allocatable, target :: sentinel(:)
     real(c_double), allocatable, target :: eigenvalues(:), eigenvectors(:)
     real(c_double), allocatable, target :: residuals(:), resolutions(:)
     real(c_double), allocatable, target :: rayleigh_quotients(:)
@@ -179,6 +180,19 @@ program test_gliss_spectrum_capi
             integer(c_size_t), value :: vector_count, error_capacity
             integer(c_int) :: result
         end function problem_energy
+
+        function problem_rayleigh_vjp(handle, parity_class, vector_count, &
+                vector, cotangent, gradient_capacity, gradient, &
+                error_pointer, error_capacity) bind(c, &
+                name="gliss_stability_problem_rayleigh_vjp") result(result)
+            import c_double, c_int, c_ptr, c_size_t
+            type(c_ptr), value :: handle, vector, gradient, error_pointer
+            integer(c_int), value :: parity_class
+            integer(c_size_t), value :: vector_count, gradient_capacity
+            integer(c_size_t), value :: error_capacity
+            real(c_double), value :: cotangent
+            integer(c_int) :: result
+        end function problem_rayleigh_vjp
     end interface
 
     call create_cylinder_fixture(fixture)
@@ -249,7 +263,7 @@ program test_gliss_spectrum_capi
         c_loc(error_buffer), int(size(error_buffer), c_size_t))
     call require(status == status_ok, "unknown-count query failed")
     call require(unknowns == 196_c_size_t, "unknown count is wrong")
-    allocate (eigenvector(unknowns), sentinel(unknowns))
+    allocate (eigenvector(unknowns), gradient(unknowns), sentinel(unknowns))
     sentinel = 7.0_c_double
     eigenvector = sentinel
     summary%struct_size = c_sizeof(summary)
@@ -310,6 +324,23 @@ program test_gliss_spectrum_capi
         "C API energy quotient differs from the eigenvalue")
     call require(energy%closure_error <= energy%closure_tolerance, &
         "C API energy terms do not close")
+    status = problem_rayleigh_vjp(problem, 1_c_int, unknowns, &
+        c_loc(eigenvector), 1.0_c_double, unknowns, c_loc(gradient), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_ok, "C API Rayleigh VJP failed")
+    call require(all(ieee_is_finite(gradient)), &
+        "C API Rayleigh VJP contains nonfinite values")
+    call require(abs(dot_product(gradient, eigenvector)) < 1.0e-9_c_double, &
+        "C API Rayleigh VJP violates scale invariance")
+    sentinel = gradient
+    status = problem_rayleigh_vjp(problem, 1_c_int, unknowns, &
+        c_loc(eigenvector), 1.0_c_double, unknowns - 1_c_size_t, &
+        c_loc(gradient), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "C API Rayleigh VJP accepted a short output")
+    call require(all(gradient == sentinel), &
+        "failed C API Rayleigh VJP modified its output")
     status = problem_energy(problem, 1_c_int, unknowns - 1_c_size_t, &
         c_loc(eigenvector), c_loc(energy), c_loc(error_buffer), &
         int(size(error_buffer), c_size_t))

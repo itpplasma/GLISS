@@ -9,8 +9,8 @@ program test_fixed_boundary_spectrum
         fixed_boundary_invalid, fixed_boundary_ok, &
         fixed_boundary_energy_terms_t, diagnose_fixed_boundary_energy, &
         fixed_boundary_full_spectrum_t, fixed_boundary_problem_t, &
-        fixed_boundary_spectrum_result_t, solve_fixed_boundary_class, &
-        solve_fixed_boundary_full_spectrum
+        fixed_boundary_rayleigh_gradient, fixed_boundary_spectrum_result_t, &
+        solve_fixed_boundary_class, solve_fixed_boundary_full_spectrum
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     implicit none
@@ -43,6 +43,7 @@ program test_fixed_boundary_spectrum
         energy, info)
     call require(info == fixed_boundary_ok, "energy decomposition failed")
     call check_energy(energy, first%lowest_eigenvalue)
+    call check_rayleigh_gradient()
     call require(abs(first%lowest_eigenvalue - legacy_lowest(1)) &
         <= legacy_relative_tolerance * abs(legacy_lowest(1)), &
         "class-one result changed from the legacy CLI")
@@ -80,6 +81,53 @@ program test_fixed_boundary_spectrum
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_rayleigh_gradient()
+        type(fixed_boundary_energy_terms_t) :: plus, minus
+        real(dp), allocatable :: gradient(:), primal(:), tangent(:), shifted(:)
+        real(dp) :: centered, exact, step, scale
+        integer :: index, status
+
+        allocate (primal(size(first%eigenvector)), &
+            tangent(size(first%eigenvector)), &
+            shifted(size(first%eigenvector)))
+        do index = 1, size(tangent)
+            tangent(index) = sin(real(index, dp))
+            primal(index) = first%eigenvector(index) &
+                + 0.01_dp * cos(real(index, dp))
+        end do
+        call fixed_boundary_rayleigh_gradient(problem, 1, primal, &
+            gradient, status)
+        call require(status == fixed_boundary_ok, &
+            "Rayleigh gradient action failed")
+        call require(all(ieee_is_finite(gradient)), &
+            "Rayleigh gradient contains nonfinite values")
+        scale = max(1.0_dp, sqrt(dot_product(gradient, gradient)) &
+            * sqrt(dot_product(primal, primal)))
+        call require(abs(dot_product(gradient, primal)) &
+            < 1.0e-11_dp * scale, &
+            "Rayleigh gradient violates scale invariance")
+        step = 1.0e-6_dp
+        shifted = primal + step * tangent
+        call diagnose_fixed_boundary_energy(problem, 1, shifted, plus, status)
+        call require(status == fixed_boundary_ok, &
+            "positive Rayleigh perturbation failed")
+        shifted = primal - step * tangent
+        call diagnose_fixed_boundary_energy(problem, 1, shifted, minus, status)
+        call require(status == fixed_boundary_ok, &
+            "negative Rayleigh perturbation failed")
+        centered = (plus%rayleigh_quotient - minus%rayleigh_quotient) &
+            / (2.0_dp * step)
+        exact = dot_product(gradient, tangent)
+        if (abs(centered - exact) >= 2.0e-7_dp &
+            * max(1.0_dp, abs(centered), abs(exact))) &
+            write (error_unit, "(a,3es24.15)") &
+            "Rayleigh centered/exact/difference: ", centered, exact, &
+            centered - exact
+        call require(abs(centered - exact) &
+            < 2.0e-7_dp * max(1.0_dp, abs(centered), abs(exact)), &
+            "Rayleigh gradient disagrees with a centered reevaluation")
+    end subroutine check_rayleigh_gradient
 
     subroutine check_energy(terms, eigenvalue)
         type(fixed_boundary_energy_terms_t), intent(in) :: terms

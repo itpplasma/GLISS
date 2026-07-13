@@ -34,6 +34,7 @@ module fixed_boundary_energy
 
     public :: diagnose_fixed_boundary_energy_store
     public :: pack_fixed_boundary_energy_store
+    public :: rayleigh_gradient_fixed_boundary_store
 
 contains
 
@@ -115,6 +116,56 @@ contains
         end if
         info = fixed_boundary_energy_ok
     end subroutine diagnose_fixed_boundary_energy_store
+
+    subroutine rayleigh_gradient_fixed_boundary_store(stiffness, mass, &
+            permutation, vector, gradient, info)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        integer, intent(in) :: permutation(:)
+        real(dp), intent(in) :: vector(:)
+        real(dp), allocatable, intent(out) :: gradient(:)
+        integer, intent(out) :: info
+        real(dp), allocatable :: permuted(:), stiffness_image(:)
+        real(dp), allocatable :: mass_image(:), permuted_gradient(:)
+        real(dp) :: kinetic_energy, potential_energy, quotient
+        integer :: allocation_status, index
+
+        info = fixed_boundary_energy_invalid
+        if (size(vector) < 1 .or. size(vector) /= size(permutation)) return
+        if (.not. all(ieee_is_finite(vector))) return
+        allocate (permuted(size(vector)), stiffness_image(size(vector)), &
+            mass_image(size(vector)), permuted_gradient(size(vector)), &
+            gradient(size(vector)), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = fixed_boundary_energy_allocation
+            return
+        end if
+        do index = 1, size(vector)
+            if (permutation(index) < 1 .or. &
+                permutation(index) > size(vector)) return
+            permuted(index) = vector(permutation(index))
+        end do
+        call quadratic_form(stiffness, permuted, stiffness_image, &
+            potential_energy, info)
+        if (info /= fixed_boundary_energy_ok) return
+        call quadratic_form(mass, permuted, mass_image, kinetic_energy, info)
+        if (info /= fixed_boundary_energy_ok) return
+        if (kinetic_energy <= 0.0_dp) then
+            info = fixed_boundary_energy_invalid
+            return
+        end if
+        quotient = potential_energy / kinetic_energy
+        permuted_gradient = 2.0_dp * (stiffness_image &
+            - quotient * mass_image) / kinetic_energy
+        gradient = 0.0_dp
+        do index = 1, size(vector)
+            gradient(permutation(index)) = permuted_gradient(index)
+        end do
+        if (.not. all(ieee_is_finite(gradient))) then
+            info = fixed_boundary_energy_inconsistent
+            return
+        end if
+        info = fixed_boundary_energy_ok
+    end subroutine rayleigh_gradient_fixed_boundary_store
 
     subroutine quadratic_form(matrix, vector, image, value, info)
         type(variable_block_tridiagonal_t), intent(in) :: matrix

@@ -12,7 +12,8 @@ module fixed_boundary_spectrum
     use fixed_boundary_energy, only: diagnose_fixed_boundary_energy_store, &
         fixed_boundary_energy_allocation, fixed_boundary_energy_invalid, &
         fixed_boundary_energy_ok, fixed_boundary_energy_store_t, &
-        fixed_boundary_energy_terms_t, pack_fixed_boundary_energy_store
+        fixed_boundary_energy_terms_t, pack_fixed_boundary_energy_store, &
+        rayleigh_gradient_fixed_boundary_store
     use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
         fixed_boundary_bracket_ok
     use fixed_boundary_input_validation, only: valid_fixed_boundary_inputs
@@ -106,12 +107,10 @@ module fixed_boundary_spectrum
         real(dp), allocatable :: resolutions(:)
     end type fixed_boundary_full_spectrum_t
 
-    public :: build_fixed_boundary_problem
-    public :: diagnose_fixed_boundary_energy
-    public :: fixed_boundary_energy_terms_t
-    public :: fixed_boundary_unknown_count
-    public :: set_fixed_boundary_solver_controls
-    public :: solve_fixed_boundary_class
+    public :: build_fixed_boundary_problem, diagnose_fixed_boundary_energy
+    public :: fixed_boundary_energy_terms_t, fixed_boundary_unknown_count
+    public :: fixed_boundary_rayleigh_gradient
+    public :: set_fixed_boundary_solver_controls, solve_fixed_boundary_class
     public :: solve_fixed_boundary_full_spectrum
 
 contains
@@ -248,16 +247,37 @@ contains
             problem%classes(parity_class)%mass, &
             problem%classes(parity_class)%energy, &
             problem%classes(parity_class)%permutation, vector, result, info)
-        if (info == fixed_boundary_energy_ok) then
-            info = fixed_boundary_ok
-        else if (info == fixed_boundary_energy_allocation) then
-            info = fixed_boundary_allocation_error
-        else if (info == fixed_boundary_energy_invalid) then
-            info = fixed_boundary_invalid
-        else
-            info = fixed_boundary_solver_error
-        end if
+        info = map_fixed_boundary_energy_info(info)
     end subroutine diagnose_fixed_boundary_energy
+
+    subroutine fixed_boundary_rayleigh_gradient(problem, parity_class, &
+            vector, gradient, info)
+        type(fixed_boundary_problem_t), intent(in) :: problem
+        integer, intent(in) :: parity_class
+        real(dp), intent(in) :: vector(:)
+        real(dp), allocatable, intent(out) :: gradient(:)
+        integer, intent(out) :: info
+
+        info = fixed_boundary_invalid
+        if (.not. problem%ready) return
+        if (parity_class < 1 .or. parity_class > 2) return
+        call rayleigh_gradient_fixed_boundary_store( &
+            problem%classes(parity_class)%stiffness, &
+            problem%classes(parity_class)%mass, &
+            problem%classes(parity_class)%permutation, vector, gradient, info)
+        info = map_fixed_boundary_energy_info(info)
+    end subroutine fixed_boundary_rayleigh_gradient
+
+    pure function map_fixed_boundary_energy_info(info) result(status)
+        integer, intent(in) :: info
+        integer :: status
+
+        status = fixed_boundary_solver_error
+        if (info == fixed_boundary_energy_ok) status = fixed_boundary_ok
+        if (info == fixed_boundary_energy_allocation) &
+            status = fixed_boundary_allocation_error
+        if (info == fixed_boundary_energy_invalid) status = fixed_boundary_invalid
+    end function map_fixed_boundary_energy_info
 
     subroutine pack_class_matrices(stiffness, mass, layout, class_problem, &
             widths, info)
