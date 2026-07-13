@@ -9,6 +9,7 @@ module terpsichore_reduced_mass_adapter
         terpsichore_pair_ok
     use terpsichore_reduced_layout, only: &
         build_terpsichore_reduced_fixed_boundary_layout, &
+        build_terpsichore_reduced_free_boundary_layout, &
         terpsichore_reduced_layout_ok
     use terpsichore_reduced_mass, only: add_reduced_values
     implicit none
@@ -18,6 +19,7 @@ module terpsichore_reduced_mass_adapter
     integer, parameter, public :: terpsichore_reduced_adapter_invalid = -1
 
     public :: assemble_terpsichore_fixture_reduced_mass
+    public :: assemble_terpsichore_fixture_reduced_mass_free_boundary
 
 contains
 
@@ -29,6 +31,28 @@ contains
     subroutine assemble_terpsichore_fixture_reduced_mass(fixture, mass, &
             layout, info)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        real(dp), allocatable, intent(out) :: mass(:, :)
+        type(dynamic_family_layout_t), intent(out) :: layout
+        integer, intent(out) :: info
+        call assemble_terpsichore_fixture_reduced_mass_with_boundary( &
+            fixture, .false., mass, layout, info)
+    end subroutine assemble_terpsichore_fixture_reduced_mass
+
+    subroutine assemble_terpsichore_fixture_reduced_mass_free_boundary( &
+            fixture, mass, layout, info)
+        type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        real(dp), allocatable, intent(out) :: mass(:, :)
+        type(dynamic_family_layout_t), intent(out) :: layout
+        integer, intent(out) :: info
+
+        call assemble_terpsichore_fixture_reduced_mass_with_boundary( &
+            fixture, .true., mass, layout, info)
+    end subroutine assemble_terpsichore_fixture_reduced_mass_free_boundary
+
+    subroutine assemble_terpsichore_fixture_reduced_mass_with_boundary( &
+            fixture, retain_outer_normal, mass, layout, info)
+        type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        logical, intent(in) :: retain_outer_normal
         real(dp), allocatable, intent(out) :: mass(:, :)
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
@@ -48,9 +72,15 @@ contains
         modes = fixture%modes
         allocate (parity(modes), source=phase_sine, stat=allocation_status)
         if (allocation_status /= 0) return
-        call build_terpsichore_reduced_fixed_boundary_layout( &
-            fixture%mode_m, fixture%mode_n, parity, fixture%intervals, &
-            layout, element_to_global, info)
+        if (retain_outer_normal) then
+            call build_terpsichore_reduced_free_boundary_layout( &
+                fixture%mode_m, fixture%mode_n, parity, fixture%intervals, &
+                layout, element_to_global, info)
+        else
+            call build_terpsichore_reduced_fixed_boundary_layout( &
+                fixture%mode_m, fixture%mode_n, parity, fixture%intervals, &
+                layout, element_to_global, info)
+        end if
         if (info /= terpsichore_reduced_layout_ok) then
             info = terpsichore_reduced_adapter_invalid
             return
@@ -97,7 +127,7 @@ contains
             end if
         end do
         info = terpsichore_reduced_adapter_ok
-    end subroutine assemble_terpsichore_fixture_reduced_mass
+    end subroutine assemble_terpsichore_fixture_reduced_mass_with_boundary
 
     subroutine build_radial_values(fixture, factor, weight, info)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture

@@ -51,6 +51,7 @@ module terpsichore_matrix_fixture
 
     public :: read_terpsichore_fixed_boundary_fixture
     public :: read_terpsichore_fixed_boundary_potential_fixture
+    public :: read_terpsichore_potential_fixture
     public :: terpsichore_fixed_fixture_is_valid
     public :: terpsichore_potential_metadata_is_valid
     public :: terpsichore_potential_fixture_is_valid
@@ -66,7 +67,7 @@ contains
 
         info = terpsichore_matrix_fixture_invalid
         if (vacuum_intervals /= 0) return
-        call read_fixture_prefix(unit, .false., fixture, io_status)
+        call read_fixture_prefix(unit, .false., 0, fixture, io_status)
         if (io_status /= 0) return
         if (.not. terpsichore_fixed_fixture_is_valid(fixture)) return
         info = terpsichore_matrix_fixture_ok
@@ -77,21 +78,36 @@ contains
         integer, intent(in) :: unit, vacuum_intervals
         type(terpsichore_matrix_fixture_t), intent(out) :: fixture
         integer, intent(out) :: info
+        info = terpsichore_matrix_fixture_invalid
+        if (vacuum_intervals /= 0) return
+        call read_terpsichore_potential_fixture(unit, vacuum_intervals, &
+            fixture, info)
+    end subroutine read_terpsichore_fixed_boundary_potential_fixture
+
+    subroutine read_terpsichore_potential_fixture(unit, vacuum_intervals, &
+            fixture, info)
+        integer, intent(in) :: unit, vacuum_intervals
+        type(terpsichore_matrix_fixture_t), intent(out) :: fixture
+        integer, intent(out) :: info
         integer :: io_status
 
         info = terpsichore_matrix_fixture_invalid
-        if (vacuum_intervals /= 0) return
-        call read_fixture_prefix(unit, .true., fixture, io_status)
+        if (vacuum_intervals < 0 .or. &
+            vacuum_intervals > maximum_intervals) return
+        call read_fixture_prefix(unit, .true., vacuum_intervals, fixture, &
+            io_status)
         if (io_status /= 0) return
         call read_potential_records(unit, fixture, io_status)
         if (io_status /= 0) return
         if (.not. terpsichore_potential_fixture_is_valid(fixture)) return
         info = terpsichore_matrix_fixture_ok
-    end subroutine read_terpsichore_fixed_boundary_potential_fixture
+    end subroutine read_terpsichore_potential_fixture
 
-    subroutine read_fixture_prefix(unit, retain_potential, fixture, info)
+    subroutine read_fixture_prefix(unit, retain_potential, vacuum_intervals, &
+            fixture, info)
         integer, intent(in) :: unit
         logical, intent(in) :: retain_potential
+        integer, intent(in) :: vacuum_intervals
         type(terpsichore_matrix_fixture_t), intent(out) :: fixture
         integer, intent(out) :: info
         real(dp), allocatable :: bjac(:, :), flux_t_slope(:), radial_power(:)
@@ -102,10 +118,11 @@ contains
             fixture%poloidal_points, fixture%toroidal_points, &
             fixture%stability_periods, fixture%field_periods, fixture%modes
         if (info /= 0 .or. .not. valid_sizes(fixture)) return
+        if (vacuum_intervals > maximum_intervals - fixture%intervals) return
         if (retain_potential .and. &
             .not. terpsichore_potential_metadata_is_valid(fixture)) return
-        call allocate_record_arrays(fixture, radial_grid, flux_t_slope, &
-            radial_power, bjac, info)
+        call allocate_record_arrays(fixture, vacuum_intervals, radial_grid, &
+            flux_t_slope, radial_power, bjac, info)
         if (info /= 0) return
         call read_radial_record(unit, fixture, radial_grid, flux_t_slope, &
             info)
@@ -115,8 +132,8 @@ contains
         if (info /= 0) return
         read (unit, iostat=info)
         if (info /= 0) return
-        call read_geometry_record(unit, retain_potential, fixture, bjac, &
-            info)
+        call read_geometry_record(unit, retain_potential, vacuum_intervals, &
+            fixture, bjac, info)
         if (info /= 0) return
         call move_fixture_arrays(fixture, radial_grid, flux_t_slope, &
             radial_power, bjac)
@@ -150,9 +167,10 @@ contains
             / (2 * fixture%intervals - 1)
     end function valid_sizes
 
-    subroutine allocate_record_arrays(fixture, radial_grid, flux_t_slope, &
-            radial_power, bjac, allocation_status)
+    subroutine allocate_record_arrays(fixture, vacuum_intervals, radial_grid, &
+            flux_t_slope, radial_power, bjac, allocation_status)
         type(terpsichore_matrix_fixture_t), intent(inout) :: fixture
+        integer, intent(in) :: vacuum_intervals
         real(dp), allocatable, intent(out) :: radial_grid(:)
         real(dp), allocatable, intent(out) :: flux_t_slope(:)
         real(dp), allocatable, intent(out) :: radial_power(:)
@@ -162,7 +180,8 @@ contains
 
         allocation_status = 1
         points = fixture%poloidal_points * fixture%toroidal_points
-        allocate (radial_grid(0:fixture%intervals), stat=allocation_status)
+        allocate (radial_grid(0:fixture%intervals + vacuum_intervals), &
+            stat=allocation_status)
         if (allocation_status /= 0) return
         allocate (flux_t_slope(fixture%intervals + 1), &
             stat=allocation_status)
@@ -203,13 +222,16 @@ contains
         if (io_status == 0) fixture%parity = real(parity, dp)
     end subroutine read_radial_record
 
-    subroutine read_geometry_record(unit, retain_potential, fixture, bjac, &
-            io_status)
+    subroutine read_geometry_record(unit, retain_potential, vacuum_intervals, &
+            fixture, bjac, io_status)
         integer, intent(in) :: unit
         logical, intent(in) :: retain_potential
+        integer, intent(in) :: vacuum_intervals
         type(terpsichore_matrix_fixture_t), intent(inout) :: fixture
         real(dp), intent(out) :: bjac(:, 0:)
         integer, intent(out) :: io_status
+        real(dp), allocatable :: full_bjac(:, :), full_gssl(:, :)
+        real(dp), allocatable :: full_gstl(:, :), full_gttl(:, :)
         integer :: points
 
         if (.not. retain_potential) then
@@ -217,6 +239,12 @@ contains
             return
         end if
         points = fixture%poloidal_points * fixture%toroidal_points
+        allocate (full_bjac(points, 0:fixture%intervals + vacuum_intervals), &
+            full_gssl(points, 0:fixture%intervals + vacuum_intervals), &
+            full_gstl(points, 0:fixture%intervals + vacuum_intervals), &
+            full_gttl(points, 0:fixture%intervals + vacuum_intervals), &
+            stat=io_status)
+        if (io_status /= 0) return
         allocate (fixture%sigma_b_s(points, 0:fixture%intervals), &
             stat=io_status)
         if (io_status /= 0) return
@@ -229,10 +257,16 @@ contains
         allocate (fixture%metric_tt_over_jacobian(points, &
             0:fixture%intervals), stat=io_status)
         if (io_status /= 0) return
-        read (unit, iostat=io_status) bjac, fixture%sigma_b_s, &
-            fixture%metric_ss_over_jacobian, &
-            fixture%metric_st_over_jacobian, &
-            fixture%metric_tt_over_jacobian
+        read (unit, iostat=io_status) full_bjac, fixture%sigma_b_s, &
+            full_gssl, full_gstl, full_gttl
+        if (io_status /= 0) return
+        bjac = full_bjac(:, :fixture%intervals)
+        fixture%metric_ss_over_jacobian = &
+            full_gssl(:, :fixture%intervals)
+        fixture%metric_st_over_jacobian = &
+            full_gstl(:, :fixture%intervals)
+        fixture%metric_tt_over_jacobian = &
+            full_gttl(:, :fixture%intervals)
     end subroutine read_geometry_record
 
     subroutine read_potential_records(unit, fixture, io_status)
@@ -307,7 +341,8 @@ contains
         real(dp), allocatable, intent(inout) :: radial_power(:)
         real(dp), allocatable, intent(inout) :: bjac(:, :)
 
-        call move_alloc(radial_grid, fixture%s)
+        allocate (fixture%s(0:fixture%intervals), &
+            source=radial_grid(:fixture%intervals))
         call move_alloc(flux_t_slope, fixture%flux_t_slope)
         call move_alloc(radial_power, fixture%radial_power)
         call move_alloc(bjac, fixture%signed_bjac)

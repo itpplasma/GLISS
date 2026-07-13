@@ -8,6 +8,7 @@ program test_terpsichore_noninteracting_stiffness
         terpsichore_coefficients_ok
     use terpsichore_noninteracting_stiffness, only: &
         assemble_terpsichore_noninteracting_fixed_boundary_stiffness, &
+        assemble_terpsichore_noninteracting_free_boundary_stiffness, &
         terpsichore_noninteracting_ok
     implicit none
 
@@ -27,6 +28,7 @@ program test_terpsichore_noninteracting_stiffness
         "non-interacting fixed-boundary layout is wrong")
     call require(maxval(abs(stiffness - expected)) < 2.0e-12_dp, &
         "non-interacting analytical matrix is wrong")
+    call check_free_boundary(fixture, stiffness)
     call build_terpsichore_noninteracting_coefficients(fixture, fast, &
         info)
     call require(info == terpsichore_coefficients_ok, &
@@ -65,6 +67,32 @@ program test_terpsichore_noninteracting_stiffness
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_free_boundary(value, fixed)
+        type(terpsichore_matrix_fixture_t), intent(in) :: value
+        real(dp), intent(in) :: fixed(:, :)
+        type(dynamic_family_layout_t) :: free_layout
+        real(dp), allocatable :: free(:, :)
+        real(dp) :: edge_diagonal, edge_off_diagonal
+        integer, parameter :: retained(5) = [1, 2, 4, 5, 6]
+        integer :: local_info
+
+        call assemble_terpsichore_noninteracting_free_boundary_stiffness( &
+            value, free, free_layout, local_info)
+        call require(local_info == terpsichore_noninteracting_ok, &
+            "free-boundary non-interacting fixture was rejected")
+        call require(free_layout%outer_normal_retained &
+            .and. free_layout%total_unknowns == 6, &
+            "free-boundary non-interacting layout is wrong")
+        call require(maxval(abs(free(retained, retained) - fixed)) &
+            < 2.0e-12_dp, &
+            "fixed-boundary matrix is not the constrained free matrix")
+        edge_diagonal = 3.0_dp / 0.4_dp + 0.75_dp * 0.4_dp
+        edge_off_diagonal = -3.0_dp / 0.4_dp + 0.75_dp * 0.4_dp
+        call require(abs(free(3, 3) - edge_diagonal) < 2.0e-12_dp &
+            .and. abs(free(2, 3) - edge_off_diagonal) < 2.0e-12_dp, &
+            "free-boundary edge element is wrong")
+    end subroutine check_free_boundary
 
     subroutine build_constant_fixture(value)
         type(terpsichore_matrix_fixture_t), intent(out) :: value

@@ -52,7 +52,7 @@ contains
 
     subroutine test_fixture_reader()
         type(terpsichore_pseudoplasma_fixture_t) :: source, restored
-        integer, parameter :: magic = int(z'47565031'), schema = 1
+        integer, parameter :: magic = int(z'47565031'), schema = 2
         integer :: info, unit
 
         call build_fixture(source)
@@ -60,7 +60,8 @@ contains
             form="unformatted", action="readwrite")
         write (unit) magic, schema, source%plasma_intervals, &
             source%vacuum_intervals, source%modes
-        write (unit) source%s, source%flux_t_slope, source%flux_p_slope
+        write (unit) source%s, source%flux_t_slope, source%flux_p_slope, &
+            source%alfven_normalization
         write (unit) source%mode_m, source%mode_n
         write (unit) source%coefficient(1, :, :, :), &
             source%coefficient(2, :, :, :), &
@@ -99,7 +100,7 @@ contains
 
         open (newunit=unit, status="scratch", access="sequential", &
             form="unformatted", action="readwrite")
-        write (unit) magic, 2, 4, 2, 1
+        write (unit) magic, 3, 4, 2, 1
         rewind (unit)
         call read_terpsichore_pseudoplasma_fixture(unit, restored, info)
         close (unit)
@@ -107,7 +108,7 @@ contains
             "unknown pseudoplasma schema was accepted")
         open (newunit=unit, status="scratch", access="sequential", &
             form="unformatted", action="readwrite")
-        write (unit) magic, 1, 4, 996, 100
+        write (unit) magic, 2, 4, 996, 100
         rewind (unit)
         call read_terpsichore_pseudoplasma_fixture(unit, restored, info)
         close (unit)
@@ -115,7 +116,7 @@ contains
             "oversized pseudoplasma matrix was accepted")
         open (newunit=unit, status="scratch", access="sequential", &
             form="unformatted", action="readwrite")
-        write (unit) magic, 1, 4, 2, 1
+        write (unit) magic, 2, 4, 2, 1
         rewind (unit)
         call read_terpsichore_pseudoplasma_fixture(unit, restored, info)
         close (unit)
@@ -131,6 +132,7 @@ contains
         fixture%modes = 1
         fixture%flux_p_slope = 1.0_dp
         fixture%flux_t_slope = 0.0_dp
+        fixture%alfven_normalization = 2.0_dp
         allocate (fixture%s(0:2), source=[1.0_dp, 1.5_dp, 2.0_dp])
         allocate (fixture%mode_m(1), source=1)
         allocate (fixture%mode_n(1), source=0)

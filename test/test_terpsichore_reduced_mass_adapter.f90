@@ -5,11 +5,13 @@ program test_terpsichore_reduced_mass_adapter
     use terpsichore_matrix_fixture, only: &
         read_terpsichore_fixed_boundary_fixture, &
         read_terpsichore_fixed_boundary_potential_fixture, &
+        read_terpsichore_potential_fixture, &
         terpsichore_matrix_fixture_invalid, terpsichore_matrix_fixture_ok, &
         terpsichore_matrix_fixture_t, &
         terpsichore_potential_metadata_is_valid
     use terpsichore_reduced_mass_adapter, only: &
         assemble_terpsichore_fixture_reduced_mass, &
+        assemble_terpsichore_fixture_reduced_mass_free_boundary, &
         terpsichore_reduced_adapter_ok
     use terpsichore_reduced_mass_family_assembly, only: &
         assemble_terpsichore_reduced_fixed_boundary_mass
@@ -17,7 +19,9 @@ program test_terpsichore_reduced_mass_adapter
 
     call test_fixture_reader()
     call test_potential_fixture_reader()
+    call test_vacuum_potential_fixture_reader()
     call test_fixture_adapter()
+    call test_free_boundary_adapter()
     call test_fixture_rejections()
     write (*, "(a)") "PASS"
 
@@ -49,18 +53,25 @@ contains
             "TERPSICHORE BJAC ordering is wrong")
     end subroutine test_fixture_reader
 
-    subroutine write_fixture(unit, modelk)
+    subroutine write_fixture(unit, modelk, vacuum_intervals)
         integer, intent(in) :: unit
-        integer, intent(in), optional :: modelk
-        real(dp) :: s(0:3), pth(3), fpp(4), ftp(4)
+        integer, intent(in), optional :: modelk, vacuum_intervals
+        real(dp), allocatable :: bjac(:, :), full_surface(:, :), s(:)
+        real(dp) :: pth(3), fpp(4), ftp(4)
         real(dp) :: current_i(3), current_j(3), pressure_slope(3)
-        real(dp) :: parity, ql(2), bjac(4, 0:3), surface_field(4, 0:3)
+        real(dp) :: parity, ql(2), surface_field(4, 0:3)
         real(dp) :: cell(4, 3), radial_surface(4), radial_cell(3)
         real(dp) :: mode_surface(2, 0:3)
         integer :: mode_m(2), mode_n(2), point, surface_index
-        integer :: legacy_modelk
+        integer :: legacy_modelk, vacuum
 
-        s = [0.0_dp, 0.2_dp, 0.6_dp, 1.0_dp]
+        vacuum = 0
+        if (present(vacuum_intervals)) vacuum = vacuum_intervals
+        allocate (s(0:3 + vacuum), bjac(4, 0:3 + vacuum), &
+            full_surface(4, 0:3 + vacuum))
+        s(:3) = [0.0_dp, 0.2_dp, 0.6_dp, 1.0_dp]
+        if (vacuum > 0) s(4:) = [(1.0_dp + 0.3_dp * &
+            real(surface_index, dp), surface_index = 1, vacuum)]
         pth = 0.0_dp
         fpp = [0.2_dp, 0.25_dp, 0.3_dp, 0.35_dp]
         ftp = [1.0_dp, 1.1_dp, 1.2_dp, 1.3_dp]
@@ -73,7 +84,7 @@ contains
         mode_m = [1, 2]
         mode_n = [0, 1]
         ql = [0.5_dp, 0.0_dp]
-        do surface_index = 0, 3
+        do surface_index = 0, 3 + vacuum
             do point = 1, 4
                 bjac(point, surface_index) = -1.0_dp &
                     - 0.1_dp * real(point - 1, dp) &
@@ -87,8 +98,9 @@ contains
         write (unit) mode_m, mode_n, ql
         write (unit) 0.0_dp
         surface_field = 1.25_dp
-        write (unit) bjac, surface_field, surface_field + 1.0_dp, &
-            surface_field + 2.0_dp, surface_field + 3.0_dp
+        full_surface = 1.25_dp
+        write (unit) bjac, surface_field, full_surface + 1.0_dp, &
+            full_surface + 2.0_dp, full_surface + 3.0_dp
         radial_surface = [0.1_dp, 0.2_dp, 0.3_dp, 0.4_dp]
         radial_cell = [0.5_dp, 0.6_dp, 0.7_dp]
         mode_surface = 0.0_dp
@@ -147,6 +159,31 @@ contains
             "TERPSICHORE current factor is wrong")
     end subroutine test_potential_fixture_reader
 
+    subroutine test_vacuum_potential_fixture_reader()
+        type(terpsichore_matrix_fixture_t) :: fixture
+        integer :: info, unit
+
+        open (newunit=unit, status="scratch", form="unformatted", &
+            access="sequential")
+        call write_fixture(unit, vacuum_intervals=1)
+        rewind (unit)
+        call read_terpsichore_potential_fixture(unit, 1, fixture, info)
+        close (unit)
+        call require(info == terpsichore_matrix_fixture_ok, &
+            "valid vacuum TERPSICHORE fixture was rejected")
+        call require(all(shape(fixture%signed_bjac) == [4, 4]) &
+            .and. all(shape(fixture%metric_ss_over_jacobian) == [4, 4]), &
+            "vacuum fixture retained non-plasma geometry surfaces")
+        call require(maxval(abs(fixture%s - [0.0_dp, 0.2_dp, 0.6_dp, &
+            1.0_dp])) < 1.0e-14_dp, &
+            "vacuum radial extension shifted the plasma grid")
+        call require(abs(fixture%flux_p_slope(1) - 0.2_dp) < 1.0e-14_dp &
+            .and. abs(fixture%sigma_b_s(1, 0) - 1.25_dp) < 1.0e-14_dp &
+            .and. abs(fixture%metric_ss_over_jacobian(1, 0) - 2.25_dp) &
+            < 1.0e-14_dp, &
+            "vacuum record lengths shifted plasma fields")
+    end subroutine test_vacuum_potential_fixture_reader
+
     subroutine test_fixture_adapter()
         type(terpsichore_matrix_fixture_t) :: fixture
         type(dynamic_family_layout_t) :: actual_layout, expected_layout
@@ -174,6 +211,33 @@ contains
         call require(maxval(abs(actual - expected)) < 2.0e-14_dp, &
             "TERPSICHORE fixture adapter matrix is wrong")
     end subroutine test_fixture_adapter
+
+    subroutine test_free_boundary_adapter()
+        type(terpsichore_matrix_fixture_t) :: fixture
+        type(dynamic_family_layout_t) :: fixed_layout, free_layout
+        real(dp), allocatable :: fixed(:, :), free(:, :)
+        integer, allocatable :: retained(:)
+        integer :: info
+
+        call build_adapter_fixture(fixture)
+        call assemble_terpsichore_fixture_reduced_mass(fixture, fixed, &
+            fixed_layout, info)
+        call require(info == terpsichore_reduced_adapter_ok, &
+            "fixed mass for free-boundary comparison failed")
+        call assemble_terpsichore_fixture_reduced_mass_free_boundary( &
+            fixture, free, free_layout, info)
+        call require(info == terpsichore_reduced_adapter_ok, &
+            "free-boundary reduced mass failed")
+        call require(free_layout%outer_normal_retained &
+            .and. free_layout%normal_unknowns == 6, &
+            "free-boundary reduced mass layout is wrong")
+        retained = [1, 2, 3, 4, 7, 8, 9, 10, 11, 12]
+        call require(maxval(abs(free(retained, retained) - fixed)) &
+            < 2.0e-14_dp, &
+            "fixed reduced mass is not the constrained free mass")
+        call require(maxval(abs(free - transpose(free))) < 2.0e-14_dp, &
+            "free-boundary reduced mass is not symmetric")
+    end subroutine test_free_boundary_adapter
 
     subroutine test_fixture_rejections()
         type(terpsichore_matrix_fixture_t) :: fixture

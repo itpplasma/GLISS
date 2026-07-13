@@ -10,6 +10,7 @@ module terpsichore_noninteracting_stiffness
         terpsichore_coefficients_ok
     use terpsichore_reduced_layout, only: &
         build_terpsichore_reduced_fixed_boundary_layout, &
+        build_terpsichore_reduced_free_boundary_layout, &
         terpsichore_reduced_layout_ok
     implicit none
     private
@@ -28,12 +29,35 @@ module terpsichore_noninteracting_stiffness
     end type interval_factors_t
 
     public :: assemble_terpsichore_noninteracting_fixed_boundary_stiffness
+    public :: assemble_terpsichore_noninteracting_free_boundary_stiffness
 
 contains
 
     subroutine assemble_terpsichore_noninteracting_fixed_boundary_stiffness( &
             fixture, stiffness, layout, info)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        real(dp), allocatable, intent(out) :: stiffness(:, :)
+        type(dynamic_family_layout_t), intent(out) :: layout
+        integer, intent(out) :: info
+        call assemble_terpsichore_noninteracting_stiffness(fixture, .false., &
+            stiffness, layout, info)
+    end subroutine assemble_terpsichore_noninteracting_fixed_boundary_stiffness
+
+    subroutine assemble_terpsichore_noninteracting_free_boundary_stiffness( &
+            fixture, stiffness, layout, info)
+        type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        real(dp), allocatable, intent(out) :: stiffness(:, :)
+        type(dynamic_family_layout_t), intent(out) :: layout
+        integer, intent(out) :: info
+
+        call assemble_terpsichore_noninteracting_stiffness(fixture, .true., &
+            stiffness, layout, info)
+    end subroutine assemble_terpsichore_noninteracting_free_boundary_stiffness
+
+    subroutine assemble_terpsichore_noninteracting_stiffness(fixture, &
+            retain_outer_normal, stiffness, layout, info)
+        type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        logical, intent(in) :: retain_outer_normal
         real(dp), allocatable, intent(out) :: stiffness(:, :)
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
@@ -48,9 +72,15 @@ contains
         allocate (parity(fixture%modes), source=phase_sine, &
             stat=allocation_status)
         if (allocation_status /= 0) return
-        call build_terpsichore_reduced_fixed_boundary_layout(fixture%mode_m, &
-            fixture%mode_n, parity, fixture%intervals, layout, &
-            element_to_global, info)
+        if (retain_outer_normal) then
+            call build_terpsichore_reduced_free_boundary_layout( &
+                fixture%mode_m, fixture%mode_n, parity, fixture%intervals, &
+                layout, element_to_global, info)
+        else
+            call build_terpsichore_reduced_fixed_boundary_layout( &
+                fixture%mode_m, fixture%mode_n, parity, fixture%intervals, &
+                layout, element_to_global, info)
+        end if
         if (info /= terpsichore_reduced_layout_ok) return
         allocate (stiffness(layout%total_unknowns, layout%total_unknowns), &
             source=0.0_dp, stat=allocation_status)
@@ -71,7 +101,7 @@ contains
         end do
         if (.not. all(ieee_is_finite(stiffness))) return
         info = terpsichore_noninteracting_ok
-    end subroutine assemble_terpsichore_noninteracting_fixed_boundary_stiffness
+    end subroutine assemble_terpsichore_noninteracting_stiffness
 
     pure subroutine build_local_element(fixture, coefficient, interval, element)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture

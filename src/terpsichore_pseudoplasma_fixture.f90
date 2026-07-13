@@ -7,7 +7,7 @@ module terpsichore_pseudoplasma_fixture
     integer, parameter, public :: pseudoplasma_fixture_ok = 0
     integer, parameter, public :: pseudoplasma_fixture_invalid = -1
     integer, parameter :: fixture_magic = int(z'47565031')
-    integer, parameter :: fixture_schema = 1
+    integer, parameter :: fixture_schema = 2
     integer, parameter :: maximum_intervals = 996
     integer, parameter :: maximum_modes = 10000
     integer, parameter :: maximum_coefficients = 50000000
@@ -20,6 +20,7 @@ module terpsichore_pseudoplasma_fixture
         integer :: modes = 0
         real(dp) :: flux_t_slope = 0.0_dp
         real(dp) :: flux_p_slope = 0.0_dp
+        real(dp) :: alfven_normalization = 0.0_dp
         real(dp), allocatable :: s(:)
         integer, allocatable :: mode_m(:)
         integer, allocatable :: mode_n(:)
@@ -49,7 +50,8 @@ contains
             fixture%vacuum_intervals), stat=allocation_status)
         if (allocation_status /= 0) return
         read (unit, iostat=allocation_status) fixture%s, &
-            fixture%flux_t_slope, fixture%flux_p_slope
+            fixture%flux_t_slope, fixture%flux_p_slope, &
+            fixture%alfven_normalization
         if (allocation_status /= 0) return
         read (unit, iostat=allocation_status) fixture%mode_m, fixture%mode_n
         if (allocation_status /= 0) return
@@ -118,7 +120,10 @@ contains
         valid = all(ieee_is_finite(fixture%s)) &
             .and. ieee_is_finite(fixture%flux_t_slope) &
             .and. ieee_is_finite(fixture%flux_p_slope) &
+            .and. ieee_is_finite(fixture%alfven_normalization) &
             .and. all(ieee_is_finite(fixture%coefficient))
+        if (.not. valid) return
+        valid = fixture%alfven_normalization > 0.0_dp
         if (.not. valid) return
         valid = all(fixture%s(1:) > fixture%s(:fixture%vacuum_intervals - 1))
     end function terpsichore_pseudoplasma_fixture_is_valid

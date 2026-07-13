@@ -40,6 +40,7 @@ program test_dynamic_family_layout
         "first mu index is wrong")
     call require(mu_global_index(layout, 4, 3) == 33, &
         "last mu index is wrong")
+    call check_retained_outer_normal()
     call check_malformed_indices(layout)
     element = 1.0_dp
     malformed_matrix = 0.0_dp
@@ -126,6 +127,36 @@ program test_dynamic_family_layout
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_retained_outer_normal()
+        type(dynamic_family_layout_t) :: free_layout
+        integer, allocatable :: free_permutation(:), free_widths(:)
+        integer, parameter :: expected(36) = [ &
+            1, 2, 3, 13, 14, 15, 25, 26, 27, &
+            4, 5, 6, 16, 17, 18, 28, 29, 30, &
+            7, 8, 9, 19, 20, 21, 31, 32, 33, &
+            10, 11, 12, 22, 23, 24, 34, 35, 36]
+        integer :: local_info
+
+        call build_dynamic_family_layout(3, 4, free_layout, local_info, &
+            retain_outer_normal=.true.)
+        call require(local_info == dynamic_layout_ok, &
+            "retained-edge dynamic layout failed")
+        call require(free_layout%normal_unknowns == 12 &
+            .and. free_layout%total_unknowns == 36, &
+            "retained-edge dynamic counts are wrong")
+        call require(normal_global_index(free_layout, 4, 1) == 10 &
+            .and. normal_global_index(free_layout, 4, 3) == 12, &
+            "retained edge normal indices are wrong")
+        call build_dynamic_block_permutation(free_layout, free_widths, &
+            free_permutation, local_info)
+        call require(local_info == dynamic_layout_ok, &
+            "retained-edge block permutation failed")
+        call require(all(free_widths == [9, 9, 9, 9]), &
+            "retained-edge block widths are wrong")
+        call require(all(free_permutation == expected), &
+            "retained-edge block permutation is wrong")
+    end subroutine check_retained_outer_normal
 
     subroutine check_malformed_indices(valid_layout)
         type(dynamic_family_layout_t), intent(in) :: valid_layout

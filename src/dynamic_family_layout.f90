@@ -15,6 +15,7 @@ module dynamic_family_layout
         integer :: mu_unknowns = 0
         integer :: total_unknowns = 0
         integer :: active_count(3) = 0
+        logical :: outer_normal_retained = .false.
         logical, allocatable :: active(:, :)
         integer, allocatable :: active_rank(:, :)
     end type dynamic_family_layout_t
@@ -128,17 +129,22 @@ contains
         regular_width = sum(layout%active_count)
         edge_width = sum(layout%active_count(2:3))
         block_count = layout%intervals - 1
-        if (edge_width > 0) block_count = layout%intervals
+        if (edge_width > 0 .or. layout%outer_normal_retained) &
+            block_count = layout%intervals
         allocate (widths(block_count), permutation(layout%total_unknowns))
         widths(1:layout%intervals - 1) = regular_width
-        if (edge_width > 0) widths(block_count) = edge_width
+        if (block_count == layout%intervals) then
+            widths(block_count) = edge_width
+            if (layout%outer_normal_retained) widths(block_count) = regular_width
+        end if
         position = 0
         do cell = 1, layout%intervals - 1
             call append_cell_indices(layout, cell, .true., permutation, &
                 position)
         end do
-        if (edge_width > 0) call append_cell_indices(layout, &
-            layout%intervals, .false., permutation, position)
+        if (block_count == layout%intervals) call append_cell_indices(layout, &
+            layout%intervals, layout%outer_normal_retained, permutation, &
+            position)
         if (position /= layout%total_unknowns) return
         info = dynamic_layout_ok
     end subroutine build_dynamic_block_permutation
@@ -190,10 +196,12 @@ contains
         end select
     end function element_global_index
 
-    pure subroutine build_dynamic_family_layout(trials, intervals, layout, info)
+    pure subroutine build_dynamic_family_layout(trials, intervals, layout, &
+            info, retain_outer_normal)
         integer, intent(in) :: trials, intervals
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
+        logical, intent(in), optional :: retain_outer_normal
 
         type(trial_space_topology_t) :: topology
 
@@ -201,15 +209,17 @@ contains
         if (trials < 1) return
         allocate (topology%active(3, trials), source=.true.)
         call build_resolved_dynamic_family_layout(topology, intervals, &
-            layout, info)
+            layout, info, retain_outer_normal)
     end subroutine build_dynamic_family_layout
 
     pure subroutine build_resolved_dynamic_family_layout(topology, intervals, &
-            layout, info)
+            layout, info, retain_outer_normal)
         type(trial_space_topology_t), intent(in) :: topology
         integer, intent(in) :: intervals
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
+        logical, intent(in), optional :: retain_outer_normal
+        integer :: normal_nodes
 
         layout = dynamic_family_layout_t()
         info = dynamic_layout_invalid
@@ -219,9 +229,13 @@ contains
         if (intervals < 2 .or. .not. any(topology%active)) return
         layout%trials = size(topology%active, 2)
         layout%intervals = intervals
+        if (present(retain_outer_normal)) &
+            layout%outer_normal_retained = retain_outer_normal
         allocate (layout%active, source=topology%active)
         call build_activity_ranks(layout)
-        layout%normal_unknowns = layout%active_count(1) * (intervals - 1)
+        normal_nodes = intervals - 1
+        if (layout%outer_normal_retained) normal_nodes = intervals
+        layout%normal_unknowns = layout%active_count(1) * normal_nodes
         layout%eta_unknowns = layout%active_count(2) * intervals
         layout%mu_unknowns = layout%active_count(3) * intervals
         layout%total_unknowns = layout%normal_unknowns &
@@ -269,7 +283,9 @@ contains
         integer :: index
 
         index = 0
-        if (node <= 0 .or. node >= layout%intervals) return
+        if (node <= 0 .or. node > layout%intervals) return
+        if (node == layout%intervals .and. &
+            .not. layout%outer_normal_retained) return
         if (trial < 1 .or. trial > layout%trials) return
         if (.not. layout%active(1, trial)) return
         index = (node - 1) * layout%active_count(1) &
@@ -351,8 +367,13 @@ contains
         if (.not. valid) return
         valid = activity_ranks_are_consistent(layout)
         if (.not. valid) return
-        valid = layout%normal_unknowns == layout%active_count(1) &
-            * (layout%intervals - 1)
+        if (layout%outer_normal_retained) then
+            valid = layout%normal_unknowns == layout%active_count(1) &
+                * layout%intervals
+        else
+            valid = layout%normal_unknowns == layout%active_count(1) &
+                * (layout%intervals - 1)
+        end if
         if (.not. valid) return
         valid = layout%eta_unknowns == layout%active_count(2) &
             * layout%intervals
