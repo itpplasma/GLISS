@@ -58,6 +58,7 @@ add_library(gliss
     src/terpsichore_topology.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
+    src/vacuum_schur.f90
     src/variable_block_tridiagonal.f90
     src/variable_generalized_solver.f90
     src/variable_spectrum_analysis.f90
@@ -106,6 +107,12 @@ add_executable(gliss_local_mode_diagnostic
     app/gliss_local_mode_diagnostic.f90)
 target_link_libraries(gliss_local_mode_diagnostic PRIVATE gliss)
 set_target_properties(gliss_local_mode_diagnostic PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_vacuum_schur_diagnostic
+    app/gliss_vacuum_schur_diagnostic.f90)
+target_link_libraries(gliss_vacuum_schur_diagnostic PRIVATE gliss)
+set_target_properties(gliss_vacuum_schur_diagnostic PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gliss_mercier app/gliss_mercier.f90)
@@ -243,6 +250,16 @@ if(BUILD_TESTING)
     add_test(NAME local_mode_diagnostic_cli_extra COMMAND ${CMAKE_COMMAND}
         -DPROGRAM=$<TARGET_FILE:gliss_local_mode_diagnostic>
         "-DEXPECTED=gliss_local_mode_diagnostic: no arguments are accepted"
+        "-DARGUMENTS=extra"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+
+    add_executable(test_vacuum_schur test/test_vacuum_schur.f90)
+    target_link_libraries(test_vacuum_schur PRIVATE gliss)
+    add_test(NAME vacuum_schur COMMAND test_vacuum_schur)
+    add_test(NAME vacuum_schur_diagnostic COMMAND gliss_vacuum_schur_diagnostic)
+    add_test(NAME vacuum_schur_diagnostic_cli_extra COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_vacuum_schur_diagnostic>
+        "-DEXPECTED=gliss_vacuum_schur_diagnostic: no arguments are accepted"
         "-DARGUMENTS=extra"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
 
