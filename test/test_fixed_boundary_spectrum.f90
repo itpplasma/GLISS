@@ -3,10 +3,13 @@ program test_fixed_boundary_spectrum
         ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use cylinder_fixture, only: create_cylinder_fixture
+    use dense_spectrum_support, only: dense_spectrum_invalid, &
+        dense_spectrum_ok, unpermute_dense_vectors
     use fixed_boundary_spectrum, only: build_fixed_boundary_problem, &
         fixed_boundary_invalid, fixed_boundary_ok, &
-        fixed_boundary_problem_t, fixed_boundary_spectrum_result_t, &
-        solve_fixed_boundary_class
+        fixed_boundary_full_spectrum_t, fixed_boundary_problem_t, &
+        fixed_boundary_spectrum_result_t, solve_fixed_boundary_class, &
+        solve_fixed_boundary_full_spectrum
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     implicit none
@@ -18,6 +21,7 @@ program test_fixed_boundary_spectrum
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(fixed_boundary_problem_t) :: problem
     type(fixed_boundary_spectrum_result_t) :: first, second, repeated
+    type(fixed_boundary_full_spectrum_t) :: full, full_repeated
     integer :: info
 
     call create_cylinder_fixture(fixture)
@@ -40,6 +44,23 @@ program test_fixed_boundary_spectrum
         <= legacy_relative_tolerance * abs(legacy_lowest(2)), &
         "class-two result changed from the legacy CLI")
 
+    call solve_fixed_boundary_full_spectrum(problem, 1, full, info)
+    call require(info == fixed_boundary_ok, "full-spectrum solve failed")
+    call check_full_spectrum(full, first)
+    call solve_fixed_boundary_full_spectrum(problem, 1, full_repeated, info)
+    call require(info == fixed_boundary_ok, "repeated full-spectrum solve failed")
+    call require(all(full_repeated%eigenvalues == full%eigenvalues), &
+        "repeated full-spectrum solve changed the eigenvalues")
+    call require(all(full_repeated%eigenvectors == full%eigenvectors), &
+        "repeated full-spectrum solve changed the eigenvectors")
+    call require(all(full_repeated%rayleigh_quotients &
+        == full%rayleigh_quotients), &
+        "repeated full-spectrum solve changed the Rayleigh quotients")
+    call require(all(full_repeated%residuals == full%residuals), &
+        "repeated full-spectrum solve changed the residuals")
+    call require(all(full_repeated%resolutions == full%resolutions), &
+        "repeated full-spectrum solve changed the resolutions")
+
     call solve_fixed_boundary_class(problem, 1, repeated, info)
     call require(info == fixed_boundary_ok, "repeated solve failed")
     call require(repeated%lowest_eigenvalue == first%lowest_eigenvalue, &
@@ -48,6 +69,7 @@ program test_fixed_boundary_spectrum
         "repeated solve changed the eigenvector")
 
     call check_invalid_inputs(equilibrium)
+    call check_row_permutation()
     call delete_fixture()
     write (*, "(a)") "PASS"
 
@@ -81,6 +103,75 @@ contains
         call require(result%negative_count >= 0, "negative count is invalid")
         call require(result%floor_count >= 0, "floor count is invalid")
     end subroutine check_result
+
+    subroutine check_full_spectrum(full, certified)
+        type(fixed_boundary_full_spectrum_t), intent(in) :: full
+        type(fixed_boundary_spectrum_result_t), intent(in) :: certified
+        real(dp) :: overlap
+        integer :: certified_index
+
+        call require(size(full%eigenvalues) == certified%unknowns, &
+            "full-spectrum eigenvalue count is wrong")
+        call require(all(shape(full%eigenvectors) &
+            == [certified%unknowns, certified%unknowns]), &
+            "full-spectrum eigenvector shape is wrong")
+        call require(all(ieee_is_finite(full%eigenvalues)), &
+            "full spectrum contains nonfinite eigenvalues")
+        call require(all(ieee_is_finite(full%eigenvectors)), &
+            "full spectrum contains nonfinite eigenvectors")
+        call require(size(full%rayleigh_quotients) == certified%unknowns &
+            .and. all(ieee_is_finite(full%rayleigh_quotients)), &
+            "full spectrum contains invalid Rayleigh quotients")
+        call require(size(full%residuals) == certified%unknowns &
+            .and. all(ieee_is_finite(full%residuals)) &
+            .and. all(full%residuals >= 0.0_dp), &
+            "full spectrum contains invalid residuals")
+        call require(size(full%resolutions) == certified%unknowns &
+            .and. all(ieee_is_finite(full%resolutions)) &
+            .and. all(full%resolutions >= 0.0_dp), &
+            "full spectrum contains invalid resolutions")
+        call require(all(full%eigenvalues(2:) >= &
+            full%eigenvalues(:size(full%eigenvalues) - 1)), &
+            "full spectrum is not sorted")
+        call require(count(full%eigenvalues < -certified%zero_floor) &
+            == certified%negative_count, "full-spectrum negative count differs")
+        call require(count(abs(full%eigenvalues) <= certified%zero_floor) &
+            == certified%floor_count, "full-spectrum floor count differs")
+        certified_index = 1
+        if (certified%negative_count == 0) &
+            certified_index = certified%floor_count + 1
+        call require(abs(full%eigenvalues(certified_index) &
+            - certified%lowest_eigenvalue) &
+            <= certified%certificate + 1.0e-12_dp &
+            * abs(certified%lowest_eigenvalue), &
+            "full spectrum disagrees with the certified active eigenvalue")
+        overlap = abs(dot_product(full%eigenvectors(:, certified_index), &
+            certified%eigenvector)) / sqrt(dot_product( &
+            full%eigenvectors(:, certified_index), &
+            full%eigenvectors(:, certified_index)) &
+            * dot_product(certified%eigenvector, certified%eigenvector))
+        call require(overlap > 1.0_dp - 1.0e-10_dp, &
+            "full-spectrum vector is not in dynamic component order")
+    end subroutine check_full_spectrum
+
+    subroutine check_row_permutation()
+        real(dp) :: vectors(3, 2)
+        integer :: status
+
+        vectors(1, :) = [1.0_dp, 10.0_dp]
+        vectors(2, :) = [2.0_dp, 20.0_dp]
+        vectors(3, :) = [3.0_dp, 30.0_dp]
+        call unpermute_dense_vectors(vectors, [2, 3, 1], status)
+        call require(status == dense_spectrum_ok, &
+            "valid row permutation failed")
+        call require(all(vectors(1, :) == [3.0_dp, 30.0_dp]) &
+            .and. all(vectors(2, :) == [1.0_dp, 10.0_dp]) &
+            .and. all(vectors(3, :) == [2.0_dp, 20.0_dp]), &
+            "dense eigenvectors were unpermuted incorrectly")
+        call unpermute_dense_vectors(vectors, [1, 1, 3], status)
+        call require(status == dense_spectrum_invalid, &
+            "duplicate row permutation was accepted")
+    end subroutine check_row_permutation
 
     subroutine check_invalid_inputs(local_equilibrium)
         type(gvec_cas3d_equilibrium_t), intent(in) :: local_equilibrium
@@ -117,6 +208,9 @@ contains
         call solve_fixed_boundary_class(problem, 0, invalid_result, status)
         call require(status == fixed_boundary_invalid, &
             "invalid parity class was accepted")
+        call solve_fixed_boundary_full_spectrum(problem, 0, full, status)
+        call require(status == fixed_boundary_invalid, &
+            "full spectrum accepted an invalid parity class")
     end subroutine check_invalid_inputs
 
     subroutine delete_fixture()

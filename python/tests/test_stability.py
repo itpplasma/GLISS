@@ -1,8 +1,20 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
 import gliss
-from gliss.stability import SpectrumResult, StabilityProblem, _bind
+from gliss.full_spectrum import (
+    FullSpectrumResult,
+    FullStabilityResult,
+    _bind_full_spectrum,
+    _validate_full_spectrum,
+)
+from gliss.stability import (
+    SpectrumResult,
+    StabilityProblem,
+    _bind,
+)
 
 
 class FakeFunction:
@@ -33,6 +45,9 @@ class FakeLibrary:
         )
         self.gliss_stability_problem_solve_class = FakeFunction(
             self.problem_solve_class
+        )
+        self.gliss_stability_problem_full_spectrum = FakeFunction(
+            self.problem_full_spectrum
         )
 
     def equilibrium_create(self, path, length, handle, error, error_capacity):
@@ -128,6 +143,38 @@ class FakeLibrary:
         values.eigenpair_resolution = 2.0e-10
         values.inertia_interval = 3.0e-10
         values.certificate = 6.0e-10
+        error.value = b""
+        return 0
+
+    def problem_full_spectrum(
+        self,
+        handle,
+        parity_class,
+        eigenvalue_capacity,
+        eigenvalues,
+        residuals,
+        resolutions,
+        rayleigh_quotients,
+        eigenvector_capacity,
+        eigenvectors,
+        eigenvalues_written,
+        eigenvectors_written,
+        error,
+        error_capacity,
+    ):
+        count = eigenvalue_capacity
+        values = np.arange(count, dtype=np.float64)
+        values[0] = -4.0 - parity_class
+        values[1:] -= 2.0
+        np.ctypeslib.as_array(eigenvalues, shape=(count,))[:] = values
+        np.ctypeslib.as_array(residuals, shape=(count,))[:] = 1.0e-10
+        np.ctypeslib.as_array(resolutions, shape=(count,))[:] = 2.0e-10
+        np.ctypeslib.as_array(rayleigh_quotients, shape=(count,))[:] = values
+        np.ctypeslib.as_array(eigenvectors, shape=(eigenvector_capacity,))[:] = (
+            np.arange(eigenvector_capacity, dtype=np.float64)
+        )
+        eigenvalues_written._obj.value = count
+        eigenvectors_written._obj.value = eigenvector_capacity
         error.value = b""
         return 0
 
@@ -279,6 +326,122 @@ def test_stability_problem_represents_fully_floored_result(contexts):
 def test_stability_problem_is_public():
     assert gliss.StabilityProblem is StabilityProblem
     assert gliss.SpectrumResult is SpectrumResult
+    assert gliss.FullSpectrumResult is FullSpectrumResult
+    assert gliss.FullStabilityResult is FullStabilityResult
+
+
+def test_stability_problem_exposes_full_spectrum(contexts):
+    _, equilibrium = contexts
+    with StabilityProblem(equilibrium, modes=[(1, 1), (2, 1)]) as problem:
+        result = problem.solve_full_spectrum_class(1)
+
+    assert isinstance(result, FullSpectrumResult)
+    assert result.certified_lowest.parity_class == 1
+    np.testing.assert_array_equal(result.eigenvalues, [-5, -1, 0, 1, 2, 3])
+    assert result.eigenvectors.shape == (6, 6)
+    np.testing.assert_array_equal(result.rayleigh_quotients, result.eigenvalues)
+    np.testing.assert_array_equal(result.residuals, np.full(6, 1.0e-10))
+    np.testing.assert_array_equal(result.resolutions, np.full(6, 2.0e-10))
+    np.testing.assert_array_equal(result.eigenvectors[1], np.arange(6, 12))
+    assert result.normal.shape == (6, 2)
+    assert result.eta.shape == (6, 2)
+    assert result.mu.shape == (6, 2)
+    assert not result.eigenvalues.flags.writeable
+    assert not result.rayleigh_quotients.flags.writeable
+    assert not result.residuals.flags.writeable
+    assert not result.resolutions.flags.writeable
+    assert not result.eigenvectors.flags.writeable
+
+
+def test_stability_problem_exposes_both_full_spectra(contexts):
+    _, equilibrium = contexts
+    with StabilityProblem(equilibrium, modes=[(1, 1), (2, 1)]) as problem:
+        result = problem.solve_full_spectrum()
+    assert isinstance(result, FullStabilityResult)
+    assert tuple(item.certified_lowest.parity_class for item in result.classes) == (
+        1,
+        2,
+    )
+    assert result.lowest.certified_lowest.parity_class == 2
+
+
+def test_stability_problem_rejects_invalid_full_spectrum_sizes(contexts):
+    library, equilibrium = contexts
+
+    def wrong_sizes(*args):
+        args[9]._obj.value = args[2] - 1
+        args[10]._obj.value = args[7]
+        args[11].value = b""
+        return 0
+
+    library.gliss_stability_problem_full_spectrum = FakeFunction(wrong_sizes)
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        with pytest.raises(gliss.GlissCapacityError, match="eigenvalues"):
+            problem.solve_full_spectrum_class(1)
+
+
+def test_stability_problem_reports_numpy_allocation_failure(contexts, monkeypatch):
+    _, equilibrium = contexts
+
+    def fail_allocation(*args, **kwargs):
+        raise MemoryError
+
+    monkeypatch.setattr("gliss.equilibrium.np.empty", fail_allocation)
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        with pytest.raises(gliss.GlissAllocationError, match="eigenvector"):
+            problem.solve_class(1)
+
+
+def test_full_spectrum_certifies_first_pair_outside_floor_band(contexts):
+    _, equilibrium = contexts
+    with StabilityProblem(equilibrium, modes=[(1, 1)]) as problem:
+        certified = replace(
+            problem.solve_class(1),
+            negative_count=0,
+            floor_count=2,
+            lowest_eigenvalue=2.0,
+            certificate=0.0,
+        )
+    eigenvalues = np.array([-1.0, 0.0, 2.0, 3.0, 4.0, 5.0])
+    rayleigh_quotients = eigenvalues.copy()
+    residuals = np.zeros(6)
+    resolutions = np.zeros(6)
+    eigenvectors = np.eye(6)
+    _validate_full_spectrum(
+        certified,
+        eigenvalues,
+        rayleigh_quotients,
+        residuals,
+        resolutions,
+        eigenvectors,
+    )
+    result = FullSpectrumResult(
+        certified,
+        eigenvalues,
+        rayleigh_quotients,
+        residuals,
+        resolutions,
+        eigenvectors,
+    )
+    assert result.certified_index == 2
+    floored = replace(
+        certified,
+        has_eigenvector=False,
+        floor_count=6,
+        lowest_eigenvalue=0.0,
+        eigenvector=np.empty(0),
+    )
+    assert (
+        FullSpectrumResult(
+            floored,
+            eigenvalues,
+            rayleigh_quotients,
+            residuals,
+            resolutions,
+            eigenvectors,
+        ).certified_index
+        is None
+    )
 
 
 def test_stability_problem_exposes_configuration_and_manifest(
@@ -318,3 +481,8 @@ def test_problem_manifest_rejects_changed_source(contexts, tmp_path, monkeypatch
 def test_stability_bind_reports_missing_native_symbols():
     with pytest.raises(OSError, match="stability problem.*matching"):
         _bind(object())
+
+
+def test_full_spectrum_bind_reports_missing_native_symbol():
+    with pytest.raises(OSError, match="full stability spectrum.*matching"):
+        _bind_full_spectrum(object())

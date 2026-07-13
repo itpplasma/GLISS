@@ -44,5 +44,10 @@ int main(void) {
     if (summary.struct_size != sizeof(gliss_spectrum_summary)) {
         return 8;
     }
+    if (gliss_stability_problem_full_spectrum(
+            problem, 1, 0, NULL, NULL, NULL, NULL, 0, NULL, &surfaces,
+            &surfaces, error, sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT) {
+        return 9;
+    }
     return 0;
 }

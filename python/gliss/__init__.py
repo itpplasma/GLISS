@@ -109,6 +109,7 @@ from .stability import (  # noqa: E402
     StabilityProblem,
     StabilityResult,
 )
+from .full_spectrum import FullSpectrumResult, FullStabilityResult  # noqa: E402
 from .schema import (  # noqa: E402
     RunManifest,
     StabilityConfiguration,
@@ -126,6 +127,8 @@ __all__ = [
     "GlissIOError",
     "GlissInternalError",
     "get_include",
+    "FullSpectrumResult",
+    "FullStabilityResult",
     "mercier_objective",
     "mercier_profile",
     "SpectrumResult",

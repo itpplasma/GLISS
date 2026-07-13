@@ -5,6 +5,8 @@ module fixed_boundary_spectrum
         compressible_geometry_ok
     use compressible_stiffness_family_assembly, only: &
         assemble_compressible_family_stiffness
+    use dense_spectrum_support, only: dense_spectrum_allocation, &
+        dense_spectrum_ok, diagnose_dense_spectrum, unpermute_dense_vectors
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
         dynamic_family_layout_t, dynamic_layout_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
@@ -14,8 +16,11 @@ module fixed_boundary_spectrum
     use phase_assembly_policy, only: phase_assembly_transformed
     use physical_mass_family_assembly, only: assemble_physical_family_mass
     use radial_space_policy, only: radial_space_config_t
+    use symmetric_eigensolver, only: solve_symmetric_generalized_allocated, &
+        symmetric_eigensolver_allocation, symmetric_eigensolver_ok
     use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
-        variable_block_ok, variable_block_tridiagonal_t
+        variable_block_allocation, variable_block_ok, &
+        variable_block_to_dense, variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
         iterate_variable_generalized_eigenvalue, variable_generalized_ok, &
         variable_generalized_inertia
@@ -29,6 +34,7 @@ module fixed_boundary_spectrum
     integer, parameter, public :: fixed_boundary_geometry_error = -2
     integer, parameter, public :: fixed_boundary_assembly_error = -3
     integer, parameter, public :: fixed_boundary_solver_error = -4
+    integer, parameter, public :: fixed_boundary_allocation_error = -5
     integer, parameter, public :: fixed_boundary_n_theta = 64
     integer, parameter, public :: fixed_boundary_n_zeta = 64
 
@@ -82,9 +88,18 @@ module fixed_boundary_spectrum
         real(dp), allocatable :: eigenvector(:)
     end type fixed_boundary_spectrum_result_t
 
+    type, public :: fixed_boundary_full_spectrum_t
+        real(dp), allocatable :: eigenvalues(:)
+        real(dp), allocatable :: eigenvectors(:, :)
+        real(dp), allocatable :: rayleigh_quotients(:)
+        real(dp), allocatable :: residuals(:)
+        real(dp), allocatable :: resolutions(:)
+    end type fixed_boundary_full_spectrum_t
+
     public :: build_fixed_boundary_problem
     public :: fixed_boundary_unknown_count
     public :: solve_fixed_boundary_class
+    public :: solve_fixed_boundary_full_spectrum
 
 contains
 
@@ -317,6 +332,59 @@ contains
         unknowns = problem%classes(parity_class)%unknowns
         info = fixed_boundary_ok
     end subroutine fixed_boundary_unknown_count
+
+    subroutine solve_fixed_boundary_full_spectrum(problem, parity_class, &
+            result, info)
+        type(fixed_boundary_problem_t), intent(in) :: problem
+        integer, intent(in) :: parity_class
+        type(fixed_boundary_full_spectrum_t), intent(out) :: result
+        integer, intent(out) :: info
+        real(dp), allocatable :: stiffness(:, :), mass(:, :)
+
+        info = fixed_boundary_invalid
+        if (.not. problem%ready) return
+        if (parity_class < 1 .or. parity_class > 2) return
+        call variable_block_to_dense(problem%classes(parity_class)%stiffness, &
+            stiffness, info)
+        if (info /= variable_block_ok) then
+            info = merge(fixed_boundary_allocation_error, &
+                fixed_boundary_assembly_error, info == variable_block_allocation)
+            return
+        end if
+        call variable_block_to_dense(problem%classes(parity_class)%mass, &
+            mass, info)
+        if (info /= variable_block_ok) then
+            info = merge(fixed_boundary_allocation_error, &
+                fixed_boundary_assembly_error, info == variable_block_allocation)
+            return
+        end if
+        call solve_symmetric_generalized_allocated(stiffness, mass, &
+            result%eigenvalues, result%eigenvectors, info)
+        if (info /= symmetric_eigensolver_ok) then
+            info = merge(fixed_boundary_allocation_error, &
+                fixed_boundary_solver_error, &
+                info == symmetric_eigensolver_allocation)
+            return
+        end if
+        call diagnose_dense_spectrum(problem%classes(parity_class)%stiffness, &
+            problem%classes(parity_class)%mass, result%eigenvalues, &
+            result%eigenvectors, result%rayleigh_quotients, result%residuals, &
+            result%resolutions, info)
+        if (info /= dense_spectrum_ok) then
+            info = merge(fixed_boundary_allocation_error, &
+                fixed_boundary_solver_error, info == dense_spectrum_allocation)
+            return
+        end if
+        call unpermute_dense_vectors(result%eigenvectors, &
+            problem%classes(parity_class)%permutation, info)
+        if (info == dense_spectrum_allocation) then
+            info = fixed_boundary_allocation_error
+        else if (info /= dense_spectrum_ok) then
+            info = fixed_boundary_solver_error
+        else
+            info = fixed_boundary_ok
+        end if
+    end subroutine solve_fixed_boundary_full_spectrum
 
     subroutine resolve_lowest(class_problem, summary, result, info)
         type(fixed_boundary_class_problem_t), intent(in) :: class_problem

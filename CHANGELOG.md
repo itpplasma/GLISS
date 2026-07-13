@@ -11,6 +11,9 @@
   certified lowest-eigenpair results for both parity classes.
 - Return mass-normalized eigenvectors in documented dynamic component order
   through the C and Python interfaces.
+- Add opt-in complete fixed-boundary spectra with independently recomputed
+  Rayleigh quotients, backward residuals and roundoff resolutions for every
+  eigenpair.
 - Add deterministic version-1 configuration and result files with strict
   validation, plus portable run manifests that checksum the equilibrium and
   record the Python/native software versions.

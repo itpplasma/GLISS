@@ -45,8 +45,13 @@ program test_gliss_spectrum_capi
     integer(c_int), target :: mode_n(2) = [1_c_int, 1_c_int]
     type(c_ptr), target :: equilibrium, problem, rejected
     integer(c_size_t), target :: unknowns, written
+    integer(c_size_t), target :: eigenvalues_written, eigenvectors_written
     type(spectrum_summary_c), target :: summary
     real(c_double), allocatable, target :: eigenvector(:), sentinel(:)
+    real(c_double), allocatable, target :: eigenvalues(:), eigenvectors(:)
+    real(c_double), allocatable, target :: residuals(:), resolutions(:)
+    real(c_double), allocatable, target :: rayleigh_quotients(:)
+    real(c_double), allocatable, target :: value_sentinel(:), vector_sentinel(:)
     integer(c_int) :: status
 
     interface
@@ -110,6 +115,22 @@ program test_gliss_spectrum_capi
             integer(c_size_t), value :: capacity, error_capacity
             integer(c_int) :: result
         end function problem_solve_class
+
+        function problem_full_spectrum(handle, parity_class, value_capacity, &
+                values, residuals, resolutions, rayleigh_quotients, &
+                vector_capacity, vectors, values_written, &
+                vectors_written, error_pointer, error_capacity) bind(c, &
+                name="gliss_stability_problem_full_spectrum") result(result)
+            import c_int, c_ptr, c_size_t
+            type(c_ptr), value :: handle, values, residuals, resolutions
+            type(c_ptr), value :: rayleigh_quotients
+            type(c_ptr), value :: vectors, values_written
+            type(c_ptr), value :: vectors_written, error_pointer
+            integer(c_int), value :: parity_class
+            integer(c_size_t), value :: value_capacity, vector_capacity
+            integer(c_size_t), value :: error_capacity
+            integer(c_int) :: result
+        end function problem_full_spectrum
     end interface
 
     call create_cylinder_fixture(fixture)
@@ -197,6 +218,115 @@ program test_gliss_spectrum_capi
     call require(summary%certificate == summary%inertia_interval &
         + summary%eigenpair_residual + summary%eigenpair_resolution, &
         "C API certificate components do not close")
+
+    allocate (eigenvalues(unknowns), residuals(unknowns), &
+        resolutions(unknowns), rayleigh_quotients(unknowns), &
+        value_sentinel(unknowns))
+    allocate (eigenvectors(unknowns * unknowns), &
+        vector_sentinel(unknowns * unknowns))
+    value_sentinel = 8.0_c_double
+    vector_sentinel = 9.0_c_double
+    eigenvalues = value_sentinel
+    residuals = value_sentinel
+    resolutions = value_sentinel
+    rayleigh_quotients = value_sentinel
+    eigenvectors = vector_sentinel
+    status = problem_full_spectrum(problem, 1_c_int, unknowns - 1_c_size_t, &
+        c_loc(eigenvalues), c_loc(residuals), c_loc(resolutions), &
+        c_loc(rayleigh_quotients), unknowns * unknowns, c_loc(eigenvectors), &
+        c_loc(eigenvalues_written), &
+        c_loc(eigenvectors_written), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_capacity, &
+        "small full-spectrum eigenvalue capacity was not rejected")
+    call require(eigenvalues_written == unknowns, &
+        "required full-spectrum eigenvalue count is wrong")
+    call require(eigenvectors_written == unknowns * unknowns, &
+        "required full-spectrum eigenvector count is wrong")
+    call require(all(eigenvalues == value_sentinel), &
+        "full-spectrum capacity failure modified eigenvalues")
+    call require(all(residuals == value_sentinel), &
+        "full-spectrum capacity failure modified residuals")
+    call require(all(resolutions == value_sentinel), &
+        "full-spectrum capacity failure modified resolutions")
+    call require(all(rayleigh_quotients == value_sentinel), &
+        "full-spectrum capacity failure modified Rayleigh quotients")
+    call require(all(eigenvectors == vector_sentinel), &
+        "full-spectrum capacity failure modified eigenvectors")
+    status = problem_full_spectrum(problem, 1_c_int, unknowns, &
+        c_loc(eigenvalues), c_loc(residuals), c_loc(resolutions), &
+        c_loc(rayleigh_quotients), unknowns * unknowns - 1_c_size_t, &
+        c_loc(eigenvectors), &
+        c_loc(eigenvalues_written), &
+        c_loc(eigenvectors_written), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_capacity, &
+        "small full-spectrum eigenvector capacity was not rejected")
+    status = problem_full_spectrum(problem, 1_c_int, unknowns, &
+        c_loc(eigenvalues), c_loc(residuals), c_loc(resolutions), &
+        c_loc(rayleigh_quotients), unknowns * unknowns, c_loc(eigenvectors), &
+        c_loc(eigenvalues_written), &
+        c_loc(eigenvectors_written), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_ok, "full-spectrum C API solve failed")
+    call require(eigenvalues_written == unknowns, &
+        "full-spectrum C API wrote the wrong eigenvalue count")
+    call require(eigenvectors_written == unknowns * unknowns, &
+        "full-spectrum C API wrote the wrong eigenvector count")
+    call require(all(ieee_is_finite(eigenvalues)), &
+        "full-spectrum C API returned nonfinite eigenvalues")
+    call require(all(ieee_is_finite(residuals)) .and. all(residuals >= 0.0), &
+        "full-spectrum C API returned invalid residuals")
+    call require(all(ieee_is_finite(resolutions)) &
+        .and. all(resolutions >= 0.0), &
+        "full-spectrum C API returned invalid resolutions")
+    call require(all(ieee_is_finite(rayleigh_quotients)), &
+        "full-spectrum C API returned nonfinite Rayleigh quotients")
+    call require(all(ieee_is_finite(eigenvectors)), &
+        "full-spectrum C API returned nonfinite eigenvectors")
+    call require(all(eigenvalues(2:) >= &
+        eigenvalues(:size(eigenvalues) - 1)), &
+        "full-spectrum C API eigenvalues are not sorted")
+    call require(abs(eigenvalues(merge(1_c_size_t, summary%floor_count &
+        + 1_c_size_t, summary%negative_count > 0_c_size_t)) &
+        - summary%lowest_eigenvalue) &
+        <= summary%certificate + 1.0e-12_c_double &
+        * abs(summary%lowest_eigenvalue), &
+        "full-spectrum C API disagrees with certified active eigenvalue")
+    call require(abs(dot_product(eigenvectors(:unknowns), eigenvector)) &
+        / sqrt(dot_product(eigenvectors(:unknowns), eigenvectors(:unknowns)) &
+        * dot_product(eigenvector, eigenvector)) &
+        > 1.0_c_double - 1.0e-10_c_double, &
+        "full-spectrum C API component order is wrong")
+
+    status = problem_full_spectrum(problem, 1_c_int, unknowns, c_null_ptr, &
+        c_loc(residuals), c_loc(resolutions), c_loc(rayleigh_quotients), &
+        unknowns * unknowns, c_loc(eigenvectors), &
+        c_loc(eigenvalues_written), c_loc(eigenvectors_written), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "null full-spectrum eigenvalue output was accepted")
+    status = problem_full_spectrum(problem, 1_c_int, unknowns, &
+        c_loc(eigenvalues), c_null_ptr, c_loc(resolutions), &
+        c_loc(rayleigh_quotients), unknowns * unknowns, c_loc(eigenvectors), &
+        c_loc(eigenvalues_written), c_loc(eigenvectors_written), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "null full-spectrum residual output was accepted")
+    status = problem_full_spectrum(problem, 1_c_int, unknowns, &
+        c_loc(eigenvalues), c_loc(residuals), c_loc(resolutions), &
+        c_loc(rayleigh_quotients), unknowns * unknowns, c_loc(eigenvectors), &
+        c_null_ptr, &
+        c_loc(eigenvectors_written), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "null full-spectrum written output was accepted")
+    status = problem_full_spectrum(problem, 0_c_int, 0_c_size_t, c_null_ptr, &
+        c_null_ptr, c_null_ptr, c_null_ptr, 0_c_size_t, c_null_ptr, &
+        c_loc(eigenvalues_written), c_loc(eigenvectors_written), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "full-spectrum C API accepted an invalid parity class")
 
     status = problem_solve_class(problem, 1_c_int, unknowns, c_null_ptr, &
         c_loc(written), c_loc(summary), c_loc(error_buffer), &

@@ -39,11 +39,20 @@ class GlissArgumentError(GlissError):
 
 
 class GlissAllocationError(GlissError):
-    """The native library could not allocate an internal object."""
+    """The GLISS interface could not allocate required storage."""
 
 
 class GlissInternalError(GlissError):
     """The native library encountered an internal lifecycle failure."""
+
+
+def _empty_float64(shape: Any, description: str) -> np.ndarray:
+    try:
+        return np.empty(shape, dtype=np.float64)
+    except MemoryError as error:
+        raise GlissAllocationError(f"failed to allocate {description}") from error
+    except ValueError as error:
+        raise GlissCapacityError(f"{description} exceeds NumPy's size limit") from error
 
 
 _STATUS_EXCEPTIONS = {
@@ -311,8 +320,8 @@ class Equilibrium:
         n_theta = _resolution(n_theta, "n_theta")
         n_zeta = _resolution(n_zeta, "n_zeta")
         count = self._surface_count()
-        s_values = np.empty(count, dtype=np.float64)
-        d_mercier = np.empty(count, dtype=np.float64)
+        s_values = _empty_float64(count, f"Mercier radial grid with {count} entries")
+        d_mercier = _empty_float64(count, f"Mercier profile with {count} entries")
         written = ctypes.c_size_t()
         error = _error_buffer()
         status = self._library.gliss_mercier_profile_context(

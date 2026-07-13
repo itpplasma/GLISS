@@ -8,6 +8,7 @@ module variable_block_tridiagonal
     integer, parameter, public :: variable_block_ok = 0
     integer, parameter, public :: variable_block_invalid = -1
     integer, parameter, public :: variable_block_singular = -2
+    integer, parameter, public :: variable_block_allocation = -3
 
     type, public :: variable_matrix_block_t
         real(dp), allocatable :: values(:, :)
@@ -287,12 +288,16 @@ contains
         type(variable_block_tridiagonal_t), intent(in) :: blocks
         real(dp), allocatable, intent(out) :: dense(:, :)
         integer, intent(out) :: info
-        integer :: block, first, n, next
+        integer :: allocation_status, block, first, n, next
 
         call validate_variable_blocks(blocks, info)
         if (info /= variable_block_ok) return
         n = sum(blocks%widths)
-        allocate (dense(n, n), source=0.0_dp)
+        allocate (dense(n, n), source=0.0_dp, stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = variable_block_allocation
+            return
+        end if
         first = 1
         do block = 1, size(blocks%widths)
             dense(first:first + blocks%widths(block) - 1, &

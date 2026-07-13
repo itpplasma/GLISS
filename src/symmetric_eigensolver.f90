@@ -4,8 +4,13 @@ module symmetric_eigensolver
     implicit none
     private
 
+    integer, parameter, public :: symmetric_eigensolver_ok = 0
+    integer, parameter, public :: symmetric_eigensolver_invalid = -1
+    integer, parameter, public :: symmetric_eigensolver_allocation = -2
+
     public :: solve_three_component_modes
     public :: solve_symmetric_generalized
+    public :: solve_symmetric_generalized_allocated
 
     interface
         subroutine dsygv(itype, jobz, uplo, n, a, lda, b, ldb, w, work, &
@@ -42,10 +47,48 @@ contains
         real(dp), allocatable, intent(out) :: eigenvalues(:)
         real(dp), allocatable, intent(out) :: eigenvectors(:, :)
         integer, intent(out) :: info
-        real(dp), allocatable :: mass_copy(:, :), work(:)
+        real(dp), allocatable :: stiffness_copy(:, :), mass_copy(:, :)
+        integer :: allocation_status
+
+        info = symmetric_eigensolver_invalid
+        if (.not. valid_generalized_problem(stiffness, mass)) return
+        info = symmetric_eigensolver_allocation
+        allocate (stiffness_copy, source=stiffness, stat=allocation_status)
+        if (allocation_status /= 0) return
+        allocate (mass_copy, source=mass, stat=allocation_status)
+        if (allocation_status /= 0) return
+        call solve_symmetric_generalized_allocated(stiffness_copy, mass_copy, &
+            eigenvalues, eigenvectors, info)
+    end subroutine solve_symmetric_generalized
+
+    subroutine solve_symmetric_generalized_allocated(stiffness, mass, &
+            eigenvalues, eigenvectors, info)
+        real(dp), allocatable, intent(inout) :: stiffness(:, :), mass(:, :)
+        real(dp), allocatable, intent(out) :: eigenvalues(:)
+        real(dp), allocatable, intent(out) :: eigenvectors(:, :)
+        integer, intent(out) :: info
+        real(dp), allocatable :: work(:)
+        integer :: allocation_status, n
+
+        info = symmetric_eigensolver_invalid
+        if (.not. allocated(stiffness) .or. .not. allocated(mass)) return
+        if (.not. valid_generalized_problem(stiffness, mass)) return
+        n = size(stiffness, 1)
+        if (n > ishft(huge(n), -3)) return
+        info = symmetric_eigensolver_allocation
+        allocate (eigenvalues(n), work(max(1, 8 * n)), stat=allocation_status)
+        if (allocation_status /= 0) return
+        call move_alloc(stiffness, eigenvectors)
+        call dsygv(1, "V", "U", n, eigenvectors, n, mass, n, eigenvalues, &
+            work, size(work), info)
+    end subroutine solve_symmetric_generalized_allocated
+
+    function valid_generalized_problem(stiffness, mass) result(valid)
+        real(dp), intent(in) :: stiffness(:, :), mass(:, :)
+        logical :: valid
         integer :: n
 
-        info = -1
+        valid = .false.
         n = size(stiffness, 1)
         if (n < 1 .or. size(stiffness, 2) /= n) return
         if (size(mass, 1) /= n .or. size(mass, 2) /= n) return
@@ -53,13 +96,8 @@ contains
         if (.not. all(ieee_is_finite(mass))) return
         if (.not. symmetric_matrix(stiffness)) return
         if (.not. symmetric_matrix(mass)) return
-        allocate (eigenvalues(n), eigenvectors(n, n), mass_copy(n, n))
-        allocate (work(max(1, 8 * n)))
-        eigenvectors = stiffness
-        mass_copy = mass
-        call dsygv(1, "V", "U", n, eigenvectors, n, mass_copy, n, &
-            eigenvalues, work, size(work), info)
-    end subroutine solve_symmetric_generalized
+        valid = .true.
+    end function valid_generalized_problem
 
     pure function symmetric_matrix(matrix) result(symmetric)
         real(dp), intent(in) :: matrix(:, :)

@@ -15,12 +15,14 @@ from .equilibrium import (
     Equilibrium,
     GlissCapacityError,
     GlissInternalError,
+    _empty_float64,
     _error_buffer,
     _raise_for_status,
     _stable_file_digest,
 )
 
 if TYPE_CHECKING:
+    from .full_spectrum import FullSpectrumResult, FullStabilityResult
     from .schema import RunManifest, StabilityConfiguration
 
 _INT32_MIN = -(2**31)
@@ -376,7 +378,7 @@ class StabilityProblem:
         if parity_class not in (1, 2):
             raise ValueError("parity_class must be 1 or 2")
         count = self._unknown_count(parity_class)
-        vector = np.empty(count, dtype=np.float64)
+        vector = _empty_float64(count, f"eigenvector with {count} entries")
         written = ctypes.c_size_t()
         summary = _SpectrumSummary(struct_size=ctypes.sizeof(_SpectrumSummary))
         error = _error_buffer()
@@ -396,6 +398,18 @@ class StabilityProblem:
         )
         vector.setflags(write=False)
         return self._result_from_summary(summary, vector)
+
+    def solve_full_spectrum(self) -> "FullStabilityResult":
+        """Compute every eigenpair in both parity classes."""
+        from .full_spectrum import solve_full_spectrum
+
+        return solve_full_spectrum(self)
+
+    def solve_full_spectrum_class(self, parity_class: int) -> "FullSpectrumResult":
+        """Compute every eigenpair in one parity class with dense LAPACK."""
+        from .full_spectrum import solve_full_spectrum_class
+
+        return solve_full_spectrum_class(self, parity_class)
 
     def _unknown_count(self, parity_class: int) -> int:
         count = ctypes.c_size_t()

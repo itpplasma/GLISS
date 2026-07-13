@@ -106,6 +106,21 @@ def test_equilibrium_context_lifecycle(monkeypatch, tmp_path):
         equilibrium.write(tmp_path / "closed.nc")
 
 
+def test_equilibrium_reports_numpy_allocation_failure(monkeypatch, tmp_path):
+    library = FakeLibrary()
+
+    def fail_allocation(*args, **kwargs):
+        raise MemoryError
+
+    monkeypatch.setattr("gliss.equilibrium._load_library", lambda: library)
+    export = tmp_path / "equilibrium.nc"
+    export.touch()
+    with Equilibrium(export) as equilibrium:
+        monkeypatch.setattr("gliss.equilibrium.np.empty", fail_allocation)
+        with pytest.raises(gliss.GlissAllocationError, match="Mercier radial grid"):
+            equilibrium.mercier_profile()
+
+
 def test_equilibrium_write_atomically_replaces_destination(monkeypatch, tmp_path):
     library = FakeLibrary()
     monkeypatch.setattr("gliss.equilibrium._load_library", lambda: library)

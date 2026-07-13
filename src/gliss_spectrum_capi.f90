@@ -2,6 +2,7 @@ module gliss_spectrum_capi
     use, intrinsic :: iso_c_binding, only: c_associated, c_double, &
         c_f_pointer, c_int, c_loc, c_null_ptr, c_ptr, c_size_t, c_sizeof
     use fixed_boundary_spectrum, only: build_fixed_boundary_problem, &
+        fixed_boundary_allocation_error, &
         fixed_boundary_invalid, fixed_boundary_ok, fixed_boundary_problem_t, &
         fixed_boundary_spectrum_result_t, fixed_boundary_unknown_count, &
         solve_fixed_boundary_class
@@ -304,6 +305,7 @@ contains
         status = status_ok
     end function gliss_stability_problem_solve_class_c
 
+
     function prepare_solve_outputs(written_pointer, summary_pointer, &
             error_pointer, error_capacity, written, summary) result(status)
         type(c_ptr), value, intent(in) :: written_pointer, summary_pointer
@@ -404,6 +406,10 @@ contains
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
                 "invalid fixed-boundary stability configuration")
+        else if (info == fixed_boundary_allocation_error) then
+            status = status_allocation_error
+            call write_error(error_pointer, error_capacity, &
+                "failed to allocate fixed-boundary spectrum storage")
         else
             status = status_compute_error
             call write_error(error_pointer, error_capacity, &

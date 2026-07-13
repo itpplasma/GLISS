@@ -78,6 +78,7 @@ add_library(gliss
     src/variable_block_tridiagonal.f90
     src/variable_generalized_solver.f90
     src/variable_spectrum_analysis.f90
+    src/dense_spectrum_support.f90
     src/fixed_boundary_spectrum.f90
     src/newcomb_limit.f90
     src/family_assembly.f90
@@ -100,7 +101,8 @@ add_library(gliss_c SHARED
     src/gliss_c_contexts.f90
     src/gliss_equilibrium_io_capi.f90
     src/gliss_capi.f90
-    src/gliss_spectrum_capi.f90)
+    src/gliss_spectrum_capi.f90
+    src/gliss_full_spectrum_capi.f90)
 add_dependencies(gliss_c gliss)
 target_link_libraries(gliss_c PRIVATE gliss)
 install(TARGETS gliss_c

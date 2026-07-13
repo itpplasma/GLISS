@@ -152,6 +152,32 @@ gliss_status gliss_stability_problem_solve_class(
     char *error,
     size_t error_capacity);
 
+/* Compute every generalized eigenpair with a dense LAPACK solve. This is an
+ * explicit O(unknowns^3)-time, O(unknowns^2)-memory operation; use
+ * gliss_stability_problem_solve_class when only the certified lowest pair is
+ * required. Eigenvectors contains unknowns contiguous vectors in ascending
+ * eigenvalue order, each in dynamic component order and normalized by
+ * x^T M x = 1. rayleigh_quotients independently reevaluates x^T K x / x^T M x;
+ * residuals and resolutions report the scaled backward error and roundoff
+ * resolution for each pair. On a capacity error, both written outputs report
+ * the required counts and no data array is modified. eigenvalue_capacity
+ * applies to eigenvalues, residuals, resolutions, and rayleigh_quotients.
+ * Output arrays must not overlap. */
+gliss_status gliss_stability_problem_full_spectrum(
+    const gliss_stability_problem *problem,
+    int32_t parity_class,
+    size_t eigenvalue_capacity,
+    double *eigenvalues,
+    double *residuals,
+    double *resolutions,
+    double *rayleigh_quotients,
+    size_t eigenvector_capacity,
+    double *eigenvectors,
+    size_t *eigenvalues_written,
+    size_t *eigenvectors_written,
+    char *error,
+    size_t error_capacity);
+
 /* Retained for ABI-v1 compatibility. New code should reuse an equilibrium
  * context instead of loading the same file for every diagnostic. */
 void gliss_mercier_profile(

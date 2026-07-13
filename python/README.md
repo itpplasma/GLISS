@@ -158,9 +158,39 @@ normal coefficients, `eta`, then compressional `mu`. The `normal`, `eta` and
 `mu` properties return the corresponding views. If the zero floor contains
 the entire spectrum, `has_eigenvector` is false and the eigenvector is empty.
 
-The current API returns the certified lowest eigenpair for each class, not the
-complete spectrum. `StabilityProblem.close()` is idempotent. Calls on one
-problem must not overlap, but independently constructed problems may coexist.
+Request every eigenpair only when the dense cost is acceptable:
+
+```python
+with gliss.Equilibrium("equilibrium_export.nc") as equilibrium:
+    with gliss.StabilityProblem(equilibrium, modes=[(1, 1), (2, 1)]) as problem:
+        spectrum = problem.solve_full_spectrum_class(parity_class=1)
+
+print(spectrum.eigenvalues)
+print(spectrum.residuals)
+print(spectrum.eigenvectors.shape)
+```
+
+`eigenvalues`, `rayleigh_quotients`, `residuals`, and `resolutions` are
+read-only `float64` arrays with one entry per unknown. `eigenvectors` has shape
+`(eigenpair, component)`. Its `normal`, `eta`, and `mu` views retain that first
+axis. Eigenvalues, Rayleigh quotients, residuals, and resolutions use `s^-2`.
+Each row satisfies the same `x.T @ M @ x = 1` normalization as the certified
+pair.
+
+The complete array includes modes inside `[-zero_floor, zero_floor]`. The
+certified solver skips this numerical floor band when there is no unstable
+direction. `spectrum.certified_index` identifies its independently certified
+pair in the full array, or is `None` when the floor band contains the complete
+spectrum. Inertia counts and the active eigenvalue are checked before Python
+returns the result.
+
+`solve_full_spectrum()` returns both parity classes. It runs the certified
+block solve and then a dense LAPACK solve for each class. The dense stage costs
+`O(unknowns^3)` time and `O(unknowns^2)` memory; use `solve()` or
+`solve_class()` when only the stability margin is needed. NumPy and native
+allocation failures raise typed GLISS exceptions. `StabilityProblem.close()`
+is idempotent. Calls on one problem must not overlap, but independently
+constructed problems may coexist.
 
 ### Configuration, results, and run manifests
 
@@ -200,7 +230,8 @@ fixed boundary, mode pairs, physical scalars and radial quadrature. Result
 schema `gliss.stability.result`, version 1, stores both parity classes with all
 reported conventions, certificate terms and read-only eigenvectors. A round
 trip preserves every binary64 value. Rewriting an unchanged object produces
-the same bytes.
+the same bytes. This schema stores the certified active pair; dense full
+spectra are not written by version 1.
 
 Run schema `gliss.stability.run`, version 1, embeds the configuration and
 result. It records the equilibrium export format, base filename, byte count
@@ -271,6 +302,10 @@ Initialize `gliss_spectrum_summary.struct_size` with `sizeof` before a solve.
 The struct reports conventions and certificate metadata; the caller owns the
 eigenvector buffer. Problem construction copies and assembles everything it
 needs from its equilibrium, so the two handles have independent lifetimes.
+`gliss_stability_problem_full_spectrum()` accepts separate capacities for its
+per-pair arrays and flattened eigenvectors. On a capacity error it reports
+both required counts without modifying any data buffer. The header documents
+the eigenpair-major layout and dense cost.
 Existing ABI-v1 symbols and status values remain unchanged when functions are
 added; an incompatible signature, layout or numeric status change requires a
 new ABI version.
