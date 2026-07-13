@@ -39,13 +39,19 @@ program test_cylinder_physical_spectrum
 
     real(dp) :: slow_errors(size(meshes)), fast_errors(size(meshes))
     real(dp) :: second_errors(size(meshes)), growth_errors(size(meshes))
+    real(dp) :: slow_values(size(meshes)), fast_values(size(meshes))
+    real(dp) :: second_values(size(meshes))
     real(dp) :: growth_values(size(meshes)), growth_extrapolated
+    character(len=1024) :: output_path
     integer :: mesh
+    logical :: output_requested
 
+    call validate_arguments()
     call check_bridge_rejections()
     do mesh = 1, size(meshes)
         call check_theta_pinch(meshes(mesh), slow_errors(mesh), &
-            fast_errors(mesh), second_errors(mesh))
+            fast_errors(mesh), second_errors(mesh), slow_values(mesh), &
+            fast_values(mesh), second_values(mesh))
         call check_screw_stable(meshes(mesh))
         call check_screw_unstable(meshes(mesh), growth_values(mesh), &
             mesh == size(meshes))
@@ -89,6 +95,7 @@ program test_cylinder_physical_spectrum
     call require(abs(growth_extrapolated - screw_unstable_omega2) &
         < 1.0e-2_dp * abs(screw_unstable_omega2), &
         "extrapolated growth rate misses the shooting reference")
+    call write_results(slow_values, fast_values, second_values, growth_values)
 
     write (*, "(a)") "PASS"
 
@@ -147,9 +154,10 @@ contains
     end subroutine assemble_pair
 
     subroutine check_theta_pinch(surfaces, slow_error, fast_error, &
-            second_error)
+            second_error, slow_value, fast_value, second_value)
         integer, intent(in) :: surfaces
         real(dp), intent(out) :: slow_error, fast_error, second_error
+        real(dp), intent(out) :: slow_value, fast_value, second_value
         type(dynamic_family_layout_t) :: layout
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
         real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
@@ -166,7 +174,8 @@ contains
         call require(info == 0, "theta-pinch dense solve failed")
         call require(all(eigenvalues > 0.0_dp), &
             "theta-pinch spectrum is not positive")
-        slow_error = abs(eigenvalues(1) - theta_slow_point) &
+        slow_value = eigenvalues(1)
+        slow_error = abs(slow_value - theta_slow_point) &
             / theta_slow_point
 
         ! the reference branch separations are factors of about 4.8e3
@@ -200,7 +209,52 @@ contains
             / theta_fast_lowest
         second_error = abs(fast_second - theta_fast_second) &
             / theta_fast_second
+        fast_value = fast_first
+        second_value = fast_second
     end subroutine check_theta_pinch
+
+    subroutine validate_arguments()
+        integer :: io_status
+
+        if (command_argument_count() > 1) then
+            call fail_cli("usage: test_cylinder_physical_spectrum " // &
+                "[OUTPUT_CSV]")
+        end if
+        output_requested = command_argument_count() == 1
+        if (.not. output_requested) return
+        call get_command_argument(1, output_path, status=io_status)
+        if (io_status /= 0) call fail_cli("output path is unavailable")
+        if (len_trim(output_path) == 0) call fail_cli("output path is empty")
+    end subroutine validate_arguments
+
+    subroutine write_results(slow, fast, second, growth)
+        real(dp), intent(in) :: slow(:), fast(:), second(:), growth(:)
+        integer :: i, io_status, unit
+
+        if (.not. output_requested) return
+        open (newunit=unit, file=trim(output_path), status="replace", &
+            action="write", iostat=io_status)
+        if (io_status /= 0) call fail_cli("output CSV cannot be opened")
+        write (unit, "(a)") "n_radial,theta_slow_s_minus_2," // &
+            "theta_fast_first_s_minus_2,theta_fast_second_s_minus_2," // &
+            "screw_unstable_omega2_s_minus_2"
+        do i = 1, size(meshes)
+            write (unit, "(i0,4(',',es24.16))", iostat=io_status) &
+                meshes(i), slow(i), fast(i), second(i), growth(i)
+            if (io_status /= 0) call fail_cli("output CSV write failed")
+        end do
+        close (unit, iostat=io_status)
+        if (io_status /= 0) call fail_cli("output CSV close failed")
+    end subroutine write_results
+
+    subroutine fail_cli(message)
+        character(len=*), intent(in) :: message
+
+        write (error_unit, "(a)") &
+            "test_cylinder_physical_spectrum: " // message
+        flush (error_unit)
+        stop 2
+    end subroutine fail_cli
 
     subroutine check_screw_stable(surfaces)
         integer, intent(in) :: surfaces
