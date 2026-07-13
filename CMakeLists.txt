@@ -122,6 +122,11 @@ target_link_libraries(gliss_spectrum PRIVATE gliss)
 set_target_properties(gliss_spectrum PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
+add_executable(gliss_axisymmetric app/gliss_axisymmetric.f90)
+target_link_libraries(gliss_axisymmetric PRIVATE gliss)
+set_target_properties(gliss_axisymmetric PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
 add_executable(gliss_terpsichore_eigen
     app/gliss_terpsichore_eigen.f90)
 target_link_libraries(gliss_terpsichore_eigen PRIVATE gliss)
@@ -162,6 +167,8 @@ if(BUILD_TESTING)
 
     add_spectrum_cli_rejection(spectrum_cli_bad_gamma
         "GAMMA must be a number" missing.nc bad 1.0 1.0 1,1)
+    add_spectrum_cli_rejection(spectrum_cli_negative_gamma
+        "GAMMA must be nonnegative" missing.nc -1.0 1.0 1.0 1,1)
     add_spectrum_cli_rejection(spectrum_cli_nonfinite_floor
         "FLOOR must be finite" missing.nc 1.6666666666666667 1.0 NaN 1,1)
     add_spectrum_cli_rejection(spectrum_cli_zero_density
@@ -174,6 +181,36 @@ if(BUILD_TESTING)
     add_spectrum_cli_rejection(spectrum_cli_incomplete_family
         "--family requires exactly INDEX MMAX NMAX"
         missing.nc 1.6666666666666667 1.0 1.0 --family 0 8)
+    add_spectrum_cli_rejection(spectrum_cli_bad_quadrature
+        "quadrature RULE must be midpoint or gauss2"
+        missing.nc 1.6666666666666667 1.0 1.0 --quadrature bad 1,1)
+    add_spectrum_cli_rejection(spectrum_cli_incomplete_quadrature
+        "--quadrature requires RULE and a mode selector"
+        missing.nc 1.6666666666666667 1.0 1.0 --quadrature)
+
+    function(add_axisymmetric_cli_rejection name expected)
+        add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:gliss_axisymmetric>
+            "-DEXPECTED=gliss_axisymmetric: ${expected}"
+            "-DARGUMENTS=${ARGN}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    endfunction()
+
+    add_axisymmetric_cli_rejection(axisymmetric_cli_bad_n
+        "N must be an integer" missing.nc bad 4)
+    add_axisymmetric_cli_rejection(axisymmetric_cli_zero_n
+        "N must be positive" missing.nc 0 4)
+    add_axisymmetric_cli_rejection(axisymmetric_cli_zero_mmax
+        "MMAX must be positive" missing.nc 1 0)
+    add_axisymmetric_cli_rejection(axisymmetric_cli_bad_option
+        "the optional argument must be --quadrature"
+        missing.nc 1 4 --bad gauss2)
+    add_axisymmetric_cli_rejection(axisymmetric_cli_bad_quadrature
+        "quadrature RULE must be midpoint or gauss2"
+        missing.nc 1 4 --quadrature bad)
+    add_axisymmetric_cli_rejection(axisymmetric_cli_bad_final_option
+        "the final option must be --count-only"
+        missing.nc 1 4 --quadrature gauss2 --bad)
 
     add_executable(test_local_mode test/test_local_mode.f90)
     target_link_libraries(test_local_mode PRIVATE gliss)

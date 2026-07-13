@@ -40,7 +40,7 @@ contains
         integer, intent(in) :: mode_m(:), mode_n(:), selector
         real(dp), intent(in) :: step
         real(dp), intent(in), optional :: normal_stored_power(:)
-        real(dp) :: dense, certified, width, tolerance
+        real(dp) :: dense, certified, residual, width, tolerance
         integer :: info
         type(family_assembly_options_t) :: options
 
@@ -50,8 +50,11 @@ contains
             dense, info, options, normal_stored_power)
         call require(info == 0, "dense reference solve failed")
         call certified_lowest_eigenvalue(geometry, mode_m, mode_n, &
-            step, certified, width, info, options, normal_stored_power)
+            step, certified, width, info, options, normal_stored_power, &
+            residual)
         call require(info == 0, "certified tracking failed")
+        call require(residual <= 1.0e-10_dp, &
+            "certified eigenpair residual is not tight")
         call require(width <= 1.0e-8_dp * max(1.0_dp, abs(certified)), &
             "certificate window is not tight")
         tolerance = width + 1.0e-7_dp * abs(dense)

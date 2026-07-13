@@ -35,8 +35,9 @@ program gliss_spectrum
     real(dp), allocatable :: jacobian_z(:, :, :), gamma_p(:, :, :)
     integer, allocatable :: mode_m(:), mode_n(:)
     real(dp) :: adiabatic_index, density_kg_m3, zero_floor
-    integer :: info, i, j, arguments, comma
+    integer :: info, i, j, arguments, comma, selector_position, mode_index
     integer :: family_index, poloidal_max, toroidal_max
+    integer :: radial_quadrature
     logical :: generated_family
 
     interface
@@ -54,24 +55,46 @@ program gliss_spectrum
     call read_real_argument(2, "GAMMA", adiabatic_index)
     call read_real_argument(3, "DENSITY", density_kg_m3)
     call read_real_argument(4, "FLOOR", zero_floor)
-    if (adiabatic_index <= 0.0_dp) call fail_usage("GAMMA must be positive")
+    if (adiabatic_index < 0.0_dp) call fail_usage("GAMMA must be nonnegative")
     if (density_kg_m3 <= 0.0_dp) call fail_usage("DENSITY must be positive")
     if (zero_floor <= 0.0_dp) call fail_usage("FLOOR must be positive")
-    call read_argument(5, "mode or --family", token)
+    radial_quadrature = 1
+    selector_position = 5
+    call read_argument(selector_position, "mode or option", token)
+    if (trim(token) == "--quadrature") then
+        if (arguments < 7) &
+            call fail_usage("--quadrature requires RULE and a mode selector")
+        call read_argument(6, "quadrature rule", token)
+        select case (trim(token))
+        case ("midpoint")
+            radial_quadrature = 1
+        case ("gauss2")
+            radial_quadrature = 2
+        case default
+            call fail_usage("quadrature RULE must be midpoint or gauss2")
+        end select
+        selector_position = 7
+        call read_argument(selector_position, "mode or --family", token)
+    end if
     generated_family = trim(token) == "--family"
     if (generated_family) then
-        if (arguments /= 8) then
+        if (arguments /= selector_position + 3) then
             call fail_usage("--family requires exactly INDEX MMAX NMAX")
         end if
-        call read_integer_argument(6, "INDEX", family_index)
-        call read_integer_argument(7, "MMAX", poloidal_max)
-        call read_integer_argument(8, "NMAX", toroidal_max)
+        call read_integer_argument(selector_position + 1, "INDEX", &
+            family_index)
+        call read_integer_argument(selector_position + 2, "MMAX", &
+            poloidal_max)
+        call read_integer_argument(selector_position + 3, "NMAX", &
+            toroidal_max)
         if (family_index < 0) call fail_usage("INDEX must be nonnegative")
         if (poloidal_max < 0) call fail_usage("MMAX must be nonnegative")
         if (toroidal_max < 0) call fail_usage("NMAX must be nonnegative")
     else
-        allocate (mode_m(arguments - 4), mode_n(arguments - 4))
-        do i = 5, arguments
+        allocate (mode_m(arguments - selector_position + 1), &
+            mode_n(arguments - selector_position + 1))
+        do i = selector_position, arguments
+            mode_index = i - selector_position + 1
             call read_argument(i, "mode", token)
             comma = index(token, ",")
             if (comma <= 1 .or. comma == len_trim(token)) &
@@ -79,16 +102,16 @@ program gliss_spectrum
             if (index(token(comma + 1:), ",") > 0) &
                 call fail_usage("modes must contain exactly one comma")
             call parse_integer(token(:comma - 1), "poloidal mode", &
-                mode_m(i - 4))
+                mode_m(mode_index))
             call parse_integer(token(comma + 1:), "toroidal mode", &
-                mode_n(i - 4))
-            if (mode_m(i - 4) < 0) &
+                mode_n(mode_index))
+            if (mode_m(mode_index) < 0) &
                 call fail_usage("poloidal mode m must be nonnegative")
-            if (mode_m(i - 4) == 0 .and. mode_n(i - 4) < 0) &
+            if (mode_m(mode_index) == 0 .and. mode_n(mode_index) < 0) &
                 call fail_usage("axis modes require nonnegative n")
-            do j = 1, i - 5
-                if (mode_m(j) == mode_m(i - 4) .and. &
-                    mode_n(j) == mode_n(i - 4)) &
+            do j = 1, mode_index - 1
+                if (mode_m(j) == mode_m(mode_index) .and. &
+                    mode_n(j) == mode_n(mode_index)) &
                     call fail_usage("duplicate mode")
             end do
         end do
@@ -125,7 +148,7 @@ program gliss_spectrum
     write (*, "(a)") "chart_metric,field_periods,modes,parity_class," // &
         "adiabatic_index,density_kg_m3,unknowns,negative_count," // &
         "floor_count,lowest_eigenvalue,certificate,eigenpair_residual," // &
-        "eigenpair_resolution,inertia_interval"
+        "eigenpair_resolution,inertia_interval,radial_quadrature_points"
     do i = 1, 2
         call report_class(i)
     end do
@@ -138,6 +161,7 @@ contains
         write (error_unit, "(a)") "gliss_spectrum: " // trim(message)
         write (error_unit, "(a)") &
             "usage: gliss_spectrum EXPORT_FILE GAMMA DENSITY FLOOR " // &
+            "[--quadrature midpoint|gauss2] " // &
             "m,n [m,n ...] | --family INDEX MMAX NMAX"
         call terminate_process(2_c_int)
     end subroutine fail_usage
@@ -207,6 +231,7 @@ contains
 
         ns = size(equilibrium%s)
         step = 1.0_dp / real(ns, dp)
+        radial_space%quadrature_points = radial_quadrature
         allocate (trial_parity(size(mode_m)), source=parity_class)
         allocate (stored_power(size(mode_m)), source=0.0_dp)
         density%s = [0.0_dp, 1.0_dp]
@@ -265,13 +290,13 @@ contains
             inertia_interval, residual, resolution)
         certificate = inertia_interval + residual + resolution
         write (*, "(l1, a, i0, a, i0, a, i0, a, es9.2, a, es9.2, a, i0, " // &
-            "a, i0, a, i0, a, es24.16, 4(a, es9.2))") &
+            "a, i0, a, i0, a, es24.16, 4(a, es9.2), a, i0)") &
             equilibrium%has_chart_metric, ",", equilibrium%field_periods, &
             ",", size(mode_m), ",", parity_class, ",", adiabatic_index, &
             ",", density_kg_m3, ",", layout%total_unknowns, ",", &
             summary%negative_count, ",", summary%zero_count, ",", lowest, &
             ",", certificate, ",", residual, ",", resolution, ",", &
-            inertia_interval
+            inertia_interval, ",", radial_quadrature
     end subroutine report_class
 
     subroutine resolve_lowest(k_blocks, m_blocks, summary, lowest, &

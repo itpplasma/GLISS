@@ -178,15 +178,18 @@ contains
     end subroutine iterate_family_eigenvalue
 
     subroutine iterate_block_eigenvalue(blocks, radial_step, shift, &
-            eigenvalue, info)
+            eigenvalue, info, eigenpair_residual)
         type(block_tridiagonal_t), intent(in) :: blocks
         real(dp), intent(in) :: radial_step, shift
         real(dp), intent(out) :: eigenvalue
         integer, intent(out) :: info
+        real(dp), intent(out), optional :: eigenpair_residual
         type(block_factor_t) :: factor
         real(dp), allocatable :: vector(:, :)
-        real(dp) :: rayleigh, previous
+        real(dp), allocatable :: image(:, :)
+        real(dp) :: operator_scale, rayleigh, previous, residual
         integer :: trials, nodes, iteration, t, j
+        logical :: converged
 
         call factorize_shifted(blocks, shift * radial_step, factor, info)
         if (info /= 0) return
@@ -200,23 +203,34 @@ contains
             end do
         end do
         vector = vector / norm2(vector)
+        operator_scale = sqrt(sum(blocks%diag**2) &
+            + 2.0_dp * sum(blocks%off**2))
         previous = huge(1.0_dp)
+        converged = .false.
         do iteration = 1, 500
             call solve_factored(blocks, factor, vector, info)
             if (info /= 0) return
             vector = vector / norm2(vector)
-            rayleigh = sum(vector * apply_block_tridiagonal(blocks, &
-                vector))
+            image = apply_block_tridiagonal(blocks, vector)
+            rayleigh = sum(vector * image)
+            residual = norm2(image - rayleigh * vector) &
+                / max(operator_scale + abs(rayleigh), tiny(1.0_dp))
             if (abs(rayleigh - previous) <= 1.0e-13_dp &
-                * max(1.0_dp, abs(rayleigh))) exit
+                * max(1.0_dp, abs(rayleigh)) &
+                .and. residual <= 1.0e-10_dp) then
+                converged = .true.
+                exit
+            end if
             previous = rayleigh
         end do
-        if (abs(rayleigh - previous) > 1.0e-11_dp &
-            * max(1.0_dp, abs(rayleigh))) then
+        if (.not. converged) then
             info = -1
             return
         end if
         eigenvalue = rayleigh / radial_step
+        if (present(eigenpair_residual)) then
+            eigenpair_residual = residual
+        end if
         info = 0
     end subroutine iterate_block_eigenvalue
 

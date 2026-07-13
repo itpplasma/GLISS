@@ -14,7 +14,7 @@ contains
 
     subroutine certified_lowest_eigenvalue(geometry, mode_m, mode_n, &
             radial_step, eigenvalue, certificate_width, info, &
-            options, normal_stored_power)
+            options, normal_stored_power, eigenpair_residual)
         type(surface_geometry_t), intent(in) :: geometry(:)
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: radial_step
@@ -22,8 +22,9 @@ contains
         integer, intent(out) :: info
         type(family_assembly_options_t), intent(in), optional :: options
         real(dp), intent(in), optional :: normal_stored_power(:)
+        real(dp), intent(out), optional :: eigenpair_residual
         type(block_tridiagonal_t) :: blocks
-        real(dp) :: lower, upper, mid, scale, rayleigh, width
+        real(dp) :: lower, upper, mid, scale, rayleigh, residual, width
         real(dp) :: floor_local, window
         integer :: attempt, counted, count_upper, iterate_info
         integer :: below, above, lookahead
@@ -56,7 +57,7 @@ contains
             end if
             if (try_iterate) then
                 call iterate_block_eigenvalue(blocks, radial_step, &
-                    upper, rayleigh, iterate_info)
+                    upper, rayleigh, iterate_info, residual)
                 if (iterate_info == 0) then
                     window = 1.0e-9_dp * max(1.0_dp, abs(rayleigh))
                     if (at_floor) then
@@ -74,6 +75,8 @@ contains
                     if (below == 0 .and. above >= 1) then
                         eigenvalue = rayleigh
                         certificate_width = window
+                        if (present(eigenpair_residual)) &
+                            eigenpair_residual = residual
                         info = 0
                         return
                     end if
