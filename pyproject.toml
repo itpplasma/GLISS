@@ -23,6 +23,10 @@ classifiers = [
 [project.optional-dependencies]
 simsopt = ["simsopt"]
 test = ["pytest>=8"]
+vmec = [
+    "booz-xform>=0.0.9,<0.1",
+    "scipy>=1.10",
+]
 
 [project.urls]
 Documentation = "https://github.com/itpplasma/GLISS/tree/main/python"

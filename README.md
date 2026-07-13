@@ -28,7 +28,7 @@ certified lowest-eigenpair results, opt-in full spectra with per-pair
 diagnostics, deterministic full-spectrum run containers, and atomic versioned
 equilibrium export.
 See the [Python guide](python/README.md) for examples, conventions, input and
-output contracts, and the optional SIMSOPT adapter.
+output contracts, direct VMEC conversion, and the optional SIMSOPT adapter.
 
 ## Build
 

@@ -18,6 +18,67 @@ the native libraries needed by GLISS. Installing from source requires CMake,
 Ninja, and a Fortran compiler. LAPACK, PkgConfig, and the NetCDF C library are
 also required.
 
+VMEC conversion is optional:
+
+```sh
+python -m pip install "gliss[vmec]"
+```
+
+This extra installs SciPy and `booz_xform`. They are used only while converting
+a VMEC equilibrium; loading and solving the converted file still requires only
+the base package.
+
+## VMEC input
+
+Convert a standard, converged VMEC `wout` file before constructing an
+equilibrium:
+
+```python
+from pathlib import Path
+
+import gliss
+
+converted = gliss.convert_vmec(
+    Path("wout_W7X.nc"),
+    Path("W7X_gliss.nc"),
+    poloidal_max=8,
+    toroidal_max=8,
+)
+with gliss.Equilibrium(converted) as equilibrium:
+    s, d_mercier = equilibrium.mercier_profile()
+```
+
+The conversion runs the maintained `booz_xform` implementation, then writes
+the same left-handed, one-field-period Boozer convention used by pyGVEC's
+CAS3D exporter. The output contains SI pressure, magnetic field and fluxes;
+`s` is normalized toroidal flux. The Fourier phase is
+`2*pi*(m*theta - n*zeta)`, with `zeta` normalized over one field period.
+
+The importer currently accepts fixed-boundary, stellarator-symmetric VMEC
+files with `signgs=-1` and a successful `ier_flag`. It rejects asymmetric and
+reversed-field-pinch files instead of applying the symmetric GLISS operator to
+an incompatible chart. Mode limits are integers from 0 through 64. The
+default 8 by 8 truncation is deliberate: higher modes can amplify radial
+noise in a surface-by-surface Boozer transform. Increase them only after a
+convergence check.
+
+The generated file supports GLISS's fixed-boundary operators. It does not
+contain a vacuum-region mesh or conducting-wall model for free-boundary work.
+
+Before writing, GLISS checks the chart orientation, surface metric, Boozer
+Jacobian, magnetic-field strength, flux identities, currents, symmetry and
+force balance. A conversion with an interior normalized force-balance
+residual above 0.1 is rejected. This is a corruption and gross-resolution
+gate, not a literature-validation tolerance. The residuals, source basename
+and Boozer transform resolution are stored as NetCDF attributes so validation
+runs can reproduce the exact preprocessing choice.
+
+An existing output is never replaced unless `overwrite=True`. Writes use a
+temporary file in the destination directory and an atomic replacement; a
+failed conversion removes the temporary file. Install-time dependency errors,
+invalid options, failed VMEC solves and numerical identity failures produce
+distinct Python exceptions with the rejected condition in the message.
+
 ## Mercier profile
 
 ```python

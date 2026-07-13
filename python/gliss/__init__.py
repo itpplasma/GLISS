@@ -106,6 +106,7 @@ from .equilibrium import (  # noqa: E402
 from .mercier import mercier_objective, mercier_profile  # noqa: E402
 from .energy import EnergyTerms  # noqa: E402
 from .solver import SolverTolerances  # noqa: E402
+from .vmec import convert_vmec  # noqa: E402
 from .stability import (  # noqa: E402
     SpectrumResult,
     StabilityProblem,
@@ -130,6 +131,7 @@ __all__ = [
     "GlissError",
     "GlissIOError",
     "GlissInternalError",
+    "convert_vmec",
     "get_include",
     "FullSpectrumResult",
     "FullStabilityResult",
