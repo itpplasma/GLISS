@@ -162,6 +162,10 @@ name = "terpsichore_noninteracting_stiffness"
 main = "test_terpsichore_noninteracting_stiffness.f90"
 
 [[test]]
+name = "terpsichore_pseudoplasma_stiffness"
+main = "test_terpsichore_pseudoplasma_stiffness.f90"
+
+[[test]]
 name = "terpsichore_normalization"
 main = "test_terpsichore_normalization.f90"
 

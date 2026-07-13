@@ -51,6 +51,8 @@ add_library(gliss
     src/terpsichore_matrix_fixture.f90
     src/terpsichore_noninteracting_coefficients.f90
     src/terpsichore_noninteracting_stiffness.f90
+    src/terpsichore_pseudoplasma_fixture.f90
+    src/terpsichore_pseudoplasma_stiffness.f90
     src/terpsichore_reduced_layout.f90
     src/terpsichore_reduced_mass.f90
     src/terpsichore_reduced_mass_adapter.f90
@@ -172,6 +174,12 @@ add_executable(gliss_terpsichore_noninteracting_stiffness
     app/gliss_terpsichore_noninteracting_stiffness.f90)
 target_link_libraries(gliss_terpsichore_noninteracting_stiffness PRIVATE gliss)
 set_target_properties(gliss_terpsichore_noninteracting_stiffness PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_terpsichore_pseudoplasma_stiffness
+    app/gliss_terpsichore_pseudoplasma_stiffness.f90)
+target_link_libraries(gliss_terpsichore_pseudoplasma_stiffness PRIVATE gliss)
+set_target_properties(gliss_terpsichore_pseudoplasma_stiffness PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 if(BUILD_TESTING)
@@ -451,6 +459,23 @@ if(BUILD_TESTING)
     target_link_libraries(test_terpsichore_noninteracting_stiffness PRIVATE gliss)
     add_test(NAME terpsichore_noninteracting_stiffness
         COMMAND test_terpsichore_noninteracting_stiffness)
+
+    add_executable(test_terpsichore_pseudoplasma_stiffness
+        test/test_terpsichore_pseudoplasma_stiffness.f90)
+    target_link_libraries(test_terpsichore_pseudoplasma_stiffness PRIVATE gliss)
+    add_test(NAME terpsichore_pseudoplasma_stiffness
+        COMMAND test_terpsichore_pseudoplasma_stiffness)
+    add_test(NAME terpsichore_pseudoplasma_stiffness_cli_missing
+        COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_terpsichore_pseudoplasma_stiffness>
+        "-DEXPECTED=usage: gliss_terpsichore_pseudoplasma_stiffness FORT.24"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    add_test(NAME terpsichore_pseudoplasma_stiffness_cli_extra
+        COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:gliss_terpsichore_pseudoplasma_stiffness>
+        "-DEXPECTED=usage: gliss_terpsichore_pseudoplasma_stiffness FORT.24"
+        "-DARGUMENTS=one;two"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
 
     add_executable(test_terpsichore_normalization
         test/test_terpsichore_normalization.f90)
