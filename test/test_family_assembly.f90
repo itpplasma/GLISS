@@ -4,7 +4,8 @@ program test_family_assembly
     use family_point_assembly, only: assemble_direct_surface, &
         assemble_transformed_surface
     use family_assembly, only: assemble_family_blocks, &
-        assemble_family_stiffness, family_negative_count, &
+        assemble_family_stiffness, condensed_surface_coefficients, &
+        family_negative_count, &
         family_assembly_options_t, iterate_family_eigenvalue, &
         lowest_family_eigenvalue, phase_assembly_direct, &
         phase_assembly_transformed, surface_geometry_t
@@ -63,6 +64,7 @@ program test_family_assembly
     call check_transformed_assembly()
     call check_terpsichore_selection_equivalence(geometry, step)
     call check_radial_space_options(geometry, step)
+    call check_surface_coefficients(geometry(20), step)
 
     call iterate_family_eigenvalue(geometry, [1], [1], step, &
         1.05_dp * family_value, iterated, info)
@@ -86,6 +88,36 @@ program test_family_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_surface_coefficients(surface, step)
+        type(surface_geometry_t), intent(in) :: surface
+        real(dp), intent(in) :: step
+        type(surface_geometry_t) :: repeated(2)
+        type(family_assembly_options_t) :: options
+        real(dp), allocatable :: f_matrix(:, :), g_matrix(:, :)
+        real(dp), allocatable :: k_matrix(:, :), stiffness(:, :)
+        real(dp) :: expected
+        integer :: info
+
+        call condensed_surface_coefficients(surface, [2], [1], [1], &
+            0.2_dp, step, 1, f_matrix, k_matrix, g_matrix, info)
+        call require(info == 0, "surface coefficient extraction failed")
+        call require(maxval(abs(f_matrix - transpose(f_matrix))) < 1.0e-12_dp, &
+            "surface F matrix is not symmetric")
+        call require(maxval(abs(g_matrix - transpose(g_matrix))) < 1.0e-12_dp, &
+            "surface G matrix is not symmetric")
+        repeated(1) = surface
+        repeated(2) = surface
+        options%parity_class = 1
+        call assemble_family_stiffness(repeated, [2], [1], step, &
+            stiffness, info, options)
+        call require(info == 0, "surface coefficient reconstruction failed")
+        expected = 0.5_dp * step * g_matrix(1, 1) &
+            + 2.0_dp * f_matrix(1, 1) / step
+        call require(abs(stiffness(1, 1) - expected) < 1.0e-12_dp &
+            * max(1.0_dp, abs(expected)), &
+            "surface F/K/G matrices do not reconstruct the finite element")
+    end subroutine check_surface_coefficients
 
     subroutine check_block_assembly(geometry, step)
         type(surface_geometry_t), intent(in) :: geometry(:)

@@ -45,4 +45,62 @@ module gvec_cas3d_types
         type(harmonic_pair_t) :: b_contravariant_zeta
     end type gvec_cas3d_equilibrium_t
 
+    public :: equilibrium_is_axisymmetric
+
+contains
+
+    pure function equilibrium_is_axisymmetric(equilibrium) result(axisymmetric)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        logical :: axisymmetric
+
+        axisymmetric = harmonic_is_axisymmetric(equilibrium%xhat, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%yhat, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%zhat, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%jacobian, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%mod_b, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%g_tt, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%g_tz, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%g_zz, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%g_st, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%g_sz, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric( &
+            equilibrium%b_contravariant_theta, equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric( &
+            equilibrium%b_contravariant_zeta, &
+            equilibrium%toroidal_modes)
+    end function equilibrium_is_axisymmetric
+
+    pure function harmonic_is_axisymmetric(harmonic, toroidal_modes) &
+            result(axisymmetric)
+        type(harmonic_pair_t), intent(in) :: harmonic
+        integer, intent(in) :: toroidal_modes(:)
+        logical :: axisymmetric
+        real(dp) :: scale, tolerance
+        integer :: i
+
+        axisymmetric = .false.
+        if (.not. allocated(harmonic%cosine)) return
+        if (.not. allocated(harmonic%sine)) return
+        if (size(harmonic%cosine, 3) /= size(toroidal_modes)) return
+        if (any(shape(harmonic%cosine) /= shape(harmonic%sine))) return
+        scale = max(maxval(abs(harmonic%cosine)), maxval(abs(harmonic%sine)))
+        tolerance = 100.0_dp * epsilon(1.0_dp) * max(1.0_dp, scale)
+        do i = 1, size(toroidal_modes)
+            if (toroidal_modes(i) == 0) cycle
+            if (maxval(abs(harmonic%cosine(:, :, i))) > tolerance) return
+            if (maxval(abs(harmonic%sine(:, :, i))) > tolerance) return
+        end do
+        axisymmetric = .true.
+    end function harmonic_is_axisymmetric
+
 end module gvec_cas3d_types

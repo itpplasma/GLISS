@@ -127,6 +127,11 @@ target_link_libraries(gliss_axisymmetric PRIVATE gliss)
 set_target_properties(gliss_axisymmetric PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
+add_executable(gliss_axisymmetric_fkg app/gliss_axisymmetric_fkg.f90)
+target_link_libraries(gliss_axisymmetric_fkg PRIVATE gliss)
+set_target_properties(gliss_axisymmetric_fkg PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
 add_executable(gliss_terpsichore_eigen
     app/gliss_terpsichore_eigen.f90)
 target_link_libraries(gliss_terpsichore_eigen PRIVATE gliss)
@@ -208,6 +213,19 @@ if(BUILD_TESTING)
     add_axisymmetric_cli_rejection(axisymmetric_cli_bad_quadrature
         "quadrature RULE must be midpoint or gauss2"
         missing.nc 1 4 --quadrature bad)
+
+    function(add_axisymmetric_fkg_cli_rejection name expected)
+        add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:gliss_axisymmetric_fkg>
+            "-DEXPECTED=gliss_axisymmetric_fkg: ${expected}"
+            "-DARGUMENTS=${ARGN}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    endfunction()
+
+    add_axisymmetric_fkg_cli_rejection(axisymmetric_fkg_cli_bad_n
+        "N must be an integer" missing.nc bad 4)
+    add_axisymmetric_fkg_cli_rejection(axisymmetric_fkg_cli_zero_mmax
+        "MMAX must be positive" missing.nc 1 0)
     add_axisymmetric_cli_rejection(axisymmetric_cli_bad_final_option
         "the final option must be --count-only"
         missing.nc 1 4 --quadrature gauss2 --bad)

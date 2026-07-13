@@ -8,11 +8,12 @@ program gliss_axisymmetric
     use field_profile_identities, only: compute_field_profile_identities, &
         field_profile_identities_ok, field_profile_identity_result_t
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
-    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
+    use gvec_cas3d_types, only: equilibrium_is_axisymmetric, &
+        gvec_cas3d_equilibrium_t
     use mercier_diagnostic, only: build_kernel_geometry, mercier_ok
     implicit none
 
-    integer, parameter :: n_theta = 64, n_zeta = 64
+    integer, parameter :: n_theta = 64, n_zeta = 8
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(family_assembly_options_t) :: options
     type(field_profile_identity_result_t) :: identities
@@ -75,6 +76,8 @@ program gliss_axisymmetric
         call fail("equilibrium export lacks g_st/g_sz chart metrics")
     if (equilibrium%field_periods /= 1) &
         call fail("axisymmetric comparison requires N_FP=1")
+    if (.not. equilibrium_is_axisymmetric(equilibrium)) &
+        call fail("equilibrium contains nonaxisymmetric harmonics")
     if (2 * poloidal_max + maxval(abs(equilibrium%poloidal_modes)) &
         >= n_theta) &
         call fail_usage("MMAX aliases the fixed angular quadrature")

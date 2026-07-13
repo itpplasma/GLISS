@@ -31,6 +31,7 @@ module family_assembly
 
     public :: assemble_family_blocks
     public :: assemble_family_stiffness
+    public :: condensed_surface_coefficients
     public :: family_negative_count
     public :: iterate_block_eigenvalue
     public :: iterate_family_eigenvalue
@@ -56,6 +57,54 @@ module family_assembly
     end interface
 
 contains
+
+    subroutine condensed_surface_coefficients(surface, trial_m, trial_n, &
+            trial_parity, radial_coordinate, radial_step, field_periods, &
+            f_matrix, k_matrix, g_matrix, info)
+        type(surface_geometry_t), intent(in) :: surface
+        integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
+        real(dp), intent(in) :: radial_coordinate, radial_step
+        integer, intent(in) :: field_periods
+        real(dp), allocatable, intent(out) :: f_matrix(:, :)
+        real(dp), allocatable, intent(out) :: k_matrix(:, :)
+        real(dp), allocatable, intent(out) :: g_matrix(:, :)
+        integer, intent(out) :: info
+        type(radial_space_config_t) :: radial_space
+        real(dp), allocatable :: coefficients(:, :), element(:, :)
+        real(dp), allocatable :: stored_power(:), transform(:, :)
+        integer :: i, trials
+
+        trials = size(trial_m)
+        allocate (f_matrix(0, 0), k_matrix(0, 0), g_matrix(0, 0))
+        info = -2
+        if (trials < 1) return
+        if (size(trial_n) /= trials .or. size(trial_parity) /= trials) return
+        if (.not. ieee_is_finite(radial_coordinate)) return
+        if (.not. ieee_is_finite(radial_step) .or. radial_step <= 0.0_dp) return
+        if (field_periods < 1) return
+        allocate (stored_power(trials), source=0.0_dp)
+        allocate (element(2 * trials, 2 * trials))
+        call condensed_element(surface, trial_m, trial_n, trial_parity, &
+            stored_power, field_periods, phase_assembly_transformed, &
+            radial_space, radial_coordinate, radial_step, element, info)
+        if (info /= 0) return
+        allocate (transform(2 * trials, 2 * trials), source=0.0_dp)
+        do i = 1, trials
+            transform(i, i) = 1.0_dp
+            transform(i, trials + i) = -0.5_dp * radial_step
+            transform(trials + i, i) = 1.0_dp
+            transform(trials + i, trials + i) = 0.5_dp * radial_step
+        end do
+        coefficients = matmul(transpose(transform), &
+            matmul(element, transform)) / radial_step
+        deallocate (f_matrix, k_matrix, g_matrix)
+        allocate (f_matrix(trials, trials), k_matrix(trials, trials), &
+            g_matrix(trials, trials))
+        g_matrix = coefficients(1:trials, 1:trials)
+        k_matrix = coefficients(trials + 1:, 1:trials)
+        f_matrix = coefficients(trials + 1:, trials + 1:)
+        info = 0
+    end subroutine condensed_surface_coefficients
 
     subroutine lowest_family_eigenvalue(geometry, mode_m, mode_n, &
             radial_step, lowest, info, options, normal_stored_power)

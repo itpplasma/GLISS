@@ -5,8 +5,8 @@ program test_gvec_cas3d_reader
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, &
         reader_coordinate_error, reader_data_error, reader_ok, &
         reader_open_error, reader_schema_error
-    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, radial_grid_full, &
-        radial_grid_half
+    use gvec_cas3d_types, only: equilibrium_is_axisymmetric, &
+        gvec_cas3d_equilibrium_t, radial_grid_full, radial_grid_half
     use netcdf_c_api, only: nc_close_file, nc_create_netcdf4, &
         nc_def_dimension, nc_def_scalar, nc_def_variable, nc_double, &
         nc_end_definitions, nc_inquire_variable_id, nc_int64, nc_noerr, &
@@ -56,6 +56,12 @@ program test_gvec_cas3d_reader
     call read_gvec_cas3d_file(half_file, equilibrium, info)
     call require(info == reader_ok, "half-mesh fixture was rejected")
     call verify_half_fixture(equilibrium)
+    equilibrium%toroidal_modes = 0
+    call require(equilibrium_is_axisymmetric(equilibrium), &
+        "axisymmetric harmonic table was rejected")
+    equilibrium%toroidal_modes(2) = 1
+    call require(.not. equilibrium_is_axisymmetric(equilibrium), &
+        "nonaxisymmetric harmonic table was accepted")
 
     call create_fixture(full_file, radial_grid_full, .false., .false.)
     call read_gvec_cas3d_file(full_file, equilibrium, info)
