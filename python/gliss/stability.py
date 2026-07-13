@@ -6,7 +6,7 @@ import numbers
 import operator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence, Tuple
+from typing import Any, Sequence, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -18,6 +18,9 @@ from .equilibrium import (
     _error_buffer,
     _raise_for_status,
 )
+
+if TYPE_CHECKING:
+    from .schema import RunManifest, StabilityConfiguration
 
 _INT32_MIN = -(2**31)
 _INT32_MAX = 2**31 - 1
@@ -216,6 +219,25 @@ class StabilityResult:
         """Class with the algebraically lowest computed eigenvalue."""
         return min(self.classes, key=lambda result: result.lowest_eigenvalue)
 
+    def to_dict(self) -> dict:
+        """Return the canonical version-1 result document."""
+        from ._result_schema import stability_result_to_dict
+
+        return stability_result_to_dict(self)
+
+    def write(self, path: Any) -> None:
+        """Atomically write the canonical JSON result document."""
+        from ._result_schema import write_stability_result
+
+        write_stability_result(self, path)
+
+    @classmethod
+    def read(cls, path: Any) -> "StabilityResult":
+        """Read and strictly validate a JSON result document."""
+        from ._result_schema import read_stability_result
+
+        return read_stability_result(path)
+
 
 class StabilityProblem:
     """Reusable assembled fixed-boundary ideal-MHD eigenproblem."""
@@ -310,6 +332,27 @@ class StabilityProblem:
         return (
             f"<gliss.StabilityProblem(path={self.equilibrium_path!r}, "
             f"modes={len(self.modes)}, state={state!r})>"
+        )
+
+    @property
+    def configuration(self) -> "StabilityConfiguration":
+        """Immutable serializable inputs for this assembled problem."""
+        from .schema import StabilityConfiguration
+
+        return StabilityConfiguration(
+            self.modes,
+            self.adiabatic_index,
+            self.density_kg_m3,
+            self.zero_floor,
+            self.radial_quadrature,
+        )
+
+    def write_manifest(self, path: Any, result: StabilityResult) -> "RunManifest":
+        """Write a portable manifest for a result produced by this problem."""
+        from .schema import write_run_manifest
+
+        return write_run_manifest(
+            path, self.equilibrium_path, self.configuration, result
         )
 
     def solve(self) -> StabilityResult:

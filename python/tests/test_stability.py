@@ -252,6 +252,27 @@ def test_stability_problem_is_public():
     assert gliss.SpectrumResult is SpectrumResult
 
 
+def test_stability_problem_exposes_configuration_and_manifest(
+    contexts, tmp_path, monkeypatch
+):
+    _, equilibrium = contexts
+    monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.1")
+    path = tmp_path / "run.json"
+    with StabilityProblem(
+        equilibrium,
+        modes=[(1, 1), (2, 1)],
+        density_kg_m3=2.0,
+    ) as problem:
+        result = problem.solve()
+        assert problem.configuration == gliss.StabilityConfiguration(
+            modes=((1, 1), (2, 1)), density_kg_m3=2.0
+        )
+        manifest = problem.write_manifest(path, result)
+
+    assert path.is_file()
+    assert gliss.RunManifest.read(path) == manifest
+
+
 def test_stability_bind_reports_missing_native_symbols():
     with pytest.raises(OSError, match="stability problem.*matching"):
         _bind(object())

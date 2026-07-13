@@ -129,6 +129,60 @@ The current API returns the certified lowest eigenpair for each class, not the
 complete spectrum. `StabilityProblem.close()` is idempotent. Calls on one
 problem must not overlap, but independently constructed problems may coexist.
 
+### Configuration, results, and run manifests
+
+`StabilityConfiguration` records the inputs independently of a native
+context. Results and configurations use deterministic, versioned JSON:
+
+```python
+from pathlib import Path
+
+import gliss
+
+configuration = gliss.StabilityConfiguration(
+    modes=[(1, 1), (2, 1)],
+    adiabatic_index=5.0 / 3.0,
+    density_kg_m3=1.0,
+    zero_floor=1.0,
+    radial_quadrature="midpoint",
+)
+configuration.write("configuration.json")
+
+with gliss.Equilibrium(Path("equilibrium_export.nc")) as equilibrium:
+    with configuration.create_problem(equilibrium) as problem:
+        result = problem.solve()
+        result.write("result.json")
+        problem.write_manifest("run.json", result)
+
+restored_configuration = gliss.StabilityConfiguration.read(
+    "configuration.json"
+)
+restored_result = gliss.StabilityResult.read("result.json")
+manifest = gliss.RunManifest.read("run.json")
+manifest.verify_equilibrium("equilibrium_export.nc")
+```
+
+Configuration schema `gliss.stability.configuration`, version 1, records the
+fixed boundary, mode pairs, physical scalars and radial quadrature. Result
+schema `gliss.stability.result`, version 1, stores both parity classes with all
+reported conventions, certificate terms and read-only eigenvectors. A round
+trip preserves every binary64 value. Rewriting an unchanged object produces
+the same bytes.
+
+Run schema `gliss.stability.run`, version 1, embeds the configuration and
+result. It records the equilibrium export format, base filename, byte count
+and SHA-256. It also records the GLISS Python/native versions and ABI, plus the
+NumPy and Python versions. Absolute input paths are not stored. The manifest
+therefore contains the complete run contract and output without exposing a
+private directory; the NetCDF input remains a separate checksummed artifact.
+
+Writers use an atomic replacement in the destination directory. Readers
+require UTF-8 JSON objects and reject duplicate or unknown fields, missing
+fields, incompatible schema versions, nonfinite numbers, inconsistent parity
+metadata, invalid vector lengths and truncated files. Errors name the invalid
+field and its expected form. `verify_equilibrium()` rejects a file whose size
+or SHA-256 differs from the manifest.
+
 ## SIMSOPT
 
 Install the optional dependency and import the adapter explicitly:

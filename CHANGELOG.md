@@ -11,6 +11,9 @@
   certified lowest-eigenpair results for both parity classes.
 - Return mass-normalized eigenvectors in documented dynamic component order
   through the C and Python interfaces.
+- Add deterministic version-1 configuration and result files with strict
+  validation, plus portable run manifests that checksum the equilibrium and
+  record the Python/native software versions.
 
 ## 0.0.1 - 2026-07-13
 

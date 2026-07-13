@@ -109,6 +109,11 @@ from .stability import (  # noqa: E402
     StabilityProblem,
     StabilityResult,
 )
+from .schema import (  # noqa: E402
+    RunManifest,
+    StabilityConfiguration,
+    write_run_manifest,
+)
 
 __all__ = [
     "__version__",
@@ -124,7 +129,10 @@ __all__ = [
     "mercier_objective",
     "mercier_profile",
     "SpectrumResult",
+    "RunManifest",
+    "StabilityConfiguration",
     "StabilityProblem",
     "StabilityResult",
     "version",
+    "write_run_manifest",
 ]
