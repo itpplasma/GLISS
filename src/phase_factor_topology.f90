@@ -52,6 +52,7 @@ contains
             table%envelope_toroidal(size(mode_m)), &
             table%base_sign(size(mode_m)))
         do mode = 1, size(mode_m)
+            sign = 0
             residue = modulo(mode_n(mode), field_periods)
             if (residue == family_index) then
                 sign = 1

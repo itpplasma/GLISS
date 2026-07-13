@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import gliss
-from gliss.equilibrium import Equilibrium, GlissIOError
+from gliss.equilibrium import Equilibrium, GlissIOError, _bind
 
 
 class FakeFunction:
@@ -135,3 +135,8 @@ def test_equilibrium_failed_partial_create_is_cleaned_up(monkeypatch, tmp_path):
 
 def test_equilibrium_is_public():
     assert gliss.Equilibrium is Equilibrium
+
+
+def test_equilibrium_bind_reports_missing_native_symbols():
+    with pytest.raises(OSError, match="equilibrium context.*matching"):
+        _bind(object())

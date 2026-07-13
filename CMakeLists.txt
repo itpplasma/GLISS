@@ -77,6 +77,7 @@ add_library(gliss
     src/variable_block_tridiagonal.f90
     src/variable_generalized_solver.f90
     src/variable_spectrum_analysis.f90
+    src/fixed_boundary_spectrum.f90
     src/newcomb_limit.f90
     src/family_assembly.f90
     src/field_profile_identities.f90
@@ -93,13 +94,21 @@ set_target_properties(gliss PROPERTIES
 target_include_directories(gliss PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/modules>")
 
-add_library(gliss_c SHARED src/gliss_capi.f90)
+add_library(gliss_c SHARED
+    src/gliss_c_abi_support.f90
+    src/gliss_c_contexts.f90
+    src/gliss_capi.f90
+    src/gliss_spectrum_capi.f90)
 add_dependencies(gliss_c gliss)
 target_link_libraries(gliss_c PRIVATE gliss)
 install(TARGETS gliss_c
     LIBRARY DESTINATION gliss
     RUNTIME DESTINATION gliss)
-install(FILES include/gliss.h DESTINATION include)
+if(SKBUILD)
+    install(FILES include/gliss.h DESTINATION gliss/include)
+else()
+    install(FILES include/gliss.h DESTINATION include)
+endif()
 
 add_executable(gliss_demo app/gliss_demo.f90)
 target_link_libraries(gliss_demo PRIVATE gliss)
@@ -351,6 +360,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_gliss_capi PRIVATE gliss_c gliss_test_support)
     add_test(NAME gliss_capi COMMAND test_gliss_capi)
 
+    add_executable(test_gliss_spectrum_capi
+        test/test_gliss_spectrum_capi.f90)
+    target_link_libraries(test_gliss_spectrum_capi PRIVATE
+        gliss_c gliss_test_support)
+    add_test(NAME gliss_spectrum_capi COMMAND test_gliss_spectrum_capi)
+
     add_executable(test_gliss_header cmake/test_gliss_header.c)
     target_include_directories(test_gliss_header PRIVATE include)
     target_link_libraries(test_gliss_header PRIVATE gliss_c)
@@ -464,6 +479,13 @@ if(BUILD_TESTING)
         gliss_test_support)
     add_test(NAME cylinder_physical_spectrum
         COMMAND test_cylinder_physical_spectrum)
+
+    add_executable(test_fixed_boundary_spectrum
+        test/test_fixed_boundary_spectrum.f90)
+    target_link_libraries(test_fixed_boundary_spectrum PRIVATE
+        gliss_test_support)
+    add_test(NAME fixed_boundary_spectrum
+        COMMAND test_fixed_boundary_spectrum)
 
     add_executable(test_mode_topology test/test_mode_topology.f90)
     target_link_libraries(test_mode_topology PRIVATE gliss)

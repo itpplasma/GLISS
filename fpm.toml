@@ -138,6 +138,14 @@ name = "cylinder_physical_spectrum"
 main = "test_cylinder_physical_spectrum.f90"
 
 [[test]]
+name = "fixed_boundary_spectrum"
+main = "test_fixed_boundary_spectrum.f90"
+
+[[test]]
+name = "gliss_spectrum_capi"
+main = "test_gliss_spectrum_capi.f90"
+
+[[test]]
 name = "mode_topology"
 main = "test_mode_topology.f90"
 

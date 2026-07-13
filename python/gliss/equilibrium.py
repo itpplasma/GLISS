@@ -8,7 +8,7 @@ from typing import Any, Tuple, Union
 
 import numpy as np
 
-from . import _load_library
+from . import _load_library, _require_symbols
 
 _C_INT_MAX = 2 ** (ctypes.sizeof(ctypes.c_int) * 8 - 1) - 1
 _ERROR_CAPACITY = 512
@@ -86,6 +86,16 @@ def _export_path(path: PathLike) -> Tuple[Path, bytes]:
 
 
 def _bind(library: Any) -> None:
+    _require_symbols(
+        library,
+        (
+            "gliss_equilibrium_create",
+            "gliss_equilibrium_destroy",
+            "gliss_equilibrium_surface_count",
+            "gliss_mercier_profile_context",
+        ),
+        "equilibrium context",
+    )
     library.gliss_equilibrium_create.argtypes = (
         ctypes.c_char_p,
         ctypes.c_size_t,

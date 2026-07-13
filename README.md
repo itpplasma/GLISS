@@ -10,18 +10,22 @@ built for exact differentiability: assembly kernels carry
 Enzyme-generated derivative actions so that eigenvalues, marginal points,
 and local criteria expose exact gradients to optimization loops.
 
-The present code covers the equilibrium interface (NetCDF reader,
-coordinate adapter, Fourier reconstruction, integrals), the radial
-B-spline basis, and a verified local plane-wave prototype with a dense
-eigensolver and an opt-in Enzyme gradient gate. The global solver is under
-construction.
+The present code covers the equilibrium interface, fixed-boundary
+two-component and compressible global operators, physical kinetic norm,
+variable-block eigensolver, inertia certificates, Mercier diagnostics, and
+selected free-boundary operators. Validation includes analytic cylinders,
+Solov'ev marginality and the complete 191-mode QAS3 TERPSICHORE comparison.
+Free-boundary plasma-vacuum parity and the complete cross-code benchmark table
+remain under construction.
 
 ## Python
 
 The Python package is the primary user interface. Install it with
 `python -m pip install gliss`; version 0.0.1 exposes the validated Mercier
-profile and objective through NumPy. See the [Python guide](python/README.md)
-for the API, sign convention, input contract, and optional SIMSOPT adapter.
+profile and objective through NumPy. Development main also provides reusable
+`Equilibrium` and fixed-boundary `StabilityProblem` contexts with typed,
+certified lowest-eigenpair results. See the [Python guide](python/README.md)
+for examples, conventions, input contracts and the optional SIMSOPT adapter.
 
 ## Build
 

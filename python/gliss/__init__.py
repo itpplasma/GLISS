@@ -62,6 +62,16 @@ def _load_library():
     return library
 
 
+def _require_symbols(library, symbols, feature: str) -> None:
+    missing = [symbol for symbol in symbols if not hasattr(library, symbol)]
+    if missing:
+        names = ", ".join(missing)
+        raise OSError(
+            f"GLISS {feature} requires native symbols {names}; install a "
+            "matching Python package and shared library"
+        )
+
+
 def version() -> str:
     """Return the version of the loaded GLISS shared library."""
     library = _load_library()
@@ -70,6 +80,17 @@ def version() -> str:
     buffer = ctypes.create_string_buffer(32)
     library.gliss_version(buffer, len(buffer))
     return buffer.value.decode("ascii")
+
+
+def get_include() -> str:
+    """Return the directory containing the wheel-installed C header."""
+    resource = files("gliss") / "include" / "gliss.h"
+    if not resource.is_file():
+        raise FileNotFoundError(
+            "bundled gliss.h not found; source builds provide it in include/"
+        )
+    header = _RESOURCE_STACK.enter_context(as_file(resource))
+    return os.fspath(header.parent)
 
 
 from .equilibrium import (  # noqa: E402
@@ -83,6 +104,11 @@ from .equilibrium import (  # noqa: E402
     GlissInternalError,
 )
 from .mercier import mercier_objective, mercier_profile  # noqa: E402
+from .stability import (  # noqa: E402
+    SpectrumResult,
+    StabilityProblem,
+    StabilityResult,
+)
 
 __all__ = [
     "__version__",
@@ -94,7 +120,11 @@ __all__ = [
     "GlissError",
     "GlissIOError",
     "GlissInternalError",
+    "get_include",
     "mercier_objective",
     "mercier_profile",
+    "SpectrumResult",
+    "StabilityProblem",
+    "StabilityResult",
     "version",
 ]

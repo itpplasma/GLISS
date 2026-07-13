@@ -11,6 +11,7 @@ extern "C" {
 #define GLISS_ABI_VERSION 1
 
 typedef struct gliss_equilibrium gliss_equilibrium;
+typedef struct gliss_stability_problem gliss_stability_problem;
 
 /* Status values and existing function signatures do not change within one
  * ABI version. Functions that accept an error buffer clear it on success and
@@ -62,6 +63,77 @@ gliss_status gliss_mercier_profile_context(
     double *s_values,
     double *d_mercier,
     size_t *written,
+    char *error,
+    size_t error_capacity);
+
+typedef struct gliss_spectrum_summary {
+    size_t struct_size;
+    int32_t has_chart_metric;
+    int32_t has_eigenvector;
+    int32_t field_periods;
+    int32_t parity_class;
+    int32_t radial_quadrature;
+    int32_t angular_theta;
+    int32_t angular_zeta;
+    size_t mode_count;
+    size_t unknowns;
+    size_t normal_unknowns;
+    size_t eta_unknowns;
+    size_t mu_unknowns;
+    size_t negative_count;
+    size_t floor_count;
+    double adiabatic_index;
+    double density_kg_m3;
+    double zero_floor;
+    double lowest_eigenvalue;
+    double certificate;
+    double eigenpair_residual;
+    double eigenpair_resolution;
+    double inertia_interval;
+} gliss_spectrum_summary;
+
+/* A fixed-boundary problem copies and assembles all data it needs, so the
+ * equilibrium may be destroyed after successful construction. mode_m and
+ * mode_n are mode_count contiguous int32_t values. radial_quadrature is 1 for
+ * midpoint or 2 for two-point Gauss quadrature. */
+gliss_status gliss_stability_problem_create(
+    const gliss_equilibrium *equilibrium,
+    double adiabatic_index,
+    double density_kg_m3,
+    double zero_floor,
+    size_t mode_count,
+    const int32_t *mode_m,
+    const int32_t *mode_n,
+    int32_t radial_quadrature,
+    gliss_stability_problem **problem,
+    char *error,
+    size_t error_capacity);
+
+gliss_status gliss_stability_problem_destroy(
+    gliss_stability_problem **problem,
+    char *error,
+    size_t error_capacity);
+
+gliss_status gliss_stability_problem_unknown_count(
+    const gliss_stability_problem *problem,
+    int32_t parity_class,
+    size_t *unknown_count,
+    char *error,
+    size_t error_capacity);
+
+/* Set summary->struct_size to sizeof(*summary) before calling. eigenvector is
+ * caller-owned and uses the documented dynamic component order: fixed-edge
+ * normal unknowns, then eta, then mu. It is normalized by x^T M x = 1. On a
+ * capacity error, written reports the required count and eigenvector is not
+ * modified. If has_eigenvector is zero, written is zero and eigenvector may be
+ * NULL. */
+gliss_status gliss_stability_problem_solve_class(
+    const gliss_stability_problem *problem,
+    int32_t parity_class,
+    size_t capacity,
+    double *eigenvector,
+    size_t *written,
+    gliss_spectrum_summary *summary,
     char *error,
     size_t error_capacity);
 

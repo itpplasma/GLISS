@@ -30,3 +30,11 @@ def test_incompatible_abi_is_rejected(monkeypatch):
     monkeypatch.setattr(gliss, "_open_library", lambda: Library())
     with pytest.raises(OSError, match="ABI version 2.*requires 1"):
         gliss._load_library()
+
+
+def test_get_include_returns_bundled_header_directory(monkeypatch, tmp_path):
+    include = tmp_path / "include"
+    include.mkdir()
+    (include / "gliss.h").touch()
+    monkeypatch.setattr(gliss, "files", lambda package: tmp_path)
+    assert Path(gliss.get_include()) == include
