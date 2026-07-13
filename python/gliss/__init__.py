@@ -1,35 +1,65 @@
-"""Python skeleton for GLISS, the Global Linear Ideal Stability Solver.
+"""Python interface to the Global Linear Ideal Stability Solver."""
 
-``version()`` and the Mercier stability bindings (``mercier_profile``,
-``mercier_objective``) proving ctypes linkage to the compiled Fortran C API
-(``src/gliss_capi.f90``, CMake target ``gliss_c``) are implemented. Build the
-shared library with CMake before calling any of them.
-"""
+import atexit
 import ctypes
 import ctypes.util
 import os
+import sys
+from contextlib import ExitStack
+from importlib.resources import as_file, files
 
-__version__ = "0.1.0"
+__version__ = "0.0.1"
 
+_ABI_VERSION = 1
 _LIBRARY_NAME = "gliss_c"
+_RESOURCE_STACK = ExitStack()
+atexit.register(_RESOURCE_STACK.close)
+
+
+def _bundled_library():
+    suffix = {"win32": ".dll", "darwin": ".dylib"}.get(sys.platform, ".so")
+    prefix = "" if sys.platform == "win32" else "lib"
+    resource = files("gliss") / f"{prefix}{_LIBRARY_NAME}{suffix}"
+    if not resource.is_file():
+        return None
+    return _RESOURCE_STACK.enter_context(as_file(resource))
+
+
+def _open_library():
+    configured = os.environ.get("GLISS_LIB")
+    path = configured or _bundled_library() or ctypes.util.find_library(_LIBRARY_NAME)
+    if not path:
+        raise OSError(
+            "GLISS shared library not found; install a platform wheel or set "
+            "GLISS_LIB to a locally built libgliss_c shared library"
+        )
+    try:
+        return ctypes.CDLL(os.fspath(path))
+    except OSError as error:
+        raise OSError(
+            f"failed to load GLISS shared library {path!s}: {error}"
+        ) from error
 
 
 def _load_library():
-    path = os.environ.get("GLISS_LIB") or ctypes.util.find_library(_LIBRARY_NAME)
-    if not path:
-        raise OSError(
-            "libgliss_c shared library not found. Build it with CMake "
-            "(target gliss_c) and set GLISS_LIB to the built path, e.g. "
-            "build/libgliss_c.so, or add its directory to LD_LIBRARY_PATH."
-        )
+    library = _open_library()
     try:
-        return ctypes.CDLL(path)
-    except OSError as error:
-        raise OSError(f"failed to load {path}: {error}") from error
+        abi_version = library.gliss_abi_version
+    except AttributeError as error:
+        raise OSError("GLISS shared library does not expose its ABI version") from error
+    abi_version.argtypes = ()
+    abi_version.restype = ctypes.c_int
+    actual = abi_version()
+    if actual != _ABI_VERSION:
+        raise OSError(
+            f"GLISS shared library ABI version {actual} is incompatible; "
+            f"this Python package requires {_ABI_VERSION}"
+        )
+    return library
 
 
 def version():
-    """Return the compiled library version via the gliss_version C symbol."""
+    """Return the version of the loaded GLISS shared library."""
     library = _load_library()
     library.gliss_version.argtypes = (ctypes.c_char_p, ctypes.c_int)
     library.gliss_version.restype = None
@@ -40,11 +70,4 @@ def version():
 
 from .mercier import mercier_objective, mercier_profile  # noqa: E402
 
-__all__ = ["version", "mercier_profile", "mercier_objective"]
-
-try:
-    from .simsopt import MercierPenalty, mercier_penalty  # noqa: E402
-except ImportError:
-    pass
-else:
-    __all__ += ["MercierPenalty", "mercier_penalty"]
+__all__ = ["__version__", "mercier_objective", "mercier_profile", "version"]

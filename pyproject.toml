@@ -1,0 +1,43 @@
+[build-system]
+requires = ["ninja>=1.10", "scikit-build-core>=1.0,<2"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "gliss"
+version = "0.0.1"
+description = "Python interface to the Global Linear Ideal Stability Solver"
+readme = "python/README.md"
+license = "MIT"
+authors = [{name = "Christopher G. Albert"}]
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.23"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+[project.optional-dependencies]
+simsopt = ["simsopt"]
+test = ["pytest>=8"]
+
+[project.urls]
+Documentation = "https://github.com/itpplasma/GLISS/tree/main/python"
+Issues = "https://github.com/itpplasma/GLISS/issues"
+Repository = "https://github.com/itpplasma/GLISS"
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build/{wheel_tag}"
+build.targets = ["gliss_c"]
+wheel.packages = ["python/gliss"]
+wheel.py-api = "py3"
+wheel.reproducible = true
+sdist.exclude = ["build", "validation", "python/.pytest_cache"]
+
+[tool.pytest.ini_options]
+pythonpath = ["python"]
+testpaths = ["python/tests"]

@@ -70,7 +70,7 @@ jobs:
           sudo apt-get install -y gfortran cmake ninja-build \
             liblapack-dev libnetcdf-dev pkg-config
           python -m pip install --upgrade pip
-          pip install numpy pytest
+          pip install build numpy pytest
       - name: Build shared library
         run: |
           cmake -S . -B build -G Ninja
@@ -80,6 +80,15 @@ jobs:
         # simsopt tests skip without the LFS fixtures / simsopt, which is the
         # intended behavior in public CI.
         run: GLISS_LIB=$PWD/build/libgliss_c.so python -m pytest python/tests -v
+      - name: Build distributions
+        run: python -m build
+      - name: Test installed wheel
+        run: |
+          python -m venv /tmp/gliss-wheel
+          /tmp/gliss-wheel/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/gliss-wheel/bin/python -c \
+            'import gliss; assert gliss.version() == gliss.__version__ == "0.0.1"'
 
   flang:
     runs-on: ubuntu-latest

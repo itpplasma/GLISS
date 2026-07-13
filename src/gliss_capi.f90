@@ -8,7 +8,7 @@ module gliss_capi
     implicit none
     private
 
-    character(len=*), parameter :: version_string = "0.1.0"
+    character(len=*), parameter :: version_string = "0.0.1"
     integer(c_int), parameter :: abi_version_number = 1
 
     public :: gliss_version_c

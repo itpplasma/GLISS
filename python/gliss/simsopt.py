@@ -15,6 +15,7 @@ follow-up. Between evaluations, an external GVEC solve step is expected
 to write a new export and update ``export_path`` so the next ``J()``
 call picks it up.
 """
+
 from simsopt._core.optimizable import Optimizable
 
 from .mercier import mercier_objective
@@ -45,7 +46,7 @@ class MercierPenalty(Optimizable):
         """Worst-case ``max(D_Mercier)`` for the current export path."""
         return mercier_objective(self._export_path)
 
-    return_fn_map = {'J': J}
+    return_fn_map = {"J": J}
 
 
 def mercier_penalty(export_path):

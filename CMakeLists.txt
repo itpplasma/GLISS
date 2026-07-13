@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(gliss VERSION 0.1.0 LANGUAGES Fortran)
+project(gliss VERSION 0.0.1 LANGUAGES Fortran)
 
 include(CTest)
 find_package(LAPACK REQUIRED)
@@ -90,6 +90,9 @@ target_include_directories(gliss PUBLIC
 add_library(gliss_c SHARED src/gliss_capi.f90)
 add_dependencies(gliss_c gliss)
 target_link_libraries(gliss_c PRIVATE gliss)
+install(TARGETS gliss_c
+    LIBRARY DESTINATION gliss
+    RUNTIME DESTINATION gliss)
 
 add_executable(gliss_demo app/gliss_demo.f90)
 target_link_libraries(gliss_demo PRIVATE gliss)

@@ -1,4 +1,5 @@
 """Tests for gliss.simsopt: the SIMSOPT Optimizable wrapper for mercier_objective."""
+
 import math
 import os
 import sys

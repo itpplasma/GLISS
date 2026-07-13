@@ -2,6 +2,8 @@ cff-version: 1.2.0
 message: "If you use GLISS, cite it via this metadata."
 title: "GLISS: Global Linear Ideal Stability Solver"
 type: software
+version: 0.0.1
+date-released: 2026-07-13
 authors:
   - family-names: Albert
     given-names: Christopher G.

@@ -13,14 +13,20 @@ and local criteria expose exact gradients to optimization loops.
 The present code covers the equilibrium interface (NetCDF reader,
 coordinate adapter, Fourier reconstruction, integrals), the radial
 B-spline basis, and a verified local plane-wave prototype with a dense
-eigensolver and an opt-in Enzyme gradient gate.  The global solver is
-under construction; the staged plan lives in the research repository's
-roadmap.
+eigensolver and an opt-in Enzyme gradient gate. The global solver is under
+construction.
+
+## Python
+
+The Python package is the primary user interface. Install it with
+`python -m pip install gliss`; version 0.0.1 exposes the validated Mercier
+profile and objective through NumPy. See the [Python guide](python/README.md)
+for the API, sign convention, input contract, and optional SIMSOPT adapter.
 
 ## Build
 
-Requires CMake, Ninja, a Fortran compiler, LAPACK, PkgConfig, and the
-NetCDF C library.
+Requires CMake, Ninja, and a Fortran compiler. LAPACK, PkgConfig, and the
+NetCDF C library are also required.
 
 ```sh
 cmake -S . -B build -G Ninja

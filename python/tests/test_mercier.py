@@ -1,6 +1,8 @@
 """Tests for gliss.mercier: ABI contract and golden-fixture regression."""
+
 import csv
 import os
+from pathlib import Path
 import sys
 
 import numpy as np
@@ -25,9 +27,29 @@ def _ensure_library():
 
 
 def test_mercier_profile_nonexistent_path_raises():
-    _ensure_library()
-    with pytest.raises(RuntimeError):
+    with pytest.raises(FileNotFoundError, match="does not exist"):
         gliss.mercier_profile("/nonexistent/path.nc")
+
+
+@pytest.mark.parametrize("resolution", [True, 0, -1, 1.5, "64"])
+def test_mercier_profile_rejects_invalid_resolution(tmp_path, resolution):
+    export = tmp_path / "equilibrium.nc"
+    export.touch()
+    with pytest.raises((TypeError, ValueError), match="n_theta"):
+        gliss.mercier_profile(export, n_theta=resolution)
+
+
+def test_mercier_profile_accepts_pathlike(tmp_path):
+    _ensure_library()
+    export = Path(tmp_path, "invalid.nc")
+    export.touch()
+    with pytest.raises(RuntimeError, match="failed to read"):
+        gliss.mercier_profile(export)
+
+
+def test_mercier_profile_rejects_embedded_nul(tmp_path):
+    with pytest.raises(ValueError, match="null byte"):
+        gliss.mercier_profile(os.fspath(tmp_path) + "/bad\0name.nc")
 
 
 def _load_golden(path):
