@@ -71,6 +71,39 @@ No Fortran allocation crosses the ABI. Native failures map to subclasses of
 `GlissInternalError`. The one-shot `mercier_profile()` function uses the same
 context internally and remains convenient for a single evaluation.
 
+### Writing an equilibrium export
+
+Legacy GVEC/CAS3D exports have schema version 0. GLISS writes schema version 1:
+
+```python
+from pathlib import Path
+
+import gliss
+
+source = Path("equilibrium_export.nc")
+normalized = Path("equilibrium_gliss_v1.nc")
+with gliss.Equilibrium(source) as equilibrium:
+    print(equilibrium.schema_version)
+    equilibrium.write(normalized)
+
+with gliss.Equilibrium(normalized) as equilibrium:
+    assert equilibrium.schema_version == 1
+```
+
+Version 1 names the `gvec-cas3d-export` schema in the NetCDF global
+attributes. It stores the radial grid, mode order, symmetry, field periods,
+winding, average beta, six profiles, thirteen required harmonic pairs and the
+two optional chart-metric pairs. The writer preserves every value represented
+by `Equilibrium`; it does not copy unrecognized variables or attributes from
+the source file.
+
+The Python writer creates a temporary file in the destination directory and
+replaces the destination only after the native writer closes a complete
+NetCDF file. A failed write leaves an existing destination unchanged and
+removes temporary output. The low-level C function
+`gliss_equilibrium_write()` uses exclusive creation and refuses to overwrite
+an existing path.
+
 ## Fixed-boundary spectrum
 
 This example assembles the physical compressible problem for two Fourier
@@ -171,10 +204,16 @@ the same bytes.
 
 Run schema `gliss.stability.run`, version 1, embeds the configuration and
 result. It records the equilibrium export format, base filename, byte count
-and SHA-256. It also records the GLISS Python/native versions and ABI, plus the
-NumPy and Python versions. Absolute input paths are not stored. The manifest
-therefore contains the complete run contract and output without exposing a
-private directory; the NetCDF input remains a separate checksummed artifact.
+and SHA-256, including equilibrium schema 0 or 1. It also records the GLISS
+Python/native versions and ABI, plus the NumPy and Python versions. Absolute
+input paths are not stored. The manifest contains the complete run contract
+and output without exposing a private directory; the NetCDF input remains a
+separate checksummed artifact.
+
+`StabilityProblem.write_manifest()` records the schema, size and checksum of
+the file from which the problem was assembled. It refuses the manifest if the
+file at that path has changed. The standalone `write_run_manifest()` collects
+the same metadata from a stable file snapshot.
 
 Writers use an atomic replacement in the destination directory. Readers
 require UTF-8 JSON objects and reject duplicate or unknown fields, missing
@@ -235,3 +274,9 @@ needs from its equilibrium, so the two handles have independent lifetimes.
 Existing ABI-v1 symbols and status values remain unchanged when functions are
 added; an incompatible signature, layout or numeric status change requires a
 new ABI version.
+
+`gliss_equilibrium_schema_version()` returns 0 for legacy exports and 1 for
+GLISS exports. `gliss_equilibrium_write()` writes schema 1 and never replaces
+an existing path. Both functions validate null handles, output pointers, path
+lengths, embedded null bytes and error-buffer ownership through the same typed
+status contract as the other ABI calls.

@@ -6,6 +6,7 @@ module netcdf_c_api
     private
 
     public :: nc_noerr
+    public :: nc_enotatt
     public :: nc_enotvar
     public :: nc_global
     public :: nc_double
@@ -13,6 +14,7 @@ module netcdf_c_api
 
     public :: nc_close_file
     public :: nc_create_netcdf4
+    public :: nc_create_netcdf4_exclusive
     public :: nc_def_dimension
     public :: nc_def_scalar
     public :: nc_def_variable
@@ -88,6 +90,17 @@ contains
         status = c_nc_create(c_path, int(z'1000', c_int), c_ncid)
         ncid = int(c_ncid)
     end function nc_create_netcdf4
+
+    integer function nc_create_netcdf4_exclusive(path, ncid) result(status)
+        character(len=*), intent(in) :: path
+        integer, intent(out) :: ncid
+        character(c_char), allocatable :: c_path(:)
+        integer(c_int) :: c_ncid
+
+        c_path = c_string(path)
+        status = c_nc_create(c_path, int(z'1004', c_int), c_ncid)
+        ncid = int(c_ncid)
+    end function nc_create_netcdf4_exclusive
 
     integer function nc_close_file(ncid) result(status)
         integer, intent(in) :: ncid

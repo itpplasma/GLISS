@@ -17,6 +17,7 @@ from .equilibrium import (
     GlissInternalError,
     _error_buffer,
     _raise_for_status,
+    _stable_file_digest,
 )
 
 if TYPE_CHECKING:
@@ -271,6 +272,10 @@ class StabilityProblem:
             raise ValueError("zero_floor is too large for spectrum certification")
         self.radial_quadrature = radial_quadrature
         self.equilibrium_path = Path(equilibrium.path)
+        size, digest = _stable_file_digest(
+            self.equilibrium_path, equilibrium._source_identity
+        )
+        self._equilibrium_metadata = (equilibrium.schema_version, size, digest)
         self._library = _load_library()
         _bind(self._library)
         self._handle = ctypes.c_void_p()
@@ -330,7 +335,7 @@ class StabilityProblem:
     def __repr__(self) -> str:
         state = "closed" if self.closed else "open"
         return (
-            f"<gliss.StabilityProblem(path={self.equilibrium_path!r}, "
+            f"<gliss.StabilityProblem(path={self.equilibrium_path.name!r}, "
             f"modes={len(self.modes)}, state={state!r})>"
         )
 
@@ -349,10 +354,14 @@ class StabilityProblem:
 
     def write_manifest(self, path: Any, result: StabilityResult) -> "RunManifest":
         """Write a portable manifest for a result produced by this problem."""
-        from .schema import write_run_manifest
+        from .schema import _write_run_manifest
 
-        return write_run_manifest(
-            path, self.equilibrium_path, self.configuration, result
+        return _write_run_manifest(
+            path,
+            self.equilibrium_path,
+            self.configuration,
+            result,
+            self._equilibrium_metadata,
         )
 
     def solve(self) -> StabilityResult:

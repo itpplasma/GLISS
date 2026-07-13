@@ -25,6 +25,8 @@ program test_gvec_cas3d_reader
         "Phi", "chi", "iota"]
     character(len=64) :: half_file, full_file, symmetric_file
     character(len=64) :: corrupt_file, nan_file, mode_file, missing_file
+    character(len=64) :: schema_file, future_file, incomplete_file
+    character(len=64) :: malformed_file
 
     interface
         function get_process_id() result(process_id) bind(c, name="getpid")
@@ -51,6 +53,10 @@ program test_gvec_cas3d_reader
     write (nan_file, '("reader_nan_",i0,".nc")') get_process_id()
     write (mode_file, '("reader_mode_",i0,".nc")') get_process_id()
     write (missing_file, '("reader_missing_",i0,".nc")') get_process_id()
+    write (schema_file, '("reader_schema_",i0,".nc")') get_process_id()
+    write (future_file, '("reader_future_",i0,".nc")') get_process_id()
+    write (incomplete_file, '("reader_incomplete_",i0,".nc")') get_process_id()
+    write (malformed_file, '("reader_malformed_",i0,".nc")') get_process_id()
 
     call create_fixture(half_file, radial_grid_half, .false., .false.)
     call read_gvec_cas3d_file(half_file, equilibrium, info)
@@ -92,6 +98,22 @@ program test_gvec_cas3d_reader
         "invalid toroidal mode order was accepted")
     call read_gvec_cas3d_file(missing_file, equilibrium, info)
     call require(info == reader_open_error, "missing file was accepted")
+    call create_fixture(schema_file, radial_grid_half, .false., .false., 1)
+    call read_gvec_cas3d_file(schema_file, equilibrium, info)
+    call require(info == reader_ok .and. equilibrium%schema_version == 1, &
+        "schema version 1 was not identified")
+    call create_fixture(future_file, radial_grid_half, .false., .false., 2)
+    call read_gvec_cas3d_file(future_file, equilibrium, info)
+    call require(info == reader_schema_error, &
+        "unsupported schema version was accepted")
+    call create_fixture(incomplete_file, radial_grid_half, .false., .false., -1)
+    call read_gvec_cas3d_file(incomplete_file, equilibrium, info)
+    call require(info == reader_schema_error, &
+        "incomplete schema metadata was accepted")
+    call create_fixture(malformed_file, radial_grid_half, .false., .false., -2)
+    call read_gvec_cas3d_file(malformed_file, equilibrium, info)
+    call require(info == reader_schema_error, &
+        "malformed schema metadata was accepted as legacy")
 
     call delete_fixture(half_file)
     call delete_fixture(full_file)
@@ -99,6 +121,10 @@ program test_gvec_cas3d_reader
     call delete_fixture(corrupt_file)
     call delete_fixture(nan_file)
     call delete_fixture(mode_file)
+    call delete_fixture(schema_file)
+    call delete_fixture(future_file)
+    call delete_fixture(incomplete_file)
+    call delete_fixture(malformed_file)
     write (*, "(a)") "PASS"
 
 contains
@@ -126,23 +152,29 @@ contains
             1.0e-14_dp, "sine harmonic value is wrong")
     end subroutine verify_half_fixture
 
-    subroutine create_fixture(filename, grid_kind, symmetric, corrupt)
+    subroutine create_fixture(filename, grid_kind, symmetric, corrupt, &
+            schema_version)
         character(len=*), intent(in) :: filename
         integer, intent(in) :: grid_kind
         logical, intent(in) :: symmetric, corrupt
+        integer, intent(in), optional :: schema_version
         type(fixture_ids_t) :: ids
 
-        call define_fixture(filename, grid_kind, symmetric, corrupt, ids)
+        call define_fixture(filename, grid_kind, symmetric, corrupt, ids, &
+            schema_version)
         call write_fixture(grid_kind, ids)
         call require_netcdf(nc_close_file(ids%ncid))
     end subroutine create_fixture
 
-    subroutine define_fixture(filename, grid_kind, symmetric, corrupt, ids)
+    subroutine define_fixture(filename, grid_kind, symmetric, corrupt, ids, &
+            schema_version)
         character(len=*), intent(in) :: filename
         integer, intent(in) :: grid_kind
         logical, intent(in) :: symmetric, corrupt
         type(fixture_ids_t), intent(out) :: ids
+        integer, intent(in), optional :: schema_version
         integer :: dim_s, dim_m, dim_n
+        character(len=16) :: version_text
 
         call require_netcdf(nc_create_netcdf4(filename, ids%ncid))
         call require_netcdf(nc_def_dimension(ids%ncid, "s", ns, dim_s))
@@ -155,6 +187,21 @@ contains
             [dim_s, dim_m, dim_n])
         call require_netcdf(nc_put_global_text(ids%ncid, &
             "stellarator_symmetry", merge("True ", "False", symmetric)))
+        if (present(schema_version)) then
+            if (schema_version == -2) then
+                call require_netcdf(nc_put_global_text(ids%ncid, &
+                    "gliss_schema", repeat("x", 40)))
+                call require_netcdf(nc_put_global_text(ids%ncid, &
+                    "gliss_schema_version", repeat("2", 40)))
+            else
+                if (schema_version >= 0) call require_netcdf( &
+                    nc_put_global_text(ids%ncid, "gliss_schema", &
+                    "gvec-cas3d-export"))
+                write (version_text, "(i0)") max(1, schema_version)
+                call require_netcdf(nc_put_global_text(ids%ncid, &
+                    "gliss_schema_version", trim(version_text)))
+            end if
+        end if
         call require_netcdf(nc_end_definitions(ids%ncid))
     end subroutine define_fixture
 

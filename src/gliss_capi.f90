@@ -1,9 +1,10 @@
 module gliss_capi
     use, intrinsic :: iso_c_binding, only: c_associated, c_char, c_double, &
         c_f_pointer, c_int, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t
-    use gliss_c_abi_support, only: error_buffer_status, status_allocation_error, &
-        status_capacity, status_compute_error, status_invalid_argument, &
-        status_internal_error, status_ok, status_read_error, write_error
+    use gliss_c_abi_support, only: decode_path, error_buffer_status, &
+        status_allocation_error, status_capacity, status_compute_error, &
+        status_invalid_argument, status_internal_error, status_ok, &
+        status_read_error, write_error
     use gliss_c_contexts, only: equilibrium_context_t
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
@@ -307,51 +308,5 @@ contains
         end if
         status = status_ok
     end function context_from_handle
-
-    function decode_path(path_pointer, path_length, filename, message) &
-            result(status)
-        type(c_ptr), value, intent(in) :: path_pointer
-        integer(c_size_t), value, intent(in) :: path_length
-        character(len=:), allocatable, intent(out) :: filename
-        character(len=*), intent(out) :: message
-        integer(c_int) :: status
-        character(c_char), pointer :: path(:)
-        integer :: allocation_status, i, length
-
-        message = ""
-        if (.not. c_associated(path_pointer)) then
-            status = status_invalid_argument
-            message = "path pointer is null"
-            return
-        end if
-        if (path_length < 1_c_size_t) then
-            status = status_invalid_argument
-            message = "path must not be empty"
-            return
-        end if
-        if (path_length > int(huge(length), c_size_t)) then
-            status = status_invalid_argument
-            message = "path length exceeds the Fortran string limit"
-            return
-        end if
-        length = int(path_length)
-        call c_f_pointer(path_pointer, path, [length])
-        allocate (character(len=length) :: filename, stat=allocation_status)
-        if (allocation_status /= 0) then
-            status = status_allocation_error
-            message = "failed to allocate path storage"
-            return
-        end if
-        do i = 1, length
-            if (path(i) == c_null_char) then
-                deallocate (filename)
-                status = status_invalid_argument
-                message = "path contains an embedded null byte"
-                return
-            end if
-            filename(i:i) = path(i)
-        end do
-        status = status_ok
-    end function decode_path
 
 end module gliss_capi

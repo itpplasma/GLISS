@@ -5,7 +5,7 @@ import platform
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Mapping, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -22,7 +22,14 @@ from ._schema_support import (
     string,
     write_json,
 )
-from .equilibrium import PathLike, _export_path
+from .equilibrium import (
+    Equilibrium,
+    GlissIOError,
+    PathLike,
+    _export_path,
+    _file_identity,
+    _stable_file_digest,
+)
 from .stability import (
     _QUADRATURE,
     _real_parameter,
@@ -136,6 +143,7 @@ class RunManifest:
     equilibrium_filename: str
     equilibrium_size_bytes: int
     equilibrium_sha256: str
+    equilibrium_schema_version: int
     configuration: StabilityConfiguration
     result: StabilityResult
     gliss_python_version: str
@@ -154,6 +162,11 @@ class RunManifest:
         digest = string(self.equilibrium_sha256, "equilibrium_sha256")
         if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
             raise ValueError("equilibrium_sha256 must be 64 lowercase hex digits")
+        equilibrium_schema = integer(
+            self.equilibrium_schema_version, "equilibrium_schema_version"
+        )
+        if equilibrium_schema > 1:
+            raise ValueError("equilibrium_schema_version must be 0 or 1")
         if not isinstance(self.configuration, StabilityConfiguration):
             raise TypeError("configuration must be a gliss.StabilityConfiguration")
         if not isinstance(self.result, StabilityResult):
@@ -180,7 +193,7 @@ class RunManifest:
             "schema_version": SCHEMA_VERSION,
             "equilibrium": {
                 "format": _EQUILIBRIUM_FORMAT,
-                "schema_version": 1,
+                "schema_version": self.equilibrium_schema_version,
                 "filename": self.equilibrium_filename,
                 "size_bytes": self.equilibrium_size_bytes,
                 "sha256": self.equilibrium_sha256,
@@ -221,8 +234,11 @@ class RunManifest:
         )
         if equilibrium["format"] != _EQUILIBRIUM_FORMAT:
             raise ValueError(f"run.equilibrium.format must be {_EQUILIBRIUM_FORMAT!r}")
-        if equilibrium["schema_version"] != 1:
-            raise ValueError("run.equilibrium.schema_version must be 1")
+        equilibrium_schema = integer(
+            equilibrium["schema_version"], "run.equilibrium.schema_version"
+        )
+        if equilibrium_schema > 1:
+            raise ValueError("run.equilibrium.schema_version must be 0 or 1")
         digest = string(equilibrium["sha256"], "run.equilibrium.sha256")
         if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
             raise ValueError("run.equilibrium.sha256 must be 64 lowercase hex digits")
@@ -245,6 +261,7 @@ class RunManifest:
                 equilibrium["size_bytes"], "run.equilibrium.size_bytes"
             ),
             equilibrium_sha256=digest,
+            equilibrium_schema_version=equilibrium_schema,
             configuration=configuration,
             result=result,
             gliss_python_version=string(
@@ -293,13 +310,30 @@ def _native_version() -> str:
     return version()
 
 
-def write_run_manifest(
+def _equilibrium_schema_version(path: Path) -> int:
+    with Equilibrium(path) as equilibrium:
+        return equilibrium.schema_version
+
+
+def _equilibrium_metadata(path: Path) -> Tuple[int, int, str]:
+    identity = _file_identity(path)
+    schema_version = _equilibrium_schema_version(path)
+    try:
+        size_bytes, digest = _stable_file_digest(path, identity)
+    except GlissIOError as error:
+        raise GlissIOError(
+            "equilibrium export changed while collecting metadata"
+        ) from error
+    return schema_version, size_bytes, digest
+
+
+def _write_run_manifest(
     path: PathLike,
     equilibrium_path: PathLike,
     configuration: StabilityConfiguration,
     result: StabilityResult,
+    expected_equilibrium: Optional[Tuple[int, int, str]] = None,
 ) -> RunManifest:
-    """Create and atomically write a portable manifest for one stability run."""
     if not isinstance(configuration, StabilityConfiguration):
         raise TypeError("configuration must be a gliss.StabilityConfiguration")
     if not isinstance(result, StabilityResult):
@@ -307,12 +341,23 @@ def write_run_manifest(
     stability_result_to_dict(result)
     _validate_result_configuration(configuration, result)
     export, _ = _export_path(equilibrium_path)
+    equilibrium_schema, equilibrium_size, equilibrium_digest = _equilibrium_metadata(
+        export
+    )
+    actual_equilibrium = (
+        equilibrium_schema,
+        equilibrium_size,
+        equilibrium_digest,
+    )
+    if expected_equilibrium is not None and actual_equilibrium != expected_equilibrium:
+        raise GlissIOError("equilibrium export differs from problem input")
     from . import __version__
 
     manifest = RunManifest(
         equilibrium_filename=export.name,
-        equilibrium_size_bytes=export.stat().st_size,
-        equilibrium_sha256=_sha256(export),
+        equilibrium_size_bytes=equilibrium_size,
+        equilibrium_sha256=equilibrium_digest,
+        equilibrium_schema_version=equilibrium_schema,
         configuration=configuration,
         result=result,
         gliss_python_version=__version__,
@@ -323,3 +368,15 @@ def write_run_manifest(
     )
     manifest.write(path)
     return manifest
+
+
+def write_run_manifest(
+    path: PathLike,
+    equilibrium_path: PathLike,
+    configuration: StabilityConfiguration,
+    result: StabilityResult,
+) -> RunManifest:
+    """Create and atomically write a portable manifest for one stability run."""
+    return _write_run_manifest(
+        path, equilibrium_path, configuration, result, expected_equilibrium=None
+    )

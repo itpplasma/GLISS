@@ -24,8 +24,9 @@ The Python package is the primary user interface. Install it with
 `python -m pip install gliss`; version 0.0.1 exposes the validated Mercier
 profile and objective through NumPy. Development main also provides reusable
 `Equilibrium` and fixed-boundary `StabilityProblem` contexts with typed,
-certified lowest-eigenpair results. See the [Python guide](python/README.md)
-for examples, conventions, input contracts and the optional SIMSOPT adapter.
+certified lowest-eigenpair results, plus atomic versioned equilibrium export.
+See the [Python guide](python/README.md) for examples, conventions, input and
+output contracts, and the optional SIMSOPT adapter.
 
 ## Build
 

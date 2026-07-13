@@ -14,6 +14,12 @@
 - Add deterministic version-1 configuration and result files with strict
   validation, plus portable run manifests that checksum the equilibrium and
   record the Python/native software versions.
+- Add schema-version queries and exact version-1 equilibrium export through
+  the C and Python interfaces. Python writes replace destinations atomically;
+  direct C writes refuse existing paths.
+- Record the actual legacy or version-1 equilibrium schema in run manifests.
+- Refuse problem manifests when the source equilibrium changed after assembly,
+  and reject files modified while manifest metadata is collected.
 
 ## 0.0.1 - 2026-07-13
 

@@ -8,6 +8,7 @@ int main(void) {
     gliss_stability_problem *problem = NULL;
     gliss_spectrum_summary summary;
     size_t surfaces = 1;
+    int32_t schema_version = -1;
     char error[128];
 
     memset(&summary, 0, sizeof(summary));
@@ -28,12 +29,20 @@ int main(void) {
     if (surfaces != 0 || error[0] == '\0') {
         return 4;
     }
-    if (gliss_stability_problem_destroy(&problem, error, sizeof(error)) !=
-        GLISS_STATUS_OK) {
+    if (gliss_equilibrium_schema_version(
+            equilibrium, &schema_version, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
         return 5;
     }
-    if (summary.struct_size != sizeof(gliss_spectrum_summary)) {
+    if (schema_version != 0 || error[0] == '\0') {
         return 6;
+    }
+    if (gliss_stability_problem_destroy(&problem, error, sizeof(error)) !=
+        GLISS_STATUS_OK) {
+        return 7;
+    }
+    if (summary.struct_size != sizeof(gliss_spectrum_summary)) {
+        return 8;
     }
     return 0;
 }

@@ -46,6 +46,10 @@ name = "gvec_cas3d_reader"
 main = "test_gvec_cas3d_reader.f90"
 
 [[test]]
+name = "gvec_cas3d_writer"
+main = "test_gvec_cas3d_writer.f90"
+
+[[test]]
 name = "radial_bspline_basis"
 main = "test_radial_bspline_basis.f90"
 

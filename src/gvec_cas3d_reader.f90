@@ -7,8 +7,8 @@ module gvec_cas3d_reader
         reader_data_error, reader_ok, reader_open_error, reader_schema_error
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
         radial_grid_full, radial_grid_half
-    use netcdf_c_api, only: nc_close_file, nc_get_global_text, nc_noerr, &
-        nc_open_read
+    use netcdf_c_api, only: nc_close_file, nc_enotatt, nc_get_global_text, &
+        nc_noerr, nc_open_read
     implicit none
     private
 
@@ -46,6 +46,8 @@ contains
         integer, intent(out) :: info
         integer :: radial_count, poloidal_count, toroidal_count
 
+        call read_schema_metadata(ncid, equilibrium%schema_version, info)
+        if (info /= reader_ok) return
         call read_dimension(ncid, "s", radial_count, info)
         if (info /= reader_ok) return
         call read_dimension(ncid, "m", poloidal_count, info)
@@ -62,6 +64,28 @@ contains
         call read_harmonics(ncid, radial_count, poloidal_count, &
             toroidal_count, equilibrium, info)
     end subroutine read_file_contents
+
+    subroutine read_schema_metadata(ncid, schema_version, info)
+        integer, intent(in) :: ncid
+        integer, intent(out) :: schema_version, info
+        character(len=32) :: schema_name, version_text
+        integer :: name_status, version_status
+
+        schema_version = 0
+        name_status = nc_get_global_text(ncid, "gliss_schema", schema_name)
+        version_status = nc_get_global_text(ncid, "gliss_schema_version", &
+            version_text)
+        if (name_status == nc_enotatt .and. version_status == nc_enotatt) then
+            info = reader_ok
+            return
+        end if
+        info = reader_schema_error
+        if (name_status /= nc_noerr .or. version_status /= nc_noerr) return
+        if (trim(schema_name) /= "gvec-cas3d-export") return
+        if (trim(version_text) /= "1") return
+        schema_version = 1
+        info = reader_ok
+    end subroutine read_schema_metadata
 
     subroutine read_metadata(ncid, equilibrium, info)
         integer, intent(in) :: ncid

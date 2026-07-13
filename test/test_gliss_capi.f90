@@ -11,13 +11,16 @@ program test_gliss_capi
     integer(c_int), parameter :: status_capacity = 3
     integer(c_int), parameter :: status_invalid_argument = 4
     character(len=*), parameter :: fixture = "capi_cylinder.nc"
+    character(len=*), parameter :: output_file = "capi_roundtrip.nc"
 
     character(c_char), target :: path(len(fixture)), error_buffer(256)
+    character(c_char), target :: output_path(len(output_file))
     character(c_char), target :: embedded_nul(3), missing_path(10)
     real(c_double), allocatable, target :: s_values(:), d_mercier(:)
     real(c_double), allocatable :: legacy_s(:), legacy_d(:)
-    type(c_ptr), target :: context
+    type(c_ptr), target :: context, roundtrip_context
     integer(c_size_t), target :: surfaces, written
+    integer(c_int), target :: schema_version
     integer(c_int) :: status, legacy_status, legacy_surfaces
 
     interface
@@ -52,6 +55,24 @@ program test_gliss_capi
             integer(c_size_t), value :: error_capacity
             integer(c_int) :: result
         end function equilibrium_surface_count
+
+        function equilibrium_schema_version(handle, version, error_pointer, &
+                error_capacity) bind(c, &
+                name="gliss_equilibrium_schema_version") result(result)
+            import c_int, c_ptr, c_size_t
+            type(c_ptr), value :: handle, version, error_pointer
+            integer(c_size_t), value :: error_capacity
+            integer(c_int) :: result
+        end function equilibrium_schema_version
+
+        function equilibrium_write(handle, path_pointer, path_length, &
+                error_pointer, error_capacity) bind(c, &
+                name="gliss_equilibrium_write") result(result)
+            import c_int, c_ptr, c_size_t
+            type(c_ptr), value :: handle, path_pointer, error_pointer
+            integer(c_size_t), value :: path_length, error_capacity
+            integer(c_int) :: result
+        end function equilibrium_write
 
         function mercier_profile_context(handle, n_theta, n_zeta, capacity, &
                 s_pointer, d_pointer, written, error_pointer, error_capacity) &
@@ -88,6 +109,60 @@ program test_gliss_capi
     call require(c_associated(context), "create returned a null handle")
     call require(len_trim(error_text(error_buffer)) == 0, &
         "success left stale error text")
+    schema_version = -1_c_int
+    status = equilibrium_schema_version(context, c_loc(schema_version), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_ok .and. schema_version == 0_c_int, &
+        "legacy schema version query failed")
+    status = equilibrium_schema_version(context, c_null_ptr, &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "null schema-version output was accepted")
+    call copy_chars(output_file, output_path)
+    schema_version = -1_c_int
+    status = equilibrium_schema_version(c_null_ptr, c_loc(schema_version), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument .and. &
+        schema_version == 0_c_int, "null schema-version handle was accepted")
+    status = equilibrium_write(c_null_ptr, c_loc(output_path), &
+        int(size(output_path), c_size_t), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "null equilibrium write handle was accepted")
+    status = equilibrium_write(context, c_null_ptr, 1_c_size_t, &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "null equilibrium write path was accepted")
+    status = equilibrium_write(context, c_loc(output_path), 0_c_size_t, &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "empty equilibrium write path was accepted")
+    status = equilibrium_write(context, c_loc(output_path), &
+        int(size(output_path), c_size_t), c_null_ptr, 1_c_size_t)
+    call require(status == status_invalid_argument, &
+        "null nonempty write error buffer was accepted")
+    status = equilibrium_write(context, c_loc(output_path), &
+        int(size(output_path), c_size_t), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_ok, "equilibrium write failed")
+    status = equilibrium_write(context, c_loc(output_path), &
+        int(size(output_path), c_size_t), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_read_error, &
+        "equilibrium write overwrote an existing file")
+    roundtrip_context = c_null_ptr
+    status = equilibrium_create(c_loc(output_path), &
+        int(size(output_path), c_size_t), c_loc(roundtrip_context), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_ok, "round-trip equilibrium create failed")
+    status = equilibrium_schema_version(roundtrip_context, &
+        c_loc(schema_version), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_ok .and. schema_version == 1_c_int, &
+        "round-trip schema version is wrong")
+    status = equilibrium_destroy(c_loc(roundtrip_context), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_ok, "round-trip destroy failed")
 
     status = equilibrium_surface_count(context, c_null_ptr, &
         c_loc(error_buffer), int(size(error_buffer), c_size_t))
@@ -196,6 +271,8 @@ program test_gliss_capi
         "null path without error buffer was not rejected")
 
     open (unit=13, file=fixture, status="old")
+    close (13, status="delete")
+    open (unit=13, file=output_file, status="old")
     close (13, status="delete")
     write (*, "(a)") "PASS"
 

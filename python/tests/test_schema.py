@@ -176,6 +176,7 @@ def test_run_manifest_is_portable_and_round_trips(
     equilibrium.write_bytes(b"equilibrium fixture")
     path = tmp_path / "run.json"
     monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.1")
+    monkeypatch.setattr("gliss.schema._equilibrium_schema_version", lambda path: 0)
 
     manifest = gliss.write_run_manifest(path, equilibrium, configuration, result)
     loaded = gliss.RunManifest.read(path)
@@ -183,6 +184,7 @@ def test_run_manifest_is_portable_and_round_trips(
 
     assert loaded == manifest
     assert loaded.equilibrium_filename == "equilibrium.nc"
+    assert loaded.equilibrium_schema_version == 0
     assert (
         loaded.equilibrium_sha256
         == hashlib.sha256(equilibrium.read_bytes()).hexdigest()
@@ -200,9 +202,48 @@ def test_manifest_rejects_result_configuration_mismatch(
     equilibrium = tmp_path / "equilibrium.nc"
     equilibrium.touch()
     monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.1")
+    monkeypatch.setattr("gliss.schema._equilibrium_schema_version", lambda path: 0)
     mismatch = replace(configuration, modes=((3, 2),))
     with pytest.raises(ValueError, match="result modes.*configuration modes"):
         gliss.write_run_manifest(tmp_path / "run.json", equilibrium, mismatch, result)
+
+
+def test_manifest_rejects_equilibrium_changed_during_metadata_collection(
+    configuration, result, tmp_path, monkeypatch
+):
+    equilibrium = tmp_path / "equilibrium.nc"
+    equilibrium.write_bytes(b"before")
+    monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.1")
+
+    def change_source(path):
+        path.write_bytes(b"after")
+        return 0
+
+    monkeypatch.setattr("gliss.schema._equilibrium_schema_version", change_source)
+    with pytest.raises(gliss.GlissIOError, match="changed while collecting"):
+        gliss.write_run_manifest(
+            tmp_path / "run.json", equilibrium, configuration, result
+        )
+    assert not (tmp_path / "run.json").exists()
+
+
+def test_manifest_rejects_equilibrium_deleted_during_metadata_collection(
+    configuration, result, tmp_path, monkeypatch
+):
+    equilibrium = tmp_path / "equilibrium.nc"
+    equilibrium.write_bytes(b"before")
+    monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.1")
+
+    def remove_source(path):
+        path.unlink()
+        return 0
+
+    monkeypatch.setattr("gliss.schema._equilibrium_schema_version", remove_source)
+    with pytest.raises(gliss.GlissIOError, match="changed while collecting"):
+        gliss.write_run_manifest(
+            tmp_path / "run.json", equilibrium, configuration, result
+        )
+    assert not (tmp_path / "run.json").exists()
 
 
 def test_manifest_rejects_changed_equilibrium(configuration, result, tmp_path):
@@ -243,6 +284,7 @@ def test_manifest_constructor_rejects_private_or_invalid_metadata(
             equilibrium_filename="/private/equilibrium.nc",
             equilibrium_size_bytes=1,
             equilibrium_sha256="0" * 64,
+            equilibrium_schema_version=0,
             configuration=configuration,
             result=result,
             gliss_python_version="0.0.1",
@@ -251,3 +293,56 @@ def test_manifest_constructor_rejects_private_or_invalid_metadata(
             numpy_version=np.__version__,
             python_version="3.9.0",
         )
+
+
+@pytest.mark.parametrize("version", [-1, 2, True, "1"])
+def test_manifest_rejects_invalid_equilibrium_schema_version(
+    configuration, result, version
+):
+    with pytest.raises((TypeError, ValueError), match="equilibrium_schema_version"):
+        gliss.RunManifest(
+            equilibrium_filename="equilibrium.nc",
+            equilibrium_size_bytes=1,
+            equilibrium_sha256="0" * 64,
+            equilibrium_schema_version=version,
+            configuration=configuration,
+            result=result,
+            gliss_python_version="0.0.1",
+            gliss_native_version="0.0.1",
+            gliss_abi_version=1,
+            numpy_version=np.__version__,
+            python_version="3.9.0",
+        )
+
+
+def test_manifest_reader_accepts_legacy_and_rejects_unknown_equilibrium_schema(
+    configuration, result, tmp_path
+):
+    path = tmp_path / "run.json"
+    document = {
+        "schema": "gliss.stability.run",
+        "schema_version": 1,
+        "equilibrium": {
+            "format": "gvec-cas3d-netcdf",
+            "schema_version": 0,
+            "filename": "equilibrium.nc",
+            "size_bytes": 0,
+            "sha256": "0" * 64,
+        },
+        "software": {
+            "gliss_python": "0.0.1",
+            "gliss_native": "0.0.1",
+            "gliss_abi": 1,
+            "numpy": np.__version__,
+            "python": "3.9.0",
+        },
+        "configuration": configuration.to_dict(),
+        "result": result.to_dict(),
+    }
+    path.write_text(json.dumps(document), encoding="utf-8")
+    assert gliss.RunManifest.read(path).equilibrium_schema_version == 0
+
+    document["equilibrium"]["schema_version"] = 2
+    path.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(ValueError, match="equilibrium.schema_version.*0 or 1"):
+        gliss.RunManifest.read(path)

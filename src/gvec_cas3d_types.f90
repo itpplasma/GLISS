@@ -12,6 +12,7 @@ module gvec_cas3d_types
     end type harmonic_pair_t
 
     type, public :: gvec_cas3d_equilibrium_t
+        integer :: schema_version = 0
         integer :: field_periods = 0
         integer :: winding = 0
         integer :: radial_grid = 0

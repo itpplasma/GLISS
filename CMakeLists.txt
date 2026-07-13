@@ -23,6 +23,7 @@ add_library(gliss
     src/netcdf_c_api.f90
     src/gvec_cas3d_netcdf.f90
     src/gvec_cas3d_reader.f90
+    src/gvec_cas3d_writer.f90
     src/gvec_cas3d_reconstruction.f90
     src/gvec_cas3d_integrals.f90
     src/gvec_cas3d_types.f90
@@ -97,6 +98,7 @@ target_include_directories(gliss PUBLIC
 add_library(gliss_c SHARED
     src/gliss_c_abi_support.f90
     src/gliss_c_contexts.f90
+    src/gliss_equilibrium_io_capi.f90
     src/gliss_capi.f90
     src/gliss_spectrum_capi.f90)
 add_dependencies(gliss_c gliss)
@@ -336,6 +338,11 @@ if(BUILD_TESTING)
         test/test_gvec_cas3d_reader.f90)
     target_link_libraries(test_gvec_cas3d_reader PRIVATE gliss)
     add_test(NAME gvec_cas3d_reader COMMAND test_gvec_cas3d_reader)
+
+    add_executable(test_gvec_cas3d_writer
+        test/test_gvec_cas3d_writer.f90)
+    target_link_libraries(test_gvec_cas3d_writer PRIVATE gliss_test_support)
+    add_test(NAME gvec_cas3d_writer COMMAND test_gvec_cas3d_writer)
 
     add_executable(test_radial_bspline_basis
         test/test_radial_bspline_basis.f90)

@@ -4,6 +4,7 @@ module netcdf_c_bindings
     private
 
     integer, parameter, public :: nc_noerr = 0
+    integer, parameter, public :: nc_enotatt = -43
     integer, parameter, public :: nc_enotvar = -49
     integer, parameter, public :: nc_global = -1
     integer, parameter, public :: nc_double = 6

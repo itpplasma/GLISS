@@ -1,10 +1,12 @@
 """Reusable equilibrium contexts backed by the GLISS C ABI."""
 
 import ctypes
+import hashlib
 import operator
 import os
+import tempfile
 from pathlib import Path
-from typing import Any, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 
@@ -13,6 +15,7 @@ from . import _load_library, _require_symbols
 _C_INT_MAX = 2 ** (ctypes.sizeof(ctypes.c_int) * 8 - 1) - 1
 _ERROR_CAPACITY = 512
 PathLike = Union[str, os.PathLike]
+_FileIdentity = Tuple[int, int, int, int, int]
 
 
 class GlissError(RuntimeError):
@@ -53,6 +56,38 @@ _STATUS_EXCEPTIONS = {
 }
 
 
+def _file_identity(path: Path) -> _FileIdentity:
+    metadata = path.stat()
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _stable_file_digest(
+    path: Path, expected_identity: Optional[_FileIdentity] = None
+) -> Tuple[int, str]:
+    try:
+        before = _file_identity(path)
+        if expected_identity is not None and before != expected_identity:
+            raise GlissIOError("equilibrium export changed after loading")
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        if _file_identity(path) != before:
+            raise GlissIOError("equilibrium export changed while checksumming")
+    except OSError as error:
+        message = "equilibrium export changed while checksumming"
+        if expected_identity is not None:
+            message = "equilibrium export changed after loading"
+        raise GlissIOError(message) from error
+    return before[2], digest.hexdigest()
+
+
 def _resolution(value: Any, name: str) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise TypeError(f"{name} must be an integer")
@@ -85,6 +120,23 @@ def _export_path(path: PathLike) -> Tuple[Path, bytes]:
     return export, encoded
 
 
+def _output_path(path: PathLike) -> Path:
+    try:
+        value = os.fspath(path)
+    except TypeError as error:
+        raise TypeError("output path must be a string or path-like object") from error
+    if not isinstance(value, str):
+        raise TypeError("output path must resolve to a string")
+    if "\0" in value:
+        raise ValueError("output path contains a null byte")
+    output = Path(value)
+    if not output.parent.is_dir():
+        raise FileNotFoundError(f"output directory does not exist: {output.parent}")
+    if output.exists() and not output.is_file():
+        raise ValueError(f"output path is a directory or special file: {output}")
+    return output
+
+
 def _bind(library: Any) -> None:
     _require_symbols(
         library,
@@ -92,6 +144,8 @@ def _bind(library: Any) -> None:
             "gliss_equilibrium_create",
             "gliss_equilibrium_destroy",
             "gliss_equilibrium_surface_count",
+            "gliss_equilibrium_schema_version",
+            "gliss_equilibrium_write",
             "gliss_mercier_profile_context",
         ),
         "equilibrium context",
@@ -117,6 +171,21 @@ def _bind(library: Any) -> None:
         ctypes.c_size_t,
     )
     library.gliss_equilibrium_surface_count.restype = ctypes.c_int
+    library.gliss_equilibrium_schema_version.argtypes = (
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    )
+    library.gliss_equilibrium_schema_version.restype = ctypes.c_int
+    library.gliss_equilibrium_write.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_size_t,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    )
+    library.gliss_equilibrium_write.restype = ctypes.c_int
     library.gliss_mercier_profile_context.argtypes = (
         ctypes.c_void_p,
         ctypes.c_int,
@@ -148,6 +217,7 @@ class Equilibrium:
 
     def __init__(self, path: PathLike):
         self.path, encoded = _export_path(path)
+        source_identity = _file_identity(self.path)
         self._library = _load_library()
         _bind(self._library)
         self._handle = ctypes.c_void_p()
@@ -164,11 +234,36 @@ class Equilibrium:
         _raise_for_status(status, error, "gliss_equilibrium_create")
         if self._handle.value is None:
             raise GlissInternalError("GLISS returned a null equilibrium handle")
+        try:
+            source_changed = _file_identity(self.path) != source_identity
+        except OSError as error:
+            self._library.gliss_equilibrium_destroy(ctypes.byref(self._handle), None, 0)
+            raise GlissIOError("equilibrium export changed while loading") from error
+        if source_changed:
+            self._library.gliss_equilibrium_destroy(ctypes.byref(self._handle), None, 0)
+            raise GlissIOError("equilibrium export changed while loading")
+        self._source_identity = source_identity
 
     @property
     def closed(self) -> bool:
         """Whether the native equilibrium has been released."""
         return self._handle.value is None
+
+    @property
+    def schema_version(self) -> int:
+        """NetCDF export schema: 0 for legacy inputs and 1 for GLISS exports."""
+        self._require_open()
+        version = ctypes.c_int32()
+        error = _error_buffer()
+        status = self._library.gliss_equilibrium_schema_version(
+            self._handle, ctypes.byref(version), error, len(error)
+        )
+        _raise_for_status(status, error, "gliss_equilibrium_schema_version")
+        if version.value not in (0, 1):
+            raise GlissInternalError(
+                f"GLISS returned unsupported equilibrium schema {version.value}"
+            )
+        return version.value
 
     def close(self) -> None:
         """Release the native equilibrium; repeated calls are safe."""
@@ -192,7 +287,7 @@ class Equilibrium:
 
     def __repr__(self) -> str:
         state = "closed" if self.closed else "open"
-        return f"<gliss.Equilibrium(path={self.path!r}, state={state!r})>"
+        return f"<gliss.Equilibrium(path={self.path.name!r}, state={state!r})>"
 
     def _surface_count(self) -> int:
         self._require_open()
@@ -237,6 +332,33 @@ class Equilibrium:
                 f"GLISS wrote {written.value} surfaces; expected {count}"
             )
         return s_values, d_mercier
+
+    def write(self, path: PathLike) -> Path:
+        """Atomically write a version-1 equilibrium export."""
+        self._require_open()
+        destination = _output_path(path)
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+        )
+        os.close(descriptor)
+        temporary = Path(temporary_name)
+        temporary.unlink()
+        try:
+            encoded = os.fsencode(temporary)
+            if len(encoded) > ctypes.c_size_t(-1).value:
+                raise ValueError("encoded output path is too long for the GLISS C API")
+            error = _error_buffer()
+            status = self._library.gliss_equilibrium_write(
+                self._handle, encoded, len(encoded), error, len(error)
+            )
+            _raise_for_status(status, error, "gliss_equilibrium_write")
+            os.replace(temporary, destination)
+            return destination
+        finally:
+            if temporary.exists():
+                temporary.unlink()
 
     def _require_open(self) -> None:
         if self.closed:

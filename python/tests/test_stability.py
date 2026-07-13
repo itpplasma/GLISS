@@ -23,6 +23,8 @@ class FakeLibrary:
         self.gliss_equilibrium_create = FakeFunction(self.equilibrium_create)
         self.gliss_equilibrium_destroy = FakeFunction(self.equilibrium_destroy)
         self.gliss_equilibrium_surface_count = FakeFunction(self.surface_count)
+        self.gliss_equilibrium_schema_version = FakeFunction(self.schema_version)
+        self.gliss_equilibrium_write = FakeFunction(self.equilibrium_write)
         self.gliss_mercier_profile_context = FakeFunction(self.mercier_profile)
         self.gliss_stability_problem_create = FakeFunction(self.problem_create)
         self.gliss_stability_problem_destroy = FakeFunction(self.problem_destroy)
@@ -44,6 +46,14 @@ class FakeLibrary:
     def surface_count(self, handle, surfaces, error, error_capacity):
         surfaces._obj.value = 3
         return 0
+
+    def schema_version(self, handle, version, error, error_capacity):
+        version._obj.value = 0
+        error.value = b""
+        return 0
+
+    def equilibrium_write(self, *args):
+        raise AssertionError("equilibrium write was not requested")
 
     def mercier_profile(self, *args):
         raise AssertionError("Mercier was not requested")
@@ -143,7 +153,10 @@ def test_stability_problem_lifecycle_and_results(contexts):
         density_kg_m3=2.0,
         zero_floor=1.0,
     )
-    assert repr(problem).startswith("<gliss.StabilityProblem(")
+    assert repr(problem) == (
+        "<gliss.StabilityProblem(path='equilibrium.nc', modes=2, state='open')>"
+    )
+    assert str(equilibrium.path.parent) not in repr(problem)
     equilibrium.close()
 
     result = problem.solve()
@@ -204,6 +217,20 @@ def test_stability_problem_requires_open_equilibrium(contexts):
         StabilityProblem(equilibrium, modes=[(1, 1)])
 
 
+def test_stability_problem_rejects_changed_equilibrium(contexts):
+    _, equilibrium = contexts
+    equilibrium.path.write_bytes(b"changed")
+    with pytest.raises(gliss.GlissIOError, match="changed after loading"):
+        StabilityProblem(equilibrium, modes=[(1, 1)])
+
+
+def test_stability_problem_rejects_deleted_equilibrium(contexts):
+    _, equilibrium = contexts
+    equilibrium.path.unlink()
+    with pytest.raises(gliss.GlissIOError, match="changed after loading"):
+        StabilityProblem(equilibrium, modes=[(1, 1)])
+
+
 def test_stability_problem_requires_equilibrium_object(tmp_path):
     export = tmp_path / "equilibrium.nc"
     export.touch()
@@ -239,7 +266,9 @@ def test_stability_problem_rejects_invalid_parity(contexts):
 def test_stability_problem_represents_fully_floored_result(contexts):
     library, equilibrium = contexts
     library.has_eigenvector = False
-    with StabilityProblem(equilibrium, modes=[(1, 1), (2, 1)]) as problem:
+    with StabilityProblem(
+        equilibrium, modes=[(1, 1), (2, 1)], density_kg_m3=2.0
+    ) as problem:
         result = problem.solve_class(1)
     assert not result.has_eigenvector
     assert result.eigenvector.shape == (0,)
@@ -271,6 +300,19 @@ def test_stability_problem_exposes_configuration_and_manifest(
 
     assert path.is_file()
     assert gliss.RunManifest.read(path) == manifest
+
+
+def test_problem_manifest_rejects_changed_source(contexts, tmp_path, monkeypatch):
+    _, equilibrium = contexts
+    monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.1")
+    with StabilityProblem(
+        equilibrium, modes=[(1, 1), (2, 1)], density_kg_m3=2.0
+    ) as problem:
+        result = problem.solve()
+        equilibrium.path.write_bytes(b"changed")
+        with pytest.raises(gliss.GlissIOError, match="differs from problem input"):
+            problem.write_manifest(tmp_path / "run.json", result)
+    assert not (tmp_path / "run.json").exists()
 
 
 def test_stability_bind_reports_missing_native_symbols():

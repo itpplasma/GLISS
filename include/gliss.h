@@ -52,6 +52,21 @@ gliss_status gliss_equilibrium_surface_count(
     char *error,
     size_t error_capacity);
 
+/* Legacy exports report schema version 0. GLISS exports report version 1.
+ * Direct writes use exclusive creation and never replace an existing path. */
+gliss_status gliss_equilibrium_schema_version(
+    const gliss_equilibrium *equilibrium,
+    int32_t *schema_version,
+    char *error,
+    size_t error_capacity);
+
+gliss_status gliss_equilibrium_write(
+    const gliss_equilibrium *equilibrium,
+    const char *path,
+    size_t path_length,
+    char *error,
+    size_t error_capacity);
+
 /* s_values and d_mercier are caller-owned contiguous arrays of capacity
  * doubles. On GLISS_STATUS_CAPACITY, written reports the required capacity and
  * neither array is modified. On earlier failures, written is zero. */
