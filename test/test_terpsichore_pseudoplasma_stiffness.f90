@@ -14,6 +14,7 @@ program test_terpsichore_pseudoplasma_stiffness
     call test_analytic_matrix()
     call test_fixture_reader()
     call test_invalid_fixture()
+    call test_invalid_fixture_records()
     write (*, "(a)") "PASS"
 
 contains
@@ -79,14 +80,23 @@ contains
     end subroutine test_fixture_reader
 
     subroutine test_invalid_fixture()
-        type(terpsichore_pseudoplasma_fixture_t) :: fixture, restored
-        integer, parameter :: magic = int(z'47565031')
-        integer :: info, unit
+        type(terpsichore_pseudoplasma_fixture_t) :: fixture
 
         call build_fixture(fixture)
         fixture%s(2) = fixture%s(1)
         call require(.not. terpsichore_pseudoplasma_fixture_is_valid(fixture), &
             "nonmonotone vacuum grid was accepted")
+        call build_fixture(fixture)
+        fixture%mode_m(1) = 1000001
+        call require(.not. terpsichore_pseudoplasma_fixture_is_valid(fixture), &
+            "unsafe mode number was accepted")
+    end subroutine test_invalid_fixture
+
+    subroutine test_invalid_fixture_records()
+        type(terpsichore_pseudoplasma_fixture_t) :: restored
+        integer, parameter :: magic = int(z'47565031')
+        integer :: info, unit
+
         open (newunit=unit, status="scratch", access="sequential", &
             form="unformatted", action="readwrite")
         write (unit) magic, 2, 4, 2, 1
@@ -95,10 +105,14 @@ contains
         close (unit)
         call require(info == pseudoplasma_fixture_invalid, &
             "unknown pseudoplasma schema was accepted")
-        call build_fixture(fixture)
-        fixture%mode_m(1) = 1000001
-        call require(.not. terpsichore_pseudoplasma_fixture_is_valid(fixture), &
-            "unsafe mode number was accepted")
+        open (newunit=unit, status="scratch", access="sequential", &
+            form="unformatted", action="readwrite")
+        write (unit) magic, 1, 4, 996, 100
+        rewind (unit)
+        call read_terpsichore_pseudoplasma_fixture(unit, restored, info)
+        close (unit)
+        call require(info == pseudoplasma_fixture_invalid, &
+            "oversized pseudoplasma matrix was accepted")
         open (newunit=unit, status="scratch", access="sequential", &
             form="unformatted", action="readwrite")
         write (unit) magic, 1, 4, 2, 1
@@ -107,7 +121,7 @@ contains
         close (unit)
         call require(info == pseudoplasma_fixture_invalid, &
             "truncated pseudoplasma fixture was accepted")
-    end subroutine test_invalid_fixture
+    end subroutine test_invalid_fixture_records
 
     subroutine build_fixture(fixture)
         type(terpsichore_pseudoplasma_fixture_t), intent(out) :: fixture
