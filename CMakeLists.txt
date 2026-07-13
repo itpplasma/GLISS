@@ -9,6 +9,9 @@ pkg_check_modules(NETCDF_C REQUIRED IMPORTED_TARGET netcdf)
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     add_compile_options(-Wall -Wextra -Wno-compare-reals)
+    if(SKBUILD)
+        add_compile_options(-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.)
+    endif()
 endif()
 
 add_library(gliss

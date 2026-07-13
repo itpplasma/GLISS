@@ -1,5 +1,5 @@
 [build-system]
-requires = ["ninja>=1.10", "scikit-build-core>=1.0,<2"]
+requires = ["ninja==1.13.0", "scikit-build-core==1.0.3"]
 build-backend = "scikit_build_core.build"
 
 [project]
