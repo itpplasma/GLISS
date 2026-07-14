@@ -22,12 +22,12 @@ program gliss_compatible_marginality
     real(dp), allocatable :: stored_power(:), stiffness(:, :), mass(:, :)
     real(dp), allocatable :: stiffness_operator(:, :), work(:)
     integer, allocatable :: pivots(:)
-    real(dp) :: density, floor, kinetic, potential, residual
+    real(dp) :: density, floor, kinetic, m0_stored_power, potential, residual
     real(dp) :: term_energy(4)
     integer :: allocation_status, arguments, comma, degree, first_mode, info
     integer :: inertia_negative_count, mode, negative_count, work_size
     integer :: n_theta, n_zeta, parity, trial
-    logical :: inertia_only, physical_mass
+    logical :: has_m0_power, inertia_only, physical_mass
 
     interface
         subroutine terminate_process(status) bind(C, name="exit")
@@ -62,27 +62,39 @@ program gliss_compatible_marginality
     first_mode = 7
     inertia_only = .false.
     physical_mass = .false.
+    has_m0_power = .false.
     density = 0.0_dp
-    call read_argument(first_mode, "mode", token)
-    if (trim(token) == "--inertia-only") then
-        inertia_only = .true.
-        first_mode = first_mode + 1
-        if (arguments < first_mode) &
-            call fail_usage("--inertia-only requires at least one mode")
+    m0_stored_power = 0.0_dp
+    do while (first_mode <= arguments)
         call read_argument(first_mode, "mode", token)
-    end if
-    if (index(token, "--physical-density=") == 1) then
-        if (len_trim(token) == len("--physical-density=")) &
-            call fail_usage("--physical-density requires a value")
-        call parse_real(token(len("--physical-density=") + 1:), &
-            "physical density", density)
-        if (density <= 0.0_dp) &
-            call fail_usage("physical density must be positive")
-        physical_mass = .true.
+        if (index(token, "--") /= 1) exit
+        if (trim(token) == "--inertia-only") then
+            if (inertia_only) call fail_usage("duplicate --inertia-only")
+            inertia_only = .true.
+        else if (index(token, "--physical-density=") == 1) then
+            if (physical_mass) call fail_usage("duplicate --physical-density")
+            if (len_trim(token) == len("--physical-density=")) &
+                call fail_usage("--physical-density requires a value")
+            call parse_real(token(len("--physical-density=") + 1:), &
+                "physical density", density)
+            if (density <= 0.0_dp) &
+                call fail_usage("physical density must be positive")
+            physical_mass = .true.
+        else if (index(token, "--m0-stored-power=") == 1) then
+            if (has_m0_power) call fail_usage("duplicate --m0-stored-power")
+            if (len_trim(token) == len("--m0-stored-power=")) &
+                call fail_usage("--m0-stored-power requires a value")
+            call parse_real(token(len("--m0-stored-power=") + 1:), &
+                "m=0 stored power", m0_stored_power)
+            if (m0_stored_power < 0.0_dp .or. m0_stored_power > 1.0_dp) &
+                call fail_usage("m=0 stored power must lie in [0,1]")
+            has_m0_power = .true.
+        else
+            call fail_usage("unknown option " // trim(token))
+        end if
         first_mode = first_mode + 1
-        if (arguments < first_mode) &
-            call fail_usage("--physical-density requires at least one mode")
-    end if
+    end do
+    if (arguments < first_mode) call fail_usage("at least one mode is required")
     allocate (mode_m(arguments - first_mode + 1), &
         mode_n(arguments - first_mode + 1), &
         stored_power(arguments - first_mode + 1), stat=allocation_status)
@@ -109,6 +121,8 @@ program gliss_compatible_marginality
         stored_power(mode) = 0.0_dp
         if (mode_m(mode) > 0) stored_power(mode) = &
             1.0_dp - 0.5_dp * real(mode_m(mode), dp)
+        if (mode_m(mode) == 0 .and. has_m0_power) &
+            stored_power(mode) = m0_stored_power
     end do
     call read_gvec_cas3d_file(trim(filename), equilibrium, info)
     if (info /= reader_ok) call fail_solver("reader", info)
@@ -143,11 +157,12 @@ program gliss_compatible_marginality
     inertia_negative_count = pivot_negative_count(stiffness, pivots)
     if (inertia_only) then
         write (*, "(a)") "degree,parity,unknowns,normal_unknowns," // &
-            "eta_unknowns,inertia_negative_count,physical_mass"
-        write (*, "(i0,6(a,i0))") degree, ",", parity, ",", &
+            "eta_unknowns,inertia_negative_count,physical_mass," // &
+            "m0_stored_power"
+        write (*, "(i0,6(a,i0),a,es24.16)") degree, ",", parity, ",", &
             size(stiffness, 1), ",", problem%normal_unknowns, ",", &
             problem%eta_unknowns, ",", inertia_negative_count, ",", &
-            merge(1, 0, physical_mass)
+            merge(1, 0, physical_mass), ",", m0_stored_power
         call terminate_process(0_c_int)
     end if
     deallocate (stiffness)
@@ -170,13 +185,13 @@ program gliss_compatible_marginality
     end do
     write (*, "(a)") "degree,parity,unknowns,normal_unknowns," // &
         "eta_unknowns,negative_count,inertia_negative_count,physical_mass," // &
-        "lowest_eigenvalue,residual,kinetic," // &
+        "m0_stored_power,lowest_eigenvalue,residual,kinetic," // &
         "potential,bending,shear,compression,drive"
-    write (*, "(i0, 7(a, i0), 8(a, es24.16))") degree, ",", parity, ",", &
+    write (*, "(i0, 7(a, i0), 9(a, es24.16))") degree, ",", parity, ",", &
         size(eigenvalues), ",", problem%normal_unknowns, ",", &
         problem%eta_unknowns, ",", negative_count, ",", &
         inertia_negative_count, ",", merge(1, 0, physical_mass), &
-        ",", eigenvalues(1), &
+        ",", m0_stored_power, ",", eigenvalues(1), &
         ",", residual, ",", kinetic, ",", potential, ",", term_energy(1), &
         ",", term_energy(2), ",", term_energy(3), ",", term_energy(4)
     write (*, "(a)") "eigenvalue_index,eigenvalue"
@@ -205,7 +220,8 @@ contains
             "gliss_compatible_marginality: " // trim(message)
         write (error_unit, "(a)") "usage: gliss_compatible_marginality " // &
             "EXPORT_FILE DEGREE NTHETA NZETA FLOOR PARITY " // &
-            "[--inertia-only] [--physical-density=VALUE] m,n [m,n ...]"
+            "[--inertia-only] [--physical-density=VALUE] " // &
+            "[--m0-stored-power=VALUE] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
 

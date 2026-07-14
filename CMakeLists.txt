@@ -461,6 +461,15 @@ if(BUILD_TESTING)
         gliss_compatible_marginality
         "gliss_compatible_marginality: --physical-density requires a value"
         missing.nc 2 8 8 1e-8 1 --physical-density=)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_m0_power
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: m=0 stored power must be finite"
+        missing.nc 2 8 8 1e-8 1 --m0-stored-power=nan 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_option
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --m0-stored-power"
+        missing.nc 2 8 8 1e-8 1 --m0-stored-power=0.5
+        --m0-stored-power=0.5 0,1)
     add_compatible_cli_rejection(compatible_trace_cli_missing
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: missing required arguments")
