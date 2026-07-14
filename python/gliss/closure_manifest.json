@@ -1,0 +1,377 @@
+{
+  "closures": [
+    {
+      "category": "equilibrium",
+      "evidence": [
+        {
+          "path": "test/test_gvec_cas3d_reader.f90",
+          "token": "reader_schema_error"
+        }
+      ],
+      "id": "gvec-cas3d-v1",
+      "implementations": [
+        "src/gvec_cas3d_reader.f90",
+        "src/gvec_cas3d_writer.f90"
+      ]
+    },
+    {
+      "category": "equilibrium",
+      "evidence": [
+        {
+          "path": "python/tests/test_vmec.py",
+          "token": "test_convert_vmec"
+        }
+      ],
+      "id": "vmec-symmetric",
+      "implementations": [
+        "python/gliss/vmec.py",
+        "python/gliss/_vmec_geometry.py"
+      ]
+    },
+    {
+      "category": "equilibrium",
+      "evidence": [
+        {
+          "path": "test/test_terpsichore_reduced_mass_adapter.f90",
+          "token": "terpsichore_matrix_fixture_ok"
+        }
+      ],
+      "id": "terpsichore-fort23",
+      "implementations": [
+        "src/terpsichore_matrix_fixture.f90"
+      ]
+    },
+    {
+      "category": "basis",
+      "evidence": [
+        {
+          "path": "test/test_radial_space_policy.f90",
+          "token": "normal_degree"
+        }
+      ],
+      "id": "cas3d-p1-p0-p0",
+      "implementations": [
+        "src/radial_space_policy.f90"
+      ]
+    },
+    {
+      "category": "basis",
+      "evidence": [
+        {
+          "path": "test/test_terpsichore_reduced_mass_family_assembly.f90",
+          "token": "reduced family normal boundary elimination is wrong"
+        }
+      ],
+      "id": "terpsichore-p1-p0",
+      "implementations": [
+        "src/terpsichore_reduced_layout.f90"
+      ]
+    },
+    {
+      "category": "topology",
+      "evidence": [
+        {
+          "path": "test/test_mode_topology.f90",
+          "token": "distinct families are coupled"
+        }
+      ],
+      "id": "stellarator-parity",
+      "implementations": [
+        "src/mode_topology.f90",
+        "src/trial_space_topology.f90"
+      ]
+    },
+    {
+      "category": "topology",
+      "evidence": [
+        {
+          "path": "test/test_two_component_spectrum.f90",
+          "token": "require_same_result"
+        }
+      ],
+      "id": "axisymmetric-family",
+      "implementations": [
+        "src/axisymmetric_spectrum.f90"
+      ]
+    },
+    {
+      "category": "topology",
+      "evidence": [
+        {
+          "path": "test/test_terpsichore_topology.f90",
+          "token": "PARFAC"
+        }
+      ],
+      "id": "terpsichore-mask",
+      "implementations": [
+        "src/terpsichore_topology.f90"
+      ]
+    },
+    {
+      "category": "physics",
+      "evidence": [
+        {
+          "path": "test/test_three_component_kernel.f90",
+          "token": "compressible_divergence"
+        }
+      ],
+      "id": "compressible-ideal-mhd",
+      "implementations": [
+        "src/three_component_kernel.f90"
+      ]
+    },
+    {
+      "category": "physics",
+      "evidence": [
+        {
+          "path": "test/test_two_component_kernel.f90",
+          "token": "two_component_density"
+        }
+      ],
+      "id": "incompressible-two-component",
+      "implementations": [
+        "src/two_component_kernel.f90"
+      ]
+    },
+    {
+      "category": "physics",
+      "evidence": [
+        {
+          "path": "test/test_terpsichore_noninteracting_stiffness.f90",
+          "token": "assemble_terpsichore_noninteracting_fixed_boundary_stiffness"
+        }
+      ],
+      "id": "terpsichore-modelk0",
+      "implementations": [
+        "src/terpsichore_noninteracting_stiffness.f90"
+      ]
+    },
+    {
+      "category": "assembly",
+      "evidence": [
+        {
+          "path": "test/test_family_assembly.f90",
+          "token": "family_negative_count"
+        }
+      ],
+      "id": "midpoint-block",
+      "implementations": [
+        "src/family_assembly.f90",
+        "src/compressible_stiffness_family_assembly.f90"
+      ]
+    },
+    {
+      "category": "assembly",
+      "evidence": [
+        {
+          "path": "test/test_terpsichore_reduced_mass_adapter.f90",
+          "token": "raw TERPSICHORE MODELK is wrong"
+        }
+      ],
+      "id": "terpsichore-preassembled",
+      "implementations": [
+        "src/terpsichore_matrix_fixture.f90"
+      ]
+    },
+    {
+      "category": "norm",
+      "evidence": [
+        {
+          "path": "test/test_physical_mass_assembly.f90",
+          "token": "positive"
+        }
+      ],
+      "id": "physical-kinetic",
+      "implementations": [
+        "src/physical_mass_family_assembly.f90"
+      ]
+    },
+    {
+      "category": "norm",
+      "evidence": [
+        {
+          "path": "test/test_two_component_spectrum.f90",
+          "token": "negative_count"
+        }
+      ],
+      "id": "artificial-marginality",
+      "implementations": [
+        "src/family_assembly.f90"
+      ]
+    },
+    {
+      "category": "norm",
+      "evidence": [
+        {
+          "path": "test/test_terpsichore_reduced_mass.f90",
+          "token": "assemble_terpsichore_reduced_mass_element"
+        }
+      ],
+      "id": "terpsichore-reduced",
+      "implementations": [
+        "src/terpsichore_reduced_mass.f90"
+      ]
+    },
+    {
+      "category": "boundary",
+      "evidence": [
+        {
+          "path": "test/test_dynamic_family_layout.f90",
+          "token": "edge normal coefficient was retained"
+        }
+      ],
+      "id": "fixed-edge",
+      "implementations": [
+        "src/dynamic_family_layout.f90"
+      ]
+    },
+    {
+      "category": "boundary",
+      "evidence": [
+        {
+          "path": "test/test_terpsichore_pseudoplasma_stiffness.f90",
+          "token": "add_terpsichore_pseudoplasma_schur"
+        }
+      ],
+      "id": "pseudoplasma-vacuum",
+      "implementations": [
+        "src/terpsichore_pseudoplasma_coupling.f90"
+      ]
+    },
+    {
+      "category": "solver",
+      "evidence": [
+        {
+          "path": "test/test_eigenvalue_tracking.f90",
+          "token": "certificate"
+        }
+      ],
+      "id": "certified-block-inertia",
+      "implementations": [
+        "src/eigenvalue_tracking.f90",
+        "src/variable_generalized_solver.f90"
+      ]
+    },
+    {
+      "category": "solver",
+      "evidence": [
+        {
+          "path": "test/test_fixed_boundary_spectrum.f90",
+          "token": "check_full_spectrum"
+        }
+      ],
+      "id": "dense-lapack-complete",
+      "implementations": [
+        "src/dense_spectrum_support.f90"
+      ]
+    },
+    {
+      "category": "derivative",
+      "evidence": [
+        {
+          "path": "python/tests/test_stability.py",
+          "token": "rayleigh_jvp_and_vjp"
+        }
+      ],
+      "id": "rayleigh-displacement",
+      "implementations": [
+        "python/gliss/derivatives.py"
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "closures": {
+        "assembly": "midpoint-block",
+        "basis": "cas3d-p1-p0-p0",
+        "boundary": "fixed-edge",
+        "derivative": "rayleigh-displacement",
+        "equilibrium": "gvec-cas3d-v1",
+        "norm": "physical-kinetic",
+        "physics": "compressible-ideal-mhd",
+        "solver": "certified-block-inertia",
+        "topology": "stellarator-parity"
+      },
+      "entrypoint": {
+        "path": "python/gliss/stability.py",
+        "token": "def solve_class"
+      },
+      "id": "physical-fixed-certified",
+      "interface": "python"
+    },
+    {
+      "closures": {
+        "assembly": "midpoint-block",
+        "basis": "cas3d-p1-p0-p0",
+        "boundary": "fixed-edge",
+        "derivative": "rayleigh-displacement",
+        "equilibrium": "vmec-symmetric",
+        "norm": "physical-kinetic",
+        "physics": "compressible-ideal-mhd",
+        "solver": "dense-lapack-complete",
+        "topology": "stellarator-parity"
+      },
+      "entrypoint": {
+        "path": "python/gliss/stability.py",
+        "token": "def solve_full_spectrum_class"
+      },
+      "id": "physical-fixed-dense-vmec",
+      "interface": "python"
+    },
+    {
+      "closures": {
+        "assembly": "midpoint-block",
+        "basis": "cas3d-p1-p0-p0",
+        "boundary": "fixed-edge",
+        "equilibrium": "gvec-cas3d-v1",
+        "norm": "artificial-marginality",
+        "physics": "incompressible-two-component",
+        "solver": "certified-block-inertia",
+        "topology": "axisymmetric-family"
+      },
+      "entrypoint": {
+        "path": "python/gliss/axisymmetric.py",
+        "token": "def solve_axisymmetric"
+      },
+      "id": "axisymmetric-marginality",
+      "interface": "python"
+    },
+    {
+      "closures": {
+        "assembly": "terpsichore-preassembled",
+        "basis": "terpsichore-p1-p0",
+        "boundary": "fixed-edge",
+        "equilibrium": "terpsichore-fort23",
+        "norm": "terpsichore-reduced",
+        "physics": "terpsichore-modelk0",
+        "solver": "certified-block-inertia",
+        "topology": "terpsichore-mask"
+      },
+      "entrypoint": {
+        "path": "python/gliss/terpsichore.py",
+        "token": "def solve_terpsichore_fixed_boundary"
+      },
+      "id": "terpsichore-fixed",
+      "interface": "python"
+    },
+    {
+      "closures": {
+        "assembly": "terpsichore-preassembled",
+        "basis": "terpsichore-p1-p0",
+        "boundary": "pseudoplasma-vacuum",
+        "equilibrium": "terpsichore-fort23",
+        "norm": "terpsichore-reduced",
+        "physics": "terpsichore-modelk0",
+        "solver": "certified-block-inertia",
+        "topology": "terpsichore-mask"
+      },
+      "entrypoint": {
+        "path": "app/gliss_terpsichore_eigen.f90",
+        "token": "add_terpsichore_pseudoplasma_schur"
+      },
+      "id": "terpsichore-pseudoplasma",
+      "interface": "native"
+    }
+  ],
+  "schema_version": 1
+}
