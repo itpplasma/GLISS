@@ -1,5 +1,6 @@
 program test_cartesian_harmonic_spline
-    use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, &
+        ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use cartesian_harmonic_spline, only: cartesian_harmonic_invalid, &
         cartesian_harmonic_ok, cartesian_harmonic_spline_t, &
@@ -13,6 +14,8 @@ program test_cartesian_harmonic_spline
     use primitive_geometry_grid, only: build_primitive_geometry_grid, &
         primitive_geometry_grid_invalid, primitive_geometry_grid_ok, &
         primitive_geometry_grid_t
+    use primitive_kernel_geometry, only: evaluate_primitive_kernel_surface, &
+        primitive_kernel_ok
     use radial_cubic_spline, only: build_radial_cubic_spline_grid, &
         radial_cubic_spline_grid_t, radial_cubic_spline_ok
     implicit none
@@ -117,13 +120,14 @@ contains
         real(dp), parameter :: phi_slope = 7.0_dp, chi_slope = -3.0_dp
         integer, parameter :: periods = 5
         real(dp) :: b_theta, b_zeta, expected_j, expected_js, expected_jt
-        real(dp) :: expected_metric(3, 3), expected_second(2, 2)
-        real(dp) :: expected_covariant(2), expected_b
+        real(dp) :: expected_metric(3, 3), expected_metric_s(3, 3)
+        real(dp) :: expected_second(2, 2), expected_covariant(2)
+        real(dp) :: expected_b, expected_b_s(2), expected_covariant_s(2)
         real(dp) :: angle, radius, surface_radius, two_pi
         integer :: j, k, status
 
         call build_primitive_geometry_grid(torus_jet, periods, phi_slope, &
-            chi_slope, geometry, status)
+            chi_slope, geometry, status, 0.0_dp, 0.0_dp)
         call require(status == primitive_geometry_grid_ok, &
             "primitive geometry grid failed")
         two_pi = 2.0_dp * acos(-1.0_dp)
@@ -136,6 +140,13 @@ contains
                 expected_metric(1, 1) = minor_radius**2 / (4.0_dp * query_s)
                 expected_metric(2, 2) = (two_pi * radius)**2
                 expected_metric(3, 3) = (two_pi * surface_radius)**2
+                expected_metric_s = 0.0_dp
+                expected_metric_s(1, 1) = &
+                    -minor_radius**2 / (4.0_dp * query_s**2)
+                expected_metric_s(2, 2) = (two_pi * minor_radius)**2
+                expected_metric_s(3, 3) = 4.0_dp * acos(-1.0_dp)**2 &
+                    * surface_radius * minor_radius * cos(angle) &
+                    / sqrt(query_s)
                 expected_j = -2.0_dp * acos(-1.0_dp)**2 &
                     * minor_radius**2 * surface_radius
                 expected_js = -acos(-1.0_dp)**2 * minor_radius**3 &
@@ -146,6 +157,12 @@ contains
                 b_zeta = -phi_slope / expected_j
                 expected_covariant = [expected_metric(2, 2) * b_theta, &
                     expected_metric(3, 3) * b_zeta]
+                expected_b_s = -[b_theta, b_zeta] * expected_js / expected_j
+                expected_covariant_s = [ &
+                    expected_metric_s(2, 2) * b_theta &
+                    + expected_metric(2, 2) * expected_b_s(1), &
+                    expected_metric_s(3, 3) * b_zeta &
+                    + expected_metric(3, 3) * expected_b_s(2)]
                 expected_b = sqrt(b_theta * expected_covariant(1) &
                     + b_zeta * expected_covariant(2))
                 expected_second = 0.0_dp
@@ -154,6 +171,8 @@ contains
                     * cos(angle)
                 call require(close_matrix(geometry%metric(j, k, :, :), &
                     expected_metric), "torus metric differs")
+                call require(close_matrix(geometry%metric_radial(j, k, :, :), &
+                    expected_metric_s), "torus radial metric differs")
                 call require(close_scalar(geometry%signed_jacobian(j, k), &
                     expected_j), "torus signed Jacobian differs")
                 call require(close_scalar(geometry%jacobian_s(j, k), &
@@ -165,6 +184,13 @@ contains
                     [b_theta, b_zeta]), "torus contravariant field differs")
                 call require(close_vector(geometry%b_covariant(j, k, :), &
                     expected_covariant), "torus covariant field differs")
+                call require(close_vector( &
+                    geometry%b_contravariant_radial(j, k, :), &
+                    expected_b_s), "torus radial contravariant field differs")
+                call require(close_vector( &
+                    geometry%b_covariant_radial(j, k, :), &
+                    expected_covariant_s), &
+                    "torus radial covariant field differs")
                 call require(close_scalar(geometry%mod_b(j, k), expected_b), &
                     "torus magnetic magnitude differs")
                 call require(close_matrix(geometry%second_form(j, k, :, :), &
@@ -203,6 +229,7 @@ contains
         type(gvec_cas3d_equilibrium_t) :: equilibrium
         type(primitive_equilibrium_spline_t) :: equilibrium_spline
         type(primitive_geometry_grid_t) :: actual, reference
+        real(dp), allocatable :: kernel_fields(:, :, :), kernel_drive(:, :)
         real(dp) :: pressure, pressure_slope
         integer :: status
 
@@ -225,7 +252,7 @@ contains
         call require(status == primitive_equilibrium_ok, &
             "primitive equilibrium evaluation failed")
         call build_primitive_geometry_grid(reference_jet, 5, 7.0_dp, &
-            -3.0_dp, reference, status)
+            -3.0_dp, reference, status, 0.0_dp, 0.0_dp)
         call require(close_rank4(actual%metric, reference%metric) &
             .and. close_rank2(actual%signed_jacobian, &
             reference%signed_jacobian) &
@@ -234,15 +261,37 @@ contains
             reference%jacobian_theta) &
             .and. close_rank2(actual%jacobian_zeta, &
             reference%jacobian_zeta) &
+            .and. close_rank4(actual%metric_radial, &
+            reference%metric_radial) &
             .and. close_rank3(actual%b_contravariant, &
             reference%b_contravariant) &
+            .and. close_rank3(actual%b_contravariant_radial, &
+            reference%b_contravariant_radial) &
             .and. close_rank3(actual%b_covariant, reference%b_covariant) &
+            .and. close_rank3(actual%b_covariant_radial, &
+            reference%b_covariant_radial) &
             .and. close_rank2(actual%mod_b, reference%mod_b) &
             .and. close_rank4(actual%second_form, reference%second_form), &
             "equilibrium composition changed primitive geometry")
         call require(close_scalar(pressure, 409.6_dp) &
             .and. close_scalar(pressure_slope, -1280.0_dp), &
             "equilibrium pressure jet differs")
+        call evaluate_primitive_kernel_surface(equilibrium_spline, query_s, &
+            theta, zeta, kernel_fields, kernel_drive, status)
+        call require(status == primitive_kernel_ok, &
+            "primitive kernel composition failed")
+        call require(all(ieee_is_finite(kernel_fields)) &
+            .and. all(ieee_is_finite(kernel_drive)), &
+            "primitive kernel composition is nonfinite")
+        call require(all(close_scalar(kernel_fields(:, :, 1), -7.0_dp)) &
+            .and. all(close_scalar(kernel_fields(:, :, 2), 0.6_dp)) &
+            .and. all(close_scalar(kernel_fields(:, :, 3), 0.0_dp)) &
+            .and. all(close_scalar(kernel_fields(:, :, 4), 0.0_dp)), &
+            "primitive kernel flux profiles differ")
+        call require(close_rank2(kernel_fields(:, :, 7), &
+            reference%signed_jacobian) &
+            .and. close_rank2(kernel_fields(:, :, 8), reference%mod_b), &
+            "primitive kernel geometry differs")
         equilibrium%winding = 1
         call fit_primitive_equilibrium(equilibrium, equilibrium_spline, status)
         call require(status == primitive_equilibrium_invalid, &

@@ -31,6 +31,9 @@
 - Evaluate variable-block residual norms with scaled compensated reductions and
   report their operation-count roundoff bound without the former naive
   dimension-linear norm estimate.
+- Reconstruct radial metric and magnetic-field derivatives from primitive
+  Cartesian jets and use the same checked kernel-field builder for exported
+  and spline-evaluated surfaces.
 
 ## 0.0.1 - 2026-07-13
 

@@ -106,7 +106,7 @@ contains
             spline%profiles, coordinate, profiles, slopes, seconds, local_info)
         if (local_info /= radial_cubic_spline_ok) return
         call build_primitive_geometry_grid(jet, spline%field_periods, &
-            slopes(1), slopes(2), geometry, local_info)
+            slopes(1), slopes(2), geometry, local_info, seconds(1), seconds(2))
         if (local_info == primitive_geometry_grid_allocation_error) then
             info = primitive_equilibrium_allocation_error
             geometry = primitive_geometry_grid_t()

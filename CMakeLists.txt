@@ -103,6 +103,7 @@ add_library(gliss
     src/axisymmetric_spectrum.f90
     src/field_profile_identities.f90
     src/export_surface_geometry.f90
+    src/primitive_kernel_geometry.f90
     src/mercier_diagnostic.f90
     src/radial_bspline_basis.f90
     src/symmetric_eigensolver.f90)

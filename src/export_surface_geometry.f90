@@ -35,11 +35,13 @@ module export_surface_geometry
 
     public :: build_angular_grids
     public :: build_kernel_geometry
+    public :: build_surface_kernel_fields
     public :: beta_from_positions
     public :: differentiate_pair
     public :: grid_mean
     public :: load_surface
     public :: solve_beta_derivatives
+    public :: solve_beta_derivatives_modes
     public :: surface_derivatives
     public :: surface_values
     public :: validate_tangential_metric
@@ -197,6 +199,57 @@ contains
             .and. all(determinant > 0.0_dp)
     end function tangential_metric_is_positive
 
+    function kernel_surface_inputs_are_valid(poloidal_modes, toroidal_modes, &
+            surface, jacobian_slope, theta, zeta, fields, drive) result(valid)
+        integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
+        type(surface_data_t), intent(in) :: surface
+        real(dp), intent(in) :: jacobian_slope(:, :), theta(:), zeta(:)
+        real(dp), intent(in) :: fields(:, :, :), drive(:, :)
+        logical :: valid
+        integer :: expected(2)
+
+        valid = size(poloidal_modes) > 0 .and. size(toroidal_modes) > 0
+        if (.not. valid) return
+        valid = size(theta) > 0 .and. size(zeta) > 0
+        if (.not. valid) return
+        valid = all(ieee_is_finite(theta)) .and. all(ieee_is_finite(zeta))
+        if (.not. valid) return
+        expected = [size(theta), size(zeta)]
+        valid = all(shape(jacobian_slope) == expected) &
+            .and. all(shape(drive) == expected) &
+            .and. all(shape(fields) == [expected, 13])
+        if (.not. valid) return
+        valid = allocated(surface%jacobian) .and. allocated(surface%g_tt) &
+            .and. allocated(surface%g_tz) .and. allocated(surface%g_zz) &
+            .and. allocated(surface%b_theta) .and. allocated(surface%b_zeta) &
+            .and. allocated(surface%g_st) .and. allocated(surface%g_sz) &
+            .and. allocated(surface%mod_b)
+        if (.not. valid) return
+        valid = all(shape(surface%jacobian) == expected) &
+            .and. all(shape(surface%g_tt) == expected) &
+            .and. all(shape(surface%g_tz) == expected) &
+            .and. all(shape(surface%g_zz) == expected) &
+            .and. all(shape(surface%b_theta) == expected) &
+            .and. all(shape(surface%b_zeta) == expected) &
+            .and. all(shape(surface%g_st) == expected) &
+            .and. all(shape(surface%g_sz) == expected) &
+            .and. all(shape(surface%mod_b) == expected)
+        if (.not. valid) return
+        valid = all(ieee_is_finite(jacobian_slope)) &
+            .and. all(ieee_is_finite(surface%jacobian)) &
+            .and. all(ieee_is_finite(surface%g_tt)) &
+            .and. all(ieee_is_finite(surface%g_tz)) &
+            .and. all(ieee_is_finite(surface%g_zz)) &
+            .and. all(ieee_is_finite(surface%b_theta)) &
+            .and. all(ieee_is_finite(surface%b_zeta)) &
+            .and. all(ieee_is_finite(surface%g_st)) &
+            .and. all(ieee_is_finite(surface%g_sz)) &
+            .and. all(ieee_is_finite(surface%mod_b))
+        if (.not. valid) return
+        valid = all(surface%jacobian /= 0.0_dp) &
+            .and. all(surface%mod_b > 0.0_dp)
+    end function kernel_surface_inputs_are_valid
+
     subroutine fill_surface_fields(equilibrium, surface, profiles, &
             jacobian_slope, i, theta, zeta, fields, drive, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
@@ -208,17 +261,10 @@ contains
         real(dp), intent(out) :: fields(:, :, :)
         real(dp), intent(out) :: drive(:, :)
         integer, intent(out) :: info
-        real(dp), allocatable :: beta_values(:, :), beta_theta(:, :)
-        real(dp), allocatable :: beta_zeta(:, :), jac_slope_grid(:, :)
+        real(dp), allocatable :: jac_slope_grid(:, :)
         real(dp), allocatable :: discard_a(:, :), discard_b(:, :)
-        real(dp), allocatable :: grad_s2(:, :)
         integer :: rec_info
 
-        call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
-            profiles%covariant_theta_slope, &
-            profiles%covariant_zeta_slope, profiles%pressure_slope, &
-            profiles%poloidal_slope, profiles%flux_slope, beta_values, &
-            beta_theta, beta_zeta)
         call reconstruct_harmonic_grid(jacobian_slope, i, &
             equilibrium%poloidal_modes, equilibrium%toroidal_modes, &
             theta, zeta, jac_slope_grid, discard_a, discard_b, rec_info)
@@ -226,6 +272,36 @@ contains
             info = mercier_reconstruction_error
             return
         end if
+        call build_surface_kernel_fields(equilibrium%poloidal_modes, &
+            equilibrium%toroidal_modes, equilibrium%has_chart_metric, &
+            surface, profiles, jac_slope_grid, theta, zeta, fields, drive, &
+            info)
+    end subroutine fill_surface_fields
+
+    subroutine build_surface_kernel_fields(poloidal_modes, toroidal_modes, &
+            has_chart_metric, surface, profiles, jacobian_slope, theta, zeta, &
+            fields, drive, info)
+        integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
+        logical, intent(in) :: has_chart_metric
+        type(surface_data_t), intent(in) :: surface
+        type(surface_profiles_t), intent(in) :: profiles
+        real(dp), intent(in) :: jacobian_slope(:, :), theta(:), zeta(:)
+        real(dp), intent(out) :: fields(:, :, :), drive(:, :)
+        integer, intent(out) :: info
+        real(dp), allocatable :: beta_values(:, :), beta_theta(:, :)
+        real(dp), allocatable :: beta_zeta(:, :), grad_s2(:, :)
+
+        info = mercier_invalid_input
+        if (.not. kernel_surface_inputs_are_valid(poloidal_modes, &
+            toroidal_modes, surface, jacobian_slope, theta, zeta, fields, &
+            drive)) return
+        if (.not. surface_profiles_are_finite(profiles)) return
+        call solve_beta_derivatives_modes(poloidal_modes, toroidal_modes, &
+            surface, theta, zeta, profiles%covariant_theta_slope, &
+            profiles%covariant_zeta_slope, profiles%pressure_slope, &
+            profiles%poloidal_slope, profiles%flux_slope, beta_values, &
+            beta_theta, beta_zeta, info=info)
+        if (info /= mercier_ok) return
         fields(:, :, 1) = profiles%flux_slope
         fields(:, :, 2) = profiles%poloidal_slope
         fields(:, :, 3) = profiles%flux_curvature
@@ -247,7 +323,7 @@ contains
             + (profiles%covariant_theta_slope - beta_theta) &
             * profiles%covariant_zeta) / surface%jacobian
         fields(:, :, 11) = mu0 * profiles%pressure_slope
-        if (equilibrium%has_chart_metric) then
+        if (has_chart_metric) then
             fields(:, :, 12) = ((surface%g_tz * surface%b_theta &
                 + surface%g_zz * surface%b_zeta) * surface%g_st &
                 - (surface%g_tt * surface%b_theta &
@@ -271,23 +347,40 @@ contains
             - profiles%flux_curvature * beta_zeta &
             - profiles%poloidal_curvature * beta_theta) &
             / surface%jacobian &
-            - mu0 * profiles%pressure_slope * jac_slope_grid &
+            - mu0 * profiles%pressure_slope * jacobian_slope &
             / surface%jacobian
         info = mercier_ok
-        if (equilibrium%has_chart_metric) then
-            call add_drive_chart_term(equilibrium, surface, theta, zeta, &
+        if (has_chart_metric) then
+            call add_drive_chart_term(poloidal_modes, toroidal_modes, &
+                surface, theta, zeta, &
                 profiles%covariant_theta_slope, &
                 profiles%covariant_zeta_slope, beta_theta, beta_zeta, &
                 profiles%poloidal_slope, profiles%flux_slope, drive, &
                 info)
         end if
-    end subroutine fill_surface_fields
+    end subroutine build_surface_kernel_fields
 
-    subroutine add_drive_chart_term(equilibrium, surface, theta, zeta, &
+    pure function surface_profiles_are_finite(profiles) result(finite)
+        type(surface_profiles_t), intent(in) :: profiles
+        logical :: finite
+
+        finite = ieee_is_finite(profiles%flux_slope) &
+            .and. ieee_is_finite(profiles%poloidal_slope) &
+            .and. ieee_is_finite(profiles%flux_curvature) &
+            .and. ieee_is_finite(profiles%poloidal_curvature) &
+            .and. ieee_is_finite(profiles%covariant_theta) &
+            .and. ieee_is_finite(profiles%covariant_zeta) &
+            .and. ieee_is_finite(profiles%covariant_theta_slope) &
+            .and. ieee_is_finite(profiles%covariant_zeta_slope) &
+            .and. ieee_is_finite(profiles%pressure_slope)
+    end function surface_profiles_are_finite
+
+    subroutine add_drive_chart_term(poloidal_modes, toroidal_modes, surface, &
+            theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, beta_theta, &
             beta_zeta, poloidal_flux_slope, toroidal_flux_slope, drive, &
             info)
-        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
         real(dp), intent(in) :: covariant_theta_slope, covariant_zeta_slope
@@ -300,10 +393,8 @@ contains
         real(dp), allocatable :: upper_ts(:, :), upper_zs(:, :)
         real(dp), allocatable :: operand_values(:, :)
         real(dp), allocatable :: operand_theta(:, :), operand_zeta(:, :)
-        real(dp) :: operand_cosine(size(equilibrium%poloidal_modes), &
-            size(equilibrium%toroidal_modes))
-        real(dp) :: operand_sine(size(equilibrium%poloidal_modes), &
-            size(equilibrium%toroidal_modes))
+        real(dp) :: operand_cosine(size(poloidal_modes), size(toroidal_modes))
+        real(dp) :: operand_sine(size(poloidal_modes), size(toroidal_modes))
         integer :: rec_info
 
         upper_ts = (surface%g_sz * surface%g_tz &
@@ -319,8 +410,8 @@ contains
         end if
         operand = ((covariant_theta_slope - beta_theta) * upper_ts &
             - (beta_zeta - covariant_zeta_slope) * upper_zs) / grad_s2
-        call project_harmonic_grid(operand, equilibrium%poloidal_modes, &
-            equilibrium%toroidal_modes, theta, zeta, operand_cosine, &
+        call project_harmonic_grid(operand, poloidal_modes, toroidal_modes, &
+            theta, zeta, operand_cosine, &
             operand_sine)
         allocate (operand_pair%cosine(1, size(operand_cosine, 1), &
             size(operand_cosine, 2)))
@@ -329,7 +420,7 @@ contains
         operand_pair%cosine(1, :, :) = operand_cosine
         operand_pair%sine(1, :, :) = operand_sine
         call reconstruct_harmonic_grid(operand_pair, 1, &
-            equilibrium%poloidal_modes, equilibrium%toroidal_modes, &
+            poloidal_modes, toroidal_modes, &
             theta, zeta, operand_values, operand_theta, operand_zeta, &
             rec_info)
         if (rec_info /= reconstruction_ok) then
@@ -414,29 +505,59 @@ contains
         real(dp), allocatable, intent(out) :: beta_zeta(:, :)
         type(harmonic_pair_t), intent(out), optional :: beta_harmonics
         type(harmonic_pair_t) :: beta_pair
-        real(dp), allocatable :: rhs(:, :)
-        real(dp) :: rhs_cosine(size(equilibrium%poloidal_modes), &
-            size(equilibrium%toroidal_modes))
-        real(dp) :: rhs_sine(size(equilibrium%poloidal_modes), &
-            size(equilibrium%toroidal_modes))
-        real(dp) :: denominator, scale
-        integer :: mode_m, mode_n, rec_info
 
+        call solve_beta_derivatives_modes(equilibrium%poloidal_modes, &
+            equilibrium%toroidal_modes, surface, theta, zeta, &
+            covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
+            poloidal_flux_slope, toroidal_flux_slope, beta_values, &
+            beta_theta, beta_zeta, beta_pair)
+        if (present(beta_harmonics)) beta_harmonics = beta_pair
+    end subroutine solve_beta_derivatives
+
+    subroutine solve_beta_derivatives_modes(poloidal_modes, toroidal_modes, &
+            surface, theta, zeta, covariant_theta_slope, &
+            covariant_zeta_slope, pressure_slope, poloidal_flux_slope, &
+            toroidal_flux_slope, beta_values, beta_theta, beta_zeta, &
+            beta_harmonics, info)
+        integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
+        type(surface_data_t), intent(in) :: surface
+        real(dp), intent(in) :: theta(:), zeta(:)
+        real(dp), intent(in) :: covariant_theta_slope, covariant_zeta_slope
+        real(dp), intent(in) :: pressure_slope, poloidal_flux_slope
+        real(dp), intent(in) :: toroidal_flux_slope
+        real(dp), allocatable, intent(out) :: beta_values(:, :)
+        real(dp), allocatable, intent(out) :: beta_theta(:, :)
+        real(dp), allocatable, intent(out) :: beta_zeta(:, :)
+        type(harmonic_pair_t), intent(out), optional :: beta_harmonics
+        integer, intent(out), optional :: info
+        type(harmonic_pair_t) :: beta_pair
+        real(dp), allocatable :: rhs(:, :)
+        real(dp) :: rhs_cosine(size(poloidal_modes), size(toroidal_modes))
+        real(dp) :: rhs_sine(size(poloidal_modes), size(toroidal_modes))
+        real(dp) :: denominator, scale
+        integer :: allocation_status, mode_m, mode_n, rec_info
+
+        if (present(info)) info = mercier_invalid_input
+        if (size(poloidal_modes) < 1 .or. size(toroidal_modes) < 1) return
+        if (size(theta) < 1 .or. size(zeta) < 1) return
+        if (.not. all(ieee_is_finite(theta)) &
+            .or. .not. all(ieee_is_finite(zeta))) return
         rhs = surface%jacobian * (mu0 * pressure_slope &
             + covariant_zeta_slope * surface%b_zeta &
             + covariant_theta_slope * surface%b_theta)
-        call project_harmonic_grid(rhs, equilibrium%poloidal_modes, &
-            equilibrium%toroidal_modes, theta, zeta, rhs_cosine, rhs_sine)
+        call project_harmonic_grid(rhs, poloidal_modes, toroidal_modes, theta, &
+            zeta, rhs_cosine, rhs_sine)
         allocate (beta_pair%cosine(1, size(rhs_cosine, 1), &
-            size(rhs_cosine, 2)))
-        allocate (beta_pair%sine(1, size(rhs_sine, 1), size(rhs_sine, 2)))
+            size(rhs_cosine, 2)), beta_pair%sine(1, size(rhs_sine, 1), &
+            size(rhs_sine, 2)), stat=allocation_status)
+        if (allocation_status /= 0) return
         scale = abs(toroidal_flux_slope) + abs(poloidal_flux_slope)
-        do mode_n = 1, size(equilibrium%toroidal_modes)
-            do mode_m = 1, size(equilibrium%poloidal_modes)
+        do mode_n = 1, size(toroidal_modes)
+            do mode_m = 1, size(poloidal_modes)
                 denominator = two_pi * (real( &
-                    equilibrium%poloidal_modes(mode_m), dp) &
+                    poloidal_modes(mode_m), dp) &
                     * poloidal_flux_slope - real( &
-                    equilibrium%toroidal_modes(mode_n), dp) &
+                    toroidal_modes(mode_n), dp) &
                     * toroidal_flux_slope)
                 if (abs(denominator) < 1.0e-10_dp * scale) then
                     beta_pair%cosine(1, mode_m, mode_n) = 0.0_dp
@@ -450,10 +571,12 @@ contains
             end do
         end do
         call reconstruct_harmonic_grid(beta_pair, 1, &
-            equilibrium%poloidal_modes, equilibrium%toroidal_modes, theta, &
-            zeta, beta_values, beta_theta, beta_zeta, rec_info)
+            poloidal_modes, toroidal_modes, theta, zeta, beta_values, &
+            beta_theta, beta_zeta, rec_info)
+        if (rec_info /= reconstruction_ok) return
         if (present(beta_harmonics)) beta_harmonics = beta_pair
-    end subroutine solve_beta_derivatives
+        if (present(info)) info = mercier_ok
+    end subroutine solve_beta_derivatives_modes
 
     pure subroutine differentiate_pair(s, pair, slope_pair)
         real(dp), intent(in) :: s(:)
