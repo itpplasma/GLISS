@@ -18,6 +18,10 @@ program gliss_compatible_operator_trace
         "flux_t_slope", "flux_p_slope", "flux_t_curve", "flux_p_curve", &
         "current_i", "current_j", "signed_sqrtg", "mod_b", "grad_s2", &
         "j_dot_b", "pressure_slope", "sigma_tilde", "beta_tilde", "drive"]
+    integer, parameter :: selected_cell_count = 8
+    integer, parameter :: q1_selection_rank = 4
+    real(dp), parameter :: target_poloidal_radii(7) = [ &
+        0.10_dp, 0.25_dp, 0.40_dp, 0.55_dp, 0.70_dp, 0.85_dp, 0.95_dp]
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(compatible_two_component_problem_t) :: problem
     type(compatible_cell_trace_t), allocatable :: traces(:)
@@ -26,9 +30,9 @@ program gliss_compatible_operator_trace
     character(len=1024) :: filename
     integer, allocatable :: mode_m(:), mode_n(:), selected_cells(:)
     real(dp), allocatable :: profile_values(:, :), stored_power(:)
-    real(dp) :: edge_profiles(3), edge_seconds(3), edge_slopes(3)
+    real(dp) :: edge_profiles(3), edge_seconds(3), edge_slopes(3), q1_distance
     integer :: allocation_status, arguments, degree, info, n_theta, n_zeta
-    integer :: parity, q1_index
+    integer :: parity, profile_index, q1_index
 
     interface
         subroutine terminate_process(status) bind(C, name="exit")
@@ -41,12 +45,16 @@ program gliss_compatible_operator_trace
         mode_n, stored_power)
     call read_gvec_cas3d_file(trim(filename), equilibrium, info)
     if (info /= reader_ok) call fail("reader", info)
-    q1_index = minloc(abs(equilibrium%rotational_transform - 1.0_dp), dim=1)
-    call select_cells(size(equilibrium%s), q1_index, selected_cells)
-    call build_compatible_two_component_problem(equilibrium, mode_m, mode_n, &
-        stored_power, parity, degree, n_theta, n_zeta, problem, info, &
-        selected_cells, traces)
-    if (info /= compatible_problem_ok) call fail("operator assembly", info)
+    q1_index = 1
+    q1_distance = abs(equilibrium%rotational_transform(1) - 1.0_dp)
+    do profile_index = 2, size(equilibrium%rotational_transform)
+        if (abs(equilibrium%rotational_transform(profile_index) - 1.0_dp) < &
+            q1_distance) then
+            q1_index = profile_index
+            q1_distance = abs( &
+                equilibrium%rotational_transform(profile_index) - 1.0_dp)
+        end if
+    end do
     allocate (profile_values(size(equilibrium%s), 3), stat=allocation_status)
     if (allocation_status /= 0) call fail("profile allocation", -1)
     profile_values(:, 1) = equilibrium%toroidal_flux
@@ -62,6 +70,11 @@ program gliss_compatible_operator_trace
         1.0_dp, edge_profiles, edge_slopes, edge_seconds, info)
     if (info /= radial_cubic_spline_ok) call fail("edge profiles", info)
     if (edge_profiles(2) == 0.0_dp) call fail("zero edge poloidal flux", -1)
+    call select_cells(size(equilibrium%s), q1_index, selected_cells)
+    call build_compatible_two_component_problem(equilibrium, mode_m, mode_n, &
+        stored_power, parity, degree, n_theta, n_zeta, problem, info, &
+        selected_cells, traces)
+    if (info /= compatible_problem_ok) call fail("operator assembly", info)
     call write_trace(q1_index)
     call write_compatible_operator_geometry(equilibrium, traces, n_theta, &
         n_zeta, info)
@@ -334,32 +347,43 @@ contains
     subroutine select_cells(intervals, q1_cell, cells)
         integer, intent(in) :: intervals, q1_cell
         integer, allocatable, intent(out) :: cells(:)
-        integer :: allocation_status, candidates(3), count, candidate, previous
-        logical :: repeated
+        integer :: allocation_status, cell, previous, rank, target
+        real(dp) :: distance, nearest_distance
+        logical :: used
 
-        candidates = [1, q1_cell, intervals]
-        count = 0
-        do candidate = 1, size(candidates)
-            repeated = .false.
-            do previous = 1, candidate - 1
-                if (candidates(previous) == candidates(candidate)) &
-                    repeated = .true.
-            end do
-            if (repeated) cycle
-            count = count + 1
-        end do
-        allocate (cells(count), stat=allocation_status)
+        if (intervals < selected_cell_count) &
+            call fail("operator trace requires at least eight radial cells", intervals)
+        if (q1_cell < 1 .or. q1_cell > intervals) &
+            call fail("q=1 trace cell is out of bounds", q1_cell)
+        allocate (cells(selected_cell_count), stat=allocation_status)
         if (allocation_status /= 0) call fail("cell selection allocation", -1)
-        count = 0
-        do candidate = 1, size(candidates)
-            repeated = .false.
-            do previous = 1, candidate - 1
-                if (candidates(previous) == candidates(candidate)) &
-                    repeated = .true.
+        cells = 0
+        cells(q1_selection_rank) = q1_cell
+        target = 0
+        do rank = 1, selected_cell_count
+            if (rank == q1_selection_rank) cycle
+            target = target + 1
+            nearest_distance = huge(0.0_dp)
+            do cell = 1, intervals
+                used = .false.
+                do previous = 1, selected_cell_count
+                    if (cells(previous) == cell) used = .true.
+                end do
+                if (used) cycle
+                distance = abs(poloidal_radius( &
+                    equilibrium%poloidal_flux(cell)) - &
+                    target_poloidal_radii(target))
+                if (distance < nearest_distance) then
+                    nearest_distance = distance
+                    cells(rank) = cell
+                end if
             end do
-            if (repeated) cycle
-            count = count + 1
-            cells(count) = candidates(candidate)
+            if (cells(rank) == 0) call fail("radial trace-cell selection", rank)
+        end do
+        do rank = 2, selected_cell_count
+            if (cells(rank) <= cells(rank - 1)) call fail( &
+                "q=1 radius must lie between trace targets 0.40 and 0.55", &
+                q1_cell)
         end do
     end subroutine select_cells
 
