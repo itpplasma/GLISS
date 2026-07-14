@@ -55,6 +55,7 @@ add_library(gliss
     src/cartesian_harmonic_spline.f90
     src/cartesian_primitive_geometry.f90
     src/primitive_geometry_grid.f90
+    src/primitive_equilibrium_spline.f90
     src/radial_feec_complex.f90
     src/radial_space_policy.f90
     src/perpendicular_kinetic_kernel.f90

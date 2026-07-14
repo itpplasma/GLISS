@@ -5,7 +5,11 @@ program test_cartesian_harmonic_spline
         cartesian_harmonic_ok, cartesian_harmonic_spline_t, &
         cartesian_jet_grid_t, evaluate_cartesian_harmonic_spline, &
         fit_cartesian_harmonic_spline
-    use gvec_cas3d_types, only: harmonic_pair_t
+    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
+        radial_grid_half
+    use primitive_equilibrium_spline, only: evaluate_primitive_equilibrium, &
+        fit_primitive_equilibrium, primitive_equilibrium_invalid, &
+        primitive_equilibrium_ok, primitive_equilibrium_spline_t
     use primitive_geometry_grid, only: build_primitive_geometry_grid, &
         primitive_geometry_grid_invalid, primitive_geometry_grid_ok, &
         primitive_geometry_grid_t
@@ -40,6 +44,7 @@ program test_cartesian_harmonic_spline
     call check_manufactured_torus(jet)
     call check_geometry_grid(jet)
     call check_geometry_failures(jet)
+    call check_equilibrium_spline(jet, x, y, z)
     call check_invalid_inputs(grid, x, y, z, spline)
     write (*, "(a)") "PASS"
 
@@ -192,6 +197,64 @@ contains
             "failed geometry grid retained output")
     end subroutine check_geometry_failures
 
+    subroutine check_equilibrium_spline(reference_jet, x_pair, y_pair, z_pair)
+        type(cartesian_jet_grid_t), intent(in) :: reference_jet
+        type(harmonic_pair_t), intent(in) :: x_pair, y_pair, z_pair
+        type(gvec_cas3d_equilibrium_t) :: equilibrium
+        type(primitive_equilibrium_spline_t) :: equilibrium_spline
+        type(primitive_geometry_grid_t) :: actual, reference
+        real(dp) :: pressure, pressure_slope
+        integer :: status
+
+        equilibrium%radial_grid = radial_grid_half
+        equilibrium%field_periods = 5
+        equilibrium%s = nodes
+        equilibrium%poloidal_modes = modes_m
+        equilibrium%toroidal_modes = modes_n
+        equilibrium%toroidal_flux = 2.0_dp + 7.0_dp * nodes
+        equilibrium%poloidal_flux = -1.0_dp - 3.0_dp * nodes
+        equilibrium%pressure = 1000.0_dp * (1.0_dp - nodes)**2
+        equilibrium%xhat = x_pair
+        equilibrium%yhat = y_pair
+        equilibrium%zhat = z_pair
+        call fit_primitive_equilibrium(equilibrium, equilibrium_spline, status)
+        call require(status == primitive_equilibrium_ok, &
+            "primitive equilibrium fit failed")
+        call evaluate_primitive_equilibrium(equilibrium_spline, query_s, &
+            theta, zeta, actual, pressure, pressure_slope, status)
+        call require(status == primitive_equilibrium_ok, &
+            "primitive equilibrium evaluation failed")
+        call build_primitive_geometry_grid(reference_jet, 5, 7.0_dp, &
+            -3.0_dp, reference, status)
+        call require(close_rank4(actual%metric, reference%metric) &
+            .and. close_rank2(actual%signed_jacobian, &
+            reference%signed_jacobian) &
+            .and. close_rank2(actual%jacobian_s, reference%jacobian_s) &
+            .and. close_rank2(actual%jacobian_theta, &
+            reference%jacobian_theta) &
+            .and. close_rank2(actual%jacobian_zeta, &
+            reference%jacobian_zeta) &
+            .and. close_rank3(actual%b_contravariant, &
+            reference%b_contravariant) &
+            .and. close_rank3(actual%b_covariant, reference%b_covariant) &
+            .and. close_rank2(actual%mod_b, reference%mod_b) &
+            .and. close_rank4(actual%second_form, reference%second_form), &
+            "equilibrium composition changed primitive geometry")
+        call require(close_scalar(pressure, 409.6_dp) &
+            .and. close_scalar(pressure_slope, -1280.0_dp), &
+            "equilibrium pressure jet differs")
+        equilibrium%pressure(2) = ieee_value(0.0_dp, ieee_quiet_nan)
+        call fit_primitive_equilibrium(equilibrium, equilibrium_spline, status)
+        call require(status == primitive_equilibrium_invalid, &
+            "nonfinite equilibrium profile was accepted")
+        call evaluate_primitive_equilibrium(equilibrium_spline, query_s, &
+            theta, zeta, actual, pressure, pressure_slope, status)
+        call require(status == primitive_equilibrium_invalid &
+            .and. .not. allocated(actual%metric) &
+            .and. pressure == 0.0_dp .and. pressure_slope == 0.0_dp, &
+            "invalid equilibrium spline did not fail closed")
+    end subroutine check_equilibrium_spline
+
     subroutine torus_jet(s, theta_value, zeta_value, expected)
         real(dp), intent(in) :: s, theta_value, zeta_value
         real(dp), intent(out) :: expected(3, 10)
@@ -291,6 +354,30 @@ contains
         matches = all(shape(actual) == shape(expected)) &
             .and. all(close_scalar(actual, expected))
     end function close_matrix
+
+    function close_rank2(actual, expected) result(matches)
+        real(dp), intent(in) :: actual(:, :), expected(:, :)
+        logical :: matches
+
+        matches = all(shape(actual) == shape(expected)) &
+            .and. all(close_scalar(actual, expected))
+    end function close_rank2
+
+    function close_rank3(actual, expected) result(matches)
+        real(dp), intent(in) :: actual(:, :, :), expected(:, :, :)
+        logical :: matches
+
+        matches = all(shape(actual) == shape(expected)) &
+            .and. all(close_scalar(actual, expected))
+    end function close_rank3
+
+    function close_rank4(actual, expected) result(matches)
+        real(dp), intent(in) :: actual(:, :, :, :), expected(:, :, :, :)
+        logical :: matches
+
+        matches = all(shape(actual) == shape(expected)) &
+            .and. all(close_scalar(actual, expected))
+    end function close_rank4
 
     subroutine require(condition, message)
         logical, intent(in) :: condition
