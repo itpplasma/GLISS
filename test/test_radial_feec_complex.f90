@@ -33,9 +33,9 @@ contains
         call build_radial_feec_complex(breaks, degree, left_trace, &
             right_trace, complex, info)
         call require(info == radial_feec_ok, "valid complex was rejected")
-        expected_h1 = size(breaks) + degree - 1 &
+        expected_h1 = (size(breaks) - 1) * degree + 1 &
             - merge(1, 0, left_trace) - merge(1, 0, right_trace)
-        expected_l2 = size(breaks) + degree - 2
+        expected_l2 = (size(breaks) - 1) * degree
         call require(complex%h1_dofs == expected_h1, &
             "H1 dimension is wrong")
         call require(complex%l2_dofs == expected_l2, &
@@ -75,8 +75,85 @@ contains
             end if
         end do
         call verify_traces(complex, left_trace, right_trace)
+        call verify_knot_multiplicity(complex, breaks)
         call verify_fundamental_theorem(complex, breaks)
+        call verify_local_l2_space(complex, breaks)
     end subroutine verify_complex
+
+    subroutine verify_knot_multiplicity(complex, breaks)
+        type(radial_feec_complex_t), intent(in) :: complex
+        real(dp), intent(in) :: breaks(:)
+        integer :: boundary, expected
+
+        call require(size(complex%h1_knots) &
+            == complex%h1_degree * size(breaks) + 2, &
+            "H1 knot count differs")
+        do boundary = 1, size(breaks)
+            expected = complex%h1_degree
+            if (boundary == 1 .or. boundary == size(breaks)) &
+                expected = expected + 1
+            call require(count(complex%h1_knots == breaks(boundary)) &
+                == expected, "H1 knot multiplicity differs")
+            call require(count(complex%l2_knots == breaks(boundary)) &
+                == complex%h1_degree, "L2 knot multiplicity differs")
+        end do
+    end subroutine verify_knot_multiplicity
+
+    subroutine verify_local_l2_space(complex, breaks)
+        type(radial_feec_complex_t), intent(in) :: complex
+        real(dp), intent(in) :: breaks(:)
+        real(dp), allocatable :: collocation(:, :), h1(:), h1_derivative(:)
+        real(dp), allocatable :: l2(:), nodes(:)
+        integer, allocatable :: active(:), indices(:)
+        real(dp) :: coordinate, half_width, midpoint
+        integer :: cell, info, point
+
+        nodes = local_gauss_nodes(complex%h1_degree)
+        allocate (collocation(complex%h1_degree, complex%h1_degree))
+        indices = [(point, point=1, complex%l2_dofs)]
+        do cell = 1, size(breaks) - 1
+            midpoint = 0.5_dp * (breaks(cell) + breaks(cell + 1))
+            half_width = 0.5_dp * (breaks(cell + 1) - breaks(cell))
+            call evaluate_radial_feec_complex(complex, midpoint, h1, &
+                h1_derivative, l2, info)
+            call require(info == radial_feec_ok, "midpoint evaluation failed")
+            active = pack(indices, abs(l2) > 1.0e-14_dp)
+            call require(size(active) == complex%h1_degree, &
+                "L2 cell has the wrong number of active basis functions")
+            call require(all(active == [(complex%h1_degree * (cell - 1) &
+                + point, point=1, complex%h1_degree)]), &
+                "L2 basis support crosses a cell boundary")
+            do point = 1, complex%h1_degree
+                coordinate = midpoint + half_width * nodes(point)
+                call evaluate_radial_feec_complex(complex, coordinate, h1, &
+                    h1_derivative, l2, info)
+                call require(info == radial_feec_ok, &
+                    "Gauss-node evaluation failed")
+                collocation(point, :) = l2(active)
+            end do
+            call require(numerical_rank(collocation) == complex%h1_degree, &
+                "L2 basis is singular at matched Gauss nodes")
+        end do
+    end subroutine verify_local_l2_space
+
+    function local_gauss_nodes(degree) result(nodes)
+        integer, intent(in) :: degree
+        real(dp), allocatable :: nodes(:)
+
+        allocate (nodes(degree))
+        select case (degree)
+        case (1)
+            nodes = [0.0_dp]
+        case (2)
+            nodes = [-0.5773502691896258_dp, 0.5773502691896258_dp]
+        case (3)
+            nodes = [-0.7745966692414834_dp, 0.0_dp, &
+                0.7745966692414834_dp]
+        case (4)
+            nodes = [-0.8611363115940526_dp, -0.3399810435848563_dp, &
+                0.3399810435848563_dp, 0.8611363115940526_dp]
+        end select
+    end function local_gauss_nodes
 
     subroutine verify_fundamental_theorem(complex, breaks)
         type(radial_feec_complex_t), intent(in) :: complex

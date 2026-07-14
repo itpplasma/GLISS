@@ -2,13 +2,29 @@ module compatible_two_component_problem
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use compatible_family_point_assembly, only: &
-        assemble_compatible_transformed_surface
+        assemble_compatible_transformed_surface, &
+        compatible_two_component_term_count
+    use compatible_physical_mass_assembly, only: &
+        assemble_compatible_perpendicular_mass_surface
+    use compatible_operator_trace_types, only: build_trace_radial_mass, &
+        compatible_cell_trace_t, compatible_radial_point_trace_t
+    use compatible_problem_assembly_support, only: apply_stored_power, &
+        build_active_indices, build_uniform_breaks, &
+        compatible_support_allocation, compatible_support_ok, &
+        mode_table_is_unique, replicate_indexed_values, scale_matrix, &
+        scale_tensor, scatter_matrix, sum_tensor, symmetrize_matrix, &
+        symmetrize_tensor
+    use compatible_radial_quadrature, only: accurate_nodes, &
+        accurate_weights, build_constraint_quadrature, &
+        compatible_quadrature_ok
     use export_surface_geometry, only: build_angular_grids
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use primitive_equilibrium_spline, only: fit_primitive_equilibrium, &
         primitive_equilibrium_ok, primitive_equilibrium_spline_t
     use primitive_kernel_geometry, only: evaluate_primitive_kernel_surface, &
         primitive_kernel_ok
+    use phase_assembly_policy, only: phase_assembly_transformed
+    use physical_constants, only: vacuum_permeability
     use radial_feec_complex, only: build_radial_feec_complex, &
         evaluate_radial_feec_complex, radial_feec_complex_t, radial_feec_ok
     use trial_space_topology, only: build_trial_space_topology, &
@@ -24,34 +40,37 @@ module compatible_two_component_problem
 
     type, public :: compatible_two_component_problem_t
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
+        real(dp), allocatable :: stiffness_terms(:, :, :)
         integer :: degree = 0
         integer :: quadrature_points = 0
         integer :: h1_dofs = 0
         integer :: l2_dofs = 0
         integer :: normal_unknowns = 0
         integer :: eta_unknowns = 0
+        logical :: has_physical_mass = .false.
     end type compatible_two_component_problem_t
 
     public :: build_compatible_two_component_problem
+    public :: compatible_cell_trace_t
 
-    real(dp), parameter :: gauss_nodes(5) = [-0.9061798459386640_dp, &
-        -0.5384693101056831_dp, 0.0_dp, 0.5384693101056831_dp, &
-        0.9061798459386640_dp]
-    real(dp), parameter :: gauss_weights(5) = [0.2369268850561891_dp, &
-        0.4786286704993665_dp, 0.5688888888888889_dp, &
-        0.4786286704993665_dp, 0.2369268850561891_dp]
+    logical, parameter :: accurate_term(4) = [.true., .true., .false., .true.]
+    logical, parameter :: constraint_term(4) = &
+        [.false., .false., .true., .false.]
 
 contains
 
     subroutine build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
-            problem, info)
+            problem, info, trace_cells, trace, density_kg_m3)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
         integer, intent(in) :: parity_class, degree, n_theta, n_zeta
         type(compatible_two_component_problem_t), intent(out) :: problem
         integer, intent(out) :: info
+        integer, optional, intent(in) :: trace_cells(:)
+        type(compatible_cell_trace_t), allocatable, optional, intent(out) :: trace(:)
+        real(dp), optional, intent(in) :: density_kg_m3
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
@@ -63,7 +82,20 @@ contains
         info = compatible_problem_invalid
         if (.not. inputs_are_valid(equilibrium, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta)) return
+        if (present(density_kg_m3)) then
+            if (.not. ieee_is_finite(density_kg_m3) &
+                .or. density_kg_m3 <= 0.0_dp) return
+        end if
         intervals = size(equilibrium%s)
+        if (present(trace_cells) .neqv. present(trace)) return
+        if (present(trace_cells)) then
+            if (.not. trace_cells_are_valid(trace_cells, intervals)) return
+            allocate (trace(size(trace_cells)), stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = compatible_problem_allocation_error
+                return
+            end if
+        end if
         allocate (breaks(intervals + 1), parity(size(mode_m)), &
             normal_rank(size(mode_m)), eta_rank(size(mode_m)), &
             stat=allocation_status)
@@ -71,8 +103,8 @@ contains
             info = compatible_problem_allocation_error
             return
         end if
-        breaks = [(real(local_info, dp) / real(intervals, dp), &
-            local_info=0, intervals)]
+        call build_uniform_breaks(intervals, breaks, local_info)
+        if (local_info /= compatible_support_ok) return
         parity = parity_class
         call build_radial_feec_complex(breaks, degree, .true., .true., &
             complex, local_info)
@@ -99,28 +131,42 @@ contains
             info = compatible_problem_allocation_error
             return
         end if
+        allocate (problem%stiffness_terms(unknowns, unknowns, &
+            compatible_two_component_term_count), &
+            source=0.0_dp, stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
         call fit_primitive_equilibrium(equilibrium, spline, local_info)
         if (local_info /= primitive_equilibrium_ok) then
             info = compatible_problem_assembly_error
             return
         end if
         call build_angular_grids(n_theta, n_zeta, theta, zeta)
-        call assemble_problem(spline, complex, breaks, theta, zeta, mode_m, &
-            mode_n, parity, stored_power, topology, normal_rank, eta_rank, &
-            problem, info)
+        if (present(trace)) then
+            call assemble_problem(spline, complex, breaks, theta, zeta, &
+                mode_m, mode_n, parity, stored_power, topology, normal_rank, &
+                eta_rank, problem, info, trace_cells, trace, density_kg_m3)
+        else
+            call assemble_problem(spline, complex, breaks, theta, zeta, &
+                mode_m, mode_n, parity, stored_power, topology, normal_rank, &
+                eta_rank, problem, info, density_kg_m3=density_kg_m3)
+        end if
         if (info /= compatible_problem_ok) return
-        problem%stiffness = 0.5_dp * (problem%stiffness &
-            + transpose(problem%stiffness))
-        problem%mass = 0.5_dp * (problem%mass + transpose(problem%mass))
+        call symmetrize_matrix(problem%stiffness)
+        call symmetrize_matrix(problem%mass)
+        call symmetrize_tensor(problem%stiffness_terms)
         problem%degree = degree
-        problem%quadrature_points = size(gauss_nodes)
+        problem%quadrature_points = size(accurate_nodes)
         problem%h1_dofs = complex%h1_dofs
         problem%l2_dofs = complex%l2_dofs
+        problem%has_physical_mass = present(density_kg_m3)
     end subroutine build_compatible_two_component_problem
 
     subroutine assemble_problem(spline, complex, breaks, theta, zeta, mode_m, &
             mode_n, parity, stored_power, topology, normal_rank, eta_rank, &
-            problem, info)
+            problem, info, trace_cells, trace, density_kg_m3)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: breaks(:), theta(:), zeta(:)
@@ -130,29 +176,75 @@ contains
         integer, intent(in) :: normal_rank(:), eta_rank(:)
         type(compatible_two_component_problem_t), intent(inout) :: problem
         integer, intent(out) :: info
+        integer, optional, intent(in) :: trace_cells(:)
+        type(compatible_cell_trace_t), optional, intent(inout) :: trace(:)
+        real(dp), optional, intent(in) :: density_kg_m3
+        real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
         real(dp) :: coordinate, half_width, midpoint, radial_weight
-        integer :: cell, point
+        integer :: cell, point, trace_index, trace_point
 
         info = compatible_problem_assembly_error
+        call build_constraint_quadrature(complex%h1_degree, &
+            constraint_nodes, constraint_weights, info)
+        if (info /= compatible_quadrature_ok) return
         do cell = 1, size(breaks) - 1
+            trace_index = 0
+            if (present(trace_cells)) then
+                trace_index = findloc(trace_cells, cell, dim=1)
+                if (trace_index > 0) then
+                    trace(trace_index)%cell = cell
+                    allocate (trace(trace_index)%points( &
+                        size(accurate_nodes) + size(constraint_nodes)))
+                end if
+            end if
             midpoint = 0.5_dp * (breaks(cell) + breaks(cell + 1))
             half_width = 0.5_dp * (breaks(cell + 1) - breaks(cell))
-            do point = 1, size(gauss_nodes)
-                coordinate = midpoint + half_width * gauss_nodes(point)
-                radial_weight = half_width * gauss_weights(point)
-                call assemble_radial_point(spline, complex, coordinate, &
-                    radial_weight, theta, zeta, mode_m, mode_n, parity, &
-                    stored_power, topology, normal_rank, eta_rank, problem, &
-                    info)
+            do point = 1, size(accurate_nodes)
+                coordinate = midpoint + half_width * accurate_nodes(point)
+                radial_weight = half_width * accurate_weights(point)
+                if (trace_index > 0) then
+                    call assemble_radial_point(spline, complex, coordinate, &
+                        radial_weight, theta, zeta, mode_m, mode_n, parity, &
+                        stored_power, topology, normal_rank, eta_rank, &
+                        problem, accurate_term, .true., info, &
+                        trace(trace_index)%points(point), density_kg_m3)
+                else
+                    call assemble_radial_point(spline, complex, coordinate, &
+                        radial_weight, theta, zeta, mode_m, mode_n, parity, &
+                        stored_power, topology, normal_rank, eta_rank, &
+                        problem, accurate_term, .true., info, &
+                        density_kg_m3=density_kg_m3)
+                end if
+                if (info /= compatible_problem_ok) return
+            end do
+            do point = 1, size(constraint_nodes)
+                coordinate = midpoint + half_width * constraint_nodes(point)
+                radial_weight = half_width * constraint_weights(point)
+                trace_point = size(accurate_nodes) + point
+                if (trace_index > 0) then
+                    call assemble_radial_point(spline, complex, coordinate, &
+                        radial_weight, theta, zeta, mode_m, mode_n, parity, &
+                        stored_power, topology, normal_rank, eta_rank, &
+                        problem, constraint_term, .false., info, &
+                        trace(trace_index)%points(trace_point), density_kg_m3)
+                else
+                    call assemble_radial_point(spline, complex, coordinate, &
+                        radial_weight, theta, zeta, mode_m, mode_n, parity, &
+                        stored_power, topology, normal_rank, eta_rank, &
+                        problem, constraint_term, .false., info, &
+                        density_kg_m3=density_kg_m3)
+                end if
                 if (info /= compatible_problem_ok) return
             end do
         end do
+        call sum_tensor(problem%stiffness_terms, problem%stiffness)
         info = compatible_problem_ok
     end subroutine assemble_problem
 
     subroutine assemble_radial_point(spline, complex, coordinate, weight, &
             theta, zeta, mode_m, mode_n, parity, stored_power, topology, &
-            normal_rank, eta_rank, problem, info)
+            normal_rank, eta_rank, problem, term_mask, assemble_mass, info, &
+            point_trace, density_kg_m3)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: coordinate, weight, theta(:), zeta(:)
@@ -161,29 +253,50 @@ contains
         type(trial_space_topology_t), intent(in) :: topology
         integer, intent(in) :: normal_rank(:), eta_rank(:)
         type(compatible_two_component_problem_t), intent(inout) :: problem
+        logical, intent(in) :: term_mask(:), assemble_mass
         integer, intent(out) :: info
+        type(compatible_radial_point_trace_t), optional, intent(out) :: point_trace
+        real(dp), optional, intent(in) :: density_kg_m3
         real(dp), allocatable :: fields(:, :, :), drive(:, :), h1(:), dh1(:)
         real(dp), allocatable :: l2(:), local(:, :), local_dh1(:, :)
+        real(dp), allocatable :: local_mass(:, :), local_terms(:, :, :)
         real(dp), allocatable :: local_h1(:, :), local_l2(:, :)
         integer, allocatable :: h1_index(:), l2_index(:), map(:)
-        integer :: local_info, trials
+        real(dp) :: stiffness_scale
+        integer :: local_info, term, trials
 
         info = compatible_problem_assembly_error
         call evaluate_radial_feec_complex(complex, coordinate, h1, dh1, l2, &
             local_info)
         if (local_info /= radial_feec_ok) return
-        h1_index = pack([(local_info, local_info=1, size(h1))], &
-            h1 /= 0.0_dp .or. dh1 /= 0.0_dp)
-        l2_index = pack([(local_info, local_info=1, size(l2))], l2 /= 0.0_dp)
+        call build_active_indices(h1, h1_index, local_info, dh1)
+        if (local_info == compatible_support_allocation) then
+            info = compatible_problem_allocation_error
+            return
+        else if (local_info /= compatible_support_ok) then
+            return
+        end if
+        call build_active_indices(l2, l2_index, local_info)
+        if (local_info == compatible_support_allocation) then
+            info = compatible_problem_allocation_error
+            return
+        else if (local_info /= compatible_support_ok) then
+            return
+        end if
         if (size(h1_index) < 1 .or. size(l2_index) < 1) return
         trials = size(mode_m)
         allocate (local_h1(size(h1_index), trials), &
             local_dh1(size(h1_index), trials), &
-            local_l2(size(l2_index), trials))
-        call apply_stored_power(coordinate, stored_power, h1(h1_index), &
-            dh1(h1_index), local_h1, local_dh1, local_info)
-        if (local_info /= compatible_problem_ok) return
-        local_l2 = spread(l2(l2_index), 2, trials)
+            local_l2(size(l2_index), trials), stat=local_info)
+        if (local_info /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
+        call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
+            local_h1, local_dh1, local_info)
+        if (local_info /= compatible_support_ok) return
+        call replicate_indexed_values(l2, l2_index, local_l2, local_info)
+        if (local_info /= compatible_support_ok) return
         call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
             zeta, fields, drive, local_info)
         if (local_info /= primitive_kernel_ok) return
@@ -194,39 +307,76 @@ contains
             info = compatible_problem_allocation_error
             return
         end if
+        allocate (local_terms(size(local, 1), size(local, 2), &
+            compatible_two_component_term_count), source=0.0_dp, &
+            stat=local_info)
+        if (local_info /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
         call assemble_compatible_transformed_surface(fields, drive, mode_m, &
             mode_n, parity, spline%field_periods, local_h1, local_dh1, &
-            local_l2, local, local_info)
+            local_l2, local, local_info, local_terms)
         if (local_info /= 0) return
+        if (present(density_kg_m3) .and. assemble_mass) then
+            allocate (local_mass(size(local, 1), size(local, 2)), &
+                source=0.0_dp, stat=local_info)
+            if (local_info /= 0) then
+                info = compatible_problem_allocation_error
+                return
+            end if
+            call assemble_compatible_perpendicular_mass_surface(fields, &
+                density_kg_m3, mode_m, mode_n, parity, spline%field_periods, &
+                local_h1, local_l2, weight, phase_assembly_transformed, &
+                local_mass, local_info)
+            if (local_info /= 0) return
+        end if
         call build_local_map(complex, topology, normal_rank, eta_rank, &
             h1_index, l2_index, map)
-        call scatter_matrix(map, weight * local, problem%stiffness)
-        call add_radial_mass(map, local_h1, local_l2, weight, problem%mass)
+        if (present(point_trace)) then
+            point_trace%coordinate = coordinate
+            point_trace%weight = weight
+            point_trace%term_mask = term_mask
+            point_trace%assembles_mass = assemble_mass
+            point_trace%map = map
+            point_trace%fields = fields
+            point_trace%drive = drive
+            point_trace%h1 = local_h1
+            point_trace%dh1 = local_dh1
+            point_trace%l2 = local_l2
+            if (present(density_kg_m3)) then
+                point_trace%stiffness_terms = local_terms
+                call scale_tensor(point_trace%stiffness_terms, &
+                    1.0_dp / vacuum_permeability)
+                allocate (point_trace%mass(size(local, 1), size(local, 2)), &
+                    source=0.0_dp)
+                if (assemble_mass) then
+                    point_trace%mass = local_mass
+                    call scale_matrix(point_trace%mass, 1.0_dp / weight)
+                end if
+            else
+                point_trace%stiffness_terms = local_terms
+                call build_trace_radial_mass(local_h1, local_l2, &
+                    point_trace%mass)
+            end if
+        end if
+        stiffness_scale = weight
+        if (present(density_kg_m3)) stiffness_scale = weight / vacuum_permeability
+        do term = 1, compatible_two_component_term_count
+            if (.not. term_mask(term)) cycle
+            call scatter_matrix(map, local_terms(:, :, term), &
+                stiffness_scale, problem%stiffness_terms(:, :, term))
+        end do
+        if (assemble_mass) then
+            if (present(density_kg_m3)) then
+                call scatter_matrix(map, local_mass, 1.0_dp, problem%mass)
+            else
+                call add_radial_mass(map, local_h1, local_l2, weight, &
+                    problem%mass)
+            end if
+        end if
         info = compatible_problem_ok
     end subroutine assemble_radial_point
-
-    subroutine apply_stored_power(coordinate, stored_power, h1, dh1, values, &
-            derivatives, info)
-        real(dp), intent(in) :: coordinate, stored_power(:), h1(:), dh1(:)
-        real(dp), intent(out) :: values(:, :), derivatives(:, :)
-        integer, intent(out) :: info
-        real(dp) :: scale
-        integer :: trial
-
-        info = compatible_problem_invalid
-        if (coordinate <= 0.0_dp .or. size(stored_power) /= size(values, 2)) &
-            return
-        do trial = 1, size(stored_power)
-            scale = coordinate**(-stored_power(trial))
-            if (.not. ieee_is_finite(scale)) return
-            values(:, trial) = scale * h1
-            derivatives(:, trial) = scale &
-                * (dh1 - stored_power(trial) * h1 / coordinate)
-        end do
-        if (.not. all(ieee_is_finite(values)) &
-            .or. .not. all(ieee_is_finite(derivatives))) return
-        info = compatible_problem_ok
-    end subroutine apply_stored_power
 
     subroutine build_local_map(complex, topology, normal_rank, eta_rank, &
             h1_index, l2_index, map)
@@ -292,21 +442,6 @@ contains
         end do
     end subroutine add_radial_mass
 
-    subroutine scatter_matrix(map, local, global)
-        integer, intent(in) :: map(:)
-        real(dp), intent(in) :: local(:, :)
-        real(dp), intent(inout) :: global(:, :)
-        integer :: a, b
-
-        do b = 1, size(map)
-            if (map(b) == 0) cycle
-            do a = 1, size(map)
-                if (map(a) == 0) cycle
-                global(map(a), map(b)) = global(map(a), map(b)) + local(a, b)
-            end do
-        end do
-    end subroutine scatter_matrix
-
     pure subroutine build_component_ranks(topology, normal_rank, eta_rank)
         type(trial_space_topology_t), intent(in) :: topology
         integer, intent(out) :: normal_rank(:), eta_rank(:)
@@ -350,19 +485,22 @@ contains
         valid = n_theta >= 8 .and. n_zeta >= 8
     end function inputs_are_valid
 
-    pure function mode_table_is_unique(mode_m, mode_n) result(unique)
-        integer, intent(in) :: mode_m(:), mode_n(:)
-        logical :: unique
+    pure function trace_cells_are_valid(trace_cells, intervals) result(valid)
+        integer, intent(in) :: trace_cells(:), intervals
+        logical :: valid
         integer :: first, second
 
-        unique = .false.
-        do first = 1, size(mode_m)
+        valid = size(trace_cells) >= 1 .and. all(trace_cells >= 1) &
+            .and. all(trace_cells <= intervals)
+        if (.not. valid) return
+        do first = 1, size(trace_cells)
             do second = 1, first - 1
-                if (mode_m(first) == mode_m(second) &
-                    .and. mode_n(first) == mode_n(second)) return
+                if (trace_cells(first) == trace_cells(second)) then
+                    valid = .false.
+                    return
+                end if
             end do
         end do
-        unique = .true.
-    end function mode_table_is_unique
+    end function trace_cells_are_valid
 
 end module compatible_two_component_problem

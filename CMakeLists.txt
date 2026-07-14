@@ -31,6 +31,7 @@ add_library(gliss
     src/block_tridiagonal.f90
     src/compressible_geometry.f90
     src/compressible_stiffness_validation.f90
+    src/compatible_compressible_stiffness_assembly.f90
     src/compressible_stiffness_assembly.f90
     src/compressible_stiffness_family_assembly.f90
     src/generalized_block_solver.f90
@@ -41,6 +42,7 @@ add_library(gliss
     src/local_mode_model.f90
     src/mass_density_policy.f90
     src/phase_assembly_policy.f90
+    src/compatible_physical_mass_assembly.f90
     src/physical_mass_assembly.f90
     src/physical_mass_family_assembly.f90
     src/physical_mass_kernel.f90
@@ -54,6 +56,9 @@ add_library(gliss
     src/axis_regular_harmonic_spline.f90
     src/cartesian_harmonic_spline.f90
     src/compatible_family_point_assembly.f90
+    src/compatible_radial_quadrature.f90
+    src/compatible_operator_trace_types.f90
+    src/compatible_problem_assembly_support.f90
     src/field_periodic_cartesian.f90
     src/cartesian_primitive_geometry.f90
     src/primitive_geometry_grid.f90
@@ -106,6 +111,7 @@ add_library(gliss
     src/export_surface_geometry.f90
     src/primitive_kernel_geometry.f90
     src/compatible_two_component_problem.f90
+    src/compatible_three_component_problem.f90
     src/mercier_diagnostic.f90
     src/radial_bspline_basis.f90
     src/symmetric_eigensolver.f90)
@@ -204,6 +210,24 @@ set_target_properties(gliss_family PROPERTIES
 add_executable(gliss_spectrum app/gliss_spectrum.f90)
 target_link_libraries(gliss_spectrum PRIVATE gliss)
 set_target_properties(gliss_spectrum PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_compatible_spectrum app/gliss_compatible_spectrum.f90)
+target_link_libraries(gliss_compatible_spectrum PRIVATE gliss)
+set_target_properties(gliss_compatible_spectrum PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_compatible_marginality
+    app/gliss_compatible_marginality.f90)
+target_link_libraries(gliss_compatible_marginality PRIVATE gliss)
+set_target_properties(gliss_compatible_marginality PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_compatible_operator_trace
+    app/compatible_operator_geometry_trace.f90
+    app/gliss_compatible_operator_trace.f90)
+target_link_libraries(gliss_compatible_operator_trace PRIVATE gliss)
+set_target_properties(gliss_compatible_operator_trace PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gliss_axisymmetric app/gliss_axisymmetric.f90)
@@ -395,6 +419,60 @@ if(BUILD_TESTING)
     target_link_libraries(test_radial_feec_complex PRIVATE gliss)
     add_test(NAME radial_feec_complex COMMAND test_radial_feec_complex)
 
+    add_executable(test_compatible_radial_quadrature
+        test/test_compatible_radial_quadrature.f90)
+    target_link_libraries(test_compatible_radial_quadrature PRIVATE gliss)
+    add_test(NAME compatible_radial_quadrature
+        COMMAND test_compatible_radial_quadrature)
+
+    add_executable(test_compatible_problem_assembly_support
+        test/test_compatible_problem_assembly_support.f90)
+    target_link_libraries(test_compatible_problem_assembly_support PRIVATE gliss)
+    add_test(NAME compatible_problem_assembly_support
+        COMMAND test_compatible_problem_assembly_support)
+
+    function(add_compatible_cli_rejection name target expected)
+        add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
+            -DPROGRAM=$<TARGET_FILE:${target}>
+            "-DEXPECTED=${expected}"
+            "-DARGUMENTS=${ARGN}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    endfunction()
+
+    add_compatible_cli_rejection(compatible_spectrum_cli_missing
+        gliss_compatible_spectrum
+        "gliss_compatible_spectrum: missing required arguments")
+    add_compatible_cli_rejection(compatible_spectrum_cli_nonfinite_gamma
+        gliss_compatible_spectrum
+        "gliss_compatible_spectrum: GAMMA must be finite"
+        missing.nc 2 8 8 nan 1 1 1 1,0)
+    add_compatible_cli_rejection(compatible_spectrum_cli_duplicate_mode
+        gliss_compatible_spectrum
+        "gliss_compatible_spectrum: duplicate mode"
+        missing.nc 2 8 8 1 1 1 1 1,0 1,0)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: missing required arguments")
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_floor
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: FLOOR must be finite"
+        missing.nc 2 8 8 nan 1 1,0)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_density
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --physical-density requires a value"
+        missing.nc 2 8 8 1e-8 1 --physical-density=)
+    add_compatible_cli_rejection(compatible_trace_cli_missing
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: missing required arguments")
+    add_compatible_cli_rejection(compatible_trace_cli_bad_theta
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: NTHETA and NZETA must be at least 8"
+        missing.nc 2 7 8 1 1,0)
+    add_compatible_cli_rejection(compatible_trace_cli_bad_mode
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: modes must be given once as m,n"
+        missing.nc 2 8 8 1 broken)
+
     add_executable(test_radial_cubic_spline
         test/test_radial_cubic_spline.f90)
     target_link_libraries(test_radial_cubic_spline PRIVATE gliss)
@@ -539,6 +617,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_compressible_stiffness_assembly PRIVATE gliss)
     add_test(NAME compressible_stiffness_assembly
         COMMAND test_compressible_stiffness_assembly)
+
+    add_executable(test_compatible_three_component_assembly
+        test/test_compatible_three_component_assembly.f90)
+    target_link_libraries(test_compatible_three_component_assembly PRIVATE gliss)
+    add_test(NAME compatible_three_component_assembly
+        COMMAND test_compatible_three_component_assembly)
 
     add_executable(test_compressible_stiffness_family_assembly
         test/test_compressible_stiffness_family_assembly.f90)

@@ -42,30 +42,36 @@ contains
         integer, intent(in) :: j, k
         real(dp), intent(in) :: angle, rate
         real(dp) :: value(3), radial(3), poloidal(3), toroidal(3)
+        real(dp) :: radial_radial(3), radial_poloidal(3)
+        real(dp) :: radial_toroidal(3), poloidal_poloidal(3)
+        real(dp) :: poloidal_toroidal(3), toroidal_toroidal(3)
 
         value = jet%value(j, k, :)
         radial = jet%radial(j, k, :)
         poloidal = jet%poloidal(j, k, :)
         toroidal = jet%toroidal(j, k, :)
+        radial_radial = jet%radial_radial(j, k, :)
+        radial_poloidal = jet%radial_poloidal(j, k, :)
+        radial_toroidal = jet%radial_toroidal(j, k, :)
+        poloidal_poloidal = jet%poloidal_poloidal(j, k, :)
+        poloidal_toroidal = jet%poloidal_toroidal(j, k, :)
+        toroidal_toroidal = jet%toroidal_toroidal(j, k, :)
         jet%value(j, k, :) = rotate(value, angle)
         jet%radial(j, k, :) = rotate(radial, angle)
         jet%poloidal(j, k, :) = rotate(poloidal, angle)
         jet%toroidal(j, k, :) = rotate(toroidal &
             + rate * generator(value), angle)
-        jet%radial_radial(j, k, :) = rotate( &
-            jet%radial_radial(j, k, :), angle)
-        jet%radial_poloidal(j, k, :) = rotate( &
-            jet%radial_poloidal(j, k, :), angle)
+        jet%radial_radial(j, k, :) = rotate(radial_radial, angle)
+        jet%radial_poloidal(j, k, :) = rotate(radial_poloidal, angle)
         jet%radial_toroidal(j, k, :) = rotate( &
-            jet%radial_toroidal(j, k, :) &
+            radial_toroidal &
             + rate * generator(radial), angle)
-        jet%poloidal_poloidal(j, k, :) = rotate( &
-            jet%poloidal_poloidal(j, k, :), angle)
+        jet%poloidal_poloidal(j, k, :) = rotate(poloidal_poloidal, angle)
         jet%poloidal_toroidal(j, k, :) = rotate( &
-            jet%poloidal_toroidal(j, k, :) &
+            poloidal_toroidal &
             + rate * generator(poloidal), angle)
         jet%toroidal_toroidal(j, k, :) = rotate( &
-            jet%toroidal_toroidal(j, k, :) &
+            toroidal_toroidal &
             + 2.0_dp * rate * generator(toroidal) &
             + rate**2 * generator_squared(value), angle)
     end subroutine convert_point

@@ -6,10 +6,14 @@ program gliss_primitive_geometry_trace
     use gvec_cas3d_reconstruction, only: reconstruct_harmonic_grid, &
         reconstruction_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t
+    use mercier_diagnostic, only: build_kernel_geometry, mercier_ok
     use primitive_equilibrium_spline, only: evaluate_primitive_equilibrium, &
         fit_primitive_equilibrium, primitive_equilibrium_ok, &
         primitive_equilibrium_spline_t
     use primitive_geometry_grid, only: primitive_geometry_grid_t
+    use primitive_kernel_geometry, only: evaluate_primitive_kernel_surface, &
+        primitive_kernel_ok
+    use two_component_kernel, only: two_component_components
     implicit none
 
     type(gvec_cas3d_equilibrium_t) :: equilibrium
@@ -26,6 +30,9 @@ program gliss_primitive_geometry_trace
     real(dp), allocatable :: second_zz(:, :)
     real(dp), allocatable :: discard_theta(:, :), discard_zeta(:, :)
     real(dp), allocatable :: covariant_theta(:, :), covariant_zeta(:, :)
+    real(dp), allocatable :: legacy_fields(:, :, :, :), legacy_drive(:, :, :)
+    real(dp), allocatable :: primitive_fields(:, :, :), primitive_drive(:, :)
+    real(dp), allocatable :: geometric_drive(:, :)
     real(dp) :: pressure, pressure_slope
     integer :: info, n_theta, n_zeta, surface
 
@@ -38,6 +45,9 @@ program gliss_primitive_geometry_trace
     call require(info == primitive_equilibrium_ok, &
         "primitive equilibrium fit failed")
     call build_angular_grids(n_theta, n_zeta, theta, zeta)
+    call build_kernel_geometry(equilibrium, n_theta, n_zeta, legacy_fields, &
+        legacy_drive, info)
+    call require(info == mercier_ok, "legacy kernel geometry failed")
     call differentiate_pair(equilibrium%s, equilibrium%jacobian, &
         jacobian_s_pair)
 
@@ -49,6 +59,11 @@ program gliss_primitive_geometry_trace
         call require(info == primitive_equilibrium_ok, &
             "primitive equilibrium evaluation failed")
         call reconstruct_reference_fields(surface)
+        call evaluate_primitive_kernel_surface(spline, &
+            equilibrium%s(surface), theta, zeta, primitive_fields, &
+            primitive_drive, info, geometric_drive=geometric_drive)
+        call require(info == primitive_kernel_ok, &
+            "primitive kernel geometry failed")
         covariant_theta = g_tt * b_theta + g_tz * b_zeta
         covariant_zeta = g_tz * b_theta + g_zz * b_zeta
         call write_comparison("Jac", geometry%signed_jacobian, jacobian, &
@@ -82,6 +97,10 @@ program gliss_primitive_geometry_trace
             second_tz, equilibrium%s(surface))
         call write_comparison("II_zz", geometry%second_form(:, :, 2, 2), &
             second_zz, equilibrium%s(surface))
+        call write_kernel_comparisons(surface)
+        call write_comparison("kernel_drive_geometric", geometric_drive, &
+            primitive_drive, equilibrium%s(surface))
+        call write_component_identity(equilibrium%s(surface))
     end do
 
 contains
@@ -135,6 +154,82 @@ contains
         call reconstruct_pair(equilibrium%second_form_zz, radial_surface, &
             second_zz)
     end subroutine reconstruct_reference_fields
+
+    subroutine write_kernel_comparisons(radial_surface)
+        integer, intent(in) :: radial_surface
+        character(len=16), parameter :: names(13) = [character(len=16) :: &
+            "flux_t_slope", "flux_p_slope", "flux_t_curve", &
+            "flux_p_curve", "current_i", "current_j", "signed_sqrtg", &
+            "mod_b", "grad_s2", "j_dot_b", "pressure_slope", &
+            "sigma_tilde", "beta_tilde"]
+        integer :: field
+
+        do field = 1, size(names)
+            call write_comparison("kernel_" // trim(names(field)), &
+                primitive_fields(:, :, field), &
+                legacy_fields(:, :, field, radial_surface), &
+                equilibrium%s(radial_surface))
+        end do
+        call write_comparison("kernel_drive", primitive_drive, &
+            legacy_drive(:, :, radial_surface), equilibrium%s(radial_surface))
+    end subroutine write_kernel_comparisons
+
+    subroutine write_component_identity(s)
+        real(dp), intent(in) :: s
+        real(dp), allocatable :: direct(:, :, :), kernel(:, :, :)
+        real(dp) :: r_contra(3), r_cov(3), values(6)
+        integer :: j, k
+
+        values = [0.37_dp, -0.21_dp, 0.16_dp, -0.11_dp, 0.29_dp, -0.24_dp]
+        allocate (direct(size(theta), size(zeta), 3), &
+            kernel(size(theta), size(zeta), 3))
+        do k = 1, size(zeta)
+            do j = 1, size(theta)
+                call two_component_components( &
+                    primitive_fields(j, k, 1), primitive_fields(j, k, 2), &
+                    primitive_fields(j, k, 3), primitive_fields(j, k, 4), &
+                    primitive_fields(j, k, 5), primitive_fields(j, k, 6), &
+                    primitive_fields(j, k, 7), primitive_fields(j, k, 8), &
+                    primitive_fields(j, k, 9), primitive_fields(j, k, 10), &
+                    primitive_fields(j, k, 11), primitive_fields(j, k, 12), &
+                    primitive_fields(j, k, 13), values(1), values(2), &
+                    values(3), values(4), values(5), values(6), &
+                    kernel(j, k, 1), kernel(j, k, 2), kernel(j, k, 3))
+                r_contra(1) = (primitive_fields(j, k, 2) * values(3) &
+                    + primitive_fields(j, k, 1) * values(4)) &
+                    / primitive_fields(j, k, 7)
+                r_contra(2) = (values(6) &
+                    - primitive_fields(j, k, 4) * values(1) &
+                    - primitive_fields(j, k, 2) * values(2)) &
+                    / primitive_fields(j, k, 7)
+                r_contra(3) = (-values(5) &
+                    - primitive_fields(j, k, 3) * values(1) &
+                    - primitive_fields(j, k, 1) * values(2)) &
+                    / primitive_fields(j, k, 7)
+                r_cov = matmul(geometry%metric(j, k, :, :), r_contra)
+                direct(j, k, 1) = r_contra(1) &
+                    / sqrt(primitive_fields(j, k, 9))
+                direct(j, k, 2) = (primitive_fields(j, k, 6) * r_cov(3) &
+                    - primitive_fields(j, k, 5) * r_cov(2)) &
+                    / (primitive_fields(j, k, 7) &
+                    * sqrt(primitive_fields(j, k, 9)) &
+                    * primitive_fields(j, k, 8)) &
+                    - primitive_fields(j, k, 10) * values(1) &
+                    / (sqrt(primitive_fields(j, k, 9)) &
+                    * primitive_fields(j, k, 8))
+                direct(j, k, 3) = (primitive_fields(j, k, 6) * r_contra(2) &
+                    + primitive_fields(j, k, 5) * r_contra(3) &
+                    - primitive_fields(j, k, 11) * values(1)) &
+                    / primitive_fields(j, k, 8)
+            end do
+        end do
+        call write_comparison("kernel_C1_geometric", kernel(:, :, 1), &
+            direct(:, :, 1), s)
+        call write_comparison("kernel_C2_geometric", kernel(:, :, 2), &
+            direct(:, :, 2), s)
+        call write_comparison("kernel_C3_geometric", kernel(:, :, 3), &
+            direct(:, :, 3), s)
+    end subroutine write_component_identity
 
     subroutine reconstruct_pair(pair, radial_surface, values)
         type(harmonic_pair_t), intent(in) :: pair

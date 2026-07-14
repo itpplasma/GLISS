@@ -7,6 +7,7 @@ module compatible_family_point_assembly
     private
 
     real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
+    integer, parameter, public :: compatible_two_component_term_count = 4
 
     public :: assemble_compatible_direct_surface
     public :: assemble_compatible_transformed_surface
@@ -15,7 +16,7 @@ contains
 
     subroutine assemble_compatible_direct_surface(fields, drive, trial_m, &
             trial_n, trial_parity, field_periods, h1_values, h1_derivatives, &
-            l2_values, full, info)
+            l2_values, full, info, terms)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods
@@ -23,11 +24,13 @@ contains
         real(dp), intent(in) :: l2_values(:, :)
         real(dp), intent(inout) :: full(:, :)
         integer, intent(out) :: info
+        real(dp), optional, intent(inout) :: terms(:, :, :)
         real(dp) :: weight
         integer :: j, k, period
 
         call validate_inputs(fields, drive, trial_m, trial_n, trial_parity, &
-            field_periods, h1_values, h1_derivatives, l2_values, full, info)
+            field_periods, h1_values, h1_derivatives, l2_values, full, info, &
+            terms)
         if (info /= 0) return
         weight = 1.0_dp / real(size(fields, 1) * size(fields, 2) &
             * field_periods, dp)
@@ -39,7 +42,7 @@ contains
                         h1_values, h1_derivatives, l2_values, &
                         real(j - 1, dp) / real(size(fields, 1), dp), &
                         real(k - 1, dp) / real(size(fields, 2), dp) &
-                        + real(period, dp), weight, full)
+                        + real(period, dp), weight, full, terms)
                 end do
             end do
         end do
@@ -48,7 +51,7 @@ contains
 
     subroutine assemble_compatible_transformed_surface(fields, drive, &
             trial_m, trial_n, trial_parity, field_periods, h1_values, &
-            h1_derivatives, l2_values, full, info)
+            h1_derivatives, l2_values, full, info, terms)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods
@@ -56,11 +59,13 @@ contains
         real(dp), intent(in) :: l2_values(:, :)
         real(dp), intent(inout) :: full(:, :)
         integer, intent(out) :: info
+        real(dp), optional, intent(inout) :: terms(:, :, :)
         real(dp) :: weight
         integer :: j, k
 
         call validate_inputs(fields, drive, trial_m, trial_n, trial_parity, &
-            field_periods, h1_values, h1_derivatives, l2_values, full, info)
+            field_periods, h1_values, h1_derivatives, l2_values, full, info, &
+            terms)
         if (info /= 0) return
         weight = 1.0_dp / real(size(fields, 1) * size(fields, 2), dp)
         do k = 1, size(fields, 2)
@@ -69,7 +74,8 @@ contains
                     trial_m, trial_n, trial_parity, field_periods, h1_values, &
                     h1_derivatives, l2_values, &
                     real(j - 1, dp) / real(size(fields, 1), dp), &
-                    real(k - 1, dp) / real(size(fields, 2), dp), weight, full)
+                    real(k - 1, dp) / real(size(fields, 2), dp), weight, &
+                    full, terms)
             end do
         end do
         info = 0
@@ -77,13 +83,14 @@ contains
 
     subroutine accumulate_direct(fields, drive, trial_m, trial_n, &
             trial_parity, field_periods, h1_values, h1_derivatives, &
-            l2_values, theta, zeta, weight, full)
+            l2_values, theta, zeta, weight, full, terms)
         real(dp), intent(in) :: fields(:), drive, h1_values(:, :)
         real(dp), intent(in) :: h1_derivatives(:, :), l2_values(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods
         real(dp), intent(in) :: theta, zeta, weight
         real(dp), intent(inout) :: full(:, :)
+        real(dp), optional, intent(inout) :: terms(:, :, :)
         real(dp) :: rows(4, size(full, 1)), coefficients(3, 6)
         real(dp) :: phase, toroidal_wave, value, dvalue, dother
         integer :: trial
@@ -102,18 +109,19 @@ contains
                 h1_derivatives(:, trial), l2_values(:, trial), value, &
                 dvalue, dother, coefficients)
         end do
-        call rank_update(rows, drive, weight * abs(fields(7)), full)
+        call rank_update(rows, drive, weight * abs(fields(7)), full, terms)
     end subroutine accumulate_direct
 
     subroutine accumulate_transformed(fields, drive, trial_m, trial_n, &
             trial_parity, field_periods, h1_values, h1_derivatives, &
-            l2_values, theta, zeta, weight, full)
+            l2_values, theta, zeta, weight, full, terms)
         real(dp), intent(in) :: fields(:), drive, h1_values(:, :)
         real(dp), intent(in) :: h1_derivatives(:, :), l2_values(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods
         real(dp), intent(in) :: theta, zeta, weight
         real(dp), intent(inout) :: full(:, :)
+        real(dp), optional, intent(inout) :: terms(:, :, :)
         real(dp) :: cosine_rows(4, size(full, 1))
         real(dp) :: sine_rows(4, size(full, 1)), coefficients(3, 6)
         real(dp) :: phases(size(trial_m)), toroidal_wave
@@ -148,7 +156,7 @@ contains
             end if
         end do
         call transformed_rank_update(cosine_rows, sine_rows, phases, trial_n, &
-            field_periods, drive, weight * abs(fields(7)), full)
+            field_periods, drive, weight * abs(fields(7)), full, terms)
     end subroutine accumulate_transformed
 
     subroutine add_trial_columns(rows, trial, m, toroidal_wave, h1_values, &
@@ -215,28 +223,34 @@ contains
         end if
     end subroutine phase_factors
 
-    subroutine rank_update(rows, drive, weight, full)
+    subroutine rank_update(rows, drive, weight, full, terms)
         real(dp), intent(in) :: rows(:, :), drive, weight
         real(dp), intent(inout) :: full(:, :)
+        real(dp), optional, intent(inout) :: terms(:, :, :)
+        real(dp) :: contributions(4)
         integer :: a, b
 
         do b = 1, size(full, 2)
             do a = 1, size(full, 1)
-                full(a, b) = full(a, b) + weight &
-                    * (dot_product(rows(1:3, a), rows(1:3, b)) &
-                    - drive * rows(4, a) * rows(4, b))
+                contributions = [rows(1, a) * rows(1, b), &
+                    rows(2, a) * rows(2, b), rows(3, a) * rows(3, b), &
+                    -drive * rows(4, a) * rows(4, b)]
+                full(a, b) = full(a, b) + weight * sum(contributions)
+                if (present(terms)) terms(a, b, :) = terms(a, b, :) &
+                    + weight * contributions
             end do
         end do
     end subroutine rank_update
 
     subroutine transformed_rank_update(cosine_rows, sine_rows, phases, &
-            trial_n, field_periods, drive, weight, full)
+            trial_n, field_periods, drive, weight, full, terms)
         real(dp), intent(in) :: cosine_rows(:, :), sine_rows(:, :), phases(:)
         integer, intent(in) :: trial_n(:), field_periods
         real(dp), intent(in) :: drive, weight
         real(dp), intent(inout) :: full(:, :)
+        real(dp), optional, intent(inout) :: terms(:, :, :)
         real(dp) :: products(2, 2), cosine(size(trial_n)), sine(size(trial_n))
-        real(dp) :: product
+        real(dp) :: contributions(4)
         integer :: a, b, first_trial, second_trial, trials
 
         trials = size(trial_n)
@@ -250,30 +264,49 @@ contains
                     sine(first_trial), cosine(second_trial), &
                     sine(second_trial), trial_n(first_trial), &
                     trial_n(second_trial), field_periods, products)
-                product = products(1, 1) * dot_product( &
-                    cosine_rows(1:3, a), cosine_rows(1:3, b)) &
-                    + products(1, 2) * dot_product(cosine_rows(1:3, a), &
-                    sine_rows(1:3, b)) + products(2, 1) * dot_product( &
-                    sine_rows(1:3, a), cosine_rows(1:3, b)) &
-                    + products(2, 2) * dot_product(sine_rows(1:3, a), &
-                    sine_rows(1:3, b)) - drive * (products(1, 1) &
+                call component_products(cosine_rows, sine_rows, products, &
+                    a, b, contributions(1:3))
+                contributions(4) = -drive * (products(1, 1) &
                     * cosine_rows(4, a) * cosine_rows(4, b) &
                     + products(1, 2) * cosine_rows(4, a) * sine_rows(4, b) &
                     + products(2, 1) * sine_rows(4, a) * cosine_rows(4, b) &
                     + products(2, 2) * sine_rows(4, a) * sine_rows(4, b))
-                full(a, b) = full(a, b) + weight * product
+                full(a, b) = full(a, b) + weight * sum(contributions)
+                if (present(terms)) terms(a, b, :) = terms(a, b, :) &
+                    + weight * contributions
             end do
         end do
     end subroutine transformed_rank_update
 
+    pure subroutine component_products(cosine_rows, sine_rows, products, &
+            a, b, contributions)
+        real(dp), intent(in) :: cosine_rows(:, :), sine_rows(:, :)
+        real(dp), intent(in) :: products(2, 2)
+        integer, intent(in) :: a, b
+        real(dp), intent(out) :: contributions(3)
+        integer :: component
+
+        do component = 1, 3
+            contributions(component) = products(1, 1) &
+                * cosine_rows(component, a) * cosine_rows(component, b) &
+                + products(1, 2) * cosine_rows(component, a) &
+                * sine_rows(component, b) + products(2, 1) &
+                * sine_rows(component, a) * cosine_rows(component, b) &
+                + products(2, 2) * sine_rows(component, a) &
+                * sine_rows(component, b)
+        end do
+    end subroutine component_products
+
     subroutine validate_inputs(fields, drive, trial_m, trial_n, trial_parity, &
-            field_periods, h1_values, h1_derivatives, l2_values, full, info)
+            field_periods, h1_values, h1_derivatives, l2_values, full, info, &
+            terms)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods
         real(dp), intent(in) :: h1_values(:, :), h1_derivatives(:, :)
         real(dp), intent(in) :: l2_values(:, :), full(:, :)
         integer, intent(out) :: info
+        real(dp), optional, intent(in) :: terms(:, :, :)
         integer :: expected, trials
 
         info = -1
@@ -288,6 +321,11 @@ contains
             .or. size(l2_values, 2) /= trials) return
         expected = trials * (size(h1_values, 1) + size(l2_values, 1))
         if (any(shape(full) /= expected)) return
+        if (present(terms)) then
+            if (any(shape(terms) /= &
+                [expected, expected, compatible_two_component_term_count])) &
+                return
+        end if
         if (size(fields, 1) < 1 .or. size(fields, 2) < 1 &
             .or. size(fields, 3) < 13) return
         if (any(shape(drive) /= shape(fields(:, :, 1)))) return

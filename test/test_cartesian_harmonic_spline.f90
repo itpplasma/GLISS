@@ -8,7 +8,12 @@ program test_cartesian_harmonic_spline
         fit_cartesian_harmonic_spline
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_problem_invalid, &
-        compatible_problem_ok, compatible_two_component_problem_t
+        compatible_problem_ok, compatible_cell_trace_t, &
+        compatible_two_component_problem_t
+    use compatible_three_component_problem, only: &
+        build_compatible_three_component_problem, &
+        compatible_three_component_invalid, compatible_three_component_ok, &
+        compatible_three_component_problem_t
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
         radial_grid_half
     use primitive_equilibrium_spline, only: evaluate_primitive_equilibrium, &
@@ -297,7 +302,22 @@ contains
             reference%signed_jacobian) &
             .and. close_rank2(kernel_fields(:, :, 8), reference%mod_b), &
             "primitive kernel geometry differs")
+        call evaluate_primitive_equilibrium(equilibrium_spline, 1.0_dp, &
+            theta, zeta, actual, pressure, pressure_slope, status)
+        call require(status == primitive_equilibrium_ok, &
+            "half-mesh edge reconstruction failed")
+        call require(close_scalar(pressure, 0.0_dp) &
+            .and. close_scalar(pressure_slope, 0.0_dp), &
+            "half-mesh pressure edge differs")
+        call evaluate_primitive_kernel_surface(equilibrium_spline, 1.0_dp, &
+            theta, zeta, kernel_fields, kernel_drive, status)
+        call require(status == primitive_kernel_ok, &
+            "half-mesh edge kernel evaluation failed")
+        call require(all(close_scalar(kernel_fields(:, :, 1), -7.0_dp)) &
+            .and. all(close_scalar(kernel_fields(:, :, 2), 0.6_dp)), &
+            "half-mesh flux edge slopes differ")
         call check_compatible_problem(equilibrium)
+        call check_compatible_three_component_problem(equilibrium)
         equilibrium%winding = 1
         call fit_primitive_equilibrium(equilibrium, equilibrium_spline, status)
         call require(status == primitive_equilibrium_invalid, &
@@ -318,9 +338,11 @@ contains
     subroutine check_compatible_problem(equilibrium)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(compatible_two_component_problem_t) :: problem
+        type(compatible_cell_trace_t), allocatable :: traces(:)
         real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
+        real(dp), allocatable :: reference_mass(:, :), reference_stiffness(:, :)
         real(dp) :: scale
-        integer :: degree, expected_h1, expected_l2, status
+        integer :: degree, expected_h1, expected_l2, status, term
 
         do degree = 1, 4
             call build_compatible_two_component_problem(equilibrium, &
@@ -328,8 +350,8 @@ contains
                 degree, 16, 16, problem, status)
             call require(status == compatible_problem_ok, &
                 "compatible problem assembly failed")
-            expected_h1 = size(equilibrium%s) + degree - 2
-            expected_l2 = size(equilibrium%s) + degree - 1
+            expected_h1 = size(equilibrium%s) * degree - 1
+            expected_l2 = size(equilibrium%s) * degree
             call require(problem%h1_dofs == expected_h1 &
                 .and. problem%l2_dofs == expected_l2, &
                 "compatible problem dimensions differ")
@@ -342,16 +364,111 @@ contains
                 "compatible stiffness is not symmetric")
             call require(all(problem%mass == transpose(problem%mass)), &
                 "compatible mass is not exactly symmetric")
+            call require(maxval(abs(problem%stiffness &
+                - sum(problem%stiffness_terms, dim=3))) &
+                < 3.0e-14_dp * scale, "compatible energy terms do not sum")
+            do term = 1, size(problem%stiffness_terms, 3)
+                call require(all(problem%stiffness_terms(:, :, term) &
+                    == transpose(problem%stiffness_terms(:, :, term))), &
+                    "compatible energy term is not exactly symmetric")
+            end do
             call solve_symmetric_generalized(problem%stiffness, problem%mass, &
                 eigenvalues, eigenvectors, status)
             call require(status == symmetric_eigensolver_ok, &
                 "compatible mass is not positive definite")
         end do
+        reference_stiffness = problem%stiffness
+        reference_mass = problem%mass
+        call build_compatible_two_component_problem(equilibrium, &
+            [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, 4, 16, 16, &
+            problem, status, [1, 3, 6], traces)
+        call require(status == compatible_problem_ok, &
+            "traced compatible problem assembly failed")
+        call require(all(problem%stiffness == reference_stiffness) &
+            .and. all(problem%mass == reference_mass), &
+            "operator tracing changed the assembled problem")
+        call check_compatible_trace(traces)
         call build_compatible_two_component_problem(equilibrium, [1], [0], &
             [0.0_dp], 1, 0, 16, 16, problem, status)
         call require(status == compatible_problem_invalid, &
             "degree-zero compatible problem was accepted")
     end subroutine check_compatible_problem
+
+    subroutine check_compatible_trace(traces)
+        type(compatible_cell_trace_t), intent(in) :: traces(:)
+        integer, parameter :: expected_map_size(3) = [24, 27, 24]
+        integer :: cell, point
+
+        call require(size(traces) == 3, "compatible trace count differs")
+        call require(all([(traces(cell)%cell, cell=1, 3)] == [1, 3, 6]), &
+            "compatible trace cell selection differs")
+        do cell = 1, size(traces)
+            call require(size(traces(cell)%points) == 9, &
+                "compatible trace quadrature count differs")
+            do point = 1, size(traces(cell)%points)
+                call require(size(traces(cell)%points(point)%map) &
+                    == expected_map_size(cell), &
+                    "compatible trace map size differs")
+                call require(all(shape(traces(cell)%points(point)%fields) &
+                    == [16, 16, 13]), "compatible trace field shape differs")
+                call require(all(ieee_is_finite( &
+                    traces(cell)%points(point)%stiffness_terms)) &
+                    .and. all(ieee_is_finite( &
+                    traces(cell)%points(point)%mass)), &
+                    "compatible trace matrix is nonfinite")
+                call require(all(traces(cell)%points(point)%mass &
+                    == transpose(traces(cell)%points(point)%mass)), &
+                    "compatible trace mass is not symmetric")
+            end do
+        end do
+    end subroutine check_compatible_trace
+
+    subroutine check_compatible_three_component_problem(equilibrium)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        type(compatible_three_component_problem_t) :: problem
+        real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
+        real(dp) :: scale
+        integer :: degree, expected_h1, expected_l2, status, term
+
+        do degree = 1, 4
+            call build_compatible_three_component_problem(equilibrium, &
+                5.0_dp / 3.0_dp, 2.0_dp, [0, 1, 2], [0, 0, 0], &
+                [0.0_dp, 0.5_dp, 1.0_dp], 1, degree, 16, 16, problem, status)
+            call require(status == compatible_three_component_ok, &
+                "compatible three-component problem assembly failed")
+            expected_h1 = size(equilibrium%s) * degree - 1
+            expected_l2 = size(equilibrium%s) * degree
+            call require(problem%h1_dofs == expected_h1 &
+                .and. problem%l2_dofs == expected_l2, &
+                "compatible three-component dimensions differ")
+            call require(problem%normal_unknowns == 3 * expected_h1 &
+                .and. problem%eta_unknowns == 2 * expected_l2 &
+                .and. problem%mu_unknowns == 2 * expected_l2, &
+                "compatible three-component activity differs")
+            scale = max(1.0_dp, maxval(abs(problem%stiffness)))
+            call require(maxval(abs(problem%stiffness &
+                - transpose(problem%stiffness))) < 3.0e-14_dp * scale, &
+                "compatible three-component stiffness is not symmetric")
+            call require(all(problem%mass == transpose(problem%mass)), &
+                "compatible three-component mass is not exactly symmetric")
+            call require(maxval(abs(problem%stiffness &
+                - sum(problem%stiffness_terms, dim=3))) &
+                < 3.0e-14_dp * scale, "compatible energy terms do not sum")
+            do term = 1, size(problem%stiffness_terms, 3)
+                call require(all(problem%stiffness_terms(:, :, term) &
+                    == transpose(problem%stiffness_terms(:, :, term))), &
+                    "compatible energy term is not exactly symmetric")
+            end do
+            call solve_symmetric_generalized(problem%stiffness, problem%mass, &
+                eigenvalues, eigenvectors, status)
+            call require(status == symmetric_eigensolver_ok, &
+                "compatible physical mass is not positive definite")
+        end do
+        call build_compatible_three_component_problem(equilibrium, 0.0_dp, &
+            2.0_dp, [1], [0], [0.0_dp], 1, 2, 16, 16, problem, status)
+        call require(status == compatible_three_component_invalid, &
+            "zero adiabatic index was accepted")
+    end subroutine check_compatible_three_component_problem
 
     subroutine torus_jet(s, theta_value, zeta_value, expected)
         real(dp), intent(in) :: s, theta_value, zeta_value

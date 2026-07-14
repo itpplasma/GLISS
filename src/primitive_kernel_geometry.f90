@@ -2,7 +2,8 @@ module primitive_kernel_geometry
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use export_surface_geometry, only: build_surface_kernel_fields, &
-        mercier_ok, surface_data_t, surface_profiles_t
+        mercier_ok, solve_beta_derivatives_modes, surface_data_t, &
+        surface_profiles_t
     use primitive_equilibrium_spline, only: evaluate_primitive_equilibrium, &
         primitive_equilibrium_ok, primitive_equilibrium_spline_t
     use primitive_geometry_grid, only: primitive_geometry_grid_t
@@ -18,11 +19,17 @@ module primitive_kernel_geometry
 contains
 
     subroutine evaluate_primitive_kernel_surface(spline, coordinate, theta, &
-            zeta_period, fields, drive, info)
+            zeta_period, fields, drive, info, jacobian_radial, &
+            jacobian_theta, jacobian_zeta, pressure_pa, geometric_drive)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         real(dp), intent(in) :: coordinate, theta(:), zeta_period(:)
         real(dp), allocatable, intent(out) :: fields(:, :, :), drive(:, :)
         integer, intent(out) :: info
+        real(dp), allocatable, optional, intent(out) :: jacobian_radial(:, :)
+        real(dp), allocatable, optional, intent(out) :: jacobian_theta(:, :)
+        real(dp), allocatable, optional, intent(out) :: jacobian_zeta(:, :)
+        real(dp), optional, intent(out) :: pressure_pa
+        real(dp), allocatable, optional, intent(out) :: geometric_drive(:, :)
         type(primitive_geometry_grid_t) :: geometry
         type(surface_data_t) :: surface
         type(surface_profiles_t) :: profiles
@@ -30,6 +37,7 @@ contains
         integer :: allocation_status, local_info
 
         info = primitive_kernel_invalid
+        if (present(pressure_pa)) pressure_pa = 0.0_dp
         call evaluate_primitive_equilibrium(spline, coordinate, theta, &
             zeta_period, geometry, pressure, pressure_slope, local_info)
         if (local_info /= primitive_equilibrium_ok) return
@@ -59,8 +67,127 @@ contains
             deallocate (fields, drive)
             return
         end if
+        if (present(jacobian_radial)) then
+            allocate (jacobian_radial, source=geometry%jacobian_s, &
+                stat=allocation_status)
+            if (allocation_status /= 0) then
+                deallocate (fields, drive)
+                call clear_optional_outputs(jacobian_radial, jacobian_theta, &
+                    jacobian_zeta, geometric_drive)
+                info = primitive_kernel_allocation_error
+                return
+            end if
+        end if
+        if (present(jacobian_theta)) then
+            allocate (jacobian_theta, source=geometry%jacobian_theta, &
+                stat=allocation_status)
+            if (allocation_status /= 0) then
+                deallocate (fields, drive)
+                call clear_optional_outputs(jacobian_radial, jacobian_theta, &
+                    jacobian_zeta, geometric_drive)
+                info = primitive_kernel_allocation_error
+                return
+            end if
+        end if
+        if (present(jacobian_zeta)) then
+            allocate (jacobian_zeta, source=geometry%jacobian_zeta, &
+                stat=allocation_status)
+            if (allocation_status /= 0) then
+                deallocate (fields, drive)
+                call clear_optional_outputs(jacobian_radial, jacobian_theta, &
+                    jacobian_zeta, geometric_drive)
+                info = primitive_kernel_allocation_error
+                return
+            end if
+        end if
+        if (present(pressure_pa)) pressure_pa = pressure
+        if (present(geometric_drive)) then
+            call compute_geometric_drive(spline, geometry, surface, profiles, &
+                theta, zeta_period, geometric_drive, local_info)
+            if (local_info /= primitive_kernel_ok) then
+                deallocate (fields, drive)
+                call clear_optional_outputs(jacobian_radial, jacobian_theta, &
+                    jacobian_zeta, geometric_drive)
+                info = local_info
+                return
+            end if
+        end if
         info = primitive_kernel_ok
     end subroutine evaluate_primitive_kernel_surface
+
+    subroutine clear_optional_outputs(jacobian_radial, jacobian_theta, &
+            jacobian_zeta, geometric_drive)
+        real(dp), allocatable, optional, intent(inout) :: jacobian_radial(:, :)
+        real(dp), allocatable, optional, intent(inout) :: jacobian_theta(:, :)
+        real(dp), allocatable, optional, intent(inout) :: jacobian_zeta(:, :)
+        real(dp), allocatable, optional, intent(inout) :: geometric_drive(:, :)
+
+        if (present(jacobian_radial)) then
+            if (allocated(jacobian_radial)) deallocate (jacobian_radial)
+        end if
+        if (present(jacobian_theta)) then
+            if (allocated(jacobian_theta)) deallocate (jacobian_theta)
+        end if
+        if (present(jacobian_zeta)) then
+            if (allocated(jacobian_zeta)) deallocate (jacobian_zeta)
+        end if
+        if (present(geometric_drive)) then
+            if (allocated(geometric_drive)) deallocate (geometric_drive)
+        end if
+    end subroutine clear_optional_outputs
+
+    subroutine compute_geometric_drive(spline, geometry, surface, profiles, &
+            theta, zeta, drive, info)
+        type(primitive_equilibrium_spline_t), intent(in) :: spline
+        type(primitive_geometry_grid_t), intent(in) :: geometry
+        type(surface_data_t), intent(in) :: surface
+        type(surface_profiles_t), intent(in) :: profiles
+        real(dp), intent(in) :: theta(:), zeta(:)
+        real(dp), allocatable, intent(out) :: drive(:, :)
+        integer, intent(out) :: info
+        real(dp), allocatable :: beta(:, :), beta_theta(:, :)
+        real(dp), allocatable :: beta_zeta(:, :), current_theta(:, :)
+        real(dp), allocatable :: current_zeta(:, :), grad_s2(:, :)
+        real(dp), allocatable :: curvature_theta(:, :)
+        real(dp), allocatable :: curvature_zeta(:, :)
+
+        info = primitive_kernel_invalid
+        call solve_beta_derivatives_modes(spline%position%poloidal_modes, &
+            spline%position%toroidal_modes, surface, theta, zeta, &
+            profiles%covariant_theta_slope, &
+            profiles%covariant_zeta_slope, profiles%pressure_slope, &
+            profiles%poloidal_slope, profiles%flux_slope, beta, beta_theta, &
+            beta_zeta, info=info)
+        if (info /= mercier_ok) return
+        grad_s2 = (surface%g_tt * surface%g_zz - surface%g_tz**2) &
+            / surface%jacobian**2
+        current_theta = (beta_zeta - profiles%covariant_zeta_slope) &
+            / surface%jacobian
+        current_zeta = (profiles%covariant_theta_slope - beta_theta) &
+            / surface%jacobian
+        beta = surface%g_tt * current_theta + surface%g_tz * current_zeta
+        beta_theta = surface%g_tz * current_theta &
+            + surface%g_zz * current_zeta
+        curvature_theta = -sqrt(grad_s2) &
+            * (geometry%b_contravariant(:, :, 1) &
+            * geometry%second_form(:, :, 1, 1) &
+            + geometry%b_contravariant(:, :, 2) &
+            * geometry%second_form(:, :, 1, 2))
+        curvature_zeta = -sqrt(grad_s2) &
+            * (geometry%b_contravariant(:, :, 1) &
+            * geometry%second_form(:, :, 1, 2) &
+            + geometry%b_contravariant(:, :, 2) &
+            * geometry%second_form(:, :, 2, 2))
+        allocate (drive(size(theta), size(zeta)))
+        drive = 2.0_dp * (beta_theta * curvature_theta &
+            - beta * curvature_zeta) / (surface%jacobian * grad_s2**2)
+        if (.not. all(ieee_is_finite(drive))) then
+            deallocate (drive)
+            info = primitive_kernel_invalid
+            return
+        end if
+        info = primitive_kernel_ok
+    end subroutine compute_geometric_drive
 
     subroutine copy_surface(geometry, surface, allocation_status)
         type(primitive_geometry_grid_t), intent(in) :: geometry

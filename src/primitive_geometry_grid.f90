@@ -40,6 +40,10 @@ contains
         real(dp), intent(in), optional :: toroidal_flux_curvature
         real(dp), intent(in), optional :: poloidal_flux_curvature
         type(primitive_geometry_point_t) :: point
+        real(dp) :: position_s(3), position_theta(3), position_zeta(3)
+        real(dp) :: position_ss(3), position_s_theta(3)
+        real(dp) :: position_s_zeta(3), position_theta_theta(3)
+        real(dp) :: position_theta_zeta(3), position_zeta_zeta(3)
         integer :: allocation_status, j, k, point_info
 
         geometry = primitive_geometry_grid_t()
@@ -63,14 +67,20 @@ contains
         end if
         do k = 1, size(jet%value, 2)
             do j = 1, size(jet%value, 1)
-                call build_primitive_geometry_point(jet%radial(j, k, :), &
-                    jet%poloidal(j, k, :), jet%toroidal(j, k, :), &
-                    jet%radial_radial(j, k, :), &
-                    jet%radial_poloidal(j, k, :), &
-                    jet%radial_toroidal(j, k, :), &
-                    jet%poloidal_poloidal(j, k, :), &
-                    jet%poloidal_toroidal(j, k, :), &
-                    jet%toroidal_toroidal(j, k, :), field_periods, &
+                position_s = jet%radial(j, k, :)
+                position_theta = jet%poloidal(j, k, :)
+                position_zeta = jet%toroidal(j, k, :)
+                position_ss = jet%radial_radial(j, k, :)
+                position_s_theta = jet%radial_poloidal(j, k, :)
+                position_s_zeta = jet%radial_toroidal(j, k, :)
+                position_theta_theta = jet%poloidal_poloidal(j, k, :)
+                position_theta_zeta = jet%poloidal_toroidal(j, k, :)
+                position_zeta_zeta = jet%toroidal_toroidal(j, k, :)
+                call build_primitive_geometry_point(position_s, &
+                    position_theta, position_zeta, position_ss, &
+                    position_s_theta, position_s_zeta, &
+                    position_theta_theta, position_theta_zeta, &
+                    position_zeta_zeta, field_periods, &
                     toroidal_flux_slope, poloidal_flux_slope, point, &
                     point_info)
                 if (point_info /= primitive_geometry_ok) then

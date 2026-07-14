@@ -98,10 +98,21 @@ contains
                 eigenvalues, work, size(work), info)
         end if
         if (info == symmetric_eigensolver_ok) then
-            if (apply_equilibration) &
-                eigenvectors = spread(scales, 2, n) * eigenvectors
+            if (apply_equilibration) call scale_vectors(eigenvectors, scales)
         end if
     end subroutine solve_symmetric_generalized_allocated
+
+    subroutine scale_vectors(vectors, scales)
+        real(dp), intent(inout) :: vectors(:, :)
+        real(dp), intent(in) :: scales(:)
+        integer :: column, row
+
+        do column = 1, size(vectors, 2)
+            do row = 1, size(vectors, 1)
+                vectors(row, column) = scales(row) * vectors(row, column)
+            end do
+        end do
+    end subroutine scale_vectors
 
     subroutine equilibrate_generalized_problem(stiffness, mass, scales, info)
         real(dp), intent(inout) :: stiffness(:, :), mass(:, :)
@@ -111,8 +122,10 @@ contains
         integer :: column, row
 
         info = symmetric_eigensolver_invalid
-        if (any([(mass(row, row) <= 0.0_dp, row=1, size(mass, 1))])) return
-        scales = 1.0_dp / sqrt([(mass(row, row), row=1, size(mass, 1))])
+        do row = 1, size(mass, 1)
+            if (mass(row, row) <= 0.0_dp) return
+            scales(row) = 1.0_dp / sqrt(mass(row, row))
+        end do
         do column = 1, size(mass, 2)
             do row = column, size(mass, 1)
                 scaled_stiffness = scales(row) &
@@ -151,11 +164,20 @@ contains
     pure function symmetric_matrix(matrix) result(symmetric)
         real(dp), intent(in) :: matrix(:, :)
         logical :: symmetric
-        real(dp) :: scale
+        real(dp) :: scale, tolerance
+        integer :: column, row
 
         scale = max(1.0_dp, maxval(abs(matrix)))
-        symmetric = maxval(abs(matrix - transpose(matrix))) &
-            <= 128.0_dp * epsilon(1.0_dp) * scale
+        tolerance = 128.0_dp * epsilon(1.0_dp) * scale
+        symmetric = .true.
+        do column = 1, size(matrix, 2)
+            do row = column + 1, size(matrix, 1)
+                if (abs(matrix(row, column) - matrix(column, row)) &
+                    <= tolerance) cycle
+                symmetric = .false.
+                return
+            end do
+        end do
     end function symmetric_matrix
 
 end module symmetric_eigensolver
