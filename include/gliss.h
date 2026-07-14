@@ -173,7 +173,7 @@ gliss_status gliss_terpsichore_fixed_boundary(
 /* Evaluate the fixed-boundary, sine-parity axisymmetric family on an existing
  * equilibrium. The native mode table is (0,+n), then (m,-n),(m,+n) through
  * poloidal_max, with the regular-axis powers used by gliss_axisymmetric.
- * radial_quadrature is 1 for midpoint or 2 for two-point Gauss quadrature.
+ * radial_quadrature must be 1 for midpoint quadrature.
  * solve_eigenpair is 0 for inertia only or 1 for the certified lowest pair.
  * Set result->struct_size to sizeof(*result). The result is unchanged on
  * failure. */
@@ -189,8 +189,8 @@ gliss_status gliss_axisymmetric_spectrum(
 
 /* A fixed-boundary problem copies and assembles all data it needs, so the
  * equilibrium may be destroyed after successful construction. mode_m and
- * mode_n are mode_count contiguous int32_t values. radial_quadrature is 1 for
- * midpoint or 2 for two-point Gauss quadrature. */
+ * mode_n are mode_count contiguous int32_t values. radial_quadrature must be
+ * 1 for midpoint quadrature. */
 gliss_status gliss_stability_problem_create(
     const gliss_equilibrium *equilibrium,
     double adiabatic_index,

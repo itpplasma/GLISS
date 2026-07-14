@@ -11,8 +11,6 @@ module physical_mass_family_assembly
         phase_assembly_transformed
     use physical_mass_assembly, only: &
         assemble_physical_mass_surface_resolved
-    use radial_slice_interpolation, only: gauss_two_lower, &
-        gauss_two_upper, interpolate_slice_pair
     use radial_space_policy, only: radial_space_config_t
     use trial_space_topology, only: build_trial_space_topology, &
         trial_space_topology_t, trial_topology_ok
@@ -113,52 +111,26 @@ contains
         integer, intent(in) :: element_to_global(:, :)
         real(dp), intent(out) :: mass(:, :)
         integer, intent(out) :: info
-        type(radial_space_config_t) :: node_space
         real(dp) :: element(4 * size(trial_m), 4 * size(trial_m))
-        real(dp) :: element_total(4 * size(trial_m), 4 * size(trial_m))
-        real(dp) :: fields_node(size(fields, 1), size(fields, 2), &
-            size(fields, 3))
-        real(dp) :: nodes(2), radial_coordinate, blend, density_node
-        integer :: interval, node, node_count, left, right
+        real(dp) :: radial_coordinate
+        integer :: interval
 
         call validate_fixed_inputs(fields, density_kg_m3, trial_m, &
             trial_n, trial_parity, stored_power, field_periods, radial_step, &
             phase_assembly, element_to_global, mass, info)
         if (info /= 0) return
-        if (radial_space%quadrature_points == 2) then
-            node_count = 2
-            nodes(1) = gauss_two_lower
-            nodes(2) = gauss_two_upper
-        else
-            node_count = 1
-            nodes(1) = radial_space%evaluation_coordinate
-        end if
         mass = 0.0_dp
         do interval = 1, size(fields, 4)
-            element_total = 0.0_dp
-            do node = 1, node_count
-                node_space = radial_space
-                node_space%evaluation_coordinate = nodes(node)
-                node_space%weight_fraction = radial_space%weight_fraction &
-                    / real(node_count, dp)
-                radial_coordinate = (real(interval - 1, dp) + nodes(node)) &
-                    * radial_step
-                call interpolate_slice_pair(interval, size(fields, 4), &
-                    nodes(node), left, right, blend)
-                fields_node = (1.0_dp - blend) * fields(:, :, :, left) &
-                    + blend * fields(:, :, :, right)
-                density_node = (1.0_dp - blend) * density_kg_m3(left) &
-                    + blend * density_kg_m3(right)
-                call assemble_physical_mass_surface_resolved( &
-                    fields_node, density_node, trial_m, &
-                    trial_n, trial_parity, stored_power, field_periods, &
-                    node_space, radial_coordinate, radial_step, &
-                    phase_assembly, element, info)
-                if (info /= 0) return
-                element_total = element_total + element
-            end do
+            radial_coordinate = (real(interval - 1, dp) &
+                + radial_space%evaluation_coordinate) * radial_step
+            call assemble_physical_mass_surface_resolved( &
+                fields(:, :, :, interval), density_kg_m3(interval), trial_m, &
+                trial_n, trial_parity, stored_power, field_periods, &
+                radial_space, radial_coordinate, radial_step, phase_assembly, &
+                element, info)
+            if (info /= 0) return
             call add_mapped_dynamic_element(element_to_global(:, interval), &
-                element_total, mass, info)
+                element, mass, info)
             if (info /= dynamic_layout_ok) return
         end do
         info = 0

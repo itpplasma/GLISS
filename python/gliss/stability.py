@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from .full_spectrum import FullSpectrumResult, FullStabilityResult
     from .schema import RunManifest, StabilityConfiguration
 
-_QUADRATURE = {"midpoint": 1, "gauss2": 2}
+_QUADRATURE = {"midpoint": 1}
 
 
 class _SpectrumSummary(ctypes.Structure):
@@ -224,7 +224,7 @@ class StabilityProblem:
         if not isinstance(radial_quadrature, str):
             raise TypeError("radial_quadrature must be a string")
         if radial_quadrature not in _QUADRATURE:
-            raise ValueError("radial_quadrature must be 'midpoint' or 'gauss2'")
+            raise ValueError("radial_quadrature must be 'midpoint'")
         self.modes = validate_modes(modes)
         self.adiabatic_index = real_parameter(
             adiabatic_index, "adiabatic_index", allow_zero=True

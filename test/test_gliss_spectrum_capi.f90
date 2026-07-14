@@ -221,6 +221,14 @@ program test_gliss_spectrum_capi
         "empty mode arrays were accepted")
     status = problem_create(equilibrium, 5.0_c_double / 3.0_c_double, &
         2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
+        c_loc(mode_n), 2_c_int, c_loc(rejected), c_loc(error_buffer), &
+        int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "unsafe interpolated quadrature was accepted")
+    call require(.not. c_associated(rejected), &
+        "rejected quadrature returned a problem handle")
+    status = problem_create(equilibrium, 5.0_c_double / 3.0_c_double, &
+        2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
         c_loc(mode_n), 1_c_int, c_null_ptr, c_loc(error_buffer), &
         int(size(error_buffer), c_size_t))
     call require(status == status_invalid_argument, &

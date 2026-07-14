@@ -50,7 +50,6 @@ add_library(gliss
     src/trial_space_topology.f90
     src/phase_factor_topology.f90
     src/physical_constants.f90
-    src/radial_slice_interpolation.f90
     src/radial_space_policy.f90
     src/perpendicular_kinetic_kernel.f90
     src/symmetric_pivot_inertia.f90
@@ -257,8 +256,11 @@ if(BUILD_TESTING)
         "--family requires exactly INDEX MMAX NMAX"
         missing.nc 1.6666666666666667 1.0 1.0 --family 0 8)
     add_spectrum_cli_rejection(spectrum_cli_bad_quadrature
-        "quadrature RULE must be midpoint or gauss2"
+        "quadrature RULE must be midpoint"
         missing.nc 1.6666666666666667 1.0 1.0 --quadrature bad 1,1)
+    add_spectrum_cli_rejection(spectrum_cli_rejects_gauss2
+        "quadrature RULE must be midpoint"
+        missing.nc 1.6666666666666667 1.0 1.0 --quadrature gauss2 1,1)
     add_spectrum_cli_rejection(spectrum_cli_incomplete_quadrature
         "--quadrature requires RULE and a mode selector"
         missing.nc 1.6666666666666667 1.0 1.0 --quadrature)
@@ -281,8 +283,11 @@ if(BUILD_TESTING)
         "the optional argument must be --quadrature"
         missing.nc 1 4 --bad gauss2)
     add_axisymmetric_cli_rejection(axisymmetric_cli_bad_quadrature
-        "quadrature RULE must be midpoint or gauss2"
+        "quadrature RULE must be midpoint"
         missing.nc 1 4 --quadrature bad)
+    add_axisymmetric_cli_rejection(axisymmetric_cli_rejects_gauss2
+        "quadrature RULE must be midpoint"
+        missing.nc 1 4 --quadrature gauss2)
 
     function(add_axisymmetric_fkg_cli_rejection name expected)
         add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
@@ -298,7 +303,7 @@ if(BUILD_TESTING)
         "MMAX must be positive" missing.nc 1 0)
     add_axisymmetric_cli_rejection(axisymmetric_cli_bad_final_option
         "the final option must be --count-only"
-        missing.nc 1 4 --quadrature gauss2 --bad)
+        missing.nc 1 4 --quadrature midpoint --bad)
 
     add_executable(test_local_mode test/test_local_mode.f90)
     target_link_libraries(test_local_mode PRIVATE gliss)

@@ -74,10 +74,10 @@ def test_axisymmetric_inertia_uses_loaded_equilibrium():
         equilibrium(library),
         toroidal_mode=2,
         poloidal_max=7,
-        radial_quadrature="gauss2",
+        radial_quadrature="midpoint",
     )
 
-    assert library.arguments == (17, 2, 7, 2, 0)
+    assert library.arguments == (17, 2, 7, 1, 0)
     assert result.has_eigenpair is False
     assert result.field_periods == 1
     assert result.toroidal_mode == 2
@@ -85,7 +85,7 @@ def test_axisymmetric_inertia_uses_loaded_equilibrium():
     assert result.mode_count == 15
     assert result.radial_surfaces == 768
     assert result.parity_class == 1
-    assert result.radial_quadrature == "gauss2"
+    assert result.radial_quadrature == "midpoint"
     assert result.negative_count == 1
     assert result.lowest_eigenvalue is None
     assert result.certificate is None
@@ -126,7 +126,8 @@ def test_axisymmetric_rejects_non_equilibrium():
         ("toroidal_mode", 0, ValueError, "must be positive"),
         ("poloidal_max", 0, ValueError, "must be positive"),
         ("radial_quadrature", 1, TypeError, "must be a string"),
-        ("radial_quadrature", "bad", ValueError, "midpoint or gauss2"),
+        ("radial_quadrature", "gauss2", ValueError, "must be midpoint"),
+        ("radial_quadrature", "bad", ValueError, "must be midpoint"),
     ],
 )
 def test_axisymmetric_rejects_invalid_input(keyword, value, exception, match):

@@ -84,10 +84,8 @@ contains
         select case (trim(token))
         case ("midpoint")
             quadrature = 1
-        case ("gauss2")
-            quadrature = 2
         case default
-            call fail_usage("quadrature RULE must be midpoint or gauss2")
+            call fail_usage("quadrature RULE must be midpoint")
         end select
         selector = 7
         call read_argument(selector, "mode or --family", token)
@@ -161,7 +159,7 @@ contains
         write (error_unit, "(a)") "gliss_spectrum: " // trim(message)
         write (error_unit, "(a)") &
             "usage: gliss_spectrum EXPORT_FILE GAMMA DENSITY FLOOR " // &
-            "[--quadrature midpoint|gauss2] " // &
+            "[--quadrature midpoint] " // &
             "m,n [m,n ...] | --family INDEX MMAX NMAX"
         call terminate_process(2_c_int)
     end subroutine fail_usage

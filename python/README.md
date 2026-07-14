@@ -167,7 +167,7 @@ operator. It uses normalized toroidal flux `s`, a fixed plasma boundary at
 `(m,-n),(m,+n)` for `m=1,...,poloidal_max`. The stored radial factor enforces
 the regular physical behavior `xi^s ~ s^(m/2)` at the magnetic axis. Fourier
 phases use `2*pi*(m*theta-n*zeta)`. Angular quadrature is fixed at 64 by 8;
-radial quadrature is `"midpoint"` or `"gauss2"`.
+radial quadrature is `"midpoint"`.
 
 The eigenvalue and certificate use the native normalization of this
 two-component comparison operator. They are not an SI `omega^2` or a growth
@@ -306,8 +306,10 @@ for parity in result.classes:
 Poloidal mode `m` must be nonnegative; an axis mode with `m=0` also requires
 `n>=0`. Duplicate modes are rejected. `adiabatic_index` is nonnegative,
 `density_kg_m3` is a positive SI mass density, and `zero_floor` is a positive
-`omega^2` threshold in `s^-2`. Radial quadrature is `"midpoint"` or
-`"gauss2"`. Angular quadrature is currently fixed at 64 by 64.
+`omega^2` threshold in `s^-2`. Radial quadrature currently accepts only
+`"midpoint"`. GLISS rejects higher-order quadrature until equilibrium
+primitives can be reconstructed at its nodes without interpolating derived
+midpoint kernels. Angular quadrature is currently fixed at 64 by 64.
 
 The assembled problem uses the physical compressible stiffness and mass,
 transformed one-period Fourier assembly, P1/P0/P0 radial spaces and exact

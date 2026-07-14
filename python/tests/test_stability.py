@@ -310,6 +310,7 @@ def test_stability_problem_lifecycle_and_results(contexts):
         ("density_kg_m3", 0.0, "positive"),
         ("zero_floor", -1.0, "positive"),
         ("zero_floor", np.finfo(np.float64).max, "too large"),
+        ("radial_quadrature", "gauss2", "midpoint"),
         ("radial_quadrature", "unknown", "midpoint"),
         ("radial_quadrature", 1, "string"),
         ("solver_tolerances", {}, "gliss.SolverTolerances"),

@@ -56,7 +56,7 @@ program test_cylinder_physical_spectrum
         call check_screw_unstable(meshes(mesh), growth_values(mesh), &
             mesh == size(meshes))
     end do
-    call check_gauss_quadrature()
+    call check_unsafe_quadrature_rejection()
     growth_errors = abs(growth_values - screw_unstable_omega2) &
         / abs(screw_unstable_omega2)
     write (error_unit, "(a, 3es13.5)") "slow-point deviations ", slow_errors
@@ -103,13 +103,14 @@ contains
 
     subroutine assemble_pair(filename, surfaces, pressure_scale, &
             poloidal_scale, mode_m, mode_n, stiffness, mass, layout, &
-            quadrature_points, form_policy)
+            quadrature_points, reject_quadrature)
         character(len=*), intent(in) :: filename
         integer, intent(in) :: surfaces, mode_m, mode_n
         real(dp), intent(in) :: pressure_scale, poloidal_scale
         real(dp), allocatable, intent(out) :: stiffness(:, :), mass(:, :)
         type(dynamic_family_layout_t), intent(out) :: layout
-        integer, intent(in), optional :: quadrature_points, form_policy
+        integer, intent(in), optional :: quadrature_points
+        logical, intent(in), optional :: reject_quadrature
         type(gvec_cas3d_equilibrium_t) :: equilibrium
         type(dynamic_family_layout_t) :: mass_layout
         type(mass_density_profile_t) :: density
@@ -123,7 +124,6 @@ contains
         if (present(quadrature_points)) then
             radial_space%quadrature_points = quadrature_points
         end if
-        if (present(form_policy)) radial_space%form_policy = form_policy
         call create_cylinder_fixture(filename, surfaces=surfaces, &
             pressure_scale=pressure_scale, poloidal_scale=poloidal_scale)
         call read_gvec_cas3d_file(filename, equilibrium, info)
@@ -142,6 +142,13 @@ contains
             jacobian_s, jacobian_t, jacobian_z, gamma_p, [mode_m], &
             [mode_n], [1], [0.0_dp], 1, radial_space, step, &
             phase_assembly_transformed, stiffness, layout, info)
+        if (present(reject_quadrature)) then
+            if (reject_quadrature) then
+                call require(info /= 0, &
+                    "unsafe interpolated quadrature was accepted")
+                return
+            end if
+        end if
         call require(info == 0, "compressible stiffness assembly failed")
         density%s = [0.0_dp, 1.0_dp]
         density%kilograms_per_cubic_metre = [density_kg_m3, density_kg_m3]
@@ -348,52 +355,14 @@ contains
             "certified eigenvalue disagrees with the dense oracle")
     end subroutine certify_unstable_pair
 
-    ! E5 opt-in: two-point Gauss with interpolated coefficient slices.
-    ! Measures the slow-edge dip against the midpoint defect envelope
-    ! and probes the s^(m/2)(1-s) positivity failure under the
-    ! physical norm.
-    subroutine check_gauss_quadrature()
+    subroutine check_unsafe_quadrature_rejection()
         type(dynamic_family_layout_t) :: layout
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
-        real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
-        real(dp) :: gauss_slow(size(meshes))
-        integer :: info, mesh_index
 
-        do mesh_index = 1, size(meshes)
-            call assemble_pair("theta_gauss_spectrum.nc", &
-                meshes(mesh_index), 1.0_dp, 0.0_dp, 3, 1, stiffness, &
-                mass, layout, quadrature_points=2)
-            call solve_symmetric_generalized(stiffness, mass, &
-                eigenvalues, eigenvectors, info)
-            call require(info == 0, "Gauss theta-pinch solve failed")
-            call require(all(eigenvalues > 0.0_dp), &
-                "Gauss theta-pinch spectrum is not positive")
-            gauss_slow(mesh_index) = abs(eigenvalues(1) &
-                - theta_slow_point) / theta_slow_point
-        end do
-        write (error_unit, "(a, 3es13.5)") "gauss slow deviations ", &
-            gauss_slow
-        ! measured 4.8e-6/1.7e-5/1.5e-4 against the midpoint rule's
-        ! 1.7e-4/2.2e-3/2.9e-2: the slow-edge defect drops by two
-        ! orders; the envelope keeps cross-platform margin.
-        call require(all(gauss_slow < [2.0e-5_dp, 8.0e-5_dp, &
-            8.0e-4_dp]), "Gauss slow edge exceeds its envelope")
-
-        ! the s^(m/2)(1-s) form under the physical norm produced a
-        ! spurious negative eigenvalue with the midpoint rule; the
-        ! Gauss rule restores positivity, pinning the root cause to
-        ! the quadrature rather than the form functions.
-        call assemble_pair("policy_gauss_spectrum.nc", meshes(1), &
-            0.25_dp, 1.0_dp, 4, 4, stiffness, mass, layout, &
-            quadrature_points=2, form_policy=2)
-        call solve_symmetric_generalized(stiffness, mass, eigenvalues, &
-            eigenvectors, info)
-        call require(info == 0, "Gauss form-policy solve failed")
-        write (error_unit, "(a, 2es13.5)") "gauss policy-2 lowest ", &
-            eigenvalues(1:2)
-        call require(all(eigenvalues > 0.0_dp), &
-            "Gauss form-policy member is not positive")
-    end subroutine check_gauss_quadrature
+        call assemble_pair("rejected_quadrature.nc", meshes(1), 1.0_dp, &
+            0.0_dp, 3, 1, stiffness, mass, layout, quadrature_points=2, &
+            reject_quadrature=.true.)
+    end subroutine check_unsafe_quadrature_rejection
 
     subroutine check_bridge_rejections()
         type(gvec_cas3d_equilibrium_t) :: equilibrium

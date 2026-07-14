@@ -14,7 +14,7 @@ from .equilibrium import (
     _raise_for_status,
 )
 
-_QUADRATURE = {"midpoint": 1, "gauss2": 2}
+_QUADRATURE = {"midpoint": 1}
 
 
 @dataclass(frozen=True)
@@ -88,7 +88,7 @@ def _quadrature(value: Any) -> int:
     try:
         return _QUADRATURE[value]
     except KeyError as error:
-        raise ValueError("radial_quadrature must be midpoint or gauss2") from error
+        raise ValueError("radial_quadrature must be midpoint") from error
 
 
 def _result(

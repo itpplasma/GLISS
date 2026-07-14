@@ -23,7 +23,7 @@ contains
         if (density_kg_m3 <= 0.0_dp .or. zero_floor <= 0.0_dp) return
         if (zero_floor > 0.125_dp * huge(zero_floor)) return
         if (size(mode_m) < 1 .or. size(mode_m) /= size(mode_n)) return
-        if (radial_quadrature < 1 .or. radial_quadrature > 2) return
+        if (radial_quadrature /= 1) return
         do first = 1, size(mode_m)
             if (mode_m(first) < 0) return
             if (mode_m(first) == 0 .and. mode_n(first) < 0) return

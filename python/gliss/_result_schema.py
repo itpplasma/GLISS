@@ -95,7 +95,7 @@ def _problem_metadata(value: Mapping[str, Any], context: str) -> tuple:
         raise ValueError(f"{context}.modes: {error}") from error
     quadrature = value["radial_quadrature"]
     if quadrature not in _QUADRATURE:
-        raise ValueError(f"{context}.radial_quadrature must be 'midpoint' or 'gauss2'")
+        raise ValueError(f"{context}.radial_quadrature must be 'midpoint'")
     angular = value["angular_resolution"]
     if not isinstance(angular, list) or len(angular) != 2:
         raise ValueError(f"{context}.angular_resolution must contain two integers")

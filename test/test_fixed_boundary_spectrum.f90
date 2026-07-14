@@ -287,6 +287,10 @@ contains
         call require(status == fixed_boundary_invalid, &
             "zero floor was accepted")
         call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
+            2.0_dp, 1.0_dp, [1], [1], 2, invalid_problem, status)
+        call require(status == fixed_boundary_invalid, &
+            "unsafe interpolated quadrature was accepted")
+        call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
             2.0_dp, 1.0_dp, [1], [1], 3, invalid_problem, status)
         call require(status == fixed_boundary_invalid, &
             "unknown radial quadrature was accepted")

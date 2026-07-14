@@ -122,8 +122,8 @@ contains
             message = "toroidal mode must be positive"
         else if (poloidal_max < 1) then
             message = "poloidal maximum must be positive"
-        else if (radial_quadrature /= 1 .and. radial_quadrature /= 2) then
-            message = "radial quadrature must be 1 or 2"
+        else if (radial_quadrature /= 1) then
+            message = "radial quadrature must be midpoint (1)"
         else if (.not. equilibrium%has_chart_metric) then
             message = "equilibrium export lacks g_st/g_sz chart metrics"
         else if (equilibrium%field_periods /= 1) then

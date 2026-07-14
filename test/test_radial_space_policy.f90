@@ -84,6 +84,13 @@ program test_radial_space_policy
         values, derivatives, info)
     call require(info == radial_space_invalid, &
         "unsupported radial degree was accepted")
+
+    config = radial_space_config_t()
+    config%quadrature_points = 2
+    call evaluate_normal_basis(config, 2, 0.4_dp, 0.1_dp, 0.25_dp, &
+        values, derivatives, info)
+    call require(info == radial_space_invalid, &
+        "unsafe interpolated quadrature was accepted")
     write (*, "(a)") "PASS"
 
 contains

@@ -59,7 +59,7 @@ class StabilityConfiguration:
         if not isinstance(self.radial_quadrature, str):
             raise TypeError("radial_quadrature must be a string")
         if self.radial_quadrature not in _QUADRATURE:
-            raise ValueError("radial_quadrature must be 'midpoint' or 'gauss2'")
+            raise ValueError("radial_quadrature must be 'midpoint'")
         object.__setattr__(self, "modes", _validate_modes(self.modes))
         object.__setattr__(
             self,

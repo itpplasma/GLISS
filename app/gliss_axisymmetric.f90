@@ -39,10 +39,8 @@ program gliss_axisymmetric
         select case (trim(token))
         case ("midpoint")
             quadrature = 1
-        case ("gauss2")
-            quadrature = 2
         case default
-            call fail_usage("quadrature RULE must be midpoint or gauss2")
+            call fail_usage("quadrature RULE must be midpoint")
         end select
         if (arguments == 6) then
             call read_argument(6, "option", token)
@@ -86,7 +84,7 @@ contains
         write (error_unit, "(a)") "gliss_axisymmetric: " // trim(message)
         write (error_unit, "(a)") &
             "usage: gliss_axisymmetric EXPORT_FILE N MMAX " // &
-            "[--quadrature midpoint|gauss2] [--count-only]"
+            "[--quadrature midpoint] [--count-only]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
 
