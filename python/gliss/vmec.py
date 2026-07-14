@@ -75,18 +75,19 @@ def _scalar_alias(file: Any, *names: str) -> float:
 
 def _metadata(path: Path, netcdf_file: Any) -> float:
     try:
-        with netcdf_file(path, "r", mmap=False) as file:
-            if int(_scalar(file, "ier_flag")) != 0:
-                raise ValueError("VMEC wout reports a failed equilibrium solve")
-            if int(_scalar_alias(file, "lasym__logical__", "lasym")) != 0:
-                raise ValueError("GLISS does not yet support asymmetric VMEC equilibria")
-            if int(_scalar_alias(file, "lrfp__logical__", "lrfp")) != 0:
-                raise ValueError("GLISS does not support reversed-field-pinch VMEC output")
-            if int(_scalar(file, "signgs")) != -1:
-                raise ValueError("GLISS requires the standard VMEC signgs=-1 convention")
-            return _scalar_alias(file, "betatotal", "betatot")
-    except (OSError, TypeError) as error:
+        file = netcdf_file(path, "r", mmap=False)
+    except (OSError, TypeError, ValueError) as error:
         raise ValueError(f"cannot read standard VMEC NetCDF file {path}") from error
+    with file:
+        if int(_scalar(file, "ier_flag")) != 0:
+            raise ValueError("VMEC wout reports a failed equilibrium solve")
+        if int(_scalar_alias(file, "lasym__logical__", "lasym")) != 0:
+            raise ValueError("GLISS does not yet support asymmetric VMEC equilibria")
+        if int(_scalar_alias(file, "lrfp__logical__", "lrfp")) != 0:
+            raise ValueError("GLISS does not support reversed-field-pinch VMEC output")
+        if int(_scalar(file, "signgs")) != -1:
+            raise ValueError("GLISS requires the standard VMEC signgs=-1 convention")
+        return _scalar_alias(file, "betatotal", "betatot")
 
 
 def _select_surfaces(transform: Any, radial_surfaces: Optional[int]) -> None:

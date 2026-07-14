@@ -74,6 +74,18 @@ def test_convert_vmec_rejects_overwriting_its_input(tmp_path):
     assert source.read_bytes() == b"preserve"
 
 
+def test_convert_vmec_wraps_truncated_netcdf_error(tmp_path, monkeypatch):
+    source = tmp_path / "wout.nc"
+    source.write_bytes(b"truncated")
+
+    def broken_reader(*args, **kwargs):
+        raise ValueError("cannot reshape truncated variable")
+
+    monkeypatch.setattr(vmec, "_dependencies", lambda: (_BoozModule, broken_reader))
+    with pytest.raises(ValueError, match="cannot read standard VMEC NetCDF file"):
+        vmec.convert_vmec(source, tmp_path / "out.nc")
+
+
 @pytest.mark.parametrize(
     "name", ["poloidal_max", "toroidal_max", "transform_factor", "radial_surfaces"]
 )
