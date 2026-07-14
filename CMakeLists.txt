@@ -470,6 +470,14 @@ if(BUILD_TESTING)
         "gliss_compatible_marginality: duplicate --m0-stored-power"
         missing.nc 2 8 8 1e-8 1 --m0-stored-power=0.5
         --m0-stored-power=0.5 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_bracket_order
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: negative bracket must obey"
+        missing.nc 2 8 8 1e-8 1 --negative-bracket=1e-6,1e-8,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_bracket_shape
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: negative bracket requires"
+        missing.nc 2 8 8 1e-8 1 --negative-bracket=1e-8,1e-6 0,1)
     add_compatible_cli_rejection(compatible_trace_cli_missing
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: missing required arguments")

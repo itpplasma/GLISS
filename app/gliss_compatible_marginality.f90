@@ -22,12 +22,13 @@ program gliss_compatible_marginality
     real(dp), allocatable :: stored_power(:), stiffness(:, :), mass(:, :)
     real(dp), allocatable :: stiffness_operator(:, :), work(:)
     integer, allocatable :: pivots(:)
+    real(dp) :: bracket_lower, bracket_tolerance, bracket_upper
     real(dp) :: density, floor, kinetic, m0_stored_power, potential, residual
     real(dp) :: term_energy(4)
     integer :: allocation_status, arguments, comma, degree, first_mode, info
     integer :: inertia_negative_count, mode, negative_count, work_size
     integer :: n_theta, n_zeta, parity, trial
-    logical :: has_m0_power, inertia_only, physical_mass
+    logical :: bracket_requested, has_m0_power, inertia_only, physical_mass
 
     interface
         subroutine terminate_process(status) bind(C, name="exit")
@@ -62,6 +63,7 @@ program gliss_compatible_marginality
     first_mode = 7
     inertia_only = .false.
     physical_mass = .false.
+    bracket_requested = .false.
     has_m0_power = .false.
     density = 0.0_dp
     m0_stored_power = 0.0_dp
@@ -89,6 +91,14 @@ program gliss_compatible_marginality
             if (m0_stored_power < 0.0_dp .or. m0_stored_power > 1.0_dp) &
                 call fail_usage("m=0 stored power must lie in [0,1]")
             has_m0_power = .true.
+        else if (index(token, "--negative-bracket=") == 1) then
+            if (bracket_requested) &
+                call fail_usage("duplicate --negative-bracket")
+            if (len_trim(token) == len("--negative-bracket=")) &
+                call fail_usage("--negative-bracket requires lower,upper,tolerance")
+            call parse_bracket(token(len("--negative-bracket=") + 1:), &
+                bracket_lower, bracket_upper, bracket_tolerance)
+            bracket_requested = .true.
         else
             call fail_usage("unknown option " // trim(token))
         end if
@@ -144,17 +154,17 @@ program gliss_compatible_marginality
     allocate (stiffness(size(stiffness_operator, 1), &
         size(stiffness_operator, 2)), stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("stiffness allocation", -1)
-    call add_mass_shift(stiffness_operator, problem%mass, floor, stiffness)
     if (size(stiffness, 1) > huge(work_size) / 64) &
         call fail_solver("workspace size", -1)
     work_size = 64 * size(stiffness, 1)
     allocate (pivots(size(stiffness, 1)), work(work_size), &
         stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("workspace allocation", -1)
-    call dsytrf("U", size(stiffness, 1), stiffness, size(stiffness, 1), &
-        pivots, work, size(work), info)
-    if (info /= 0) call fail_solver("shifted stiffness inertia", info)
-    inertia_negative_count = pivot_negative_count(stiffness, pivots)
+    if (bracket_requested) then
+        call bracket_negative_eigenvalue
+        call terminate_process(0_c_int)
+    end if
+    call shifted_negative_count(floor, inertia_negative_count)
     if (inertia_only) then
         write (*, "(a)") "degree,parity,unknowns,normal_unknowns," // &
             "eta_unknowns,inertia_negative_count,physical_mass," // &
@@ -221,7 +231,8 @@ contains
         write (error_unit, "(a)") "usage: gliss_compatible_marginality " // &
             "EXPORT_FILE DEGREE NTHETA NZETA FLOOR PARITY " // &
             "[--inertia-only] [--physical-density=VALUE] " // &
-            "[--m0-stored-power=VALUE] m,n [m,n ...]"
+            "[--m0-stored-power=VALUE] " // &
+            "[--negative-bracket=LOWER,UPPER,TOLERANCE] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
 
@@ -275,5 +286,76 @@ contains
         read (text, *, iostat=status) value
         if (status /= 0) call fail_usage(trim(name) // " must be an integer")
     end subroutine parse_integer
+
+    subroutine parse_bracket(text, lower, upper, tolerance)
+        character(len=*), intent(in) :: text
+        real(dp), intent(out) :: lower, upper, tolerance
+        integer :: first_comma, second_comma
+
+        first_comma = index(text, ",")
+        if (first_comma <= 1 .or. first_comma == len_trim(text)) &
+            call fail_usage("negative bracket requires lower,upper,tolerance")
+        second_comma = index(text(first_comma + 1:), ",")
+        if (second_comma <= 1) &
+            call fail_usage("negative bracket requires lower,upper,tolerance")
+        second_comma = first_comma + second_comma
+        if (second_comma == len_trim(text) .or. &
+            index(text(second_comma + 1:), ",") > 0) &
+            call fail_usage("negative bracket requires lower,upper,tolerance")
+        call parse_real(text(:first_comma - 1), "negative bracket lower", lower)
+        call parse_real(text(first_comma + 1:second_comma - 1), &
+            "negative bracket upper", upper)
+        call parse_real(text(second_comma + 1:), &
+            "negative bracket tolerance", tolerance)
+        if (lower <= 0.0_dp .or. upper <= lower) &
+            call fail_usage("negative bracket must obey 0 < lower < upper")
+        if (tolerance <= 0.0_dp .or. tolerance >= 1.0_dp) &
+            call fail_usage("negative bracket tolerance must lie in (0,1)")
+    end subroutine parse_bracket
+
+    subroutine shifted_negative_count(shift, count)
+        real(dp), intent(in) :: shift
+        integer, intent(out) :: count
+
+        call add_mass_shift(stiffness_operator, problem%mass, shift, stiffness)
+        call dsytrf("U", size(stiffness, 1), stiffness, size(stiffness, 1), &
+            pivots, work, size(work), info)
+        if (info /= 0) call fail_solver("shifted stiffness inertia", info)
+        count = pivot_negative_count(stiffness, pivots)
+    end subroutine shifted_negative_count
+
+    subroutine bracket_negative_eigenvalue
+        real(dp) :: midpoint
+        integer :: iterations, lower_count, midpoint_count, upper_count
+
+        call shifted_negative_count(bracket_lower, lower_count)
+        call shifted_negative_count(bracket_upper, upper_count)
+        if (lower_count /= upper_count + 1) &
+            call fail_usage("negative bracket must contain exactly one eigenvalue")
+        iterations = 0
+        do while (bracket_upper - bracket_lower > &
+                bracket_tolerance * bracket_lower)
+            if (iterations >= 80) call fail_solver("negative bracket iteration", -1)
+            midpoint = bracket_lower + 0.5_dp * &
+                (bracket_upper - bracket_lower)
+            call shifted_negative_count(midpoint, midpoint_count)
+            if (midpoint_count == lower_count) then
+                bracket_lower = midpoint
+            else if (midpoint_count == upper_count) then
+                bracket_upper = midpoint
+            else
+                call fail_solver("negative bracket changed by multiple levels", -1)
+            end if
+            iterations = iterations + 1
+        end do
+        write (*, "(a)") "degree,parity,unknowns,normal_unknowns," // &
+            "eta_unknowns,lower_count,upper_count,iterations," // &
+            "lambda_lower,lambda_upper,m0_stored_power"
+        write (*, "(i0,7(a,i0),3(a,es24.16))") degree, ",", parity, ",", &
+            size(stiffness, 1), ",", problem%normal_unknowns, ",", &
+            problem%eta_unknowns, ",", lower_count, ",", upper_count, ",", &
+            iterations, ",", -bracket_upper, ",", -bracket_lower, ",", &
+            m0_stored_power
+    end subroutine bracket_negative_eigenvalue
 
 end program gliss_compatible_marginality
