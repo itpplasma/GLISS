@@ -1,7 +1,12 @@
 program test_variable_generalized_solver
     use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
-    use symmetric_eigensolver, only: solve_symmetric_generalized
+    use dense_spectrum_support, only: certify_dense_spectrum_inertia, &
+        certify_dense_spectrum_orthogonality, dense_spectrum_ok, &
+        diagnose_dense_spectrum, refine_dense_spectrum
+    use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
+    use symmetric_eigensolver, only: solve_symmetric_generalized, &
+        solve_symmetric_generalized_allocated
     use variable_block_tridiagonal, only: &
         apply_variable_block_tridiagonal, pack_variable_blocks, &
         variable_block_tridiagonal_t
@@ -15,7 +20,8 @@ program test_variable_generalized_solver
     type(variable_block_tridiagonal_t) :: stiffness, mass, corrupt
     real(dp) :: dense_k(6, 6), dense_m(6, 6), eigenvalue, quotient, residual
     real(dp) :: resolution, diagnostic_residual, diagnostic_resolution
-    real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :), vector(:)
+    real(dp), allocatable :: bad_initial(:), eigenvalues(:)
+    real(dp), allocatable :: eigenvectors(:, :), vector(:)
     real(dp) :: shift
     integer :: count, i, info
 
@@ -27,6 +33,8 @@ program test_variable_generalized_solver
     call require(info == 0, "variable stiffness packing failed")
     call pack_variable_blocks(dense_m, widths, mass, info)
     call require(info == 0, "variable mass packing failed")
+    call check_indexed_dense_refinement(stiffness, mass, eigenvalues, &
+        eigenvectors)
 
     call variable_generalized_inertia(stiffness, mass, eigenvalues(1) - 1.0_dp, &
         count, info)
@@ -64,7 +72,17 @@ program test_variable_generalized_solver
         "variable generalized diagnostic residual is inconsistent")
     call require(abs(diagnostic_resolution - resolution) < 1.0e-14_dp, &
         "variable generalized resolution is inconsistent")
+    call iterate_variable_generalized_eigenvalue(stiffness, mass, shift, &
+        eigenvalue, vector, residual, resolution, info, initial=[1.0_dp])
+    call require(info == variable_generalized_invalid, &
+        "wrong-sized inverse-iteration seed was accepted")
+    allocate (bad_initial(6), source=ieee_value(0.0_dp, ieee_quiet_nan))
+    call iterate_variable_generalized_eigenvalue(stiffness, mass, shift, &
+        eigenvalue, vector, residual, resolution, info, initial=bad_initial)
+    call require(info == variable_generalized_invalid, &
+        "nonfinite inverse-iteration seed was accepted")
     call check_long_chain_resolution()
+    call check_ill_scaled_dense_pencil()
 
     corrupt = stiffness
     corrupt%diagonal(1)%values(1, 2) = &
@@ -86,6 +104,37 @@ program test_variable_generalized_solver
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_indexed_dense_refinement(stiffness, mass, values, vectors)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), intent(in) :: values(:), vectors(:, :)
+        type(fixed_boundary_solver_controls_t) :: controls
+        real(dp), allocatable :: refined(:), refined_vectors(:, :)
+        real(dp), allocatable :: rayleigh(:), residuals(:), resolutions(:)
+        integer :: info
+
+        allocate (refined, source=values)
+        allocate (refined_vectors, source=vectors)
+        refined(3) = refined(2)
+        refined_vectors(:, 3) = refined_vectors(:, 2)
+        call refine_dense_spectrum(stiffness, mass, controls, refined, &
+            refined_vectors, info)
+        call require(info == dense_spectrum_ok, &
+            "indexed dense refinement failed")
+        call require(maxval(abs(refined - values)) < 1.0e-11_dp, &
+            "indexed dense refinement skipped an eigenvalue")
+        call certify_dense_spectrum_orthogonality(mass, refined_vectors, info)
+        call require(info == dense_spectrum_ok, &
+            "refined dense vectors are not mass orthonormal")
+        call diagnose_dense_spectrum(stiffness, mass, refined, &
+            refined_vectors, rayleigh, residuals, resolutions, info)
+        call require(info == dense_spectrum_ok, &
+            "refined dense diagnostics failed")
+        call certify_dense_spectrum_inertia(stiffness, mass, refined, &
+            residuals, resolutions, info)
+        call require(info == dense_spectrum_ok, &
+            "refined dense inertia certificate failed")
+    end subroutine check_indexed_dense_refinement
 
     subroutine build_fixture(stiffness, mass)
         real(dp), intent(out) :: stiffness(:, :), mass(:, :)
@@ -146,6 +195,81 @@ contains
             * epsilon(1.0_dp) * abs(quotient), &
             "long-chain norm reduction is missing from resolution")
     end subroutine check_long_chain_resolution
+
+    subroutine check_ill_scaled_dense_pencil()
+        integer, parameter :: n = 32
+        real(dp) :: dense_k(n, n), dense_m(n, n), mass_image(n)
+        real(dp), allocatable :: stiffness_copy(:, :), mass_copy(:, :)
+        real(dp), allocatable :: values(:), vectors(:, :)
+        integer :: info
+
+        call build_ill_scaled_pencil(dense_k, dense_m)
+        allocate (stiffness_copy, source=dense_k)
+        allocate (mass_copy, source=dense_m)
+        call solve_symmetric_generalized_allocated(stiffness_copy, mass_copy, &
+            values, vectors, info, equilibrate=.true.)
+        call require(info == 0, "ill-scaled dense eigensolve failed")
+        call require(abs(values(1) - 9.978266069932716e-5_dp) < 1.0e-8_dp, &
+            "ill-scaled dense eigenvalue changed")
+        mass_image = matmul(dense_m, vectors(:, 1))
+        call require(abs(dot_product(vectors(:, 1), mass_image) - 1.0_dp) &
+            < 1.0e-8_dp, "ill-scaled eigenvector is not mass normalized")
+    end subroutine check_ill_scaled_dense_pencil
+
+    subroutine build_ill_scaled_pencil(stiffness, mass)
+        real(dp), intent(out) :: stiffness(:, :), mass(:, :)
+        integer :: i, n, source
+        real(dp) :: q(size(mass, 1), size(mass, 1))
+        real(dp) :: u(size(mass, 1), size(mass, 1))
+        real(dp) :: mass_base(size(mass, 1), size(mass, 1))
+        real(dp) :: stiffness_base(size(mass, 1), size(mass, 1))
+        real(dp) :: mass_root(size(mass, 1), size(mass, 1))
+        real(dp) :: scale(size(mass, 1)), mass_values(size(mass, 1))
+        real(dp) :: stiffness_values(size(mass, 1))
+
+        n = size(mass, 1)
+        call build_orthogonal_bases(q, u)
+        do i = 1, n
+            mass_values(i) = 10.0_dp**(4.0_dp * real(i - 1, dp) &
+                / real(n - 1, dp))
+            stiffness_values(i) = 10.0_dp**(-4.0_dp &
+                + 10.0_dp * real(i - 1, dp) / real(n - 1, dp))
+            source = modulo(i - 21, n)
+            scale(i) = 10.0_dp**(-5.0_dp &
+                + 10.0_dp * real(source, dp) / real(n - 1, dp))
+        end do
+        mass_root = matmul(transpose(u), &
+            spread(sqrt(mass_values), 2, n) * u)
+        mass_base = matmul(mass_root, mass_root)
+        stiffness_base = matmul(transpose(q), &
+            spread(stiffness_values, 2, n) * q)
+        stiffness_base = matmul(mass_root, &
+            matmul(stiffness_base, mass_root))
+        mass = spread(scale, 2, n) * mass_base * spread(scale, 1, n)
+        stiffness = spread(scale, 2, n) * stiffness_base &
+            * spread(scale, 1, n)
+        mass = 0.5_dp * (mass + transpose(mass))
+        stiffness = 0.5_dp * (stiffness + transpose(stiffness))
+    end subroutine build_ill_scaled_pencil
+
+    subroutine build_orthogonal_bases(q, u)
+        real(dp), intent(out) :: q(:, :), u(:, :)
+        real(dp) :: pi, q_scale
+        integer :: i, j, n
+
+        n = size(q, 1)
+        pi = acos(-1.0_dp)
+        do j = 1, n
+            do i = 1, n
+                q_scale = sqrt(2.0_dp / real(n, dp))
+                if (i == 1) q_scale = 1.0_dp / sqrt(real(n, dp))
+                q(i, j) = q_scale * cos(pi * real(i - 1, dp) &
+                    * (real(j, dp) - 0.5_dp) / real(n, dp))
+                u(i, j) = sqrt(2.0_dp / real(n + 1, dp)) &
+                    * sin(pi * real(i * j, dp) / real(n + 1, dp))
+            end do
+        end do
+    end subroutine build_orthogonal_bases
 
     function mass_norm(vector, mass) result(squared_norm)
         real(dp), intent(in) :: vector(:)

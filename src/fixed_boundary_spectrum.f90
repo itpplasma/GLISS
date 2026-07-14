@@ -5,8 +5,11 @@ module fixed_boundary_spectrum
     use compressible_stiffness_family_assembly, only: &
         assemble_compressible_family_stiffness_with_terms, &
         compressible_family_allocation_error
-    use dense_spectrum_support, only: dense_spectrum_allocation, &
-        dense_spectrum_ok, diagnose_dense_spectrum, unpermute_dense_vectors
+    use dense_spectrum_support, only: certify_dense_spectrum_inertia, &
+        certify_dense_spectrum_orthogonality, dense_spectrum_allocation, &
+        dense_spectrum_is_certified, dense_spectrum_ok, &
+        diagnose_dense_spectrum, refine_dense_spectrum, &
+        unpermute_dense_vectors
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
         dynamic_family_layout_t, dynamic_layout_ok
     use fixed_boundary_energy, only: diagnose_fixed_boundary_energy_store, &
@@ -394,6 +397,7 @@ contains
         integer, intent(in) :: parity_class
         type(fixed_boundary_full_spectrum_t), intent(out) :: result
         integer, intent(out) :: info
+        type(fixed_boundary_spectrum_result_t) :: certified
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
 
         info = fixed_boundary_invalid
@@ -414,11 +418,28 @@ contains
             return
         end if
         call solve_symmetric_generalized_allocated(stiffness, mass, &
-            result%eigenvalues, result%eigenvectors, info)
+            result%eigenvalues, result%eigenvectors, info, equilibrate=.true.)
         if (info /= symmetric_eigensolver_ok) then
             info = merge(fixed_boundary_allocation_error, &
                 fixed_boundary_solver_error, &
                 info == symmetric_eigensolver_allocation)
+            return
+        end if
+        call refine_dense_spectrum(problem%classes(parity_class)%stiffness, &
+            problem%classes(parity_class)%mass, problem%solver_controls, &
+            result%eigenvalues, result%eigenvectors, info)
+        if (info == dense_spectrum_allocation) then
+            info = fixed_boundary_allocation_error
+            return
+        else if (info /= dense_spectrum_ok) then
+            info = fixed_boundary_solver_error
+            return
+        end if
+        call certify_dense_spectrum_orthogonality( &
+            problem%classes(parity_class)%mass, result%eigenvectors, info)
+        if (info /= dense_spectrum_ok) then
+            info = merge(fixed_boundary_allocation_error, &
+                fixed_boundary_solver_error, info == dense_spectrum_allocation)
             return
         end if
         call diagnose_dense_spectrum(problem%classes(parity_class)%stiffness, &
@@ -428,6 +449,24 @@ contains
         if (info /= dense_spectrum_ok) then
             info = merge(fixed_boundary_allocation_error, &
                 fixed_boundary_solver_error, info == dense_spectrum_allocation)
+            return
+        end if
+        call certify_dense_spectrum_inertia( &
+            problem%classes(parity_class)%stiffness, &
+            problem%classes(parity_class)%mass, result%eigenvalues, &
+            result%residuals, result%resolutions, info)
+        if (info /= dense_spectrum_ok) then
+            info = fixed_boundary_solver_error
+            return
+        end if
+        call solve_fixed_boundary_class(problem, parity_class, certified, info)
+        if (info /= fixed_boundary_ok) return
+        if (.not. dense_spectrum_is_certified(result%eigenvalues, &
+            result%rayleigh_quotients, certified%zero_floor, &
+            certified%negative_count, certified%floor_count, &
+            certified%has_eigenvector, certified%lowest_eigenvalue, &
+            certified%certificate)) then
+            info = fixed_boundary_solver_error
             return
         end if
         call unpermute_dense_vectors(result%eigenvectors, &

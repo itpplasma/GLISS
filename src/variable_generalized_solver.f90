@@ -67,13 +67,15 @@ contains
     end subroutine variable_generalized_diagnostics
 
     subroutine iterate_variable_generalized_eigenvalue(stiffness, mass, &
-            shift, eigenvalue, vector, residual, resolution, info, controls)
+            shift, eigenvalue, vector, residual, resolution, info, controls, &
+            initial)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: shift
         real(dp), intent(out) :: eigenvalue, residual, resolution
         real(dp), allocatable, intent(out) :: vector(:)
         integer, intent(out) :: info
         type(fixed_boundary_solver_controls_t), intent(in), optional :: controls
+        real(dp), intent(in), optional :: initial(:)
         type(variable_block_factor_t) :: factor
         type(fixed_boundary_solver_controls_t) :: stopping
         real(dp), allocatable :: iterate(:)
@@ -86,7 +88,14 @@ contains
         if (info /= variable_generalized_ok) return
         n = sum(stiffness%widths)
         allocate (vector(n), iterate(n))
-        call initialize_variable_iterate(vector)
+        if (present(initial)) then
+            info = variable_generalized_invalid
+            if (size(initial) /= n) return
+            if (.not. all(ieee_is_finite(initial))) return
+            vector = initial
+        else
+            call initialize_variable_iterate(vector)
+        end if
         call normalize_variable_mass(vector, mass, info)
         if (info /= variable_generalized_ok) return
         previous = huge(1.0_dp)

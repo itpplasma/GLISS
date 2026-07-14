@@ -62,12 +62,14 @@ contains
     end subroutine solve_symmetric_generalized
 
     subroutine solve_symmetric_generalized_allocated(stiffness, mass, &
-            eigenvalues, eigenvectors, info)
+            eigenvalues, eigenvectors, info, equilibrate)
         real(dp), allocatable, intent(inout) :: stiffness(:, :), mass(:, :)
         real(dp), allocatable, intent(out) :: eigenvalues(:)
         real(dp), allocatable, intent(out) :: eigenvectors(:, :)
         integer, intent(out) :: info
-        real(dp), allocatable :: work(:)
+        logical, intent(in), optional :: equilibrate
+        real(dp), allocatable :: scales(:), work(:)
+        logical :: apply_equilibration
         integer :: allocation_status, n
 
         info = symmetric_eigensolver_invalid
@@ -76,12 +78,59 @@ contains
         n = size(stiffness, 1)
         if (n > ishft(huge(n), -3)) return
         info = symmetric_eigensolver_allocation
-        allocate (eigenvalues(n), work(max(1, 8 * n)), stat=allocation_status)
+        allocate (eigenvalues(n), scales(n), work(max(1, 8 * n)), &
+            stat=allocation_status)
         if (allocation_status /= 0) return
+        apply_equilibration = .false.
+        if (present(equilibrate)) apply_equilibration = equilibrate
+        if (apply_equilibration) then
+            call equilibrate_generalized_problem(stiffness, mass, scales, info)
+            if (info /= symmetric_eigensolver_ok) return
+        else
+            scales = 1.0_dp
+        end if
         call move_alloc(stiffness, eigenvectors)
-        call dsygv(1, "V", "U", n, eigenvectors, n, mass, n, eigenvalues, &
-            work, size(work), info)
+        if (apply_equilibration) then
+            call dsygv(1, "V", "L", n, eigenvectors, n, mass, n, &
+                eigenvalues, work, size(work), info)
+        else
+            call dsygv(1, "V", "U", n, eigenvectors, n, mass, n, &
+                eigenvalues, work, size(work), info)
+        end if
+        if (info == symmetric_eigensolver_ok) then
+            if (apply_equilibration) &
+                eigenvectors = spread(scales, 2, n) * eigenvectors
+        end if
     end subroutine solve_symmetric_generalized_allocated
+
+    subroutine equilibrate_generalized_problem(stiffness, mass, scales, info)
+        real(dp), intent(inout) :: stiffness(:, :), mass(:, :)
+        real(dp), intent(out) :: scales(:)
+        integer, intent(out) :: info
+        real(dp) :: scaled_mass, scaled_stiffness
+        integer :: column, row
+
+        info = symmetric_eigensolver_invalid
+        if (any([(mass(row, row) <= 0.0_dp, row=1, size(mass, 1))])) return
+        scales = 1.0_dp / sqrt([(mass(row, row), row=1, size(mass, 1))])
+        do column = 1, size(mass, 2)
+            do row = column, size(mass, 1)
+                scaled_stiffness = scales(row) &
+                    * (0.5_dp * stiffness(row, column) &
+                    + 0.5_dp * stiffness(column, row)) * scales(column)
+                scaled_mass = scales(row) &
+                    * (0.5_dp * mass(row, column) &
+                    + 0.5_dp * mass(column, row)) * scales(column)
+                stiffness(row, column) = scaled_stiffness
+                stiffness(column, row) = scaled_stiffness
+                mass(row, column) = scaled_mass
+                mass(column, row) = scaled_mass
+            end do
+        end do
+        if (.not. all(ieee_is_finite(stiffness))) return
+        if (.not. all(ieee_is_finite(mass))) return
+        info = symmetric_eigensolver_ok
+    end subroutine equilibrate_generalized_problem
 
     function valid_generalized_problem(stiffness, mass) result(valid)
         real(dp), intent(in) :: stiffness(:, :), mass(:, :)
