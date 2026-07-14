@@ -52,6 +52,7 @@ add_library(gliss
     src/physical_constants.f90
     src/radial_cubic_spline.f90
     src/axis_regular_harmonic_spline.f90
+    src/cartesian_primitive_geometry.f90
     src/radial_feec_complex.f90
     src/radial_space_policy.f90
     src/perpendicular_kinetic_kernel.f90
@@ -388,6 +389,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_axis_regular_harmonic_spline PRIVATE gliss)
     add_test(NAME axis_regular_harmonic_spline
         COMMAND test_axis_regular_harmonic_spline)
+
+    add_executable(test_cartesian_primitive_geometry
+        test/test_cartesian_primitive_geometry.f90)
+    target_link_libraries(test_cartesian_primitive_geometry PRIVATE gliss)
+    add_test(NAME cartesian_primitive_geometry
+        COMMAND test_cartesian_primitive_geometry)
 
     add_executable(test_radial_space_policy
         test/test_radial_space_policy.f90)
