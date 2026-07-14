@@ -226,6 +226,11 @@ boundary condition, and artificial norm all match the reference calculation.
 The finite-spectrum solve retains the P1 normal and P0 tangential coefficients
 in one generalized problem. It does not use the zero-shift tangential Schur
 complement, which preserves marginal inertia but changes finite eigenvalues.
+Before inverse iteration, GLISS applies a symmetric diagonal congruence to
+equilibrate the pencil. The transformation preserves generalized eigenvalues,
+inertia, positive mass, block sparsity, units, and boundary conditions. The
+reported residual is recomputed in the original coefficient coordinates after
+back-transformation.
 
 `modes` is the ordered sequence of `(m, n)` Fourier pairs. Poloidal mode `m`
 must be nonnegative, `(0, n)` requires nonnegative `n`, and pairs must be
@@ -253,10 +258,12 @@ native compatibility errors raise `GlissArgumentError`; reconstruction and
 eigensolver failures raise `GlissComputationError`.
 
 The reconstructed tangential metric must be positive definite at every
-quadrature point. GLISS rejects an export whose truncated Fourier metric has a
-nonpositive principal minor; it never replaces such a value by a small
-positive floor. Increase or change the equilibrium representation instead of
-using the rejected operator.
+quadrature point. GLISS also checks an angular grid with at least sixteen points
+per retained equilibrium harmonic, independently of the requested trial-space
+quadrature. It rejects an export whose truncated Fourier metric has a
+nonpositive principal minor; it never replaces such a value by a small positive
+floor. Increase or change the equilibrium representation instead of using the
+rejected operator.
 
 ## Mercier profile
 

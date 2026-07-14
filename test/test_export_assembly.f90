@@ -15,7 +15,8 @@ program test_export_assembly
         "export_assembly_shifted.nc"
     real(dp), parameter :: pi = acos(-1.0_dp)
     real(dp), parameter :: chart_shift = 0.05_dp
-    type(gvec_cas3d_equilibrium_t) :: equilibrium, invalid_metric
+    type(gvec_cas3d_equilibrium_t) :: equilibrium, hidden_invalid_metric
+    type(gvec_cas3d_equilibrium_t) :: invalid_metric
     real(dp), allocatable :: fields(:, :, :, :), drive(:, :, :)
     real(dp) :: resonant, stable, shifted_resonant, shifted_stable
     real(dp) :: radius, beta_expected, beta_error
@@ -59,6 +60,14 @@ program test_export_assembly
     call build_kernel_geometry(invalid_metric, 32, 16, fields, drive, info)
     call require(info == mercier_invalid_input, &
         "nonpositive tangential metric was accepted")
+    hidden_invalid_metric = equilibrium
+    hidden_invalid_metric%poloidal_modes(2) = 4
+    hidden_invalid_metric%g_zz%sine(:, 2, 1) = &
+        2.0_dp * hidden_invalid_metric%g_zz%cosine(:, 1, 1)
+    call build_kernel_geometry(hidden_invalid_metric, 8, 8, fields, drive, &
+        info)
+    call require(info == mercier_invalid_input, &
+        "between-node negative metric was accepted")
 
     call solve_modes(equilibrium, shifted_resonant, shifted_stable)
     call require(shifted_resonant < 0.0_dp, &

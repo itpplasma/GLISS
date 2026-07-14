@@ -1,6 +1,6 @@
 module export_surface_geometry
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use gvec_cas3d_reconstruction, only: project_harmonic_grid, &
         reconstruct_harmonic_grid, reconstruction_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
@@ -15,6 +15,7 @@ module export_surface_geometry
 
     real(dp), parameter, public :: two_pi = 2.0_dp * acos(-1.0_dp)
     real(dp), parameter, public :: mu0 = 2.0_dp * two_pi * 1.0e-7_dp
+    integer(int64), parameter :: metric_points_per_harmonic = 16_int64
 
     type, public :: surface_data_t
         real(dp), allocatable :: jacobian(:, :), g_tt(:, :), g_tz(:, :)
@@ -41,6 +42,7 @@ module export_surface_geometry
     public :: solve_beta_derivatives
     public :: surface_derivatives
     public :: surface_values
+    public :: validate_tangential_metric
 
 contains
 
@@ -68,6 +70,8 @@ contains
         if (equilibrium%radial_grid /= radial_grid_half) return
         ns = size(equilibrium%s)
         if (ns < 5) return
+        call validate_tangential_metric(equilibrium, n_theta, n_zeta, info)
+        if (info /= mercier_ok) return
 
         call build_angular_grids(n_theta, n_zeta, theta, zeta)
         call differentiate_pair(equilibrium%s, equilibrium%jacobian, &
@@ -117,6 +121,80 @@ contains
         end do
         info = mercier_ok
     end subroutine build_kernel_geometry
+
+    subroutine validate_tangential_metric(equilibrium, n_theta, n_zeta, info)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(in) :: n_theta, n_zeta
+        integer, intent(out) :: info
+        real(dp), allocatable :: determinant(:, :), g_tt(:, :)
+        real(dp), allocatable :: g_tz(:, :), g_zz(:, :), theta(:), zeta(:)
+        integer :: check_theta, check_zeta, surface
+
+        info = mercier_invalid_input
+        call metric_validation_grid(equilibrium, n_theta, n_zeta, &
+            check_theta, check_zeta, info)
+        if (info /= mercier_ok) return
+        call build_angular_grids(check_theta, check_zeta, theta, zeta)
+        do surface = 1, size(equilibrium%s)
+            call surface_values(equilibrium%g_tt, surface, equilibrium, &
+                theta, zeta, g_tt, info)
+            if (info /= mercier_ok) return
+            call surface_values(equilibrium%g_tz, surface, equilibrium, &
+                theta, zeta, g_tz, info)
+            if (info /= mercier_ok) return
+            call surface_values(equilibrium%g_zz, surface, equilibrium, &
+                theta, zeta, g_zz, info)
+            if (info /= mercier_ok) return
+            determinant = g_tt * g_zz - g_tz**2
+            if (.not. tangential_metric_is_positive( &
+                g_tt, g_zz, determinant)) then
+                info = mercier_invalid_input
+                return
+            end if
+        end do
+        info = mercier_ok
+    end subroutine validate_tangential_metric
+
+    subroutine metric_validation_grid(equilibrium, n_theta, n_zeta, &
+            check_theta, check_zeta, info)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(in) :: n_theta, n_zeta
+        integer, intent(out) :: check_theta, check_zeta, info
+        integer(int64) :: poloidal, toroidal
+
+        info = mercier_invalid_input
+        if (n_theta < 8 .or. n_zeta < 8) return
+        if (.not. allocated(equilibrium%poloidal_modes)) return
+        if (.not. allocated(equilibrium%toroidal_modes)) return
+        if (size(equilibrium%poloidal_modes) < 1) return
+        if (size(equilibrium%toroidal_modes) < 1) return
+        poloidal = maxval(abs(int(equilibrium%poloidal_modes, int64)))
+        toroidal = maxval(abs(int(equilibrium%toroidal_modes, int64)))
+        if (poloidal > int(huge(check_theta), int64) &
+            / metric_points_per_harmonic - 1) return
+        if (toroidal > int(huge(check_zeta), int64) &
+            / metric_points_per_harmonic - 1) return
+        check_theta = max(n_theta, int(metric_points_per_harmonic &
+            * (poloidal + 1)))
+        check_zeta = max(n_zeta, int(metric_points_per_harmonic &
+            * (toroidal + 1)))
+        info = mercier_ok
+    end subroutine metric_validation_grid
+
+    pure function tangential_metric_is_positive(g_tt, g_zz, determinant) &
+            result(positive)
+        real(dp), intent(in) :: g_tt(:, :), g_zz(:, :), determinant(:, :)
+        logical :: positive
+
+        positive = all(ieee_is_finite(g_tt))
+        if (.not. positive) return
+        positive = all(ieee_is_finite(g_zz))
+        if (.not. positive) return
+        positive = all(ieee_is_finite(determinant))
+        if (.not. positive) return
+        positive = all(g_tt > 0.0_dp) .and. all(g_zz > 0.0_dp) &
+            .and. all(determinant > 0.0_dp)
+    end function tangential_metric_is_positive
 
     subroutine fill_surface_fields(equilibrium, surface, profiles, &
             jacobian_slope, i, theta, zeta, fields, drive, info)

@@ -9,7 +9,10 @@ program test_variable_generalized_solver
         solve_symmetric_generalized_allocated
     use variable_block_tridiagonal, only: &
         apply_variable_block_tridiagonal, pack_variable_blocks, &
-        variable_block_tridiagonal_t
+        variable_block_to_dense, variable_block_tridiagonal_t
+    use variable_generalized_equilibration, only: &
+        equilibrate_variable_generalized, undo_variable_congruence, &
+        variable_equilibration_ok
     use variable_generalized_solver, only: &
         iterate_variable_generalized_eigenvalue, variable_generalized_diagnostics, &
         variable_generalized_inertia, variable_generalized_invalid, &
@@ -33,6 +36,7 @@ program test_variable_generalized_solver
     call require(info == 0, "variable stiffness packing failed")
     call pack_variable_blocks(dense_m, widths, mass, info)
     call require(info == 0, "variable mass packing failed")
+    call check_equilibration(stiffness, mass, eigenvalues)
     call check_indexed_dense_refinement(stiffness, mass, eigenvalues, &
         eigenvectors)
 
@@ -104,6 +108,43 @@ program test_variable_generalized_solver
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_equilibration(stiffness, mass, expected)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), intent(in) :: expected(:)
+        type(variable_block_tridiagonal_t) :: balanced_k, balanced_m
+        real(dp), allocatable :: dense_k(:, :), dense_m(:, :)
+        real(dp), allocatable :: scales(:), values(:), vectors(:, :), vector(:)
+        integer :: balanced_count, info, original_count
+
+        call equilibrate_variable_generalized(stiffness, mass, balanced_k, &
+            balanced_m, scales, info)
+        call require(info == variable_equilibration_ok, &
+            "variable generalized equilibration failed")
+        call variable_block_to_dense(balanced_k, dense_k, info)
+        call require(info == 0, "balanced stiffness unpacking failed")
+        call variable_block_to_dense(balanced_m, dense_m, info)
+        call require(info == 0, "balanced mass unpacking failed")
+        call solve_symmetric_generalized(dense_k, dense_m, values, vectors, &
+            info)
+        call require(info == 0, "balanced dense oracle failed")
+        call require(maxval(abs(values - expected)) < 1.0e-11_dp, &
+            "congruence equilibration changed the spectrum")
+        call variable_generalized_inertia(stiffness, mass, 0.0_dp, &
+            original_count, info)
+        call require(info == variable_generalized_ok, &
+            "original inertia check failed")
+        call variable_generalized_inertia(balanced_k, balanced_m, 0.0_dp, &
+            balanced_count, info)
+        call require(info == variable_generalized_ok &
+            .and. balanced_count == original_count, &
+            "congruence equilibration changed inertia")
+        call undo_variable_congruence(scales, vectors(:, 1), vector, info)
+        call require(info == variable_equilibration_ok, &
+            "balanced eigenvector back-transform failed")
+        call require(abs(mass_norm(vector, mass) - 1.0_dp) < 2.0e-14_dp, &
+            "back-transformed vector is not mass normalized")
+    end subroutine check_equilibration
 
     subroutine check_indexed_dense_refinement(stiffness, mass, values, vectors)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass

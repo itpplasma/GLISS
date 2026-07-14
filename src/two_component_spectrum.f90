@@ -16,9 +16,13 @@ module two_component_spectrum
         two_component_artificial_problem_t
     use variable_generalized_solver, only: &
         iterate_variable_generalized_eigenvalue, &
+        variable_generalized_diagnostics, &
         variable_generalized_inertia, variable_generalized_invalid, &
         variable_generalized_mass_not_spd, &
         variable_generalized_no_convergence, variable_generalized_ok
+    use variable_generalized_equilibration, only: &
+        equilibrate_variable_generalized, undo_variable_congruence, &
+        variable_equilibration_ok
     use variable_spectrum_analysis, only: analyze_variable_spectrum, &
         variable_spectrum_ok, variable_spectrum_summary_t
     implicit none
@@ -158,38 +162,63 @@ contains
         type(two_component_artificial_problem_t), intent(in) :: problem
         type(two_component_spectrum_result_t), intent(inout) :: result
         integer, intent(out) :: info
+        type(two_component_artificial_problem_t) :: balanced
         type(variable_spectrum_summary_t) :: summary
-        real(dp), allocatable :: vector(:)
-        real(dp) :: interval, resolution, safe_shift, shift
+        real(dp), allocatable :: balanced_vector(:), scales(:), vector(:)
+        real(dp) :: balanced_residual, interval, original_quotient
+        real(dp) :: original_resolution, resolution, safe_shift, shift
         integer :: first_failure
 
-        call analyze_variable_spectrum(problem%stiffness, problem%mass, &
+        call equilibrate_variable_generalized(problem%stiffness, &
+            problem%mass, balanced%stiffness, balanced%mass, scales, info)
+        if (info /= variable_equilibration_ok) then
+            info = two_component_spectrum_compute_error
+            return
+        end if
+        call analyze_variable_spectrum(balanced%stiffness, balanced%mass, &
             1.0e-12_dp, summary, info)
         if (info /= variable_spectrum_ok) then
             info = two_component_spectrum_compute_error
             return
         end if
-        call select_lowest_shift(problem, summary, shift, interval, info)
+        call select_lowest_shift(balanced, summary, shift, interval, info)
         if (info /= two_component_spectrum_ok) return
         if (.not. ieee_is_finite(shift) .or. &
             .not. ieee_is_finite(interval) .or. interval < 0.0_dp) then
             info = two_component_spectrum_compute_error
             return
         end if
-        call iterate_variable_generalized_eigenvalue(problem%stiffness, &
-            problem%mass, shift, result%lowest_eigenvalue, vector, &
-            result%eigenpair_residual, resolution, info)
+        call iterate_variable_generalized_eigenvalue(balanced%stiffness, &
+            balanced%mass, shift, result%lowest_eigenvalue, &
+            balanced_vector, balanced_residual, resolution, info)
         if (info /= variable_generalized_ok) then
             first_failure = info
             safe_shift = shift - max(8.0_dp * interval, &
                 1.0e-8_dp * max(1.0_dp, abs(shift)))
-            call iterate_variable_generalized_eigenvalue(problem%stiffness, &
-                problem%mass, safe_shift, result%lowest_eigenvalue, vector, &
-                result%eigenpair_residual, resolution, info)
+            call iterate_variable_generalized_eigenvalue( &
+                balanced%stiffness, balanced%mass, safe_shift, &
+                result%lowest_eigenvalue, balanced_vector, &
+                balanced_residual, resolution, info)
             if (info /= variable_generalized_ok) then
                 info = first_failure
                 return
             end if
+        end if
+        call undo_variable_congruence(scales, balanced_vector, vector, info)
+        if (info /= variable_equilibration_ok) then
+            info = two_component_spectrum_compute_error
+            return
+        end if
+        call variable_generalized_diagnostics(problem%stiffness, &
+            problem%mass, vector, result%lowest_eigenvalue, &
+            original_quotient, result%eigenpair_residual, &
+            original_resolution, info)
+        if (info /= variable_generalized_ok) return
+        if (abs(original_quotient - result%lowest_eigenvalue) &
+            > result%eigenpair_residual + original_resolution &
+            + resolution) then
+            info = two_component_spectrum_compute_error
+            return
         end if
         result%certificate = interval + result%eigenpair_residual + resolution
         info = two_component_spectrum_ok

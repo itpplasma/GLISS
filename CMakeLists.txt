@@ -86,6 +86,7 @@ add_library(gliss
     src/boundary/starwall_fourier_coupling.f90
     src/vacuum_schur.f90
     src/variable_block_tridiagonal.f90
+    src/variable_generalized_equilibration.f90
     src/stable_reduction.f90
     src/fixed_boundary_solver_controls.f90
     src/variable_generalized_solver.f90
