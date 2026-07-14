@@ -1,6 +1,9 @@
 program test_family_assembly
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use block_tridiagonal, only: block_tridiagonal_t
+    use compatible_family_point_assembly, only: &
+        assemble_compatible_direct_surface, &
+        assemble_compatible_transformed_surface
     use family_point_assembly, only: assemble_direct_surface, &
         assemble_transformed_surface
     use family_assembly, only: assemble_family_blocks, &
@@ -62,6 +65,7 @@ program test_family_assembly
     call check_symmetric_decoupling(step)
     call check_field_period_phase(geometry, step)
     call check_transformed_assembly()
+    call check_compatible_radial_columns(geometry(20))
     call check_terpsichore_selection_equivalence(geometry, step)
     call check_radial_space_options(geometry, step)
     call check_surface_coefficients(geometry(20), step)
@@ -88,6 +92,49 @@ program test_family_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_compatible_radial_columns(surface)
+        type(surface_geometry_t), intent(in) :: surface
+        integer, parameter :: modes(2) = [1, 2], toroidal(2) = [1, -1]
+        integer, parameter :: parity(2) = [1, 2], periods = 3
+        real(dp) :: fields(1, 1, 13), drive(1, 1)
+        real(dp) :: h1_values(3, 2), h1_derivatives(3, 2)
+        real(dp) :: l2_values(2, 2), bad_l2(2, 1)
+        real(dp) :: direct(10, 10), transformed(10, 10), scale
+        integer :: status
+
+        fields(1, 1, :) = surface%fields(2, 3, :)
+        drive(1, 1) = surface%drive(2, 3)
+        h1_values = reshape([0.2_dp, 0.5_dp, 0.3_dp, &
+            0.6_dp, 0.1_dp, 0.3_dp], shape(h1_values))
+        h1_derivatives = reshape([-1.2_dp, 0.4_dp, 0.8_dp, &
+            -0.7_dp, 1.1_dp, -0.4_dp], shape(h1_derivatives))
+        l2_values = reshape([0.75_dp, 0.25_dp, 0.4_dp, 0.6_dp], &
+            shape(l2_values))
+        direct = 0.0_dp
+        transformed = 0.0_dp
+        call assemble_compatible_direct_surface(fields, drive, modes, &
+            toroidal, parity, periods, h1_values, h1_derivatives, l2_values, &
+            direct, status)
+        call require(status == 0, "compatible direct assembly failed")
+        call assemble_compatible_transformed_surface(fields, drive, modes, &
+            toroidal, parity, periods, h1_values, h1_derivatives, l2_values, &
+            transformed, status)
+        call require(status == 0, "compatible transformed assembly failed")
+        scale = max(1.0_dp, maxval(abs(direct)))
+        call require(maxval(abs(direct - transformed)) &
+            < 4.0e-13_dp * scale, &
+            "compatible direct and transformed assemblies differ")
+        call require(maxval(abs(transformed - transpose(transformed))) &
+            < 2.0e-14_dp * scale, &
+            "compatible transformed assembly is not symmetric")
+        bad_l2 = l2_values(:, 1:1)
+        call assemble_compatible_transformed_surface(fields, drive, modes, &
+            toroidal, parity, periods, h1_values, h1_derivatives, bad_l2, &
+            transformed, status)
+        call require(status == -1, &
+            "mis-sized compatible tangential basis was accepted")
+    end subroutine check_compatible_radial_columns
 
     subroutine check_surface_coefficients(surface, step)
         type(surface_geometry_t), intent(in) :: surface

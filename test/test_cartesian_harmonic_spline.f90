@@ -6,6 +6,9 @@ program test_cartesian_harmonic_spline
         cartesian_harmonic_ok, cartesian_harmonic_spline_t, &
         cartesian_jet_grid_t, evaluate_cartesian_harmonic_spline, &
         fit_cartesian_harmonic_spline
+    use compatible_two_component_problem, only: &
+        build_compatible_two_component_problem, compatible_problem_invalid, &
+        compatible_problem_ok, compatible_two_component_problem_t
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
         radial_grid_half
     use primitive_equilibrium_spline, only: evaluate_primitive_equilibrium, &
@@ -18,6 +21,8 @@ program test_cartesian_harmonic_spline
         primitive_kernel_ok
     use radial_cubic_spline, only: build_radial_cubic_spline_grid, &
         radial_cubic_spline_grid_t, radial_cubic_spline_ok
+    use symmetric_eigensolver, only: solve_symmetric_generalized, &
+        symmetric_eigensolver_ok
     implicit none
 
     real(dp), parameter :: nodes(6) = [0.04_dp, 0.17_dp, 0.36_dp, &
@@ -292,6 +297,7 @@ contains
             reference%signed_jacobian) &
             .and. close_rank2(kernel_fields(:, :, 8), reference%mod_b), &
             "primitive kernel geometry differs")
+        call check_compatible_problem(equilibrium)
         equilibrium%winding = 1
         call fit_primitive_equilibrium(equilibrium, equilibrium_spline, status)
         call require(status == primitive_equilibrium_invalid, &
@@ -308,6 +314,44 @@ contains
             .and. pressure == 0.0_dp .and. pressure_slope == 0.0_dp, &
             "invalid equilibrium spline did not fail closed")
     end subroutine check_equilibrium_spline
+
+    subroutine check_compatible_problem(equilibrium)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        type(compatible_two_component_problem_t) :: problem
+        real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
+        real(dp) :: scale
+        integer :: degree, expected_h1, expected_l2, status
+
+        do degree = 1, 4
+            call build_compatible_two_component_problem(equilibrium, &
+                [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, &
+                degree, 16, 16, problem, status)
+            call require(status == compatible_problem_ok, &
+                "compatible problem assembly failed")
+            expected_h1 = size(equilibrium%s) + degree - 2
+            expected_l2 = size(equilibrium%s) + degree - 1
+            call require(problem%h1_dofs == expected_h1 &
+                .and. problem%l2_dofs == expected_l2, &
+                "compatible problem dimensions differ")
+            call require(problem%normal_unknowns == 3 * expected_h1 &
+                .and. problem%eta_unknowns == 2 * expected_l2, &
+                "compatible component dimensions differ")
+            scale = max(1.0_dp, maxval(abs(problem%stiffness)))
+            call require(maxval(abs(problem%stiffness &
+                - transpose(problem%stiffness))) < 3.0e-14_dp * scale, &
+                "compatible stiffness is not symmetric")
+            call require(all(problem%mass == transpose(problem%mass)), &
+                "compatible mass is not exactly symmetric")
+            call solve_symmetric_generalized(problem%stiffness, problem%mass, &
+                eigenvalues, eigenvectors, status)
+            call require(status == symmetric_eigensolver_ok, &
+                "compatible mass is not positive definite")
+        end do
+        call build_compatible_two_component_problem(equilibrium, [1], [0], &
+            [0.0_dp], 1, 0, 16, 16, problem, status)
+        call require(status == compatible_problem_invalid, &
+            "degree-zero compatible problem was accepted")
+    end subroutine check_compatible_problem
 
     subroutine torus_jet(s, theta_value, zeta_value, expected)
         real(dp), intent(in) :: s, theta_value, zeta_value

@@ -53,6 +53,7 @@ add_library(gliss
     src/radial_cubic_spline.f90
     src/axis_regular_harmonic_spline.f90
     src/cartesian_harmonic_spline.f90
+    src/compatible_family_point_assembly.f90
     src/field_periodic_cartesian.f90
     src/cartesian_primitive_geometry.f90
     src/primitive_geometry_grid.f90
@@ -104,6 +105,7 @@ add_library(gliss
     src/field_profile_identities.f90
     src/export_surface_geometry.f90
     src/primitive_kernel_geometry.f90
+    src/compatible_two_component_problem.f90
     src/mercier_diagnostic.f90
     src/radial_bspline_basis.f90
     src/symmetric_eigensolver.f90)
