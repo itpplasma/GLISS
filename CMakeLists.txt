@@ -511,6 +511,18 @@ if(BUILD_TESTING)
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: modes must be given once as m,n"
         missing.nc 2 8 8 1 broken)
+    add_compatible_cli_rejection(compatible_trace_cli_missing_first_cells
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: --first-cells requires a value"
+        missing.nc 2 8 8 1 --first-cells=)
+    add_compatible_cli_rejection(compatible_trace_cli_bad_first_cells
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: --first-cells must be between"
+        missing.nc 2 8 8 1 --first-cells=0 0,1)
+    add_compatible_cli_rejection(compatible_trace_cli_unknown_option
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: unknown option"
+        missing.nc 2 8 8 1 --cells=1 0,1)
 
     add_executable(test_radial_cubic_spline
         test/test_radial_cubic_spline.f90)

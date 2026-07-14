@@ -32,7 +32,7 @@ program gliss_compatible_operator_trace
     real(dp), allocatable :: profile_values(:, :), stored_power(:)
     real(dp) :: edge_profiles(3), edge_seconds(3), edge_slopes(3), q1_distance
     integer :: allocation_status, arguments, degree, info, n_theta, n_zeta
-    integer :: parity, profile_index, q1_index
+    integer :: first_cells, parity, profile_index, q1_index
 
     interface
         subroutine terminate_process(status) bind(C, name="exit")
@@ -42,7 +42,7 @@ program gliss_compatible_operator_trace
     end interface
 
     call read_arguments(filename, degree, n_theta, n_zeta, parity, mode_m, &
-        mode_n, stored_power)
+        mode_n, stored_power, first_cells)
     call read_gvec_cas3d_file(trim(filename), equilibrium, info)
     if (info /= reader_ok) call fail("reader", info)
     q1_index = 1
@@ -70,7 +70,17 @@ program gliss_compatible_operator_trace
         1.0_dp, edge_profiles, edge_slopes, edge_seconds, info)
     if (info /= radial_cubic_spline_ok) call fail("edge profiles", info)
     if (edge_profiles(2) == 0.0_dp) call fail("zero edge poloidal flux", -1)
-    call select_cells(size(equilibrium%s), q1_index, selected_cells)
+    if (first_cells > size(equilibrium%s)) &
+        call usage("--first-cells exceeds the radial cell count")
+    if (first_cells > 0) then
+        allocate (selected_cells(first_cells), stat=allocation_status)
+        if (allocation_status /= 0) call fail("cell selection allocation", -1)
+        do profile_index = 1, first_cells
+            selected_cells(profile_index) = profile_index
+        end do
+    else
+        call select_cells(size(equilibrium%s), q1_index, selected_cells)
+    end if
     call build_compatible_two_component_problem(equilibrium, mode_m, mode_n, &
         stored_power, parity, degree, n_theta, n_zeta, problem, info, &
         selected_cells, traces)
@@ -389,14 +399,15 @@ contains
 
     subroutine read_arguments(path, local_degree, poloidal_points, &
             toroidal_points, local_parity, poloidal_modes, toroidal_modes, &
-            powers)
+            powers, leading_cells)
         character(len=*), intent(out) :: path
         integer, intent(out) :: local_degree, poloidal_points, toroidal_points
-        integer, intent(out) :: local_parity
+        integer, intent(out) :: leading_cells, local_parity
         integer, allocatable, intent(out) :: poloidal_modes(:), toroidal_modes(:)
         real(dp), allocatable, intent(out) :: powers(:)
         character(len=64) :: token
-        integer :: allocation_status, argument, comma, local_info, mode
+        integer :: allocation_status, argument, comma, first_mode, local_info
+        integer :: mode
 
         arguments = command_argument_count()
         if (arguments < 6) call usage("missing required arguments")
@@ -411,12 +422,28 @@ contains
             call usage("NTHETA and NZETA must be at least 8")
         if (local_parity < 1 .or. local_parity > 2) &
             call usage("PARITY must be 1 or 2")
-        allocate (poloidal_modes(arguments - 5), &
-            toroidal_modes(arguments - 5), powers(arguments - 5), &
+        first_mode = 6
+        leading_cells = 0
+        call read_argument(first_mode, "mode", token)
+        if (index(token, "--first-cells=") == 1) then
+            if (len_trim(token) == len("--first-cells=")) &
+                call usage("--first-cells requires a value")
+            call parse_integer(token(len("--first-cells=") + 1:), &
+                "first-cell count", leading_cells, local_info)
+            if (leading_cells < 1 .or. leading_cells > 32) &
+                call usage("--first-cells must be between 1 and 32")
+            first_mode = first_mode + 1
+        else if (index(token, "--") == 1) then
+            call usage("unknown option " // trim(token))
+        end if
+        if (first_mode > arguments) call usage("at least one mode is required")
+        allocate (poloidal_modes(arguments - first_mode + 1), &
+            toroidal_modes(arguments - first_mode + 1), &
+            powers(arguments - first_mode + 1), &
             stat=allocation_status)
         if (allocation_status /= 0) call fail("mode allocation", -1)
-        do argument = 6, arguments
-            mode = argument - 5
+        do argument = first_mode, arguments
+            mode = argument - first_mode + 1
             call read_argument(argument, "mode", token)
             comma = index(token, ",")
             if (comma <= 1) call usage("modes must be given once as m,n")
@@ -475,7 +502,8 @@ contains
         write (error_unit, "(a)") "gliss_compatible_operator_trace: " &
             // trim(message)
         write (error_unit, "(a)") "usage: gliss_compatible_operator_trace " &
-            // "EXPORT_FILE DEGREE NTHETA NZETA PARITY m,n [m,n ...]"
+            // "EXPORT_FILE DEGREE NTHETA NZETA PARITY " &
+            // "[--first-cells=COUNT] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine usage
 
