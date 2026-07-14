@@ -170,33 +170,33 @@ contains
         scale = 2.0_dp / real(fixture%poloidal_points &
             * fixture%toroidal_points * fixture%stability_periods, dp)
         do replica = 0, fixture%stability_periods - 1
-        do point = 1, fixture%poloidal_points * fixture%toroidal_points
-            call build_point_fields(fixture, interval, point, field)
-            do b = 1, fixture%modes
-                call phase_values(fixture, point, replica, b, normal_b, &
-                    tangent_b)
-                do a = 1, fixture%modes
-                    call phase_values(fixture, point, replica, a, &
-                        normal_a, tangent_a)
-                    coefficient(0, a, b) = coefficient(0, a, b) &
-                        + scale * field(0) * normal_a * normal_b
-                    coefficient(1, a, b) = coefficient(1, a, b) &
-                        + scale * field(1) * normal_a * tangent_b
-                    coefficient(2, a, b) = coefficient(2, a, b) &
-                        + scale * field(2) * normal_a * normal_b
-                    coefficient(3, a, b) = coefficient(3, a, b) &
-                        + scale * field(3) * tangent_a * tangent_b
-                    coefficient(4, a, b) = coefficient(4, a, b) &
-                        + scale * field(4) * normal_a * tangent_b
-                    coefficient(5, a, b) = coefficient(5, a, b) &
-                        + scale * field(5) * normal_a * normal_b
-                    coefficient(6, a, b) = coefficient(6, a, b) &
-                        + scale * field(6) * normal_a * normal_b
-                    coefficient(7, a, b) = coefficient(7, a, b) &
-                        + scale * field(7) * normal_a * normal_b
+            do point = 1, fixture%poloidal_points * fixture%toroidal_points
+                call build_point_fields(fixture, interval, point, field)
+                do b = 1, fixture%modes
+                    call phase_values(fixture, point, replica, b, normal_b, &
+                        tangent_b)
+                    do a = 1, fixture%modes
+                        call phase_values(fixture, point, replica, a, &
+                            normal_a, tangent_a)
+                        coefficient(0, a, b) = coefficient(0, a, b) &
+                            + scale * field(0) * normal_a * normal_b
+                        coefficient(1, a, b) = coefficient(1, a, b) &
+                            + scale * field(1) * normal_a * tangent_b
+                        coefficient(2, a, b) = coefficient(2, a, b) &
+                            + scale * field(2) * normal_a * normal_b
+                        coefficient(3, a, b) = coefficient(3, a, b) &
+                            + scale * field(3) * tangent_a * tangent_b
+                        coefficient(4, a, b) = coefficient(4, a, b) &
+                            + scale * field(4) * normal_a * tangent_b
+                        coefficient(5, a, b) = coefficient(5, a, b) &
+                            + scale * field(5) * normal_a * normal_b
+                        coefficient(6, a, b) = coefficient(6, a, b) &
+                            + scale * field(6) * normal_a * normal_b
+                        coefficient(7, a, b) = coefficient(7, a, b) &
+                            + scale * field(7) * normal_a * normal_b
+                    end do
                 end do
             end do
-        end do
         end do
         call build_composite_coefficient(fixture, interval, coefficient)
     end subroutine build_interval_coefficients
