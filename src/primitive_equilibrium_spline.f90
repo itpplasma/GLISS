@@ -42,7 +42,6 @@ contains
         real(dp), allocatable :: profiles(:, :)
         integer :: allocation_status, local_info
 
-        spline = primitive_equilibrium_spline_t()
         info = primitive_equilibrium_invalid
         if (.not. equilibrium_primitives_are_valid(equilibrium)) return
         call build_radial_cubic_spline_grid(equilibrium%s, 0.0_dp, 1.0_dp, &

@@ -160,7 +160,7 @@ contains
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: n_theta, n_zeta
         integer, intent(out) :: check_theta, check_zeta, info
-        integer(int64) :: poloidal, toroidal
+        integer(int64) :: maximum_grid_size, poloidal, toroidal
 
         info = mercier_invalid_input
         if (n_theta < 8 .or. n_zeta < 8) return
@@ -170,10 +170,11 @@ contains
         if (size(equilibrium%toroidal_modes) < 1) return
         poloidal = maxval(abs(int(equilibrium%poloidal_modes, int64)))
         toroidal = maxval(abs(int(equilibrium%toroidal_modes, int64)))
-        if (poloidal > int(huge(check_theta), int64) &
-            / metric_points_per_harmonic - 1) return
-        if (toroidal > int(huge(check_zeta), int64) &
-            / metric_points_per_harmonic - 1) return
+        maximum_grid_size = int(huge(check_theta), int64)
+        if (poloidal > maximum_grid_size &
+            / int(metric_points_per_harmonic, int64) - 1) return
+        if (toroidal > maximum_grid_size &
+            / int(metric_points_per_harmonic, int64) - 1) return
         check_theta = max(n_theta, int(metric_points_per_harmonic &
             * (poloidal + 1)))
         check_zeta = max(n_zeta, int(metric_points_per_harmonic &

@@ -48,7 +48,6 @@ contains
         integer, allocatable :: coefficient_modes(:)
         integer :: allocation_status, coefficient_count, fit_info
 
-        spline = cartesian_harmonic_spline_t()
         info = cartesian_harmonic_invalid
         if (.not. position_pairs_are_valid(grid, poloidal_modes, &
             toroidal_modes, x, y, z)) return
@@ -273,16 +272,18 @@ contains
         integer, intent(in) :: m_count, n_count
         integer, intent(out) :: count
         logical :: valid
+        integer :: maximum_count
 
         count = 0
+        maximum_count = huge(count)
         valid = m_count > 0 .and. n_count > 0
         if (.not. valid) return
-        if (m_count > huge(count) / 6) then
+        if (m_count > maximum_count / 6) then
             valid = .false.
             return
         end if
         count = 6 * m_count
-        if (n_count > huge(count) / count) then
+        if (n_count > maximum_count / count) then
             count = 0
             valid = .false.
             return

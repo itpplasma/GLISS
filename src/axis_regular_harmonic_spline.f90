@@ -33,7 +33,6 @@ contains
         real(dp) :: exponent
         integer :: allocation_status, column, spline_info
 
-        field = axis_regular_harmonic_field_t()
         info = axis_regular_harmonic_invalid
         if (.not. grid_is_axis_half_grid(grid)) return
         if (size(values, 1) /= size(grid%nodes)) return
