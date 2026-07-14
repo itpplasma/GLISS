@@ -51,6 +51,7 @@ add_library(gliss
     src/phase_factor_topology.f90
     src/physical_constants.f90
     src/radial_cubic_spline.f90
+    src/axis_regular_harmonic_spline.f90
     src/radial_feec_complex.f90
     src/radial_space_policy.f90
     src/perpendicular_kinetic_kernel.f90
@@ -381,6 +382,12 @@ if(BUILD_TESTING)
         test/test_radial_cubic_spline.f90)
     target_link_libraries(test_radial_cubic_spline PRIVATE gliss)
     add_test(NAME radial_cubic_spline COMMAND test_radial_cubic_spline)
+
+    add_executable(test_axis_regular_harmonic_spline
+        test/test_axis_regular_harmonic_spline.f90)
+    target_link_libraries(test_axis_regular_harmonic_spline PRIVATE gliss)
+    add_test(NAME axis_regular_harmonic_spline
+        COMMAND test_axis_regular_harmonic_spline)
 
     add_executable(test_radial_space_policy
         test/test_radial_space_policy.f90)

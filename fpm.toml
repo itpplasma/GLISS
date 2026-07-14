@@ -62,6 +62,10 @@ name = "radial_cubic_spline"
 main = "test_radial_cubic_spline.f90"
 
 [[test]]
+name = "axis_regular_harmonic_spline"
+main = "test_axis_regular_harmonic_spline.f90"
+
+[[test]]
 name = "radial_space_policy"
 main = "test_radial_space_policy.f90"
 
