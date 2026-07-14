@@ -54,6 +54,10 @@ name = "radial_bspline_basis"
 main = "test_radial_bspline_basis.f90"
 
 [[test]]
+name = "radial_feec_complex"
+main = "test_radial_feec_complex.f90"
+
+[[test]]
 name = "radial_space_policy"
 main = "test_radial_space_policy.f90"
 

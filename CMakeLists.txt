@@ -50,6 +50,7 @@ add_library(gliss
     src/trial_space_topology.f90
     src/phase_factor_topology.f90
     src/physical_constants.f90
+    src/radial_feec_complex.f90
     src/radial_space_policy.f90
     src/perpendicular_kinetic_kernel.f90
     src/symmetric_pivot_inertia.f90
@@ -368,6 +369,11 @@ if(BUILD_TESTING)
         test/test_radial_bspline_basis.f90)
     target_link_libraries(test_radial_bspline_basis PRIVATE gliss)
     add_test(NAME radial_bspline_basis COMMAND test_radial_bspline_basis)
+
+    add_executable(test_radial_feec_complex
+        test/test_radial_feec_complex.f90)
+    target_link_libraries(test_radial_feec_complex PRIVATE gliss)
+    add_test(NAME radial_feec_complex COMMAND test_radial_feec_complex)
 
     add_executable(test_radial_space_policy
         test/test_radial_space_policy.f90)
