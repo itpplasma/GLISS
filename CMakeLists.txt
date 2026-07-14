@@ -461,6 +461,15 @@ if(BUILD_TESTING)
         gliss_compatible_marginality
         "gliss_compatible_marginality: --physical-density requires a value"
         missing.nc 2 8 8 1e-8 1 --physical-density=)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_density
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: physical density must be finite"
+        missing.nc 2 8 8 1e-8 1 --physical-density=nan 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_density
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --physical-density"
+        missing.nc 2 8 8 1e-8 1 --physical-density=1
+        --physical-density=1 0,1)
     add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_m0_power
         gliss_compatible_marginality
         "gliss_compatible_marginality: m=0 stored power must be finite"

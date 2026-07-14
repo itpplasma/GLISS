@@ -1,7 +1,7 @@
 program gliss_compatible_marginality
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_c_binding, only: c_int
-    use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit, int64
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_problem_ok, &
         compatible_two_component_problem_t
@@ -28,6 +28,7 @@ program gliss_compatible_marginality
     integer :: allocation_status, arguments, comma, degree, first_mode, info
     integer :: inertia_negative_count, mode, negative_count, work_size
     integer :: n_theta, n_zeta, parity, trial
+    integer(int64) :: requested_work_size
     logical :: bracket_requested, has_m0_power, has_stored_powers, inertia_only
     logical :: physical_mass
 
@@ -171,9 +172,10 @@ program gliss_compatible_marginality
     allocate (stiffness(size(stiffness_operator, 1), &
         size(stiffness_operator, 2)), stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("stiffness allocation", -1)
-    if (size(stiffness, 1) > huge(work_size) / 64) &
+    requested_work_size = 64_int64 * int(size(stiffness, 1), int64)
+    if (requested_work_size > int(huge(work_size), int64)) &
         call fail_solver("workspace size", -1)
-    work_size = 64 * size(stiffness, 1)
+    work_size = int(requested_work_size)
     allocate (pivots(size(stiffness, 1)), work(work_size), &
         stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("workspace allocation", -1)
@@ -182,6 +184,12 @@ program gliss_compatible_marginality
         write (*, "(i0,2(a,i0),a,es24.16)") mode, ",", mode_m(mode), &
             ",", mode_n(mode), ",", stored_power(mode)
     end do
+    write (*, "(a)") "radial_surfaces,degree,parity,n_theta,n_zeta," // &
+        "physical_mass,density_kg_m3,floor,bracket_requested"
+    write (*, "(i0,5(a,i0),2(a,es24.16),a,i0)") size(equilibrium%s), &
+        ",", degree, ",", parity, ",", n_theta, ",", n_zeta, ",", &
+        merge(1, 0, physical_mass), ",", density, ",", floor, ",", &
+        merge(1, 0, bracket_requested)
     if (bracket_requested) then
         call bracket_negative_eigenvalue
         call terminate_process(0_c_int)
@@ -345,8 +353,9 @@ contains
         if (second_comma <= 1) &
             call fail_usage("negative bracket requires lower,upper,tolerance")
         second_comma = first_comma + second_comma
-        if (second_comma == len_trim(text) .or. &
-            index(text(second_comma + 1:), ",") > 0) &
+        if (second_comma == len_trim(text)) &
+            call fail_usage("negative bracket requires lower,upper,tolerance")
+        if (index(text(second_comma + 1:), ",") > 0) &
             call fail_usage("negative bracket requires lower,upper,tolerance")
         call parse_real(text(:first_comma - 1), "negative bracket lower", lower)
         call parse_real(text(first_comma + 1:second_comma - 1), &
@@ -396,12 +405,12 @@ contains
         end do
         write (*, "(a)") "degree,parity,unknowns,normal_unknowns," // &
             "eta_unknowns,lower_count,upper_count,iterations," // &
-            "lambda_lower,lambda_upper,m0_stored_power"
-        write (*, "(i0,7(a,i0),3(a,es24.16))") degree, ",", parity, ",", &
+            "lambda_lower,lambda_upper,relative_tolerance,m0_stored_power"
+        write (*, "(i0,7(a,i0),4(a,es24.16))") degree, ",", parity, ",", &
             size(stiffness, 1), ",", problem%normal_unknowns, ",", &
             problem%eta_unknowns, ",", lower_count, ",", upper_count, ",", &
             iterations, ",", -bracket_upper, ",", -bracket_lower, ",", &
-            m0_stored_power
+            bracket_tolerance, ",", m0_stored_power
     end subroutine bracket_negative_eigenvalue
 
 end program gliss_compatible_marginality
