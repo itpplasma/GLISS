@@ -89,8 +89,8 @@ contains
                 end if
                 call store_point(point, j, k, geometry)
                 call store_radial_geometry(jet, point, j, k, field_periods, &
-                    toroidal_flux_slope, poloidal_flux_slope, geometry, &
-                    toroidal_flux_curvature, poloidal_flux_curvature)
+                    geometry, toroidal_flux_curvature, &
+                    poloidal_flux_curvature)
             end do
         end do
         geometry%has_radial_field_derivatives = &
@@ -134,12 +134,10 @@ contains
     end subroutine store_point
 
     subroutine store_radial_geometry(jet, point, j, k, field_periods, &
-            toroidal_flux_slope, poloidal_flux_slope, geometry, &
-            toroidal_flux_curvature, poloidal_flux_curvature)
+            geometry, toroidal_flux_curvature, poloidal_flux_curvature)
         type(cartesian_jet_grid_t), intent(in) :: jet
         type(primitive_geometry_point_t), intent(in) :: point
         integer, intent(in) :: j, k, field_periods
-        real(dp), intent(in) :: toroidal_flux_slope, poloidal_flux_slope
         type(primitive_geometry_grid_t), intent(inout) :: geometry
         real(dp), intent(in), optional :: toroidal_flux_curvature
         real(dp), intent(in), optional :: poloidal_flux_curvature
