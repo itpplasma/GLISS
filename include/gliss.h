@@ -158,6 +158,23 @@ typedef struct gliss_axisymmetric_spectrum_result {
     double force_balance_residual;
 } gliss_axisymmetric_spectrum_result;
 
+typedef struct gliss_cas3d_marginality_result {
+    size_t struct_size;
+    int32_t has_eigenpair;
+    int32_t field_periods;
+    size_t mode_count;
+    size_t radial_surfaces;
+    int32_t parity_class;
+    int32_t radial_quadrature;
+    int32_t angular_theta;
+    int32_t angular_zeta;
+    size_t negative_count;
+    double lowest_eigenvalue;
+    double certificate;
+    double eigenpair_residual;
+    double force_balance_residual;
+} gliss_cas3d_marginality_result;
+
 /* Solve the lowest negative eigenpair represented by a TERPSICHORE FORT.23
  * file produced with IVAC=0 and MODELK=0. Set result->struct_size to
  * sizeof(*result). The file's Fourier table, reduced kinetic normalization,
@@ -184,6 +201,28 @@ gliss_status gliss_axisymmetric_spectrum(
     int32_t radial_quadrature,
     int32_t solve_eigenpair,
     gliss_axisymmetric_spectrum_result *result,
+    char *error,
+    size_t error_capacity);
+
+/* Evaluate the historical CAS3D two-component incompressible functional on
+ * an explicit 3-D mode table. Its artificial L2 normalization preserves the
+ * inertia and marginal boundary but does not define a physical growth rate.
+ * The regular-axis factor s^(m/2) is derived from each nonnegative poloidal
+ * mode. radial_quadrature must be 1. parity_class must be 1 or 2.
+ * solve_eigenpair is 0 for inertia only or 1 for the certified lowest pair.
+ * Set result->struct_size to sizeof(*result). The result is unchanged on
+ * failure. */
+gliss_status gliss_cas3d_marginality(
+    const gliss_equilibrium *equilibrium,
+    size_t mode_count,
+    const int32_t *mode_m,
+    const int32_t *mode_n,
+    int32_t parity_class,
+    int32_t radial_quadrature,
+    int32_t angular_theta,
+    int32_t angular_zeta,
+    int32_t solve_eigenpair,
+    gliss_cas3d_marginality_result *result,
     char *error,
     size_t error_capacity);
 

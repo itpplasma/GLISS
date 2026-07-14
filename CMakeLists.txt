@@ -123,6 +123,7 @@ add_library(gliss_c SHARED
     src/gliss_energy_capi.f90
     src/gliss_terpsichore_capi.f90
     src/gliss_axisymmetric_capi.f90
+    src/gliss_marginality_capi.f90
     src/gliss_full_spectrum_capi.f90)
 add_dependencies(gliss_c gliss)
 target_link_libraries(gliss_c PRIVATE gliss)
@@ -468,6 +469,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_gliss_spectrum_capi PRIVATE
         gliss_c gliss_test_support)
     add_test(NAME gliss_spectrum_capi COMMAND test_gliss_spectrum_capi)
+
+    add_executable(test_gliss_marginality_capi
+        test/test_gliss_marginality_capi.f90)
+    target_link_libraries(test_gliss_marginality_capi PRIVATE
+        gliss_c gliss_test_support)
+    add_test(NAME gliss_marginality_capi COMMAND test_gliss_marginality_capi)
 
     add_executable(test_gliss_header cmake/test_gliss_header.c)
     target_include_directories(test_gliss_header PRIVATE include)

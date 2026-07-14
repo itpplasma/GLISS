@@ -122,6 +122,11 @@ from .axisymmetric import (  # noqa: E402
     axisymmetric_inertia as axisymmetric_inertia,
     solve_axisymmetric as solve_axisymmetric,
 )
+from .marginality import (  # noqa: E402
+    Cas3dMarginalityResult as Cas3dMarginalityResult,
+    cas3d_marginality_inertia as cas3d_marginality_inertia,
+    solve_cas3d_marginality as solve_cas3d_marginality,
+)
 from .schema import (  # noqa: E402
     RunManifest,
     StabilityConfiguration,
@@ -133,6 +138,7 @@ __all__ = [
     "__version__",
     "Equilibrium",
     "AxisymmetricResult",
+    "Cas3dMarginalityResult",
     "EnergyTerms",
     "GlissAllocationError",
     "GlissArgumentError",
@@ -143,6 +149,7 @@ __all__ = [
     "GlissInternalError",
     "convert_vmec",
     "axisymmetric_inertia",
+    "cas3d_marginality_inertia",
     "get_include",
     "FullSpectrumResult",
     "FullStabilityResult",
@@ -157,6 +164,7 @@ __all__ = [
     "StabilityResult",
     "TerpsichoreFixedBoundaryResult",
     "solve_axisymmetric",
+    "solve_cas3d_marginality",
     "solve_terpsichore_fixed_boundary",
     "version",
     "write_run_manifest",

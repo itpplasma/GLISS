@@ -338,6 +338,24 @@
     },
     {
       "closures": {
+        "assembly": "midpoint-block",
+        "basis": "cas3d-p1-p0-p0",
+        "boundary": "fixed-edge",
+        "equilibrium": "gvec-cas3d-v1",
+        "norm": "artificial-marginality",
+        "physics": "incompressible-two-component",
+        "solver": "certified-block-inertia",
+        "topology": "stellarator-parity"
+      },
+      "entrypoint": {
+        "path": "python/gliss/marginality.py",
+        "token": "def solve_cas3d_marginality"
+      },
+      "id": "cas3d-marginality",
+      "interface": "python"
+    },
+    {
+      "closures": {
         "assembly": "terpsichore-preassembled",
         "basis": "terpsichore-p1-p0",
         "boundary": "fixed-edge",

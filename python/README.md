@@ -185,6 +185,68 @@ raise `GlissArgumentError`; reconstruction or eigensolver failures raise
 `GlissComputationError`. Operations on a closed `Equilibrium` raise
 `RuntimeError`.
 
+## General 3-D marginality family
+
+Pass the CAS3D Fourier table explicitly for a fixed-boundary stellarator
+calculation:
+
+```python
+from pathlib import Path
+
+import gliss
+
+modes = [(3, -2), (4, -1), (5, 0), (6, 1), (7, 2)]
+with gliss.Equilibrium(Path("w7x.nc")) as equilibrium:
+    inertia = gliss.cas3d_marginality_inertia(
+        equilibrium,
+        modes=modes,
+        parity_class=1,
+        angular_theta=96,
+        angular_zeta=64,
+    )
+    if inertia.negative_count:
+        result = gliss.solve_cas3d_marginality(
+            equilibrium,
+            modes=modes,
+            parity_class=1,
+            angular_theta=96,
+            angular_zeta=64,
+        )
+        print(result.lowest_eigenvalue, result.certificate)
+```
+
+These functions use the historical incompressible, two-component CAS3D
+functional. The mass matrix is the artificial L2 norm of the transformed
+normal and tangential components described by Schwab. Its eigenvalue is not
+an SI frequency or physical growth rate. Matrix inertia and the zero crossing
+are independent of this positive norm. A numerical eigenvalue can be compared
+to CAS3D only when the equilibrium, Fourier table, radial space, quadrature,
+boundary condition, and artificial norm all match the reference calculation.
+
+`modes` is the ordered sequence of `(m, n)` Fourier pairs. Poloidal mode `m`
+must be nonnegative, `(0, n)` requires nonnegative `n`, and pairs must be
+unique. GLISS derives the regular-axis factor for each mode. The angular phase
+is `2*pi*(m*theta - n*zeta/N_T)`, where `N_T` is the number of field periods
+on the full torus. `theta` has period one; `zeta` advances by one per field
+period and spans `0 <= zeta < N_T`. `parity_class` selects either of the two
+stellarator-symmetric parity families. The plasma edge is fixed and radial
+quadrature is currently `"midpoint"`.
+
+Both calls return a frozen `Cas3dMarginalityResult`. The count-only call sets
+`lowest_eigenvalue`, `certificate`, and `eigenpair_residual` to `None`. The
+solve call returns the lowest eigenvalue, its final inertia-bracket width, and
+the scaled eigenpair backward error. The result also records the exact mode
+table, parity, angular resolution, radial surface count, Fourier convention,
+coordinate handedness, boundary condition, and normalization warning.
+
+Choose angular resolutions above the convolution bandwidth of both the trial
+modes and equilibrium spectrum. GLISS rejects an aliased grid before
+assembly. It also rejects empty or duplicate mode tables, unsupported parity
+or quadrature, invalid integer ranges, missing chart metrics, and closed
+equilibrium contexts. Python input errors raise `TypeError` or `ValueError`;
+native compatibility errors raise `GlissArgumentError`; reconstruction and
+eigensolver failures raise `GlissComputationError`.
+
 ## Mercier profile
 
 ```python

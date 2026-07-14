@@ -11,6 +11,9 @@ int main(void) {
     gliss_energy_terms energy;
     gliss_terpsichore_fixed_boundary_result terpsichore;
     gliss_axisymmetric_spectrum_result axisymmetric;
+    gliss_cas3d_marginality_result marginality;
+    int32_t mode_m[1] = {1};
+    int32_t mode_n[1] = {1};
     size_t surfaces = 1;
     int32_t schema_version = -1;
     char error[128];
@@ -23,6 +26,9 @@ int main(void) {
     memset(&axisymmetric, 0, sizeof(axisymmetric));
     axisymmetric.struct_size = sizeof(axisymmetric);
     axisymmetric.mode_count = 123;
+    memset(&marginality, 0, sizeof(marginality));
+    marginality.struct_size = sizeof(marginality);
+    marginality.mode_count = 456;
 
     if (gliss_abi_version() != GLISS_ABI_VERSION) {
         return 1;
@@ -103,6 +109,19 @@ int main(void) {
             equilibrium, 1, 8, 1, 1, NULL, error, sizeof(error)) !=
         GLISS_STATUS_INVALID_ARGUMENT) {
         return 19;
+    }
+    if (gliss_cas3d_marginality(
+            equilibrium, 1, mode_m, mode_n, 1, 1, 8, 8, 1, &marginality,
+            error, sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT) {
+        return 20;
+    }
+    if (marginality.mode_count != 456 || error[0] == '\0') {
+        return 21;
+    }
+    if (gliss_cas3d_marginality(
+            equilibrium, 1, mode_m, mode_n, 1, 1, 8, 8, 1, NULL, error,
+            sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT) {
+        return 22;
     }
     return 0;
 }

@@ -27,8 +27,9 @@ profile and objective through NumPy. Development main also provides reusable
 certified lowest-eigenpair results, opt-in full spectra with per-pair
 diagnostics, deterministic full-spectrum run containers, and atomic versioned
 equilibrium export.
-The development API also exposes the axisymmetric two-component family used
-for the pinned Solov'ev comparison with DCON.
+The development API also exposes the shared two-component marginality
+operator through an explicit general 3-D mode table and the axisymmetric
+family used for the pinned Solov'ev comparison with DCON.
 See the [Python guide](python/README.md) for examples, conventions, input and
 output contracts, direct VMEC conversion, and the optional SIMSOPT adapter.
 

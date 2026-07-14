@@ -118,18 +118,19 @@ contains
     end function iota_scaled
 
     subroutine create_cylinder_fixture(filename, chart_shift, surfaces, &
-            pressure_scale, poloidal_scale)
+            pressure_scale, poloidal_scale, toroidal_perturbation)
         character(len=*), intent(in) :: filename
         real(dp), intent(in), optional :: chart_shift
         integer, intent(in), optional :: surfaces
         real(dp), intent(in), optional :: pressure_scale
         real(dp), intent(in), optional :: poloidal_scale
+        real(dp), intent(in), optional :: toroidal_perturbation
         integer :: ncid, id_nfp, id_beta, id_winding, id_m, id_n, id_rho
         integer :: id_profiles(profile_count)
         integer :: id_cos(field_count), id_sin(field_count)
         integer :: id_chart(4)
         real(dp), allocatable :: s_values(:)
-        real(dp) :: shift, fraction, poloidal
+        real(dp) :: shift, fraction, poloidal, perturbation
         logical :: shifted
         integer :: ns, i
 
@@ -142,6 +143,9 @@ contains
         if (present(pressure_scale)) fraction = pressure_scale
         poloidal = 1.0_dp
         if (present(poloidal_scale)) poloidal = poloidal_scale
+        perturbation = 0.0_dp
+        if (present(toroidal_perturbation)) perturbation = &
+            toroidal_perturbation
         allocate (s_values(ns))
         do i = 1, ns
             s_values(i) = (real(i, dp) - 0.5_dp) / real(ns, dp)
@@ -160,7 +164,7 @@ contains
         call write_fixture_profiles(ncid, id_profiles, s_values, fraction, &
             poloidal)
         call write_fixture_fields(ncid, id_cos, id_sin, s_values, &
-            shifted, shift, fraction, poloidal)
+            shifted, shift, fraction, poloidal, perturbation)
         if (shifted) call write_chart_metric(ncid, id_chart, s_values, &
             shift)
         call require_netcdf(nc_close_file(ncid))
@@ -281,12 +285,12 @@ contains
     end function axial_flux_mean
 
     subroutine write_fixture_fields(ncid, id_cos, id_sin, s_values, &
-            shifted, shift, fraction, poloidal)
+            shifted, shift, fraction, poloidal, perturbation)
         integer, intent(in) :: ncid
         integer, intent(in) :: id_cos(field_count), id_sin(field_count)
         real(dp), intent(in) :: s_values(:)
         logical, intent(in) :: shifted
-        real(dp), intent(in) :: shift, fraction, poloidal
+        real(dp), intent(in) :: shift, fraction, poloidal, perturbation
         real(dp) :: cosine(nn, nm, size(s_values))
         real(dp) :: sine(nn, nm, size(s_values))
         real(dp) :: radius
@@ -302,6 +306,7 @@ contains
                     cosine(1, 1, i) = sqrt((poloidal &
                         * b_poloidal(radius))**2 &
                         + b_axial_scaled(radius, fraction, poloidal)**2)
+                    cosine(2, 1, i) = perturbation * cosine(1, 1, i)
                 case ("Jac")
                     cosine(1, 1, i) = -pi * minor_radius**2 * period_length
                 case ("g_tt")
