@@ -306,8 +306,10 @@ contains
         fields(:, :, 2) = profiles%poloidal_slope
         fields(:, :, 3) = profiles%flux_curvature
         fields(:, :, 4) = profiles%poloidal_curvature
-        fields(:, :, 5) = profiles%covariant_zeta
-        fields(:, :, 6) = profiles%covariant_theta
+        fields(:, :, 5) = surface%g_tz * surface%b_theta &
+            + surface%g_zz * surface%b_zeta
+        fields(:, :, 6) = surface%g_tt * surface%b_theta &
+            + surface%g_tz * surface%b_zeta
         fields(:, :, 7) = surface%jacobian
         fields(:, :, 8) = surface%mod_b
         grad_s2 = (surface%g_tt * surface%g_zz - surface%g_tz**2) &
@@ -319,9 +321,9 @@ contains
         end if
         fields(:, :, 9) = grad_s2
         fields(:, :, 10) = ((beta_zeta &
-            - profiles%covariant_zeta_slope) * profiles%covariant_theta &
+            - profiles%covariant_zeta_slope) * fields(:, :, 6) &
             + (profiles%covariant_theta_slope - beta_theta) &
-            * profiles%covariant_zeta) / surface%jacobian
+            * fields(:, :, 5)) / surface%jacobian
         fields(:, :, 11) = mu0 * profiles%pressure_slope
         if (has_chart_metric) then
             fields(:, :, 12) = ((surface%g_tz * surface%b_theta &

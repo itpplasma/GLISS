@@ -6,6 +6,8 @@ program test_export_assembly
         surface_geometry_t
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
+    use export_surface_geometry, only: build_angular_grids, &
+        build_surface_kernel_fields, surface_data_t, surface_profiles_t
     use mercier_diagnostic, only: build_kernel_geometry, &
         mercier_invalid_input, mercier_ok
     implicit none
@@ -23,6 +25,7 @@ program test_export_assembly
     real(dp) :: coarse_gap, fine_gap
     integer :: info, i, ns
 
+    call check_local_covariant_fields()
     call create_cylinder_fixture(fixture)
     call read_gvec_cas3d_file(fixture, equilibrium, info)
     call require(info == reader_ok, "fixture was rejected")
@@ -90,6 +93,73 @@ program test_export_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_local_covariant_fields()
+        integer, parameter :: n_theta = 8, n_zeta = 8
+        integer, parameter :: poloidal_modes(2) = [0, 1]
+        integer, parameter :: toroidal_modes(1) = [0]
+        type(surface_data_t) :: surface
+        type(surface_profiles_t) :: profiles
+        real(dp), allocatable :: theta(:), zeta(:)
+        real(dp) :: jacobian_slope(n_theta, n_zeta)
+        real(dp) :: fields(n_theta, n_zeta, 13)
+        real(dp) :: drive(n_theta, n_zeta)
+        real(dp) :: expected_theta(n_theta, n_zeta)
+        real(dp) :: expected_zeta(n_theta, n_zeta)
+        real(dp) :: expected_j_dot_b(n_theta, n_zeta)
+        integer :: build_info, j
+
+        call build_angular_grids(n_theta, n_zeta, theta, zeta)
+        allocate (surface%jacobian(n_theta, n_zeta), &
+            surface%g_tt(n_theta, n_zeta), surface%g_tz(n_theta, n_zeta), &
+            surface%g_zz(n_theta, n_zeta), &
+            surface%b_theta(n_theta, n_zeta), &
+            surface%b_zeta(n_theta, n_zeta), &
+            surface%g_st(n_theta, n_zeta), surface%g_sz(n_theta, n_zeta), &
+            surface%mod_b(n_theta, n_zeta), &
+            surface%area_element(n_theta, n_zeta))
+        do j = 1, n_zeta
+            surface%g_tt(:, j) = 2.0_dp + 0.2_dp &
+                * cos(2.0_dp * pi * theta)
+            surface%g_tz(:, j) = 0.1_dp * sin(2.0_dp * pi * theta)
+            surface%g_zz(:, j) = 3.0_dp
+            surface%b_theta(:, j) = 0.4_dp
+            surface%b_zeta(:, j) = -0.7_dp
+        end do
+        surface%jacobian = 1.8_dp
+        surface%g_st = 0.0_dp
+        surface%g_sz = 0.0_dp
+        expected_theta = surface%g_tt * surface%b_theta &
+            + surface%g_tz * surface%b_zeta
+        expected_zeta = surface%g_tz * surface%b_theta &
+            + surface%g_zz * surface%b_zeta
+        surface%mod_b = sqrt(surface%b_theta * expected_theta &
+            + surface%b_zeta * expected_zeta)
+        surface%area_element = 1.0_dp
+        profiles = surface_profiles_t(-1.26_dp, 0.72_dp, 0.0_dp, 0.0_dp, &
+            sum(expected_theta) / real(n_theta * n_zeta, dp), &
+            sum(expected_zeta) / real(n_theta * n_zeta, dp), &
+            0.3_dp, -0.2_dp, -0.26_dp / (4.0_dp * pi * 1.0e-7_dp))
+        expected_j_dot_b = (0.2_dp * expected_theta &
+            + 0.3_dp * expected_zeta) / surface%jacobian
+        jacobian_slope = 0.0_dp
+
+        call build_surface_kernel_fields(poloidal_modes, toroidal_modes, &
+            .true., surface, profiles, jacobian_slope, theta, zeta, fields, &
+            drive, build_info)
+        call require(build_info == mercier_ok, &
+            "local covariant-field fixture was rejected")
+        call require(maxval(abs(fields(:, :, 5) - expected_zeta)) &
+            < 1.0e-14_dp, "kernel discarded local covariant B_zeta")
+        call require(maxval(abs(fields(:, :, 6) - expected_theta)) &
+            < 1.0e-14_dp, "kernel discarded local covariant B_theta")
+        call require(maxval(abs(fields(:, :, 1) * fields(:, :, 5) &
+            + fields(:, :, 2) * fields(:, :, 6) &
+            - surface%mod_b**2 * surface%jacobian)) < 1.0e-14_dp, &
+            "kernel covariant and contravariant fields are inconsistent")
+        call require(maxval(abs(fields(:, :, 10) - expected_j_dot_b)) &
+            < 1.0e-14_dp, "kernel j dot B discarded local covariant field")
+    end subroutine check_local_covariant_fields
 
     subroutine measure_gap(surfaces, gap)
         integer, intent(in) :: surfaces

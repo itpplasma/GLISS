@@ -13,9 +13,9 @@ program test_gliss_spectrum_capi
     integer(c_int), parameter :: status_invalid_argument = 4
     character(len=*), parameter :: fixture = "spectrum_capi_cylinder.nc"
     real(c_double), parameter :: expected_lowest = &
-        -1.2278816610508129e2_c_double
-    real(c_double), parameter :: legacy_certificate_limit = 1.2e-3_c_double
-    real(c_double), parameter :: legacy_relative_limit = 1.0e-8_c_double
+        -1.2278817247994587e2_c_double
+    real(c_double), parameter :: reference_certificate_limit = 1.2e-3_c_double
+    real(c_double), parameter :: reference_relative_limit = 1.0e-8_c_double
 
     type, bind(c) :: spectrum_summary_c
         integer(c_size_t) :: struct_size
@@ -313,14 +313,14 @@ program test_gliss_spectrum_capi
         "negative inertia count is wrong")
     call require(summary%floor_count == 5_c_size_t, &
         "floor count is wrong")
-    call require(summary%certificate <= legacy_certificate_limit, &
-        "C API legacy eigenvalue certificate is too wide")
+    call require(summary%certificate <= reference_certificate_limit, &
+        "C API reference eigenvalue certificate is too wide")
     call require(abs(summary%lowest_eigenvalue - expected_lowest) &
         <= summary%certificate, &
-        "C API legacy eigenvalue lies outside the certificate")
+        "C API reference eigenvalue lies outside the certificate")
     call require(abs(summary%lowest_eigenvalue - expected_lowest) &
-        <= legacy_relative_limit * abs(expected_lowest), &
-        "C API legacy eigenvalue exceeds the portable relative limit")
+        <= reference_relative_limit * abs(expected_lowest), &
+        "C API reference eigenvalue exceeds the portable relative limit")
     call require(all(ieee_is_finite(eigenvector)), &
         "C API eigenvector contains nonfinite values")
     call require(summary%certificate == summary%inertia_interval &
