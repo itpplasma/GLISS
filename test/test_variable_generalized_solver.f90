@@ -5,6 +5,7 @@ program test_variable_generalized_solver
         certify_dense_spectrum_orthogonality, dense_spectrum_ok, &
         diagnose_dense_spectrum, refine_dense_spectrum
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
+    use stable_reduction, only: stable_norm2
     use symmetric_eigensolver, only: solve_symmetric_generalized, &
         solve_symmetric_generalized_allocated
     use variable_block_tridiagonal, only: &
@@ -86,6 +87,7 @@ program test_variable_generalized_solver
     call require(info == variable_generalized_invalid, &
         "nonfinite inverse-iteration seed was accepted")
     call check_long_chain_resolution()
+    call check_scaled_compensated_norm()
     call check_ill_scaled_dense_pencil()
 
     corrupt = stiffness
@@ -213,7 +215,7 @@ contains
         type(variable_block_tridiagonal_t) :: chain_k, chain_m
         real(dp), allocatable :: dense_k(:, :), dense_m(:, :), vector(:)
         integer, allocatable :: chain_widths(:)
-        real(dp) :: quotient, residual, resolution
+        real(dp) :: expected, factor, quotient, residual, resolution
         integer :: i, info
 
         allocate (dense_k(n, n), source=0.0_dp)
@@ -232,10 +234,29 @@ contains
             2.0_dp, quotient, residual, resolution, info)
         call require(info == variable_generalized_ok, &
             "long-chain diagnostics failed")
-        call require(resolution >= 4.0_dp * real(n, dp) &
-            * epsilon(1.0_dp) * abs(quotient), &
-            "long-chain norm reduction is missing from resolution")
+        factor = 66.0_dp * epsilon(1.0_dp) + 16.0_dp * real(n, dp) &
+            * epsilon(1.0_dp)**2
+        factor = factor / (1.0_dp - factor)
+        expected = 4.0_dp * factor
+        call require(abs(resolution / expected - 1.0_dp) &
+            < 32.0_dp * epsilon(1.0_dp), &
+            "long-chain compensated resolution bound changed")
     end subroutine check_long_chain_resolution
+
+    subroutine check_scaled_compensated_norm()
+        real(dp) :: values(4)
+
+        values = [3.0e200_dp, -4.0e200_dp, 0.0_dp, 0.0_dp]
+        call require(abs(stable_norm2(values) / 5.0e200_dp - 1.0_dp) &
+            < 4.0_dp * epsilon(1.0_dp), &
+            "scaled compensated norm overflowed")
+        values = [3.0e-200_dp, -4.0e-200_dp, 0.0_dp, 0.0_dp]
+        call require(abs(stable_norm2(values) / 5.0e-200_dp - 1.0_dp) &
+            < 4.0_dp * epsilon(1.0_dp), &
+            "scaled compensated norm underflowed")
+        call require(stable_norm2([real(dp) ::]) == 0.0_dp, &
+            "empty compensated norm is nonzero")
+    end subroutine check_scaled_compensated_norm
 
     subroutine check_ill_scaled_dense_pencil()
         integer, parameter :: n = 32

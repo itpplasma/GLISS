@@ -249,6 +249,15 @@ resolution. The result also records the exact mode table, parity, angular
 resolution, radial surface count, Fourier convention, coordinate handedness,
 boundary condition, and normalization warning.
 
+The roundoff term evaluates the absolute shifted action in the equilibrated
+coordinates. Its vector norms use a scaled compensated sum of squares, so they
+do not overflow for large finite coefficients or underflow for uniformly small
+ones. For `t` terms in the widest block row, `n` unknowns and binary64 machine
+epsilon `eps`, the guarded operation bound starts from
+`(6*t + 48)*eps + 16*n*eps**2`. This replaces a naive `O(n*eps)` norm-reduction
+allowance; it does not change the matrix pencil, eigenvalue, inertia bracket or
+back-transformed residual.
+
 Choose angular resolutions above the convolution bandwidth of both the trial
 modes and equilibrium spectrum. GLISS rejects an aliased grid before
 assembly. It also rejects empty or duplicate mode tables, unsupported parity

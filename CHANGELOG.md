@@ -28,6 +28,9 @@
 - Record the actual legacy or version-1 equilibrium schema in run manifests.
 - Refuse problem manifests when the source equilibrium changed after assembly,
   and reject files modified while manifest metadata is collected.
+- Evaluate variable-block residual norms with scaled compensated reductions and
+  report their operation-count roundoff bound without the former naive
+  dimension-linear norm estimate.
 
 ## 0.0.1 - 2026-07-13
 

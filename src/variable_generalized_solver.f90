@@ -2,7 +2,7 @@ module variable_generalized_solver
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
-    use stable_reduction, only: stable_dot_product
+    use stable_reduction, only: stable_dot_product, stable_norm2
     use variable_block_tridiagonal, only: &
         apply_variable_block_tridiagonal, factorize_variable_shifted, &
         solve_variable_factored, validate_variable_blocks, &
@@ -313,12 +313,13 @@ contains
             info = variable_generalized_invalid
             return
         end if
-        mass_norm = norm2(mass_image)
+        mass_norm = stable_norm2(mass_image)
         if (.not. ieee_is_finite(mass_norm) .or. mass_norm <= 0.0_dp) then
             info = variable_generalized_invalid
             return
         end if
-        residual = norm2(stiffness_image - eigenvalue * mass_image) / mass_norm
+        residual = stable_norm2(stiffness_image - eigenvalue * mass_image) &
+            / mass_norm
         if (.not. ieee_is_finite(residual)) then
             info = variable_generalized_invalid
             return
@@ -333,7 +334,7 @@ contains
         real(dp), intent(out) :: resolution
         integer, intent(out) :: info
         real(dp) :: absolute_image(size(vector)), mass_image(size(vector))
-        real(dp) :: factor, mass_norm
+        real(dp) :: factor, machine_epsilon, mass_norm
         integer :: operation_count
 
         call apply_variable_block_tridiagonal(mass, vector, mass_image, info)
@@ -341,22 +342,23 @@ contains
             info = variable_generalized_invalid
             return
         end if
-        mass_norm = norm2(mass_image)
+        mass_norm = stable_norm2(mass_image)
         if (.not. ieee_is_finite(mass_norm) .or. mass_norm <= 0.0_dp) then
             info = variable_generalized_invalid
             return
         end if
         call absolute_shifted_action(stiffness, mass, vector, eigenvalue, &
             absolute_image, operation_count)
-        factor = (2.0_dp * real(operation_count, dp) &
-            + 4.0_dp * real(size(vector), dp) + 16.0_dp) &
-            * epsilon(1.0_dp)
+        machine_epsilon = epsilon(1.0_dp)
+        factor = (6.0_dp * real(operation_count, dp) + 48.0_dp) &
+            * machine_epsilon + 16.0_dp * real(size(vector), dp) &
+            * machine_epsilon**2
         if (factor >= 1.0_dp) then
             info = variable_generalized_invalid
             return
         end if
         factor = factor / (1.0_dp - factor)
-        resolution = factor * norm2(absolute_image) / mass_norm
+        resolution = factor * stable_norm2(absolute_image) / mass_norm
         if (.not. ieee_is_finite(resolution)) then
             info = variable_generalized_invalid
             return
