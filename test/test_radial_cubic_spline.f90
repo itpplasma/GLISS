@@ -2,7 +2,9 @@ program test_radial_cubic_spline
     use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use radial_cubic_spline, only: build_radial_cubic_spline_grid, &
-        evaluate_radial_cubic_spline, fit_radial_cubic_spline, &
+        evaluate_radial_cubic_spline, evaluate_radial_cubic_spline_field, &
+        fit_radial_cubic_spline, fit_radial_cubic_spline_field, &
+        radial_cubic_spline_field_t, &
         radial_cubic_spline_grid_t, radial_cubic_spline_invalid, &
         radial_cubic_spline_ok, radial_cubic_spline_t
     implicit none
@@ -30,6 +32,8 @@ program test_radial_cubic_spline
             < 2.0e-12_dp, "cubic derivative is not exact")
     end do
     call check_continuity(grid)
+    call check_field_fit(grid)
+    call check_field_invalid_inputs(grid)
     call check_mathematica_fixture()
     call check_invalid_inputs(grid, spline)
     write (*, "(a)") "PASS"
@@ -96,6 +100,75 @@ contains
                 < 1.0e-13_dp * scale, "second derivative is discontinuous")
         end do
     end subroutine check_continuity
+
+    subroutine check_field_fit(valid_grid)
+        type(radial_cubic_spline_grid_t), intent(in) :: valid_grid
+        type(radial_cubic_spline_field_t) :: field
+        type(radial_cubic_spline_t) :: scalar
+        real(dp) :: samples(size(nodes), 3)
+        real(dp) :: values(3), derivatives(3), seconds(3)
+        real(dp) :: scalar_value, scalar_derivative, scalar_second
+        integer :: column, status
+
+        samples(:, 1) = polynomial(nodes)
+        samples(:, 2) = sin(3.0_dp * nodes)
+        samples(:, 3) = exp(nodes)
+        call fit_radial_cubic_spline_field(valid_grid, samples, field, status)
+        call require(status == radial_cubic_spline_ok, "field fit failed")
+        call evaluate_radial_cubic_spline_field(valid_grid, field, 0.43_dp, &
+            values, derivatives, seconds, status)
+        call require(status == radial_cubic_spline_ok, &
+            "field evaluation failed")
+        do column = 1, size(samples, 2)
+            call fit_radial_cubic_spline(valid_grid, samples(:, column), &
+                scalar, status)
+            call evaluate_radial_cubic_spline(valid_grid, scalar, 0.43_dp, &
+                scalar_value, scalar_derivative, status, scalar_second)
+            call require(values(column) == scalar_value .and. &
+                derivatives(column) == scalar_derivative .and. &
+                seconds(column) == scalar_second, &
+                "field and scalar splines differ")
+        end do
+    end subroutine check_field_fit
+
+    subroutine check_field_invalid_inputs(valid_grid)
+        type(radial_cubic_spline_grid_t), intent(in) :: valid_grid
+        type(radial_cubic_spline_field_t) :: field
+        real(dp) :: bad_values(size(nodes), 2)
+        real(dp), allocatable :: empty_values(:, :)
+        real(dp) :: values(2), derivatives(2), seconds(2)
+        integer :: status
+
+        bad_values(:, 1) = polynomial(nodes)
+        bad_values(:, 2) = exp(nodes)
+        call fit_radial_cubic_spline_field(valid_grid, bad_values(:5, :), &
+            field, status)
+        call require(status == radial_cubic_spline_invalid, &
+            "field with wrong radial extent was accepted")
+        allocate (empty_values(size(nodes), 0))
+        call fit_radial_cubic_spline_field(valid_grid, empty_values, field, &
+            status)
+        call require(status == radial_cubic_spline_invalid, &
+            "field without coefficients was accepted")
+        bad_values(3, 2) = ieee_value(0.0_dp, ieee_quiet_nan)
+        call fit_radial_cubic_spline_field(valid_grid, bad_values, field, &
+            status)
+        call require(status == radial_cubic_spline_invalid, &
+            "nonfinite field coefficient was accepted")
+        bad_values(:, 2) = exp(nodes)
+        call fit_radial_cubic_spline_field(valid_grid, bad_values, field, &
+            status)
+        call require(status == radial_cubic_spline_ok, &
+            "valid field fit failed")
+        call evaluate_radial_cubic_spline_field(valid_grid, field, 0.43_dp, &
+            values(:1), derivatives, seconds, status)
+        call require(status == radial_cubic_spline_invalid, &
+            "field output with wrong extent was accepted")
+        call evaluate_radial_cubic_spline_field(valid_grid, field, -0.01_dp, &
+            values, derivatives, seconds, status)
+        call require(status == radial_cubic_spline_invalid, &
+            "field coordinate outside domain was accepted")
+    end subroutine check_field_invalid_inputs
 
     subroutine check_mathematica_fixture()
         real(dp), parameter :: fixture_nodes(6) = [0.04_dp, 0.17_dp, &

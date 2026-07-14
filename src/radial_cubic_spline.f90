@@ -23,9 +23,16 @@ module radial_cubic_spline
         real(dp), allocatable :: second_derivatives(:)
     end type radial_cubic_spline_t
 
+    type, public :: radial_cubic_spline_field_t
+        real(dp), allocatable :: values(:, :)
+        real(dp), allocatable :: second_derivatives(:, :)
+    end type radial_cubic_spline_field_t
+
     public :: build_radial_cubic_spline_grid
     public :: evaluate_radial_cubic_spline
+    public :: evaluate_radial_cubic_spline_field
     public :: fit_radial_cubic_spline
+    public :: fit_radial_cubic_spline_field
 
 contains
 
@@ -115,6 +122,50 @@ contains
         info = radial_cubic_spline_ok
     end subroutine fit_radial_cubic_spline
 
+    subroutine fit_radial_cubic_spline_field(grid, values, spline, info)
+        type(radial_cubic_spline_grid_t), intent(in) :: grid
+        real(dp), intent(in) :: values(:, :)
+        type(radial_cubic_spline_field_t), intent(out) :: spline
+        integer, intent(out) :: info
+        real(dp), allocatable :: right_hand_side(:, :)
+        integer :: allocation_status, i, interior, node_count
+
+        spline = radial_cubic_spline_field_t()
+        info = radial_cubic_spline_invalid
+        if (.not. grid_is_valid(grid)) return
+        node_count = size(grid%nodes)
+        if (size(values, 1) /= node_count .or. size(values, 2) < 1) return
+        if (.not. all(ieee_is_finite(values))) return
+        interior = node_count - 2
+        allocate (spline%values(node_count, size(values, 2)), &
+            spline%second_derivatives(node_count, size(values, 2)), &
+            right_hand_side(interior, size(values, 2)), &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = radial_cubic_spline_allocation_error
+            return
+        end if
+        spline%values = values
+        do i = 1, interior
+            right_hand_side(i, :) = 6.0_dp * ((values(i + 2, :) &
+                - values(i + 1, :)) / grid%intervals(i + 1) &
+                - (values(i + 1, :) - values(i, :)) / grid%intervals(i))
+        end do
+        call solve_factored_field(grid, right_hand_side)
+        spline%second_derivatives(2:node_count - 1, :) = right_hand_side
+        spline%second_derivatives(1, :) = ((grid%intervals(1) &
+            + grid%intervals(2)) * right_hand_side(1, :) &
+            - grid%intervals(1) * right_hand_side(2, :)) / grid%intervals(2)
+        spline%second_derivatives(node_count, :) = &
+            ((grid%intervals(node_count - 2) &
+            + grid%intervals(node_count - 1)) * right_hand_side(interior, :) &
+            - grid%intervals(node_count - 1) &
+            * right_hand_side(interior - 1, :)) &
+            / grid%intervals(node_count - 2)
+        if (.not. field_is_valid(grid, spline)) return
+        info = radial_cubic_spline_ok
+    end subroutine fit_radial_cubic_spline_field
+
     subroutine evaluate_radial_cubic_spline(grid, spline, coordinate, value, &
             derivative, info, second_derivative)
         type(radial_cubic_spline_grid_t), intent(in) :: grid
@@ -163,6 +214,56 @@ contains
         end if
         info = radial_cubic_spline_ok
     end subroutine evaluate_radial_cubic_spline
+
+    subroutine evaluate_radial_cubic_spline_field(grid, spline, coordinate, &
+            values, derivatives, second_derivatives, info)
+        type(radial_cubic_spline_grid_t), intent(in) :: grid
+        type(radial_cubic_spline_field_t), intent(in) :: spline
+        real(dp), intent(in) :: coordinate
+        real(dp), intent(out) :: values(:), derivatives(:)
+        real(dp), intent(out) :: second_derivatives(:)
+        integer, intent(out) :: info
+        real(dp) :: distance_left, distance_right, interval
+        integer :: fields, left
+
+        info = radial_cubic_spline_invalid
+        if (.not. grid_is_valid(grid)) return
+        if (.not. field_is_valid(grid, spline)) return
+        fields = size(spline%values, 2)
+        if (size(values) /= fields) return
+        if (size(derivatives) /= fields) return
+        if (size(second_derivatives) /= fields) return
+        if (.not. ieee_is_finite(coordinate)) return
+        if (coordinate < grid%domain_min .or. coordinate > grid%domain_max) &
+            return
+        left = find_interval(grid%nodes, coordinate)
+        interval = grid%intervals(left)
+        distance_left = coordinate - grid%nodes(left)
+        distance_right = grid%nodes(left + 1) - coordinate
+        values = spline%second_derivatives(left, :) * distance_right**3 &
+            / (6.0_dp * interval) &
+            + spline%second_derivatives(left + 1, :) * distance_left**3 &
+            / (6.0_dp * interval) &
+            + (spline%values(left, :) - spline%second_derivatives(left, :) &
+            * interval**2 / 6.0_dp) * distance_right / interval &
+            + (spline%values(left + 1, :) &
+            - spline%second_derivatives(left + 1, :) &
+            * interval**2 / 6.0_dp) * distance_left / interval
+        derivatives = -spline%second_derivatives(left, :) * distance_right**2 &
+            / (2.0_dp * interval) &
+            + spline%second_derivatives(left + 1, :) * distance_left**2 &
+            / (2.0_dp * interval) &
+            + (spline%values(left + 1, :) - spline%values(left, :)) / interval &
+            - interval * (spline%second_derivatives(left + 1, :) &
+            - spline%second_derivatives(left, :)) / 6.0_dp
+        second_derivatives = (spline%second_derivatives(left, :) &
+            * distance_right + spline%second_derivatives(left + 1, :) &
+            * distance_left) / interval
+        if (.not. all(ieee_is_finite(values))) return
+        if (.not. all(ieee_is_finite(derivatives))) return
+        if (.not. all(ieee_is_finite(second_derivatives))) return
+        info = radial_cubic_spline_ok
+    end subroutine evaluate_radial_cubic_spline_field
 
     subroutine build_reduced_system(intervals, lower, diagonal, upper)
         real(dp), intent(in) :: intervals(:)
@@ -222,6 +323,23 @@ contains
                 / grid%diagonal_factor(i)
         end do
     end subroutine solve_factored_system
+
+    subroutine solve_factored_field(grid, values)
+        type(radial_cubic_spline_grid_t), intent(in) :: grid
+        real(dp), intent(inout) :: values(:, :)
+        integer :: i
+
+        do i = 2, size(values, 1)
+            values(i, :) = values(i, :) &
+                - grid%lower_factor(i - 1) * values(i - 1, :)
+        end do
+        values(size(values, 1), :) = values(size(values, 1), :) &
+            / grid%diagonal_factor(size(values, 1))
+        do i = size(values, 1) - 1, 1, -1
+            values(i, :) = (values(i, :) - grid%upper(i) * values(i + 1, :)) &
+                / grid%diagonal_factor(i)
+        end do
+    end subroutine solve_factored_field
 
     function find_interval(nodes, coordinate) result(left)
         real(dp), intent(in) :: nodes(:), coordinate
@@ -298,5 +416,22 @@ contains
         if (.not. all(ieee_is_finite(spline%second_derivatives))) return
         valid = .true.
     end function spline_is_valid
+
+    function field_is_valid(grid, spline) result(valid)
+        type(radial_cubic_spline_grid_t), intent(in) :: grid
+        type(radial_cubic_spline_field_t), intent(in) :: spline
+        logical :: valid
+
+        valid = .false.
+        if (.not. allocated(spline%values)) return
+        if (.not. allocated(spline%second_derivatives)) return
+        if (size(spline%values, 1) /= size(grid%nodes)) return
+        if (size(spline%values, 2) < 1) return
+        if (any(shape(spline%second_derivatives) /= shape(spline%values))) &
+            return
+        if (.not. all(ieee_is_finite(spline%values))) return
+        if (.not. all(ieee_is_finite(spline%second_derivatives))) return
+        valid = .true.
+    end function field_is_valid
 
 end module radial_cubic_spline
