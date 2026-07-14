@@ -53,6 +53,7 @@ add_library(gliss
     src/radial_cubic_spline.f90
     src/axis_regular_harmonic_spline.f90
     src/cartesian_harmonic_spline.f90
+    src/field_periodic_cartesian.f90
     src/cartesian_primitive_geometry.f90
     src/primitive_geometry_grid.f90
     src/primitive_equilibrium_spline.f90
@@ -181,6 +182,12 @@ set_target_properties(gliss_mercier PROPERTIES
 add_executable(gliss_field_profiles app/gliss_field_profiles.f90)
 target_link_libraries(gliss_field_profiles PRIVATE gliss)
 set_target_properties(gliss_field_profiles PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_primitive_geometry_trace
+    app/gliss_primitive_geometry_trace.f90)
+target_link_libraries(gliss_primitive_geometry_trace PRIVATE gliss)
+set_target_properties(gliss_primitive_geometry_trace PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gliss_family app/gliss_family.f90)
@@ -404,6 +411,39 @@ if(BUILD_TESTING)
     target_link_libraries(test_cartesian_harmonic_spline PRIVATE gliss)
     add_test(NAME cartesian_harmonic_spline
         COMMAND test_cartesian_harmonic_spline)
+
+    add_executable(test_field_periodic_cartesian
+        test/test_field_periodic_cartesian.f90)
+    target_link_libraries(test_field_periodic_cartesian PRIVATE gliss)
+    add_test(NAME field_periodic_cartesian
+        COMMAND test_field_periodic_cartesian)
+
+    add_test(NAME primitive_geometry_trace_usage
+        COMMAND ${CMAKE_COMMAND}
+            -DCOMMAND_PATH=$<TARGET_FILE:gliss_primitive_geometry_trace>
+            "-DEXPECTED=usage: gliss_primitive_geometry_trace"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_failure.cmake)
+
+    add_test(NAME primitive_geometry_trace_invalid_theta
+        COMMAND ${CMAKE_COMMAND}
+            -DCOMMAND_PATH=$<TARGET_FILE:gliss_primitive_geometry_trace>
+            "-DEXPECTED=NTHETA must be an integer of at least 8"
+            -DARG1=missing.nc -DARG2=bad -DARG3=8
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_failure.cmake)
+
+    add_test(NAME primitive_geometry_trace_invalid_zeta
+        COMMAND ${CMAKE_COMMAND}
+            -DCOMMAND_PATH=$<TARGET_FILE:gliss_primitive_geometry_trace>
+            "-DEXPECTED=NZETA must be an integer of at least 8"
+            -DARG1=missing.nc -DARG2=8 -DARG3=7
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_failure.cmake)
+
+    add_test(NAME primitive_geometry_trace_missing_export
+        COMMAND ${CMAKE_COMMAND}
+            -DCOMMAND_PATH=$<TARGET_FILE:gliss_primitive_geometry_trace>
+            "-DEXPECTED=export could not be read"
+            -DARG1=missing.nc -DARG2=8 -DARG3=8
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_failure.cmake)
 
     add_executable(test_radial_space_policy
         test/test_radial_space_policy.f90)

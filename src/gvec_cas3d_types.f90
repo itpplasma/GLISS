@@ -18,6 +18,7 @@ module gvec_cas3d_types
         integer :: radial_grid = 0
         logical :: stellarator_symmetric = .false.
         logical :: has_chart_metric = .false.
+        logical :: has_boozer_position_frame = .false.
         real(dp) :: beta_average = 0.0_dp
         integer, allocatable :: poloidal_modes(:)
         integer, allocatable :: toroidal_modes(:)

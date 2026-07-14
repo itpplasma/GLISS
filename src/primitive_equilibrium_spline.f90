@@ -5,6 +5,8 @@ module primitive_equilibrium_spline
         cartesian_harmonic_ok, cartesian_harmonic_spline_t, &
         cartesian_jet_grid_t, evaluate_cartesian_harmonic_spline, &
         fit_cartesian_harmonic_spline
+    use field_periodic_cartesian, only: convert_field_periodic_jet, &
+        field_periodic_cartesian_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, radial_grid_half
     use primitive_geometry_grid, only: build_primitive_geometry_grid, &
         primitive_geometry_grid_allocation_error, primitive_geometry_grid_ok, &
@@ -22,6 +24,7 @@ module primitive_equilibrium_spline
 
     type, public :: primitive_equilibrium_spline_t
         integer :: field_periods = 0
+        integer :: winding = 0
         type(radial_cubic_spline_grid_t) :: radial_grid
         type(cartesian_harmonic_spline_t) :: position
         type(radial_cubic_spline_field_t) :: profiles
@@ -74,6 +77,7 @@ contains
         end if
         if (local_info /= radial_cubic_spline_ok) return
         spline%field_periods = equilibrium%field_periods
+        spline%winding = equilibrium%winding
         info = primitive_equilibrium_ok
     end subroutine fit_primitive_equilibrium
 
@@ -96,6 +100,9 @@ contains
         call evaluate_cartesian_harmonic_spline(spline%radial_grid, &
             spline%position, coordinate, theta, zeta_period, jet, local_info)
         if (local_info /= cartesian_harmonic_ok) return
+        call convert_field_periodic_jet(zeta_period, spline%field_periods, &
+            spline%winding, jet, local_info)
+        if (local_info /= field_periodic_cartesian_ok) return
         call evaluate_radial_cubic_spline_field(spline%radial_grid, &
             spline%profiles, coordinate, profiles, slopes, seconds, local_info)
         if (local_info /= radial_cubic_spline_ok) return
@@ -128,7 +135,9 @@ contains
         integer :: count
 
         valid = equilibrium%radial_grid == radial_grid_half &
-            .and. equilibrium%field_periods >= 1
+            .and. equilibrium%field_periods >= 1 &
+            .and. (equilibrium%winding == 0 &
+            .or. equilibrium%has_boozer_position_frame)
         if (.not. valid) return
         valid = allocated(equilibrium%s) &
             .and. allocated(equilibrium%poloidal_modes) &

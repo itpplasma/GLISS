@@ -243,6 +243,11 @@ contains
         call require(close_scalar(pressure, 409.6_dp) &
             .and. close_scalar(pressure_slope, -1280.0_dp), &
             "equilibrium pressure jet differs")
+        equilibrium%winding = 1
+        call fit_primitive_equilibrium(equilibrium, equilibrium_spline, status)
+        call require(status == primitive_equilibrium_invalid, &
+            "unidentified rotating position frame was accepted")
+        equilibrium%winding = 0
         equilibrium%pressure(2) = ieee_value(0.0_dp, ieee_quiet_nan)
         call fit_primitive_equilibrium(equilibrium, equilibrium_spline, status)
         call require(status == primitive_equilibrium_invalid, &

@@ -26,7 +26,7 @@ program test_gvec_cas3d_reader
     character(len=64) :: half_file, full_file, symmetric_file
     character(len=64) :: corrupt_file, nan_file, mode_file, missing_file
     character(len=64) :: schema_file, future_file, incomplete_file
-    character(len=64) :: malformed_file
+    character(len=64) :: malformed_file, frame_file, bad_frame_file
 
     interface
         function get_process_id() result(process_id) bind(c, name="getpid")
@@ -57,6 +57,8 @@ program test_gvec_cas3d_reader
     write (future_file, '("reader_future_",i0,".nc")') get_process_id()
     write (incomplete_file, '("reader_incomplete_",i0,".nc")') get_process_id()
     write (malformed_file, '("reader_malformed_",i0,".nc")') get_process_id()
+    write (frame_file, '("reader_frame_",i0,".nc")') get_process_id()
+    write (bad_frame_file, '("reader_bad_frame_",i0,".nc")') get_process_id()
 
     call create_fixture(half_file, radial_grid_half, .false., .false.)
     call read_gvec_cas3d_file(half_file, equilibrium, info)
@@ -114,6 +116,17 @@ program test_gvec_cas3d_reader
     call read_gvec_cas3d_file(malformed_file, equilibrium, info)
     call require(info == reader_schema_error, &
         "malformed schema metadata was accepted as legacy")
+    call create_fixture(frame_file, radial_grid_half, .false., .false., &
+        position_frame="xhat,yhat rotated by winding*zeta_B")
+    call read_gvec_cas3d_file(frame_file, equilibrium, info)
+    call require(info == reader_ok &
+        .and. equilibrium%has_boozer_position_frame, &
+        "Boozer position frame was not identified")
+    call create_fixture(bad_frame_file, radial_grid_half, .false., .false., &
+        position_frame="computational zeta")
+    call read_gvec_cas3d_file(bad_frame_file, equilibrium, info)
+    call require(info == reader_schema_error, &
+        "unknown position frame was accepted")
 
     call delete_fixture(half_file)
     call delete_fixture(full_file)
@@ -125,6 +138,8 @@ program test_gvec_cas3d_reader
     call delete_fixture(future_file)
     call delete_fixture(incomplete_file)
     call delete_fixture(malformed_file)
+    call delete_fixture(frame_file)
+    call delete_fixture(bad_frame_file)
     write (*, "(a)") "PASS"
 
 contains
@@ -153,26 +168,28 @@ contains
     end subroutine verify_half_fixture
 
     subroutine create_fixture(filename, grid_kind, symmetric, corrupt, &
-            schema_version)
+            schema_version, position_frame)
         character(len=*), intent(in) :: filename
         integer, intent(in) :: grid_kind
         logical, intent(in) :: symmetric, corrupt
         integer, intent(in), optional :: schema_version
+        character(len=*), intent(in), optional :: position_frame
         type(fixture_ids_t) :: ids
 
         call define_fixture(filename, grid_kind, symmetric, corrupt, ids, &
-            schema_version)
+            schema_version, position_frame)
         call write_fixture(grid_kind, ids)
         call require_netcdf(nc_close_file(ids%ncid))
     end subroutine create_fixture
 
     subroutine define_fixture(filename, grid_kind, symmetric, corrupt, ids, &
-            schema_version)
+            schema_version, position_frame)
         character(len=*), intent(in) :: filename
         integer, intent(in) :: grid_kind
         logical, intent(in) :: symmetric, corrupt
         type(fixture_ids_t), intent(out) :: ids
         integer, intent(in), optional :: schema_version
+        character(len=*), intent(in), optional :: position_frame
         integer :: dim_s, dim_m, dim_n
         character(len=16) :: version_text
 
@@ -202,6 +219,8 @@ contains
                     "gliss_schema_version", trim(version_text)))
             end if
         end if
+        if (present(position_frame)) call require_netcdf(nc_put_global_text( &
+            ids%ncid, "position_frame", position_frame))
         call require_netcdf(nc_end_definitions(ids%ncid))
     end subroutine define_fixture
 

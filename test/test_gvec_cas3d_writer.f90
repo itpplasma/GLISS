@@ -120,6 +120,8 @@ contains
             expected%stellarator_symmetric, "symmetry changed")
         call require(actual%has_chart_metric .eqv. expected%has_chart_metric, &
             "chart-metric presence changed")
+        call require(actual%has_boozer_position_frame .eqv. &
+            expected%has_boozer_position_frame, "position frame changed")
         call require(actual%beta_average == expected%beta_average, &
             "average beta changed")
         call require(all(actual%poloidal_modes == expected%poloidal_modes), &

@@ -104,6 +104,10 @@ contains
         if (nc_put_global_text(ids%ncid, "stellarator_symmetry", &
             merge("True ", "False", equilibrium%stellarator_symmetric)) &
             /= nc_noerr) return
+        if (equilibrium%has_boozer_position_frame) then
+            if (nc_put_global_text(ids%ncid, "position_frame", &
+                "xhat,yhat rotated by winding*zeta_B") /= nc_noerr) return
+        end if
         if (nc_end_definitions(ids%ncid) /= nc_noerr) return
         info = writer_ok
     end subroutine define_file

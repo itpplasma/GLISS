@@ -103,6 +103,9 @@ contains
         end if
         call read_integer_scalar(ncid, "winding", equilibrium%winding, info)
         if (info /= reader_ok) return
+        call read_position_frame(ncid, equilibrium%has_boozer_position_frame, &
+            info)
+        if (info /= reader_ok) return
         call read_real_scalar(ncid, "beta_avg", equilibrium%beta_average, info)
         if (info /= reader_ok) return
 
@@ -122,6 +125,27 @@ contains
         end select
         info = reader_ok
     end subroutine read_metadata
+
+    subroutine read_position_frame(ncid, compatible, info)
+        integer, intent(in) :: ncid
+        logical, intent(out) :: compatible
+        integer, intent(out) :: info
+        character(len=64) :: frame
+        integer :: status
+
+        compatible = .false.
+        frame = ""
+        status = nc_get_global_text(ncid, "position_frame", frame)
+        if (status == nc_enotatt) then
+            info = reader_ok
+            return
+        end if
+        info = reader_schema_error
+        if (status /= nc_noerr) return
+        if (trim(frame) /= "xhat,yhat rotated by winding*zeta_B") return
+        compatible = .true.
+        info = reader_ok
+    end subroutine read_position_frame
 
     subroutine read_coordinates(ncid, radial_count, poloidal_count, &
             toroidal_count, equilibrium, info)
