@@ -16,7 +16,7 @@ program gliss_compatible_marginality
 
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(compatible_two_component_problem_t) :: problem
-    character(len=1024) :: filename, token
+    character(len=1024) :: filename, stored_power_token, token
     integer, allocatable :: mode_m(:), mode_n(:)
     real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
     real(dp), allocatable :: stored_power(:), stiffness(:, :), mass(:, :)
@@ -28,7 +28,8 @@ program gliss_compatible_marginality
     integer :: allocation_status, arguments, comma, degree, first_mode, info
     integer :: inertia_negative_count, mode, negative_count, work_size
     integer :: n_theta, n_zeta, parity, trial
-    logical :: bracket_requested, has_m0_power, inertia_only, physical_mass
+    logical :: bracket_requested, has_m0_power, has_stored_powers, inertia_only
+    logical :: physical_mass
 
     interface
         subroutine terminate_process(status) bind(C, name="exit")
@@ -65,6 +66,7 @@ program gliss_compatible_marginality
     physical_mass = .false.
     bracket_requested = .false.
     has_m0_power = .false.
+    has_stored_powers = .false.
     density = 0.0_dp
     m0_stored_power = 0.0_dp
     do while (first_mode <= arguments)
@@ -91,6 +93,12 @@ program gliss_compatible_marginality
             if (m0_stored_power < 0.0_dp .or. m0_stored_power > 1.0_dp) &
                 call fail_usage("m=0 stored power must lie in [0,1]")
             has_m0_power = .true.
+        else if (index(token, "--stored-powers=") == 1) then
+            if (has_stored_powers) call fail_usage("duplicate --stored-powers")
+            if (len_trim(token) == len("--stored-powers=")) &
+                call fail_usage("--stored-powers requires a comma-separated list")
+            stored_power_token = token(len("--stored-powers=") + 1:)
+            has_stored_powers = .true.
         else if (index(token, "--negative-bracket=") == 1) then
             if (bracket_requested) &
                 call fail_usage("duplicate --negative-bracket")
@@ -105,6 +113,8 @@ program gliss_compatible_marginality
         first_mode = first_mode + 1
     end do
     if (arguments < first_mode) call fail_usage("at least one mode is required")
+    if (has_m0_power .and. has_stored_powers) &
+        call fail_usage("--m0-stored-power conflicts with --stored-powers")
     allocate (mode_m(arguments - first_mode + 1), &
         mode_n(arguments - first_mode + 1), &
         stored_power(arguments - first_mode + 1), stat=allocation_status)
@@ -134,6 +144,13 @@ program gliss_compatible_marginality
         if (mode_m(mode) == 0 .and. has_m0_power) &
             stored_power(mode) = m0_stored_power
     end do
+    if (has_stored_powers) call parse_real_list(stored_power_token, &
+        "stored powers", stored_power)
+    if (has_stored_powers) then
+        do mode = 1, size(mode_m)
+            if (mode_m(mode) == 0) m0_stored_power = stored_power(mode)
+        end do
+    end if
     call read_gvec_cas3d_file(trim(filename), equilibrium, info)
     if (info /= reader_ok) call fail_solver("reader", info)
     if (physical_mass) then
@@ -160,6 +177,11 @@ program gliss_compatible_marginality
     allocate (pivots(size(stiffness, 1)), work(work_size), &
         stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("workspace allocation", -1)
+    write (*, "(a)") "stored_power_index,m,n,power"
+    do mode = 1, size(mode_m)
+        write (*, "(i0,2(a,i0),a,es24.16)") mode, ",", mode_m(mode), &
+            ",", mode_n(mode), ",", stored_power(mode)
+    end do
     if (bracket_requested) then
         call bracket_negative_eigenvalue
         call terminate_process(0_c_int)
@@ -232,6 +254,7 @@ contains
             "EXPORT_FILE DEGREE NTHETA NZETA FLOOR PARITY " // &
             "[--inertia-only] [--physical-density=VALUE] " // &
             "[--m0-stored-power=VALUE] " // &
+            "[--stored-powers=P0,P1,...] " // &
             "[--negative-bracket=LOWER,UPPER,TOLERANCE] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
@@ -286,6 +309,29 @@ contains
         read (text, *, iostat=status) value
         if (status /= 0) call fail_usage(trim(name) // " must be an integer")
     end subroutine parse_integer
+
+    subroutine parse_real_list(text, name, values)
+        character(len=*), intent(in) :: text, name
+        real(dp), intent(out) :: values(:)
+        integer :: comma, first, item
+
+        first = 1
+        do item = 1, size(values)
+            comma = index(text(first:), ",")
+            if (item < size(values)) then
+                if (comma <= 1) &
+                    call fail_usage(trim(name) // " requires one value per mode")
+                call parse_real(text(first:first + comma - 2), name, values(item))
+                first = first + comma
+            else
+                if (comma > 0 .or. first > len_trim(text)) &
+                    call fail_usage(trim(name) // " requires one value per mode")
+                call parse_real(text(first:), name, values(item))
+            end if
+            if (abs(values(item)) > 4.0_dp) &
+                call fail_usage(trim(name) // " values must lie in [-4,4]")
+        end do
+    end subroutine parse_real_list
 
     subroutine parse_bracket(text, lower, upper, tolerance)
         character(len=*), intent(in) :: text

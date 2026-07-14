@@ -470,6 +470,19 @@ if(BUILD_TESTING)
         "gliss_compatible_marginality: duplicate --m0-stored-power"
         missing.nc 2 8 8 1e-8 1 --m0-stored-power=0.5
         --m0-stored-power=0.5 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_power_count
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: stored powers requires one value per mode"
+        missing.nc 2 8 8 1e-8 1 --stored-powers=0,0 0,1 1,1 2,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_power
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: stored powers must be finite"
+        missing.nc 2 8 8 1e-8 1 --stored-powers=0,nan,0 0,1 1,1 2,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_power_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --m0-stored-power conflicts"
+        missing.nc 2 8 8 1e-8 1 --m0-stored-power=0
+        --stored-powers=0,0,0 0,1 1,1 2,1)
     add_compatible_cli_rejection(compatible_marginality_cli_bad_bracket_order
         gliss_compatible_marginality
         "gliss_compatible_marginality: negative bracket must obey"
