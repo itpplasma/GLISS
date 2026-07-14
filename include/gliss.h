@@ -141,6 +141,23 @@ typedef struct gliss_terpsichore_fixed_boundary_result {
     double resolution;
 } gliss_terpsichore_fixed_boundary_result;
 
+typedef struct gliss_axisymmetric_spectrum_result {
+    size_t struct_size;
+    int32_t has_eigenpair;
+    int32_t field_periods;
+    int32_t toroidal_mode;
+    int32_t poloidal_max;
+    size_t mode_count;
+    size_t radial_surfaces;
+    int32_t parity_class;
+    int32_t radial_quadrature;
+    size_t negative_count;
+    double lowest_eigenvalue;
+    double certificate;
+    double eigenpair_residual;
+    double force_balance_residual;
+} gliss_axisymmetric_spectrum_result;
+
 /* Solve the lowest negative eigenpair represented by a TERPSICHORE FORT.23
  * file produced with IVAC=0 and MODELK=0. Set result->struct_size to
  * sizeof(*result). The file's Fourier table, reduced kinetic normalization,
@@ -150,6 +167,23 @@ gliss_status gliss_terpsichore_fixed_boundary(
     const char *path,
     size_t path_length,
     gliss_terpsichore_fixed_boundary_result *result,
+    char *error,
+    size_t error_capacity);
+
+/* Evaluate the fixed-boundary, sine-parity axisymmetric family on an existing
+ * equilibrium. The native mode table is (0,+n), then (m,-n),(m,+n) through
+ * poloidal_max, with the regular-axis powers used by gliss_axisymmetric.
+ * radial_quadrature is 1 for midpoint or 2 for two-point Gauss quadrature.
+ * solve_eigenpair is 0 for inertia only or 1 for the certified lowest pair.
+ * Set result->struct_size to sizeof(*result). The result is unchanged on
+ * failure. */
+gliss_status gliss_axisymmetric_spectrum(
+    const gliss_equilibrium *equilibrium,
+    int32_t toroidal_mode,
+    int32_t poloidal_max,
+    int32_t radial_quadrature,
+    int32_t solve_eigenpair,
+    gliss_axisymmetric_spectrum_result *result,
     char *error,
     size_t error_capacity);
 

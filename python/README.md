@@ -127,6 +127,64 @@ files raise `GlissIOError`; assembly and eigensolver failures raise
 read, assembly, inertia count, and inverse iteration execute in one native
 call.
 
+## Axisymmetric fixed-boundary family
+
+Load one axisymmetric GVEC/CAS3D export, then reuse it for cheap inertia scans
+and selected certified solves:
+
+```python
+from pathlib import Path
+
+import gliss
+
+with gliss.Equilibrium(Path("solovev.nc")) as equilibrium:
+    inertia = gliss.axisymmetric_inertia(
+        equilibrium,
+        toroidal_mode=1,
+        poloidal_max=8,
+    )
+    if inertia.negative_count:
+        result = gliss.solve_axisymmetric(
+            equilibrium,
+            toroidal_mode=1,
+            poloidal_max=8,
+        )
+        print(result.lowest_eigenvalue, result.certificate)
+```
+
+Both functions return a frozen `AxisymmetricResult`. `negative_count` is the
+inertia of the assembled operator below zero. A zero count is stable within
+the selected Fourier and radial discretization; a positive count gives the
+number of unstable directions. `solve_axisymmetric()` also returns the lowest
+eigenvalue, final inertia-bracket width in `certificate`, and scaled backward
+error in `eigenpair_residual`. The count-only function sets these three fields
+to `None`. `force_balance_residual` is the maximum dimensionless residual of
+the equilibrium identity used while reconstructing the kernel geometry.
+
+This specialized family reproduces the `gliss_axisymmetric` command-line
+operator. It uses normalized toroidal flux `s`, a fixed plasma boundary at
+`s=1`, and the sine-parity class. The mode table is `(0,+n)`, followed by
+`(m,-n),(m,+n)` for `m=1,...,poloidal_max`. The stored radial factor enforces
+the regular physical behavior `xi^s ~ s^(m/2)` at the magnetic axis. Fourier
+phases use `2*pi*(m*theta-n*zeta)`. Angular quadrature is fixed at 64 by 8;
+radial quadrature is `"midpoint"` or `"gauss2"`.
+
+The eigenvalue and certificate use the native normalization of this
+two-component comparison operator. They are not an SI `omega^2` or a growth
+rate. Use their sign, convergence under radial and Fourier refinement, and a
+matched normalization for cross-code comparisons. The residual and inertia
+count are dimensionless.
+
+The equilibrium must contain the `g_st` and `g_sz` chart metrics, use one
+field period, contain no nonaxisymmetric harmonics, and provide at least five
+half-grid surfaces. `toroidal_mode` and `poloidal_max` are positive signed
+32-bit integers. The fixed angular grid also requires
+`2*poloidal_max + max(abs(equilibrium poloidal modes)) < 64`. Python rejects
+bad types and ranges before the native call. Native compatibility failures
+raise `GlissArgumentError`; reconstruction or eigensolver failures raise
+`GlissComputationError`. Operations on a closed `Equilibrium` raise
+`RuntimeError`.
+
 ## Mercier profile
 
 ```python

@@ -90,6 +90,7 @@ add_library(gliss
     src/fixed_boundary_spectrum.f90
     src/newcomb_limit.f90
     src/family_assembly.f90
+    src/axisymmetric_spectrum.f90
     src/field_profile_identities.f90
     src/export_surface_geometry.f90
     src/mercier_diagnostic.f90
@@ -113,6 +114,7 @@ add_library(gliss_c SHARED
     src/gliss_solver_controls_capi.f90
     src/gliss_energy_capi.f90
     src/gliss_terpsichore_capi.f90
+    src/gliss_axisymmetric_capi.f90
     src/gliss_full_spectrum_capi.f90)
 add_dependencies(gliss_c gliss)
 target_link_libraries(gliss_c PRIVATE gliss)

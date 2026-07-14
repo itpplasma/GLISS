@@ -10,6 +10,7 @@ int main(void) {
     gliss_spectrum_summary summary;
     gliss_energy_terms energy;
     gliss_terpsichore_fixed_boundary_result terpsichore;
+    gliss_axisymmetric_spectrum_result axisymmetric;
     size_t surfaces = 1;
     int32_t schema_version = -1;
     char error[128];
@@ -19,6 +20,9 @@ int main(void) {
     memset(&energy, 0, sizeof(energy));
     energy.struct_size = sizeof(energy);
     memset(&terpsichore, 0, sizeof(terpsichore));
+    memset(&axisymmetric, 0, sizeof(axisymmetric));
+    axisymmetric.struct_size = sizeof(axisymmetric);
+    axisymmetric.mode_count = 123;
 
     if (gliss_abi_version() != GLISS_ABI_VERSION) {
         return 1;
@@ -86,6 +90,19 @@ int main(void) {
             sizeof(error)) !=
         GLISS_STATUS_INVALID_ARGUMENT) {
         return 16;
+    }
+    if (gliss_axisymmetric_spectrum(
+            equilibrium, 1, 8, 1, 1, &axisymmetric, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 17;
+    }
+    if (axisymmetric.mode_count != 123 || error[0] == '\0') {
+        return 18;
+    }
+    if (gliss_axisymmetric_spectrum(
+            equilibrium, 1, 8, 1, 1, NULL, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 19;
     }
     return 0;
 }

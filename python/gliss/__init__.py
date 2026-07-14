@@ -117,6 +117,11 @@ from .terpsichore import (  # noqa: E402
     TerpsichoreFixedBoundaryResult as TerpsichoreFixedBoundaryResult,
     solve_terpsichore_fixed_boundary as solve_terpsichore_fixed_boundary,
 )
+from .axisymmetric import (  # noqa: E402
+    AxisymmetricResult as AxisymmetricResult,
+    axisymmetric_inertia as axisymmetric_inertia,
+    solve_axisymmetric as solve_axisymmetric,
+)
 from .schema import (  # noqa: E402
     RunManifest,
     StabilityConfiguration,
@@ -127,6 +132,7 @@ from .full_schema import FullRunManifest, write_full_run_manifest  # noqa: E402
 __all__ = [
     "__version__",
     "Equilibrium",
+    "AxisymmetricResult",
     "EnergyTerms",
     "GlissAllocationError",
     "GlissArgumentError",
@@ -136,6 +142,7 @@ __all__ = [
     "GlissIOError",
     "GlissInternalError",
     "convert_vmec",
+    "axisymmetric_inertia",
     "get_include",
     "FullSpectrumResult",
     "FullStabilityResult",
@@ -148,6 +155,9 @@ __all__ = [
     "StabilityConfiguration",
     "StabilityProblem",
     "StabilityResult",
+    "TerpsichoreFixedBoundaryResult",
+    "solve_axisymmetric",
+    "solve_terpsichore_fixed_boundary",
     "version",
     "write_run_manifest",
     "write_full_run_manifest",
