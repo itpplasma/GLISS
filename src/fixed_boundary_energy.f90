@@ -67,15 +67,18 @@ contains
         real(dp), intent(in) :: vector(:)
         type(fixed_boundary_energy_terms_t), intent(out) :: result
         integer, intent(out) :: info
-        real(dp), allocatable :: permuted(:), image(:)
+        real(dp), allocatable :: component_image_sum(:), image(:)
+        real(dp), allocatable :: permuted(:), potential_image(:)
         real(dp) :: components(fixed_boundary_energy_term_count)
-        real(dp) :: ones(fixed_boundary_energy_term_count), scale
+        real(dp) :: matrix_closure, ones(fixed_boundary_energy_term_count)
+        real(dp) :: roundoff_tolerance, scale
         integer :: allocation_status, index
 
         info = fixed_boundary_energy_invalid
         if (size(vector) < 1 .or. size(vector) /= size(permutation)) return
         if (.not. all(ieee_is_finite(vector))) return
         allocate (permuted(size(vector)), image(size(vector)), &
+            potential_image(size(vector)), component_image_sum(size(vector)), &
             stat=allocation_status)
         if (allocation_status /= 0) then
             info = fixed_boundary_energy_allocation
@@ -86,7 +89,7 @@ contains
                 permutation(index) > size(vector)) return
             permuted(index) = vector(permutation(index))
         end do
-        call quadratic_form(stiffness, permuted, image, &
+        call quadratic_form(stiffness, permuted, potential_image, &
             result%potential_energy, info)
         if (info /= fixed_boundary_energy_ok) return
         call quadratic_form(mass, permuted, image, result%kinetic_energy, info)
@@ -95,10 +98,12 @@ contains
             info = fixed_boundary_energy_invalid
             return
         end if
+        component_image_sum = 0.0_dp
         do index = 1, fixed_boundary_energy_term_count
             call quadratic_form(store%terms(index), permuted, image, &
                 components(index), info)
             if (info /= fixed_boundary_energy_ok) return
+            component_image_sum = component_image_sum + image
         end do
         call assign_components(components, result)
         result%rayleigh_quotient = result%potential_energy &
@@ -108,8 +113,15 @@ contains
             - stable_dot_product(ones, components))
         scale = max(1.0_dp, abs(result%potential_energy), &
             sum(abs(components)))
-        result%closure_tolerance = 128.0_dp * epsilon(1.0_dp) &
+        matrix_closure = stable_dot_product(abs(permuted), &
+            abs(potential_image - component_image_sum))
+        roundoff_tolerance = 128.0_dp * epsilon(1.0_dp) &
             * real(size(vector), dp) * scale
+        if (matrix_closure > 64.0_dp * roundoff_tolerance) then
+            info = fixed_boundary_energy_inconsistent
+            return
+        end if
+        result%closure_tolerance = matrix_closure + roundoff_tolerance
         if (.not. valid_result(result)) then
             info = fixed_boundary_energy_inconsistent
             return

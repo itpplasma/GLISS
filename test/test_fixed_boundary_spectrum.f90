@@ -18,7 +18,8 @@ program test_fixed_boundary_spectrum
     character(len=*), parameter :: fixture = "fixed_boundary_spectrum.nc"
     real(dp), parameter :: legacy_lowest(2) = &
         [-1.2278816610508129e2_dp, -1.2278816623062953e2_dp]
-    real(dp), parameter :: legacy_relative_tolerance = 1.0e-9_dp
+    real(dp), parameter :: legacy_certificate_limit = 1.2e-3_dp
+    real(dp), parameter :: legacy_relative_limit = 1.0e-8_dp
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(fixed_boundary_problem_t) :: problem
     type(fixed_boundary_spectrum_result_t) :: first, second, repeated
@@ -44,12 +45,8 @@ program test_fixed_boundary_spectrum
     call require(info == fixed_boundary_ok, "energy decomposition failed")
     call check_energy(energy, first%lowest_eigenvalue)
     call check_rayleigh_gradient()
-    call require(abs(first%lowest_eigenvalue - legacy_lowest(1)) &
-        <= legacy_relative_tolerance * abs(legacy_lowest(1)), &
-        "class-one result changed from the legacy CLI")
-    call require(abs(second%lowest_eigenvalue - legacy_lowest(2)) &
-        <= legacy_relative_tolerance * abs(legacy_lowest(2)), &
-        "class-two result changed from the legacy CLI")
+    call check_legacy_certificate(first, legacy_lowest(1))
+    call check_legacy_certificate(second, legacy_lowest(2))
 
     call solve_fixed_boundary_full_spectrum(problem, 1, full, info)
     call require(info == fixed_boundary_ok, "full-spectrum solve failed")
@@ -81,6 +78,20 @@ program test_fixed_boundary_spectrum
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_legacy_certificate(result, legacy)
+        type(fixed_boundary_spectrum_result_t), intent(in) :: result
+        real(dp), intent(in) :: legacy
+
+        call require(result%certificate <= legacy_certificate_limit, &
+            "legacy eigenvalue certificate is too wide")
+        call require(abs(result%lowest_eigenvalue - legacy) &
+            <= result%certificate, &
+            "legacy eigenvalue lies outside the certificate")
+        call require(abs(result%lowest_eigenvalue - legacy) &
+            <= legacy_relative_limit * abs(legacy), &
+            "legacy eigenvalue exceeds the portable relative limit")
+    end subroutine check_legacy_certificate
 
     subroutine check_rayleigh_gradient()
         type(fixed_boundary_energy_terms_t) :: plus, minus

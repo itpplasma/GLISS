@@ -198,9 +198,13 @@ contains
 
     subroutine check_ill_scaled_dense_pencil()
         integer, parameter :: n = 32
+        integer, parameter :: packed_widths(1) = [n]
+        type(variable_block_tridiagonal_t) :: packed_k, packed_m
         real(dp) :: dense_k(n, n), dense_m(n, n), mass_image(n)
         real(dp), allocatable :: stiffness_copy(:, :), mass_copy(:, :)
         real(dp), allocatable :: values(:), vectors(:, :)
+        real(dp), allocatable :: seed_rayleigh(:)
+        real(dp), allocatable :: seed_residuals(:), seed_resolutions(:)
         integer :: info
 
         call build_ill_scaled_pencil(dense_k, dense_m)
@@ -209,67 +213,52 @@ contains
         call solve_symmetric_generalized_allocated(stiffness_copy, mass_copy, &
             values, vectors, info, equilibrate=.true.)
         call require(info == 0, "ill-scaled dense eigensolve failed")
-        call require(abs(values(1) - 9.978266069932716e-5_dp) < 1.0e-8_dp, &
+        call require(abs(values(1) - (2.0_dp - 0.5_dp * cos( &
+            acos(-1.0_dp) / real(n + 1, dp)))) < 1.0e-12_dp, &
             "ill-scaled dense eigenvalue changed")
         mass_image = matmul(dense_m, vectors(:, 1))
         call require(abs(dot_product(vectors(:, 1), mass_image) - 1.0_dp) &
             < 1.0e-8_dp, "ill-scaled eigenvector is not mass normalized")
+        call pack_variable_blocks(dense_k, packed_widths, packed_k, info)
+        call require(info == 0, "ill-scaled stiffness packing failed")
+        call pack_variable_blocks(dense_m, packed_widths, packed_m, info)
+        call require(info == 0, "ill-scaled mass packing failed")
+        call diagnose_dense_spectrum(packed_k, packed_m, values, vectors, &
+            seed_rayleigh, seed_residuals, seed_resolutions, info)
+        call require(info == dense_spectrum_ok, &
+            "ill-scaled seed diagnostics failed")
+        call require(all(values(2:) - values(:n - 1) &
+            > seed_residuals(2:) + seed_resolutions(2:) &
+            + seed_residuals(:n - 1) + seed_resolutions(:n - 1)), &
+            "ill-scaled seed gaps are unresolved")
+        call certify_dense_spectrum_inertia(packed_k, packed_m, values, &
+            seed_residuals, seed_resolutions, info)
+        call require(info == dense_spectrum_ok, &
+            "ill-scaled seed inertia certificate failed")
+        call certify_dense_spectrum_orthogonality(packed_m, vectors, info)
+        call require(info == dense_spectrum_ok, &
+            "ill-scaled seed vectors are not mass orthonormal")
     end subroutine check_ill_scaled_dense_pencil
 
     subroutine build_ill_scaled_pencil(stiffness, mass)
         real(dp), intent(out) :: stiffness(:, :), mass(:, :)
-        integer :: i, n, source
-        real(dp) :: q(size(mass, 1), size(mass, 1))
-        real(dp) :: u(size(mass, 1), size(mass, 1))
-        real(dp) :: mass_base(size(mass, 1), size(mass, 1))
-        real(dp) :: stiffness_base(size(mass, 1), size(mass, 1))
-        real(dp) :: mass_root(size(mass, 1), size(mass, 1))
-        real(dp) :: scale(size(mass, 1)), mass_values(size(mass, 1))
-        real(dp) :: stiffness_values(size(mass, 1))
+        integer :: i, n
+        real(dp) :: scale(size(mass, 1))
 
         n = size(mass, 1)
-        call build_orthogonal_bases(q, u)
+        stiffness = 0.0_dp
+        mass = 0.0_dp
         do i = 1, n
-            mass_values(i) = 10.0_dp**(4.0_dp * real(i - 1, dp) &
+            scale(i) = 10.0_dp**(-5.0_dp + 10.0_dp * real(i - 1, dp) &
                 / real(n - 1, dp))
-            stiffness_values(i) = 10.0_dp**(-4.0_dp &
-                + 10.0_dp * real(i - 1, dp) / real(n - 1, dp))
-            source = modulo(i - 21, n)
-            scale(i) = 10.0_dp**(-5.0_dp &
-                + 10.0_dp * real(source, dp) / real(n - 1, dp))
+            mass(i, i) = scale(i)**2
+            stiffness(i, i) = 2.0_dp * mass(i, i)
         end do
-        mass_root = matmul(transpose(u), &
-            spread(sqrt(mass_values), 2, n) * u)
-        mass_base = matmul(mass_root, mass_root)
-        stiffness_base = matmul(transpose(q), &
-            spread(stiffness_values, 2, n) * q)
-        stiffness_base = matmul(mass_root, &
-            matmul(stiffness_base, mass_root))
-        mass = spread(scale, 2, n) * mass_base * spread(scale, 1, n)
-        stiffness = spread(scale, 2, n) * stiffness_base &
-            * spread(scale, 1, n)
-        mass = 0.5_dp * (mass + transpose(mass))
-        stiffness = 0.5_dp * (stiffness + transpose(stiffness))
+        do i = 1, n - 1
+            call set_symmetric(stiffness, i, i + 1, &
+                0.25_dp * scale(i) * scale(i + 1))
+        end do
     end subroutine build_ill_scaled_pencil
-
-    subroutine build_orthogonal_bases(q, u)
-        real(dp), intent(out) :: q(:, :), u(:, :)
-        real(dp) :: pi, q_scale
-        integer :: i, j, n
-
-        n = size(q, 1)
-        pi = acos(-1.0_dp)
-        do j = 1, n
-            do i = 1, n
-                q_scale = sqrt(2.0_dp / real(n, dp))
-                if (i == 1) q_scale = 1.0_dp / sqrt(real(n, dp))
-                q(i, j) = q_scale * cos(pi * real(i - 1, dp) &
-                    * (real(j, dp) - 0.5_dp) / real(n, dp))
-                u(i, j) = sqrt(2.0_dp / real(n + 1, dp)) &
-                    * sin(pi * real(i * j, dp) / real(n + 1, dp))
-            end do
-        end do
-    end subroutine build_orthogonal_bases
 
     function mass_norm(vector, mass) result(squared_norm)
         real(dp), intent(in) :: vector(:)
