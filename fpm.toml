@@ -58,6 +58,10 @@ name = "radial_feec_complex"
 main = "test_radial_feec_complex.f90"
 
 [[test]]
+name = "radial_cubic_spline"
+main = "test_radial_cubic_spline.f90"
+
+[[test]]
 name = "radial_space_policy"
 main = "test_radial_space_policy.f90"
 
