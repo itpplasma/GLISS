@@ -54,6 +54,10 @@ the same left-handed, one-field-period Boozer convention used by pyGVEC's
 CAS3D exporter. The output contains SI pressure, magnetic field and fluxes;
 `s` is normalized toroidal flux. The Fourier phase is
 `2*pi*(m*theta - n*zeta)`, with `zeta` normalized over one field period.
+VMEC angles map as `theta=-theta_B/(2*pi)` and
+`zeta=-N_FP*zeta_B/(2*pi)`. Position harmonics are stored in the declared
+rotating frame with `winding=-1`; reconstructing the frame gives the physical
+cylindrical angle `zeta_B-nu` without reflecting the Cartesian `y` coordinate.
 
 The importer currently accepts fixed-boundary, stellarator-symmetric VMEC
 files with `signgs=-1` and a successful `ier_flag`. It rejects asymmetric and

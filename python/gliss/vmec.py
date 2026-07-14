@@ -8,8 +8,12 @@ from typing import Any, Optional, Union
 
 import numpy as np
 
-from ._vmec_geometry import _EVEN_FIELDS, convert_geometry
-
+from ._vmec_geometry import (
+    _EVEN_FIELDS,
+    _POSITION_FRAME,
+    _VMEC_WINDING,
+    convert_geometry,
+)
 
 PathLike = Union[str, os.PathLike]
 
@@ -97,18 +101,12 @@ def _select_surfaces(transform: Any, radial_surfaces: Optional[int]) -> None:
     if available < 1:
         raise ValueError("booz_xform reported no VMEC half-grid surfaces")
     if available % radial_surfaces:
-        raise ValueError(
-            "radial_surfaces must divide the VMEC half-grid surface count"
-        )
+        raise ValueError("radial_surfaces must divide the VMEC half-grid surface count")
     stride = available // radial_surfaces
     if stride % 2 == 0:
-        raise ValueError(
-            "radial_surfaces must give an odd centered-subsampling stride"
-        )
+        raise ValueError("radial_surfaces must give an odd centered-subsampling stride")
     first = (stride - 1) // 2
-    transform.compute_surfs = np.arange(
-        first, available, stride, dtype=np.int32
-    )
+    transform.compute_surfs = np.arange(first, available, stride, dtype=np.int32)
 
 
 def _write(
@@ -132,6 +130,7 @@ def _write(
         file.gliss_schema = b"gvec-cas3d-export"
         file.gliss_schema_version = b"1"
         file.stellarator_symmetry = b"True"
+        file.position_frame = _POSITION_FRAME.encode("ascii")
         file.creator = b"gliss.convert_vmec"
         file.vmec_source = source_name.encode("utf-8")
         file.booz_xform_mboz = transform_resolution[0]
@@ -141,7 +140,7 @@ def _write(
         file.booz_xform_version = booz_xform_version.encode("ascii")
         for name, value in converted.residuals.items():
             setattr(file, f"conversion_residual_{name}", np.float64(value))
-        for name, value in (("N_FP", nfp), ("winding", 1)):
+        for name, value in (("N_FP", nfp), ("winding", _VMEC_WINDING)):
             variable = file.createVariable(name, "i", ())
             variable[...] = value
         variable = file.createVariable("beta_avg", "d", ())
@@ -186,9 +185,7 @@ def convert_vmec(
     toroidal_max = _integer(toroidal_max, "toroidal_max", 0, 64)
     transform_factor = _integer(transform_factor, "transform_factor", 2, 16)
     if radial_surfaces is not None:
-        radial_surfaces = _integer(
-            radial_surfaces, "radial_surfaces", 5, 1_000_000
-        )
+        radial_surfaces = _integer(radial_surfaces, "radial_surfaces", 5, 1_000_000)
     if not isinstance(overwrite, bool):
         raise TypeError("overwrite must be a bool")
     if destination.exists() and not overwrite:
@@ -216,9 +213,7 @@ def convert_vmec(
         raise RuntimeError(f"Boozer transformation failed for {source_path}") from error
     if bool(transform.asym):
         raise ValueError("booz_xform reported asymmetric geometry")
-    converted = convert_geometry(
-        transform, beta_average, poloidal_max, toroidal_max
-    )
+    converted = convert_geometry(transform, beta_average, poloidal_max, toroidal_max)
     descriptor, temporary_name = tempfile.mkstemp(
         dir=destination.parent, prefix=f".{destination.name}.", suffix=".tmp"
     )

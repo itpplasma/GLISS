@@ -5,7 +5,12 @@ import pytest
 from scipy.io import netcdf_file
 
 import gliss.vmec as vmec
-from gliss._vmec_geometry import ConvertedGeometry, _EVEN_FIELDS, _ODD_FIELDS
+from gliss._vmec_geometry import (
+    ConvertedGeometry,
+    _EVEN_FIELDS,
+    _ODD_FIELDS,
+    _position_frame,
+)
 
 
 class _Transform:
@@ -50,6 +55,29 @@ def _geometry(m_max=2, n_max=1):
         profiles,
         harmonics,
         {"toroidal_flux": 0.0},
+    )
+
+
+@pytest.mark.parametrize(
+    ("radius", "boozer_shift", "boozer_zeta"),
+    [(6.2, 0.0, 0.37), (5.9, -0.23, 1.41), (6.6, 0.31, -0.72)],
+)
+def test_vmec_position_frame_reconstructs_cylindrical_position(
+    radius, boozer_shift, boozer_zeta
+):
+    xhat, yhat = _position_frame(np.asarray(radius), np.asarray(boozer_shift))
+    nfp = 5
+    zeta_period = -nfp * boozer_zeta / (2.0 * np.pi)
+    winding = -1
+    rotation = 2.0 * np.pi * winding * zeta_period / nfp
+    physical_x = np.cos(rotation) * xhat - np.sin(rotation) * yhat
+    physical_y = np.sin(rotation) * xhat + np.cos(rotation) * yhat
+    expected_angle = boozer_zeta - boozer_shift
+    np.testing.assert_allclose(
+        [physical_x, physical_y],
+        radius * np.asarray([np.cos(expected_angle), np.sin(expected_angle)]),
+        rtol=0.0,
+        atol=2.0e-15,
     )
 
 
@@ -129,11 +157,13 @@ def test_convert_vmec_is_atomic_and_writes_reader_schema(tmp_path, monkeypatch):
         assert file.gliss_schema == b"gvec-cas3d-export"
         assert file.gliss_schema_version == b"1"
         assert file.stellarator_symmetry == b"True"
+        assert file.position_frame == b"xhat,yhat rotated by winding*zeta_B"
         assert file.creator == b"gliss.convert_vmec"
         assert int(file.vmec_half_grid_surfaces) == 15
         assert int(file.booz_xform_surfaces) == 5
         assert float(file.conversion_residual_toroidal_flux) == 0.0
         assert int(file.variables["N_FP"].data) == 3
+        assert int(file.variables["winding"].data) == -1
         assert file.variables["Jac_mnc"].data.shape == (5, 3, 3)
         assert "Jac_mns" not in file.variables
         assert file.variables["g_st_mns"].data.shape == (5, 3, 3)

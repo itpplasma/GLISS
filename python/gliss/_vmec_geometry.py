@@ -5,8 +5,9 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 
-
 _TWO_PI = 2.0 * np.pi
+_POSITION_FRAME = "xhat,yhat rotated by winding*zeta_B"
+_VMEC_WINDING = -1
 _EVEN_FIELDS = {
     "mod_B",
     "xhat",
@@ -31,10 +32,19 @@ class ConvertedGeometry:
     residuals: Dict[str, float]
 
 
+def _position_frame(
+    radius: np.ndarray, angle: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return the VMEC position in GLISS's field-period rotating frame."""
+    return radius * np.cos(angle), -radius * np.sin(angle)
+
+
 def _array(source: Any, name: str, shape: Tuple[int, ...] = ()) -> np.ndarray:
     values = np.asarray(getattr(source, name))
     if shape and values.shape != shape:
-        raise ValueError(f"booz_xform returned {name} with shape {values.shape}; expected {shape}")
+        raise ValueError(
+            f"booz_xform returned {name} with shape {values.shape}; expected {shape}"
+        )
     if not np.issubdtype(values.dtype, np.number) or not np.all(np.isfinite(values)):
         raise ValueError(f"booz_xform returned invalid values for {name}")
     return np.asarray(values, dtype=np.float64)
@@ -55,9 +65,7 @@ def _mode_tensor(
         raise ValueError("booz_xform returned a negative poloidal mode")
     m_max = int(np.max(m_modes))
     n_max = int(np.max(np.abs(n_modes)))
-    tensor = np.zeros(
-        (cosine.shape[1], m_max + 1, 2 * n_max + 1), dtype=np.complex128
-    )
+    tensor = np.zeros((cosine.shape[1], m_max + 1, 2 * n_max + 1), dtype=np.complex128)
     for index, (mode_m, mode_n) in enumerate(zip(m_modes, n_modes)):
         tensor[:, mode_m, mode_n + n_max] = cosine[index] - 1j * sine[index]
     return tensor
@@ -115,7 +123,9 @@ def _optional_component(source: Any, name: str, shape: Tuple[int, int]) -> np.nd
     if values.shape == (0, 0):
         return np.zeros(shape, dtype=np.float64)
     if values.shape != shape:
-        raise ValueError(f"booz_xform returned {name} with shape {values.shape}; expected {shape}")
+        raise ValueError(
+            f"booz_xform returned {name} with shape {values.shape}; expected {shape}"
+        )
     return values
 
 
@@ -226,8 +236,7 @@ def _force_balance_residual(
     nfp: int,
 ) -> float:
     reconstructed = {
-        name: _reconstruct(pair, theta, zeta, nfp)
-        for name, pair in harmonics.items()
+        name: _reconstruct(pair, theta, zeta, nfp) for name, pair in harmonics.items()
     }
     jacobian = reconstructed["Jac"][0]
     contra_t, contra_t_t, contra_t_z = reconstructed["B_contra_t"]
@@ -239,8 +248,7 @@ def _force_balance_residual(
     beta_z = g_st_z * contra_t + g_st * contra_t_z
     beta_z += g_sz_z * contra_z + g_sz * contra_z_z
     slopes = {
-        name: np.gradient(values, s, edge_order=2)
-        for name, values in profiles.items()
+        name: np.gradient(values, s, edge_order=2) for name, values in profiles.items()
     }
     toroidal_field = -slopes["Phi"][:, None, None]
     poloidal_field = -slopes["chi"][:, None, None] / nfp
@@ -394,10 +402,11 @@ def convert_geometry(
 
     dtheta = -1.0 / _TWO_PI
     dzeta = -nfp / _TWO_PI
+    xhat, yhat = _position_frame(r, p)
     pointwise = {
         "mod_B": field_strength,
-        "xhat": r * np.cos(p),
-        "yhat": r * np.sin(p),
+        "xhat": xhat,
+        "yhat": yhat,
         "zhat": z,
         "Jac": jacobian / (dtheta * dzeta),
         "g_tt": g_tt / dtheta**2,
