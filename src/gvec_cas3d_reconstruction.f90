@@ -21,7 +21,9 @@ contains
 
     pure subroutine reconstruct_harmonic_grid(pair, radial_surface, &
             poloidal_modes, toroidal_modes, theta, zeta_period, values, &
-            derivative_theta, derivative_zeta_period, info)
+            derivative_theta, derivative_zeta_period, info, &
+            derivative_theta_theta, derivative_theta_zeta_period, &
+            derivative_zeta_period_zeta_period)
         type(harmonic_pair_t), intent(in) :: pair
         integer, intent(in) :: radial_surface
         integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
@@ -30,6 +32,12 @@ contains
         real(dp), allocatable, intent(out) :: derivative_theta(:, :)
         real(dp), allocatable, intent(out) :: derivative_zeta_period(:, :)
         integer, intent(out) :: info
+        real(dp), allocatable, intent(out), optional :: &
+            derivative_theta_theta(:, :)
+        real(dp), allocatable, intent(out), optional :: &
+            derivative_theta_zeta_period(:, :)
+        real(dp), allocatable, intent(out), optional :: &
+            derivative_zeta_period_zeta_period(:, :)
         complex(dp), allocatable :: coefficients(:, :), theta_phase(:, :)
         complex(dp), allocatable :: theta_derivative_phase(:, :)
         complex(dp), allocatable :: zeta_phase(:, :)
@@ -50,8 +58,60 @@ contains
             coefficients), zeta_phase), dp)
         derivative_zeta_period = real(matmul(theta_partial, &
             zeta_derivative_phase), dp)
+        call reconstruct_second_angular_derivatives(coefficients, &
+            poloidal_modes, toroidal_modes, theta_phase, &
+            theta_derivative_phase, zeta_phase, zeta_derivative_phase, &
+            derivative_theta_theta, derivative_theta_zeta_period, &
+            derivative_zeta_period_zeta_period)
         info = reconstruction_ok
     end subroutine reconstruct_harmonic_grid
+
+    pure subroutine reconstruct_second_angular_derivatives(coefficients, &
+            poloidal_modes, toroidal_modes, theta_phase, &
+            theta_derivative_phase, zeta_phase, zeta_derivative_phase, &
+            derivative_theta_theta, derivative_theta_zeta_period, &
+            derivative_zeta_period_zeta_period)
+        complex(dp), intent(in) :: coefficients(:, :), theta_phase(:, :)
+        complex(dp), intent(in) :: theta_derivative_phase(:, :)
+        complex(dp), intent(in) :: zeta_phase(:, :)
+        complex(dp), intent(in) :: zeta_derivative_phase(:, :)
+        integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
+        real(dp), allocatable, intent(out), optional :: &
+            derivative_theta_theta(:, :)
+        real(dp), allocatable, intent(out), optional :: &
+            derivative_theta_zeta_period(:, :)
+        real(dp), allocatable, intent(out), optional :: &
+            derivative_zeta_period_zeta_period(:, :)
+        complex(dp), allocatable :: second_phase(:, :)
+        integer :: mode
+
+        if (present(derivative_theta_theta)) then
+            allocate (second_phase, mold=theta_phase)
+            do mode = 1, size(poloidal_modes)
+                second_phase(:, mode) = -(two_pi &
+                    * real(poloidal_modes(mode), dp))**2 &
+                    * theta_phase(:, mode)
+            end do
+            derivative_theta_theta = real(matmul(matmul(second_phase, &
+                coefficients), zeta_phase), dp)
+            deallocate (second_phase)
+        end if
+        if (present(derivative_theta_zeta_period)) then
+            derivative_theta_zeta_period = real(matmul(matmul( &
+                theta_derivative_phase, coefficients), &
+                zeta_derivative_phase), dp)
+        end if
+        if (present(derivative_zeta_period_zeta_period)) then
+            allocate (second_phase, mold=zeta_phase)
+            do mode = 1, size(toroidal_modes)
+                second_phase(mode, :) = -(two_pi &
+                    * real(toroidal_modes(mode), dp))**2 &
+                    * zeta_phase(mode, :)
+            end do
+            derivative_zeta_period_zeta_period = real(matmul(matmul( &
+                theta_phase, coefficients), second_phase), dp)
+        end if
+    end subroutine reconstruct_second_angular_derivatives
 
     pure subroutine project_harmonic_grid(values, poloidal_modes, &
             toroidal_modes, theta, zeta_period, cosine, sine)

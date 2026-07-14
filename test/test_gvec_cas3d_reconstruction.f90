@@ -15,6 +15,11 @@ program test_gvec_cas3d_reconstruction
     type(harmonic_pair_t) :: pair
     real(dp), allocatable :: values(:, :), derivative_theta(:, :)
     real(dp), allocatable :: derivative_zeta(:, :)
+    real(dp), allocatable :: derivative_theta_theta(:, :)
+    real(dp), allocatable :: derivative_theta_zeta(:, :)
+    real(dp), allocatable :: derivative_zeta_zeta(:, :)
+    real(dp), allocatable :: reference_values(:, :)
+    real(dp), allocatable :: reference_theta(:, :), reference_zeta(:, :)
     integer :: info
 
     allocate (pair%cosine(2, 3, 3), pair%sine(2, 3, 3))
@@ -28,7 +33,9 @@ program test_gvec_cas3d_reconstruction
 
     call reconstruct_harmonic_grid(pair, 1, [0, 1, 2], [0, 1, -1], &
         [1.0_dp / 8.0_dp], [1.0_dp / 8.0_dp, 9.0_dp / 8.0_dp], &
-        values, derivative_theta, derivative_zeta, info)
+        values, derivative_theta, derivative_zeta, info, &
+        derivative_theta_theta, derivative_theta_zeta, &
+        derivative_zeta_zeta)
     call require(info == reconstruction_ok, "grid reconstruction failed")
     call require(maxval(abs(values - (5.0_dp + sqrt(2.0_dp)))) < tolerance, &
         "one-period Fourier value is wrong")
@@ -38,6 +45,25 @@ program test_gvec_cas3d_reconstruction
     call require(maxval(abs(derivative_zeta + &
         10.0_dp * pi * (1.0_dp + sqrt(2.0_dp)))) < tolerance, &
         "one-period toroidal derivative is wrong")
+    call require(maxval(abs(derivative_theta_theta + 4.0_dp * pi**2 &
+        * (3.0_dp + 4.0_dp * sqrt(2.0_dp)))) < 5.0_dp * tolerance, &
+        "second poloidal derivative is wrong")
+    call require(maxval(abs(derivative_theta_zeta - 4.0_dp * pi**2 &
+        * (3.0_dp - 2.0_dp * sqrt(2.0_dp)))) < 5.0_dp * tolerance, &
+        "mixed angular derivative is wrong")
+    call require(maxval(abs(derivative_zeta_zeta + 4.0_dp * pi**2 &
+        * (3.0_dp + sqrt(2.0_dp)))) < 5.0_dp * tolerance, &
+        "second toroidal derivative is wrong")
+    reference_values = values
+    reference_theta = derivative_theta
+    reference_zeta = derivative_zeta
+    call reconstruct_harmonic_grid(pair, 1, [0, 1, 2], [0, 1, -1], &
+        [1.0_dp / 8.0_dp], [1.0_dp / 8.0_dp, 9.0_dp / 8.0_dp], &
+        values, derivative_theta, derivative_zeta, info)
+    call require(all(values == reference_values) &
+        .and. all(derivative_theta == reference_theta) &
+        .and. all(derivative_zeta == reference_zeta), &
+        "optional second derivatives changed the existing angular jet")
 
     call compare_scalar_oracle(pair)
     call test_invalid_inputs(pair)
@@ -117,9 +143,17 @@ contains
 
         call reconstruct_harmonic_grid(valid_pair, 0, [0, 1, 2], &
             [0, 1, -1], [0.0_dp], [0.0_dp], values, derivative_theta, &
-            derivative_zeta, info)
+            derivative_zeta, info, derivative_theta_theta, &
+            derivative_theta_zeta, derivative_zeta_zeta)
         call require(info == reconstruction_invalid_surface, &
             "invalid radial surface was accepted")
+        call require(.not. allocated(values) &
+            .and. .not. allocated(derivative_theta) &
+            .and. .not. allocated(derivative_zeta) &
+            .and. .not. allocated(derivative_theta_theta) &
+            .and. .not. allocated(derivative_theta_zeta) &
+            .and. .not. allocated(derivative_zeta_zeta), &
+            "failed angular reconstruction retained output arrays")
         allocate (invalid_pair%cosine(1, 2, 1), invalid_pair%sine(1, 1, 1))
         call reconstruct_harmonic_grid(invalid_pair, 1, [0, 1], [0], &
             [0.0_dp], [0.0_dp], values, derivative_theta, derivative_zeta, &
