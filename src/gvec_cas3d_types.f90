@@ -54,13 +54,9 @@ contains
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         logical :: axisymmetric
 
-        axisymmetric = harmonic_is_axisymmetric(equilibrium%xhat, &
-            equilibrium%toroidal_modes) &
-            .and. harmonic_is_axisymmetric(equilibrium%yhat, &
-            equilibrium%toroidal_modes) &
-            .and. harmonic_is_axisymmetric(equilibrium%zhat, &
-            equilibrium%toroidal_modes) &
-            .and. harmonic_is_axisymmetric(equilibrium%jacobian, &
+        ! Cartesian positions rotate under toroidal symmetry and therefore
+        ! contain n=+/-1 harmonics even for an axisymmetric torus.
+        axisymmetric = harmonic_is_axisymmetric(equilibrium%jacobian, &
             equilibrium%toroidal_modes) &
             .and. harmonic_is_axisymmetric(equilibrium%mod_b, &
             equilibrium%toroidal_modes) &
@@ -73,6 +69,12 @@ contains
             .and. harmonic_is_axisymmetric(equilibrium%g_st, &
             equilibrium%toroidal_modes) &
             .and. harmonic_is_axisymmetric(equilibrium%g_sz, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%second_form_tt, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%second_form_tz, &
+            equilibrium%toroidal_modes) &
+            .and. harmonic_is_axisymmetric(equilibrium%second_form_zz, &
             equilibrium%toroidal_modes) &
             .and. harmonic_is_axisymmetric( &
             equilibrium%b_contravariant_theta, equilibrium%toroidal_modes) &

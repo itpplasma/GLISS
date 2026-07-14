@@ -1,14 +1,10 @@
 module axisymmetric_spectrum
-    use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use eigenvalue_tracking, only: certified_lowest_eigenvalue
-    use family_assembly, only: family_assembly_options_t, &
-        family_negative_count, surface_geometry_t
-    use field_profile_identities, only: compute_field_profile_identities, &
-        field_profile_identities_ok, field_profile_identity_result_t
     use gvec_cas3d_types, only: equilibrium_is_axisymmetric, &
         gvec_cas3d_equilibrium_t
-    use mercier_diagnostic, only: build_kernel_geometry, mercier_ok
+    use two_component_spectrum, only: compute_two_component_spectrum, &
+        two_component_spectrum_invalid, two_component_spectrum_ok, &
+        two_component_spectrum_result_t
     implicit none
     private
 
@@ -33,6 +29,7 @@ module axisymmetric_spectrum
         real(dp) :: force_balance_residual = 0.0_dp
     end type axisymmetric_spectrum_result_t
 
+    public :: build_axisymmetric_mode_table
     public :: compute_axisymmetric_spectrum
 
 contains
@@ -46,69 +43,57 @@ contains
         type(axisymmetric_spectrum_result_t), intent(out) :: result
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
-        type(axisymmetric_spectrum_result_t) :: candidate
-        type(family_assembly_options_t) :: options
-        type(field_profile_identity_result_t) :: identities
-        type(surface_geometry_t), allocatable :: geometry(:)
-        real(dp), allocatable :: fields(:, :, :, :), drive(:, :, :)
-        real(dp), allocatable :: normal_stored_power(:)
+        type(two_component_spectrum_result_t) :: general
         integer, allocatable :: mode_m(:), mode_n(:)
-        real(dp) :: step
-        integer :: i, solver_info
+        real(dp), allocatable :: normal_stored_power(:)
+        integer :: general_info
 
         call validate_input(equilibrium, toroidal_mode, poloidal_max, &
             radial_quadrature, info, message)
         if (info /= axisymmetric_spectrum_ok) return
-        call build_mode_table(toroidal_mode, poloidal_max, mode_m, mode_n, &
-            normal_stored_power)
-        call build_kernel_geometry(equilibrium, n_theta, n_zeta, fields, &
-            drive, solver_info)
-        if (solver_info /= mercier_ok) then
-            info = axisymmetric_spectrum_compute_error
-            message = "kernel geometry could not be built"
+        call build_axisymmetric_mode_table(toroidal_mode, poloidal_max, &
+            mode_m, mode_n, normal_stored_power)
+        call compute_two_component_spectrum(equilibrium, mode_m, mode_n, &
+            normal_stored_power, 1, radial_quadrature, n_theta, n_zeta, &
+            solve_eigenpair, general, general_info, message)
+        if (general_info /= two_component_spectrum_ok) then
+            if (general_info == two_component_spectrum_invalid) then
+                info = axisymmetric_spectrum_invalid_input
+            else
+                info = axisymmetric_spectrum_compute_error
+            end if
             return
         end if
-        allocate (geometry(size(equilibrium%s)))
-        do i = 1, size(geometry)
-            geometry(i)%fields = fields(:, :, :, i)
-            geometry(i)%drive = drive(:, :, i)
-        end do
-        step = 1.0_dp / real(size(geometry), dp)
-        options%field_periods = 1
-        options%parity_class = 1
-        options%radial_space%quadrature_points = radial_quadrature
-        call family_negative_count(geometry, mode_m, mode_n, step, 0.0_dp, &
-            candidate%negative_count, solver_info, options, &
-            normal_stored_power)
-        if (solver_info /= 0) then
-            info = axisymmetric_spectrum_compute_error
-            message = "zero-shift inertia failed"
-            return
-        end if
-        call compute_eigenpair(geometry, mode_m, mode_n, step, options, &
-            normal_stored_power, solve_eigenpair, candidate, info, message)
-        if (info /= axisymmetric_spectrum_ok) return
-        call compute_field_profile_identities(equilibrium, n_theta, n_zeta, &
-            identities, solver_info)
-        if (solver_info /= field_profile_identities_ok) then
-            info = axisymmetric_spectrum_compute_error
-            message = "force-balance diagnostic failed"
-            return
-        end if
-        candidate%has_eigenpair = solve_eigenpair
-        candidate%field_periods = equilibrium%field_periods
-        candidate%toroidal_mode = toroidal_mode
-        candidate%poloidal_max = poloidal_max
-        candidate%mode_count = size(mode_m)
-        candidate%radial_surfaces = size(geometry)
-        candidate%parity_class = options%parity_class
-        candidate%radial_quadrature = radial_quadrature
-        candidate%force_balance_residual = &
-            maxval(identities%general_force_balance_deviation)
-        result = candidate
+        call assign_result(general, toroidal_mode, poloidal_max, result)
         info = axisymmetric_spectrum_ok
         message = ""
     end subroutine compute_axisymmetric_spectrum
+
+    subroutine build_axisymmetric_mode_table(toroidal_mode, poloidal_max, &
+            mode_m, mode_n, normal_stored_power)
+        integer, intent(in) :: toroidal_mode, poloidal_max
+        integer, allocatable, intent(out) :: mode_m(:), mode_n(:)
+        real(dp), allocatable, intent(out) :: normal_stored_power(:)
+        integer :: m, mode
+
+        allocate (mode_m(2 * poloidal_max + 1))
+        allocate (mode_n(2 * poloidal_max + 1))
+        mode_m(1) = 0
+        mode_n(1) = toroidal_mode
+        mode = 1
+        do m = 1, poloidal_max
+            mode = mode + 1
+            mode_m(mode) = m
+            mode_n(mode) = -toroidal_mode
+            mode = mode + 1
+            mode_m(mode) = m
+            mode_n(mode) = toroidal_mode
+        end do
+        allocate (normal_stored_power(size(mode_m)), source=0.0_dp)
+        where (mode_m > 0)
+            normal_stored_power = 1.0_dp - 0.5_dp * real(mode_m, dp)
+        end where
+    end subroutine build_axisymmetric_mode_table
 
     subroutine validate_input(equilibrium, toroidal_mode, poloidal_max, &
             radial_quadrature, info, message)
@@ -141,62 +126,24 @@ contains
         end if
     end subroutine validate_input
 
-    subroutine build_mode_table(toroidal_mode, poloidal_max, mode_m, mode_n, &
-            normal_stored_power)
+    subroutine assign_result(general, toroidal_mode, poloidal_max, result)
+        type(two_component_spectrum_result_t), intent(in) :: general
         integer, intent(in) :: toroidal_mode, poloidal_max
-        integer, allocatable, intent(out) :: mode_m(:), mode_n(:)
-        real(dp), allocatable, intent(out) :: normal_stored_power(:)
-        integer :: m, mode
+        type(axisymmetric_spectrum_result_t), intent(out) :: result
 
-        allocate (mode_m(2 * poloidal_max + 1))
-        allocate (mode_n(2 * poloidal_max + 1))
-        mode_m(1) = 0
-        mode_n(1) = toroidal_mode
-        mode = 1
-        do m = 1, poloidal_max
-            mode = mode + 1
-            mode_m(mode) = m
-            mode_n(mode) = -toroidal_mode
-            mode = mode + 1
-            mode_m(mode) = m
-            mode_n(mode) = toroidal_mode
-        end do
-        allocate (normal_stored_power(size(mode_m)), source=0.0_dp)
-        where (mode_m > 0)
-            normal_stored_power = 1.0_dp - 0.5_dp * real(mode_m, dp)
-        end where
-    end subroutine build_mode_table
-
-    subroutine compute_eigenpair(geometry, mode_m, mode_n, step, options, &
-            normal_stored_power, solve_eigenpair, result, info, message)
-        type(surface_geometry_t), intent(in) :: geometry(:)
-        integer, intent(in) :: mode_m(:), mode_n(:)
-        real(dp), intent(in) :: step, normal_stored_power(:)
-        type(family_assembly_options_t), intent(in) :: options
-        logical, intent(in) :: solve_eigenpair
-        type(axisymmetric_spectrum_result_t), intent(inout) :: result
-        integer, intent(out) :: info
-        character(len=*), intent(out) :: message
-        integer :: solver_info
-
-        if (solve_eigenpair) then
-            call certified_lowest_eigenvalue(geometry, mode_m, mode_n, step, &
-                result%lowest_eigenvalue, result%certificate, solver_info, &
-                options, normal_stored_power, result%eigenpair_residual)
-            if (solver_info /= 0) then
-                info = axisymmetric_spectrum_compute_error
-                message = "certified eigensolve failed"
-                return
-            end if
-        else
-            result%lowest_eigenvalue = &
-                ieee_value(result%lowest_eigenvalue, ieee_quiet_nan)
-            result%certificate = ieee_value(result%certificate, ieee_quiet_nan)
-            result%eigenpair_residual = &
-                ieee_value(result%eigenpair_residual, ieee_quiet_nan)
-        end if
-        info = axisymmetric_spectrum_ok
-        message = ""
-    end subroutine compute_eigenpair
+        result%has_eigenpair = general%has_eigenpair
+        result%field_periods = general%field_periods
+        result%toroidal_mode = toroidal_mode
+        result%poloidal_max = poloidal_max
+        result%mode_count = general%mode_count
+        result%radial_surfaces = general%radial_surfaces
+        result%parity_class = general%parity_class
+        result%radial_quadrature = general%radial_quadrature
+        result%negative_count = general%negative_count
+        result%lowest_eigenvalue = general%lowest_eigenvalue
+        result%certificate = general%certificate
+        result%eigenpair_residual = general%eigenpair_residual
+        result%force_balance_residual = general%force_balance_residual
+    end subroutine assign_result
 
 end module axisymmetric_spectrum

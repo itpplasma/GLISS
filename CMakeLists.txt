@@ -90,6 +90,7 @@ add_library(gliss
     src/fixed_boundary_spectrum.f90
     src/newcomb_limit.f90
     src/family_assembly.f90
+    src/two_component_spectrum.f90
     src/axisymmetric_spectrum.f90
     src/field_profile_identities.f90
     src/export_surface_geometry.f90
@@ -519,6 +520,13 @@ if(BUILD_TESTING)
         gliss_test_support)
     add_test(NAME fixed_boundary_spectrum
         COMMAND test_fixed_boundary_spectrum)
+
+    add_executable(test_two_component_spectrum
+        test/test_two_component_spectrum.f90)
+    target_link_libraries(test_two_component_spectrum PRIVATE
+        gliss_test_support)
+    add_test(NAME two_component_spectrum
+        COMMAND test_two_component_spectrum)
 
     add_executable(test_mode_topology test/test_mode_topology.f90)
     target_link_libraries(test_mode_topology PRIVATE gliss)

@@ -150,6 +150,10 @@ name = "fixed_boundary_spectrum"
 main = "test_fixed_boundary_spectrum.f90"
 
 [[test]]
+name = "two_component_spectrum"
+main = "test_two_component_spectrum.f90"
+
+[[test]]
 name = "gliss_spectrum_capi"
 main = "test_gliss_spectrum_capi.f90"
 
