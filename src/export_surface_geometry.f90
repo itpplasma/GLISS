@@ -1,4 +1,5 @@
 module export_surface_geometry
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use gvec_cas3d_reconstruction, only: project_harmonic_grid, &
         reconstruct_harmonic_grid, reconstruction_ok
@@ -131,6 +132,7 @@ contains
         real(dp), allocatable :: beta_values(:, :), beta_theta(:, :)
         real(dp), allocatable :: beta_zeta(:, :), jac_slope_grid(:, :)
         real(dp), allocatable :: discard_a(:, :), discard_b(:, :)
+        real(dp), allocatable :: grad_s2(:, :)
         integer :: rec_info
 
         call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
@@ -153,8 +155,14 @@ contains
         fields(:, :, 6) = profiles%covariant_theta
         fields(:, :, 7) = surface%jacobian
         fields(:, :, 8) = surface%mod_b
-        fields(:, :, 9) = max((surface%g_tt * surface%g_zz &
-            - surface%g_tz**2) / surface%jacobian**2, tiny(1.0_dp))
+        grad_s2 = (surface%g_tt * surface%g_zz - surface%g_tz**2) &
+            / surface%jacobian**2
+        if (.not. all(ieee_is_finite(grad_s2)) &
+            .or. any(grad_s2 <= 0.0_dp)) then
+            info = mercier_invalid_input
+            return
+        end if
+        fields(:, :, 9) = grad_s2
         fields(:, :, 10) = ((beta_zeta &
             - profiles%covariant_zeta_slope) * profiles%covariant_theta &
             + (profiles%covariant_theta_slope - beta_theta) &
@@ -223,8 +231,13 @@ contains
             - surface%g_st * surface%g_zz) / surface%jacobian**2
         upper_zs = (surface%g_st * surface%g_tz &
             - surface%g_sz * surface%g_tt) / surface%jacobian**2
-        grad_s2 = max((surface%g_tt * surface%g_zz - surface%g_tz**2) &
-            / surface%jacobian**2, tiny(1.0_dp))
+        grad_s2 = (surface%g_tt * surface%g_zz - surface%g_tz**2) &
+            / surface%jacobian**2
+        if (.not. all(ieee_is_finite(grad_s2)) &
+            .or. any(grad_s2 <= 0.0_dp)) then
+            info = mercier_invalid_input
+            return
+        end if
         operand = ((covariant_theta_slope - beta_theta) * upper_ts &
             - (beta_zeta - covariant_zeta_slope) * upper_zs) / grad_s2
         call project_harmonic_grid(operand, equilibrium%poloidal_modes, &

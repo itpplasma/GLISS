@@ -2,13 +2,25 @@ module two_component_spectrum
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, &
         ieee_quiet_nan, ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
-    use eigenvalue_tracking, only: certified_lowest_eigenvalue
-    use family_assembly, only: family_assembly_options_t, &
-        family_negative_count, surface_geometry_t
+    use family_assembly, only: family_assembly_options_t, surface_geometry_t
     use field_profile_identities, only: compute_field_profile_identities, &
         field_profile_identities_ok, field_profile_identity_result_t
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use mercier_diagnostic, only: build_kernel_geometry, mercier_ok
+    use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
+        fixed_boundary_bracket_expansion_error, fixed_boundary_bracket_ok, &
+        fixed_boundary_bracket_probe_error, &
+        fixed_boundary_bracket_refinement_error
+    use two_component_artificial_problem, only: artificial_problem_ok, &
+        build_two_component_artificial_problem, &
+        two_component_artificial_problem_t
+    use variable_generalized_solver, only: &
+        iterate_variable_generalized_eigenvalue, &
+        variable_generalized_inertia, variable_generalized_invalid, &
+        variable_generalized_mass_not_spd, &
+        variable_generalized_no_convergence, variable_generalized_ok
+    use variable_spectrum_analysis, only: analyze_variable_spectrum, &
+        variable_spectrum_ok, variable_spectrum_summary_t
     implicit none
     private
 
@@ -107,21 +119,27 @@ contains
         type(two_component_spectrum_result_t), intent(inout) :: result
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
+        type(two_component_artificial_problem_t) :: problem
 
-        call family_negative_count(geometry, mode_m, mode_n, radial_step, &
-            0.0_dp, result%negative_count, info, options, stored_power)
-        if (info /= 0) then
+        call build_two_component_artificial_problem(geometry, mode_m, &
+            mode_n, stored_power, radial_step, options, problem, info)
+        if (info /= artificial_problem_ok) then
+            info = two_component_spectrum_compute_error
+            message = "full artificial-norm problem assembly failed"
+            return
+        end if
+        call variable_generalized_inertia(problem%stiffness, problem%mass, &
+            0.0_dp, result%negative_count, info)
+        if (info /= variable_generalized_ok) then
             info = two_component_spectrum_compute_error
             message = "zero-shift inertia failed"
             return
         end if
         if (solve_eigenpair) then
-            call certified_lowest_eigenvalue(geometry, mode_m, mode_n, &
-                radial_step, result%lowest_eigenvalue, result%certificate, &
-                info, options, stored_power, result%eigenpair_residual)
-            if (info /= 0) then
+            call solve_lowest_artificial(problem, result, info)
+            if (info /= two_component_spectrum_ok) then
+                call describe_eigensolve_failure(info, message)
                 info = two_component_spectrum_compute_error
-                message = "certified eigensolve failed"
                 return
             end if
         else
@@ -135,6 +153,93 @@ contains
         info = two_component_spectrum_ok
         message = ""
     end subroutine solve_assembled
+
+    subroutine solve_lowest_artificial(problem, result, info)
+        type(two_component_artificial_problem_t), intent(in) :: problem
+        type(two_component_spectrum_result_t), intent(inout) :: result
+        integer, intent(out) :: info
+        type(variable_spectrum_summary_t) :: summary
+        real(dp), allocatable :: vector(:)
+        real(dp) :: interval, resolution, safe_shift, shift
+        integer :: first_failure
+
+        call analyze_variable_spectrum(problem%stiffness, problem%mass, &
+            1.0e-12_dp, summary, info)
+        if (info /= variable_spectrum_ok) then
+            info = two_component_spectrum_compute_error
+            return
+        end if
+        call select_lowest_shift(problem, summary, shift, interval, info)
+        if (info /= two_component_spectrum_ok) return
+        if (.not. ieee_is_finite(shift) .or. &
+            .not. ieee_is_finite(interval) .or. interval < 0.0_dp) then
+            info = two_component_spectrum_compute_error
+            return
+        end if
+        call iterate_variable_generalized_eigenvalue(problem%stiffness, &
+            problem%mass, shift, result%lowest_eigenvalue, vector, &
+            result%eigenpair_residual, resolution, info)
+        if (info /= variable_generalized_ok) then
+            first_failure = info
+            safe_shift = shift - max(8.0_dp * interval, &
+                1.0e-8_dp * max(1.0_dp, abs(shift)))
+            call iterate_variable_generalized_eigenvalue(problem%stiffness, &
+                problem%mass, safe_shift, result%lowest_eigenvalue, vector, &
+                result%eigenpair_residual, resolution, info)
+            if (info /= variable_generalized_ok) then
+                info = first_failure
+                return
+            end if
+        end if
+        result%certificate = interval + result%eigenpair_residual + resolution
+        info = two_component_spectrum_ok
+    end subroutine solve_lowest_artificial
+
+    subroutine select_lowest_shift(problem, summary, shift, interval, info)
+        type(two_component_artificial_problem_t), intent(in) :: problem
+        type(variable_spectrum_summary_t), intent(in) :: summary
+        real(dp), intent(out) :: shift, interval
+        integer, intent(out) :: info
+
+        info = two_component_spectrum_compute_error
+        if (summary%negative_count > 0) then
+            call bracket_lowest_negative(problem%stiffness, problem%mass, &
+                summary%zero_floor, shift, interval, info)
+            if (info /= fixed_boundary_bracket_ok) return
+        else if (summary%zero_count > 0) then
+            shift = -2.0_dp * summary%zero_floor
+            interval = 2.0_dp * summary%zero_floor
+        else if (summary%has_positive) then
+            shift = summary%first_positive_lower
+            interval = summary%first_positive_upper &
+                - summary%first_positive_lower
+        else
+            return
+        end if
+        info = two_component_spectrum_ok
+    end subroutine select_lowest_shift
+
+    pure subroutine describe_eigensolve_failure(status, message)
+        integer, intent(in) :: status
+        character(len=*), intent(out) :: message
+
+        select case (status)
+        case (variable_generalized_no_convergence)
+            message = "artificial-norm inverse iteration did not converge"
+        case (variable_generalized_mass_not_spd)
+            message = "artificial mass is not positive definite"
+        case (variable_generalized_invalid)
+            message = "artificial-norm inverse iteration became invalid"
+        case (fixed_boundary_bracket_expansion_error)
+            message = "lowest-eigenvalue lower bracket could not be found"
+        case (fixed_boundary_bracket_probe_error)
+            message = "lowest-eigenvalue inertia probe failed"
+        case (fixed_boundary_bracket_refinement_error)
+            message = "lowest-eigenvalue bracket did not converge"
+        case default
+            message = "certified artificial-norm eigensolve failed"
+        end select
+    end subroutine describe_eigensolve_failure
 
     subroutine validate_inputs(equilibrium, mode_m, mode_n, stored_power, &
             parity_class, radial_quadrature, n_theta, n_zeta, info, message)

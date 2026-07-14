@@ -97,6 +97,7 @@ add_library(gliss
     src/fixed_boundary_spectrum.f90
     src/newcomb_limit.f90
     src/family_assembly.f90
+    src/two_component_artificial_problem.f90
     src/two_component_spectrum.f90
     src/axisymmetric_spectrum.f90
     src/field_profile_identities.f90

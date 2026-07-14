@@ -158,8 +158,13 @@ CLOSURES = (
     Closure(
         "artificial-marginality",
         "norm",
-        ("src/family_assembly.f90",),
-        (_evidence("test/test_two_component_spectrum.f90", "negative_count"),),
+        ("src/two_component_artificial_problem.f90",),
+        (
+            _evidence(
+                "test/test_two_component_spectrum.f90",
+                "full artificial problem omitted tangential coefficients",
+            ),
+        ),
     ),
     Closure(
         "terpsichore-reduced",

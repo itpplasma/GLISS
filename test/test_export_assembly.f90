@@ -6,7 +6,8 @@ program test_export_assembly
         surface_geometry_t
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
-    use mercier_diagnostic, only: build_kernel_geometry, mercier_ok
+    use mercier_diagnostic, only: build_kernel_geometry, &
+        mercier_invalid_input, mercier_ok
     implicit none
 
     character(len=*), parameter :: fixture = "export_assembly.nc"
@@ -14,7 +15,7 @@ program test_export_assembly
         "export_assembly_shifted.nc"
     real(dp), parameter :: pi = acos(-1.0_dp)
     real(dp), parameter :: chart_shift = 0.05_dp
-    type(gvec_cas3d_equilibrium_t) :: equilibrium
+    type(gvec_cas3d_equilibrium_t) :: equilibrium, invalid_metric
     real(dp), allocatable :: fields(:, :, :, :), drive(:, :, :)
     real(dp) :: resonant, stable, shifted_resonant, shifted_stable
     real(dp) :: radius, beta_expected, beta_error
@@ -52,6 +53,12 @@ program test_export_assembly
     end do
     call require(beta_error < 1.0e-12_dp, &
         "chart beta-tilde does not match the physical covariant B_s")
+    invalid_metric = equilibrium
+    invalid_metric%g_zz%cosine = 0.0_dp
+    invalid_metric%g_zz%sine = 0.0_dp
+    call build_kernel_geometry(invalid_metric, 32, 16, fields, drive, info)
+    call require(info == mercier_invalid_input, &
+        "nonpositive tangential metric was accepted")
 
     call solve_modes(equilibrium, shifted_resonant, shifted_stable)
     call require(shifted_resonant < 0.0_dp, &

@@ -156,10 +156,11 @@ Both functions return a frozen `AxisymmetricResult`. `negative_count` is the
 inertia of the assembled operator below zero. A zero count is stable within
 the selected Fourier and radial discretization; a positive count gives the
 number of unstable directions. `solve_axisymmetric()` also returns the lowest
-eigenvalue, final inertia-bracket width in `certificate`, and scaled backward
-error in `eigenpair_residual`. The count-only function sets these three fields
-to `None`. `force_balance_residual` is the maximum dimensionless residual of
-the equilibrium identity used while reconstructing the kernel geometry.
+eigenvalue, a `certificate` combining the inertia-bracket width, backward
+error, and roundoff resolution, and the backward error in
+`eigenpair_residual`. The count-only function sets these three fields to
+`None`. `force_balance_residual` is the maximum dimensionless residual of the
+equilibrium identity used while reconstructing the kernel geometry.
 
 This specialized family reproduces the `gliss_axisymmetric` command-line
 operator. It uses normalized toroidal flux `s`, a fixed plasma boundary at
@@ -222,6 +223,9 @@ an SI frequency or physical growth rate. Matrix inertia and the zero crossing
 are independent of this positive norm. A numerical eigenvalue can be compared
 to CAS3D only when the equilibrium, Fourier table, radial space, quadrature,
 boundary condition, and artificial norm all match the reference calculation.
+The finite-spectrum solve retains the P1 normal and P0 tangential coefficients
+in one generalized problem. It does not use the zero-shift tangential Schur
+complement, which preserves marginal inertia but changes finite eigenvalues.
 
 `modes` is the ordered sequence of `(m, n)` Fourier pairs. Poloidal mode `m`
 must be nonnegative, `(0, n)` requires nonnegative `n`, and pairs must be
@@ -234,10 +238,11 @@ quadrature is currently `"midpoint"`.
 
 Both calls return a frozen `Cas3dMarginalityResult`. The count-only call sets
 `lowest_eigenvalue`, `certificate`, and `eigenpair_residual` to `None`. The
-solve call returns the lowest eigenvalue, its final inertia-bracket width, and
-the scaled eigenpair backward error. The result also records the exact mode
-table, parity, angular resolution, radial surface count, Fourier convention,
-coordinate handedness, boundary condition, and normalization warning.
+solve call returns the lowest eigenvalue and backward error. `certificate`
+combines the final inertia-bracket width, backward error, and roundoff
+resolution. The result also records the exact mode table, parity, angular
+resolution, radial surface count, Fourier convention, coordinate handedness,
+boundary condition, and normalization warning.
 
 Choose angular resolutions above the convolution bandwidth of both the trial
 modes and equilibrium spectrum. GLISS rejects an aliased grid before
@@ -246,6 +251,12 @@ or quadrature, invalid integer ranges, missing chart metrics, and closed
 equilibrium contexts. Python input errors raise `TypeError` or `ValueError`;
 native compatibility errors raise `GlissArgumentError`; reconstruction and
 eigensolver failures raise `GlissComputationError`.
+
+The reconstructed tangential metric must be positive definite at every
+quadrature point. GLISS rejects an export whose truncated Fourier metric has a
+nonpositive principal minor; it never replaces such a value by a small
+positive floor. Increase or change the equilibrium representation instead of
+using the rejected operator.
 
 ## Mercier profile
 

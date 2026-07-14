@@ -191,12 +191,12 @@
       "evidence": [
         {
           "path": "test/test_two_component_spectrum.f90",
-          "token": "negative_count"
+          "token": "full artificial problem omitted tangential coefficients"
         }
       ],
       "id": "artificial-marginality",
       "implementations": [
-        "src/family_assembly.f90"
+        "src/two_component_artificial_problem.f90"
       ]
     },
     {
