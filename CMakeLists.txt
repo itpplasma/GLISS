@@ -70,6 +70,7 @@ add_library(gliss
     src/terpsichore_reduced_mass_family_assembly.f90
     src/terpsichore_solution_fixture.f90
     src/terpsichore_topology.f90
+    src/terpsichore_fixed_boundary_spectrum.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
     src/boundary/starwall_cylinder_limit.f90
@@ -111,6 +112,7 @@ add_library(gliss_c SHARED
     src/gliss_spectrum_capi.f90
     src/gliss_solver_controls_capi.f90
     src/gliss_energy_capi.f90
+    src/gliss_terpsichore_capi.f90
     src/gliss_full_spectrum_capi.f90)
 add_dependencies(gliss_c gliss)
 target_link_libraries(gliss_c PRIVATE gliss)

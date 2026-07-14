@@ -131,6 +131,28 @@ typedef struct gliss_solver_tolerances {
     int32_t bracket_iteration_limit;
 } gliss_solver_tolerances;
 
+typedef struct gliss_terpsichore_fixed_boundary_result {
+    size_t struct_size;
+    size_t unknowns;
+    size_t negative_count;
+    double eigenvalue;
+    double certificate;
+    double residual;
+    double resolution;
+} gliss_terpsichore_fixed_boundary_result;
+
+/* Solve the lowest negative eigenpair represented by a TERPSICHORE FORT.23
+ * file produced with IVAC=0 and MODELK=0. Set result->struct_size to
+ * sizeof(*result). The file's Fourier table, reduced kinetic normalization,
+ * and fixed-boundary radial topology are used without reinterpretation. The
+ * result is not modified on failure. */
+gliss_status gliss_terpsichore_fixed_boundary(
+    const char *path,
+    size_t path_length,
+    gliss_terpsichore_fixed_boundary_result *result,
+    char *error,
+    size_t error_capacity);
+
 /* A fixed-boundary problem copies and assembles all data it needs, so the
  * equilibrium may be destroyed after successful construction. mode_m and
  * mode_n are mode_count contiguous int32_t values. radial_quadrature is 1 for

@@ -89,6 +89,44 @@ failed conversion removes the temporary file. Install-time dependency errors,
 invalid options, failed VMEC solves and numerical identity failures produce
 distinct Python exceptions with the rejected condition in the message.
 
+## TERPSICHORE fixed-boundary input
+
+Use the FORT.23 file from an `IVAC=0`, `MODELK=0` TERPSICHORE run directly:
+
+```python
+from pathlib import Path
+
+import gliss
+
+result = gliss.solve_terpsichore_fixed_boundary(Path("fort.23"))
+print(result.eigenvalue, result.negative_count)
+```
+
+The function returns a frozen `TerpsichoreFixedBoundaryResult`. `eigenvalue`
+is the lowest negative value of the TERPSICHORE generalized problem
+`K x = eigenvalue M x`. It uses the reduced kinetic normalization stored by
+that format. `negative_count` is the inertia count below zero. `certificate`
+is the final inertia-bracket width. `residual` is the scaled eigenpair backward
+error, and `resolution` estimates roundoff in the quotient. `unknowns` is the
+order of the assembled problem.
+
+This compatibility path preserves the file's Fourier table, sine parity,
+fixed-edge radial topology, noninteracting stiffness, reduced mass, and native
+TERPSICHORE normalization. It does not convert the case to the GVEC/CAS3D
+model. The returned eigenvalue is therefore suitable for direct comparison to
+the source TERPSICHORE run. A growth rate is not returned because the IVAC=0
+potential fixture does not carry the Alfvén normalization used for that
+conversion.
+
+The input is a native sequential-unformatted FORT.23 file. Files from a
+different record-marker or byte-order convention must be converted before
+use. Missing paths raise `FileNotFoundError`; invalid Python path values raise
+`TypeError` or `ValueError`; unreadable, truncated, or structurally invalid
+files raise `GlissIOError`; assembly and eigensolver failures raise
+`GlissComputationError`. No Fortran allocation crosses the ABI. The complete
+read, assembly, inertia count, and inverse iteration execute in one native
+call.
+
 ## Mercier profile
 
 ```python
@@ -508,6 +546,10 @@ the eigenpair-major layout and dense cost.
 Existing ABI-v1 symbols and status values remain unchanged when functions are
 added; an incompatible signature, layout or numeric status change requires a
 new ABI version.
+
+Initialize `gliss_terpsichore_fixed_boundary_result.struct_size` with
+`sizeof` before calling `gliss_terpsichore_fixed_boundary()`. The caller owns
+the result and error buffer. GLISS does not modify the result on failure.
 
 `gliss_equilibrium_schema_version()` returns 0 for legacy exports and 1 for
 GLISS exports. `gliss_equilibrium_write()` writes schema 1 and never replaces

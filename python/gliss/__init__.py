@@ -113,6 +113,10 @@ from .stability import (  # noqa: E402
     StabilityResult,
 )
 from .full_spectrum import FullSpectrumResult, FullStabilityResult  # noqa: E402
+from .terpsichore import (  # noqa: E402
+    TerpsichoreFixedBoundaryResult as TerpsichoreFixedBoundaryResult,
+    solve_terpsichore_fixed_boundary as solve_terpsichore_fixed_boundary,
+)
 from .schema import (  # noqa: E402
     RunManifest,
     StabilityConfiguration,

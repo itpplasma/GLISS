@@ -4,10 +4,12 @@
 #include <string.h>
 
 int main(void) {
+    const char *missing_fort23 = "__gliss_missing_fort23__";
     gliss_equilibrium *equilibrium = NULL;
     gliss_stability_problem *problem = NULL;
     gliss_spectrum_summary summary;
     gliss_energy_terms energy;
+    gliss_terpsichore_fixed_boundary_result terpsichore;
     size_t surfaces = 1;
     int32_t schema_version = -1;
     char error[128];
@@ -16,6 +18,7 @@ int main(void) {
     summary.struct_size = sizeof(summary);
     memset(&energy, 0, sizeof(energy));
     energy.struct_size = sizeof(energy);
+    memset(&terpsichore, 0, sizeof(terpsichore));
 
     if (gliss_abi_version() != GLISS_ABI_VERSION) {
         return 1;
@@ -59,6 +62,30 @@ int main(void) {
     }
     if (energy.struct_size != sizeof(gliss_energy_terms)) {
         return 11;
+    }
+    if (gliss_terpsichore_fixed_boundary(
+            missing_fort23, strlen(missing_fort23), &terpsichore, error,
+            sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT) {
+        return 12;
+    }
+    if (error[0] == '\0') {
+        return 13;
+    }
+    terpsichore.struct_size = sizeof(terpsichore);
+    terpsichore.unknowns = 123;
+    if (gliss_terpsichore_fixed_boundary(
+            missing_fort23, strlen(missing_fort23), &terpsichore, error,
+            sizeof(error)) != GLISS_STATUS_READ_ERROR) {
+        return 14;
+    }
+    if (terpsichore.unknowns != 123 || error[0] == '\0') {
+        return 15;
+    }
+    if (gliss_terpsichore_fixed_boundary(
+            missing_fort23, strlen(missing_fort23), NULL, error,
+            sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 16;
     }
     return 0;
 }
