@@ -192,8 +192,11 @@ contains
         radial_space%quadrature_points = radial_quadrature
         allocate (trial_parity(size(mode_m)), source=parity_class)
         allocate (stored_power(size(mode_m)), source=0.0_dp)
-        density%s = [0.0_dp, 1.0_dp]
-        density%kilograms_per_cubic_metre = [density_kg_m3, density_kg_m3]
+        allocate (density%s(2), density%kilograms_per_cubic_metre(2))
+        density%s(1) = 0.0_dp
+        density%s(2) = 1.0_dp
+        density%kilograms_per_cubic_metre(1) = density_kg_m3
+        density%kilograms_per_cubic_metre(2) = density_kg_m3
         call validate_mass_density_profile(density, info)
         if (info /= mass_density_ok) then
             info = fixed_boundary_invalid

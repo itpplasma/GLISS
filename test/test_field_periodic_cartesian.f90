@@ -39,7 +39,7 @@ contains
 
     subroutine check_exact_jet(actual)
         type(cartesian_jet_grid_t), intent(in) :: actual
-        real(dp) :: q
+        real(dp) :: expected(3), q
 
         q = acos(-1.0_dp) / 2.0_dp
         call require(close(actual%value(1, 1, :), &
@@ -48,25 +48,32 @@ contains
             [-12.0_dp, 1.0_dp, 6.0_dp]), "radial rotation differs")
         call require(close(actual%poloidal(1, 1, :), &
             [-8.0_dp, 2.0_dp, 7.0_dp]), "poloidal rotation differs")
-        call require(close(actual%toroidal(1, 1, :), &
-            [-5.0_dp - 11.0_dp * q, 6.0_dp - 29.0_dp * q, 37.0_dp]), &
+        expected(1) = -5.0_dp - 11.0_dp * q
+        expected(2) = 6.0_dp - 29.0_dp * q
+        expected(3) = 37.0_dp
+        call require(close(actual%toroidal(1, 1, :), expected), &
             "toroidal derivative rotation differs")
         call require(close(actual%radial_radial(1, 1, :), &
             [0.0_dp, 0.0_dp, 0.0_dp]), "second radial rotation differs")
         call require(close(actual%radial_poloidal(1, 1, :), &
             [-4.0_dp, 0.0_dp, 0.0_dp]), &
             "radial-poloidal rotation differs")
-        call require(close(actual%radial_toroidal(1, 1, :), &
-            [-q, -12.0_dp * q, 0.0_dp]), &
+        expected(1) = -q
+        expected(2) = -12.0_dp * q
+        expected(3) = 0.0_dp
+        call require(close(actual%radial_toroidal(1, 1, :), expected), &
             "radial-toroidal rotation differs")
         call require(close(actual%poloidal_poloidal(1, 1, :), &
             [0.0_dp, 0.0_dp, 0.0_dp]), "second poloidal rotation differs")
-        call require(close(actual%poloidal_toroidal(1, 1, :), &
-            [-2.0_dp * q, -8.0_dp * q, 7.0_dp]), &
+        expected(1) = -2.0_dp * q
+        expected(2) = -8.0_dp * q
+        expected(3) = 7.0_dp
+        call require(close(actual%poloidal_toroidal(1, 1, :), expected), &
             "poloidal-toroidal rotation differs")
-        call require(close(actual%toroidal_toroidal(1, 1, :), &
-            [-12.0_dp * q + 29.0_dp * q**2, &
-            6.0_dp - 10.0_dp * q - 11.0_dp * q**2, 16.0_dp]), &
+        expected(1) = -12.0_dp * q + 29.0_dp * q**2
+        expected(2) = 6.0_dp - 10.0_dp * q - 11.0_dp * q**2
+        expected(3) = 16.0_dp
+        call require(close(actual%toroidal_toroidal(1, 1, :), expected), &
             "second toroidal rotation differs")
     end subroutine check_exact_jet
 

@@ -131,7 +131,7 @@ contains
         real(dp), allocatable :: fields(:, :, :, :), drive(:, :, :)
         type(surface_geometry_t), allocatable :: geometry(:)
         real(dp) :: step
-        integer :: info, negatives, i, ns
+        integer :: info, mode_array(1), negatives, i, ns
 
         call create_cylinder_fixture(fixture, surfaces=surfaces, &
             pressure_scale=fraction)
@@ -147,7 +147,8 @@ contains
             geometry(i)%drive = drive(:, :, i)
         end do
         step = 1.0_dp / real(ns, dp)
-        call family_negative_count(geometry, [mode], [mode], step, &
+        mode_array(1) = mode
+        call family_negative_count(geometry, mode_array, mode_array, step, &
             threshold, negatives, info)
         call require(info == 0, "inertia count failed")
         is_unstable = negatives > 0

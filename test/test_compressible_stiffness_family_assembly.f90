@@ -34,6 +34,7 @@ program test_compressible_stiffness_family_assembly
     real(dp), allocatable :: gamma_pressure(:, :, :), direct(:, :)
     real(dp), allocatable :: transformed(:, :), zero(:, :), doubled(:, :)
     real(dp), allocatable :: decomposed(:, :), terms(:, :, :)
+    real(dp), allocatable :: doubled_gamma(:, :, :), zero_gamma(:, :, :)
     real(dp) :: probe(22), matrix_energy, element_energy
     type(dynamic_family_layout_t) :: layout, direct_layout
     type(radial_space_config_t) :: radial_space
@@ -75,7 +76,7 @@ program test_compressible_stiffness_family_assembly
         jacobian_theta, jacobian_zeta, gamma_pressure)
 
     call build_probe(probe)
-    matrix_energy = dot_product(probe, matmul(transformed, probe))
+    matrix_energy = quadratic_form(transformed, probe)
     call sum_element_energies(fields, drive, jacobian_radial, &
         jacobian_theta, jacobian_zeta, gamma_pressure, layout, probe, &
         element_energy, info)
@@ -84,15 +85,18 @@ program test_compressible_stiffness_family_assembly
         * max(1.0_dp, abs(matrix_energy), abs(element_energy)), &
         "global gather changes the sum of element energies")
 
+    allocate (zero_gamma, mold=gamma_pressure)
+    zero_gamma = 0.0_dp
+    doubled_gamma = 2.0_dp * gamma_pressure
     call assemble(fields, drive, jacobian_radial, jacobian_theta, &
-        jacobian_zeta, 0.0_dp * gamma_pressure, phase_assembly_transformed, &
+        jacobian_zeta, zero_gamma, phase_assembly_transformed, &
         zero, layout, info)
     call require(info == 0, "zero-gamma global stiffness assembly failed")
     call require(maxval(abs(zero(layout%normal_unknowns &
         + layout%eta_unknowns + 1:, :))) < 1.0e-13_dp, &
         "zero-gamma global stiffness retained mu coupling")
     call assemble(fields, drive, jacobian_radial, jacobian_theta, &
-        jacobian_zeta, 2.0_dp * gamma_pressure, phase_assembly_transformed, &
+        jacobian_zeta, doubled_gamma, phase_assembly_transformed, &
         doubled, layout, info)
     call require(info == 0, "scaled-gamma global stiffness assembly failed")
     call require_close(doubled(layout%normal_unknowns &
@@ -110,6 +114,21 @@ program test_compressible_stiffness_family_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    pure function quadratic_form(matrix, vector) result(value)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp) :: value, image
+        integer :: column, row
+
+        value = 0.0_dp
+        do row = 1, size(matrix, 1)
+            image = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image = image + matrix(row, column) * vector(column)
+            end do
+            value = value + vector(row) * image
+        end do
+    end function quadratic_form
 
     subroutine check_term_symmetry(local_terms)
         real(dp), intent(in) :: local_terms(:, :, :)
@@ -284,8 +303,7 @@ contains
             if (info /= 0) return
             call extract_element_vector(local_layout, interval, global_vector, &
                 local_vector)
-            energy = energy + dot_product(local_vector, &
-                matmul(element, local_vector))
+            energy = energy + quadratic_form(element, local_vector)
         end do
         info = 0
     end subroutine sum_element_energies

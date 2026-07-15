@@ -110,12 +110,14 @@ contains
         allocate (stiffness%diag(2, 2, 3), stiffness%off(2, 2, 2))
         allocate (mass%diag(2, 2, 3), mass%off(2, 2, 2))
         do block = 1, 3
-            stiffness%diag(:, :, block) = reshape([&
-                2.0_dp + 0.3_dp * block, 0.2_dp, 0.2_dp, &
-                3.0_dp + 0.4_dp * block], [2, 2])
-            mass%diag(:, :, block) = reshape([&
-                1.5_dp + 0.1_dp * block, 0.1_dp, 0.1_dp, &
-                1.2_dp + 0.05_dp * block], [2, 2])
+            stiffness%diag(1, 1, block) = 2.0_dp + 0.3_dp * block
+            stiffness%diag(2, 1, block) = 0.2_dp
+            stiffness%diag(1, 2, block) = 0.2_dp
+            stiffness%diag(2, 2, block) = 3.0_dp + 0.4_dp * block
+            mass%diag(1, 1, block) = 1.5_dp + 0.1_dp * block
+            mass%diag(2, 1, block) = 0.1_dp
+            mass%diag(1, 2, block) = 0.1_dp
+            mass%diag(2, 2, block) = 1.2_dp + 0.05_dp * block
         end do
         stiffness%off(:, :, 1) = reshape([&
             -0.4_dp, 0.02_dp, 0.05_dp, -0.3_dp], [2, 2])
@@ -130,23 +132,41 @@ contains
     subroutine check_dense_eigenpairs(stiffness, mass, eigenvalues, vectors)
         real(dp), intent(in) :: stiffness(:, :), mass(:, :), eigenvalues(:)
         real(dp), intent(in) :: vectors(:, :)
-        real(dp) :: product, residual
+        real(dp) :: mass_image(size(eigenvalues))
+        real(dp) :: residual_vector(size(eigenvalues))
+        real(dp) :: stiffness_image(size(eigenvalues)), product, residual
         integer :: i, j
 
         do i = 1, size(eigenvalues)
-            residual = norm2(matmul(stiffness, vectors(:, i)) &
-                - eigenvalues(i) * matmul(mass, vectors(:, i)))
+            call matrix_vector_product(stiffness, vectors(:, i), &
+                stiffness_image)
+            call matrix_vector_product(mass, vectors(:, i), mass_image)
+            residual_vector = stiffness_image - eigenvalues(i) * mass_image
+            residual = norm2(residual_vector)
             call require(residual < 1.0e-12_dp, &
                 "dense generalized residual is too large")
             do j = 1, size(eigenvalues)
-                product = dot_product(vectors(:, i), &
-                    matmul(mass, vectors(:, j)))
+                call matrix_vector_product(mass, vectors(:, j), mass_image)
+                product = dot_product(vectors(:, i), mass_image)
                 if (i == j) product = product - 1.0_dp
                 call require(abs(product) < 1.0e-12_dp, &
                     "dense eigenvectors are not mass-orthonormal")
             end do
         end do
     end subroutine check_dense_eigenpairs
+
+    pure subroutine matrix_vector_product(matrix, vector, image)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp), intent(out) :: image(:)
+        integer :: column, row
+
+        do row = 1, size(matrix, 1)
+            image(row) = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image(row) = image(row) + matrix(row, column) * vector(column)
+            end do
+        end do
+    end subroutine matrix_vector_product
 
     subroutine block_to_dense(blocks, dense)
         type(block_tridiagonal_t), intent(in) :: blocks
@@ -186,7 +206,7 @@ contains
     end subroutine build_identity_mass
 
     function mass_norm(vector, mass) result(squared_norm)
-        real(dp), intent(in) :: vector(:, :)
+        real(dp), contiguous, intent(in) :: vector(:, :)
         type(block_tridiagonal_t), intent(in) :: mass
         real(dp) :: squared_norm
         real(dp) :: image(size(vector, 1), size(vector, 2))

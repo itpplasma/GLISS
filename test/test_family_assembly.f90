@@ -530,7 +530,7 @@ contains
         type(family_assembly_options_t) :: options
         real(dp), allocatable :: rectangular(:, :), ragged(:, :), zero(:, :)
         real(dp), allocatable :: explicit_zero(:, :), negative(:, :)
-        real(dp) :: negative_power(size(power)), scale
+        real(dp) :: negative_power(size(power)), scale, zero_power(size(power))
         integer :: info
 
         options%field_periods = family%field_periods
@@ -557,9 +557,10 @@ contains
         call assemble_family_stiffness(geometry, family%poloidal, &
             family%toroidal, step, zero, info, options)
         call require(info == 0, "default stored-power assembly failed")
+        zero_power = 0.0_dp
         call assemble_family_stiffness(geometry, family%poloidal, &
             family%toroidal, step, explicit_zero, info, options, &
-            0.0_dp * power)
+            zero_power)
         call require(info == 0, "zero stored-power assembly failed")
         call require(all(zero == explicit_zero), &
             "zero stored power changes the assembled matrix")
@@ -834,7 +835,7 @@ contains
         real(dp), intent(in) :: radius
         type(surface_geometry_t), intent(out) :: surface
         real(dp) :: angle, even
-        integer :: j, l
+        integer :: component, j, l
 
         call cylinder_surface(radius, surface)
         do l = 1, n_zeta
@@ -883,6 +884,7 @@ contains
         type(surface_geometry_t), intent(out) :: surface
         real(dp) :: b_theta, b_theta_slope, fields(13), drive
         real(dp) :: length
+        integer :: component
 
         length = profiles%length
         b_theta = profiles%b_linear * radius + profiles%b_cubic &
@@ -907,7 +909,9 @@ contains
             / radius
         allocate (surface%fields(n_theta, n_zeta, 13))
         allocate (surface%drive(n_theta, n_zeta))
-        surface%fields = spread(spread(fields, 1, n_theta), 2, n_zeta)
+        do component = 1, size(fields)
+            surface%fields(:, :, component) = fields(component)
+        end do
         surface%drive = drive
     end subroutine cylinder_surface
 

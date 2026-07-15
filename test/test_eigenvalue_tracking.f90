@@ -67,6 +67,7 @@ contains
         type(surface_geometry_t), intent(out) :: surface
         real(dp) :: b_theta, b_theta_slope, fields(13), drive
         real(dp) :: length
+        integer :: component
 
         length = profiles%length
         b_theta = profiles%b_linear * radius + profiles%b_cubic &
@@ -91,7 +92,9 @@ contains
             / radius
         allocate (surface%fields(n_theta, n_zeta, 13))
         allocate (surface%drive(n_theta, n_zeta))
-        surface%fields = spread(spread(fields, 1, n_theta), 2, n_zeta)
+        do component = 1, size(fields)
+            surface%fields(:, :, component) = fields(component)
+        end do
         surface%drive = drive
     end subroutine cylinder_surface
 

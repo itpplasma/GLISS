@@ -19,6 +19,8 @@ program test_compressible_stiffness_assembly
     real(dp), allocatable :: jacobian_zeta(:, :), gamma_pressure(:, :)
     real(dp), allocatable :: direct(:, :), transformed(:, :), zero(:, :)
     real(dp), allocatable :: doubled(:, :), invalid(:, :)
+    real(dp), allocatable :: doubled_gamma(:, :), scaled_rows(:, :)
+    real(dp), allocatable :: zero_gamma(:, :)
     type(radial_space_config_t) :: radial_space
     real(dp) :: probe(12), matrix_energy, oracle_energy
     integer :: info
@@ -35,28 +37,32 @@ program test_compressible_stiffness_assembly
         "transformed compressible stiffness assembly failed")
     call require_close(direct, transformed, 1.0e-12_dp, &
         "one-period and all-period compressible stiffness matrices differ")
-    call require_close(transformed, transpose(transformed), 1.0e-13_dp, &
+    call require_symmetric(transformed, 1.0e-13_dp, &
         "compressible stiffness element is not symmetric")
     call require(maxval(abs(transformed(10:12, :))) > 1.0e-8_dp, &
         "finite compression did not retain the mu block")
 
+    allocate (zero_gamma, mold=gamma_pressure)
+    zero_gamma = 0.0_dp
+    doubled_gamma = 2.0_dp * gamma_pressure
     call assemble(fields, drive, jacobian_radial, jacobian_theta, &
-        jacobian_zeta, 0.0_dp * gamma_pressure, &
+        jacobian_zeta, zero_gamma, &
         phase_assembly_transformed, zero, info)
     call require(info == 0, "zero-compression stiffness assembly failed")
     call require(maxval(abs(zero(10:12, :))) < 1.0e-13_dp, &
         "gamma=0 stiffness retained a mu coupling")
     call assemble(fields, drive, jacobian_radial, jacobian_theta, &
-        jacobian_zeta, 2.0_dp * gamma_pressure, &
+        jacobian_zeta, doubled_gamma, &
         phase_assembly_transformed, doubled, info)
     call require(info == 0, "scaled-compression stiffness assembly failed")
-    call require_close(doubled(10:12, :), 2.0_dp * transformed(10:12, :), &
+    scaled_rows = 2.0_dp * transformed(10:12, :)
+    call require_close(doubled(10:12, :), scaled_rows, &
         1.0e-13_dp, &
         "compressional stiffness is not linear in gamma pressure")
 
     probe = [0.2_dp, -0.1_dp, 0.3_dp, -0.4_dp, 0.25_dp, 0.15_dp, &
         0.05_dp, -0.2_dp, 0.1_dp, -0.08_dp, 0.12_dp, 0.07_dp]
-    matrix_energy = dot_product(probe, matmul(direct, probe))
+    matrix_energy = quadratic_form(direct, probe)
     call calculate_direct_energy(fields, drive, jacobian_radial, &
         jacobian_theta, jacobian_zeta, gamma_pressure, radial_space, probe, &
         oracle_energy, info)
@@ -76,6 +82,38 @@ program test_compressible_stiffness_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    pure function quadratic_form(matrix, vector) result(value)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp) :: value, image
+        integer :: column, row
+
+        value = 0.0_dp
+        do row = 1, size(matrix, 1)
+            image = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image = image + matrix(row, column) * vector(column)
+            end do
+            value = value + vector(row) * image
+        end do
+    end function quadratic_form
+
+    subroutine require_symmetric(matrix, tolerance, message)
+        real(dp), intent(in) :: matrix(:, :), tolerance
+        character(len=*), intent(in) :: message
+        real(dp) :: error, scale
+        integer :: column, row
+
+        error = 0.0_dp
+        do column = 1, size(matrix, 2)
+            do row = 1, column - 1
+                error = max(error, abs(matrix(row, column) &
+                    - matrix(column, row)))
+            end do
+        end do
+        scale = max(1.0_dp, maxval(abs(matrix)))
+        call require(error <= tolerance * scale, message)
+    end subroutine require_symmetric
 
     subroutine assemble(local_fields, local_drive, local_jacobian_radial, &
             local_jacobian_theta, local_jacobian_zeta, local_gamma_pressure, &
@@ -152,7 +190,8 @@ contains
         real(dp), parameter :: gamma_p = 2.0_dp, step = 0.25_dp
         real(dp) :: constant_fields(1, 1, 13), local_drive(1, 1)
         real(dp) :: local_js(1, 1), local_jt(1, 1), local_jz(1, 1)
-        real(dp) :: local_gamma(1, 1), expected(8, 8), slopes(2), eta_div
+        real(dp) :: local_gamma(1, 1), zero_local_gamma(1, 1)
+        real(dp) :: expected(8, 8), difference(8, 8), slopes(2), eta_div
         real(dp), allocatable :: finite(:, :), zero_gamma(:, :)
         integer :: local_info
 
@@ -164,13 +203,14 @@ contains
         local_jt = jacobian_t
         local_jz = jacobian_z
         local_gamma = gamma_p
+        zero_local_gamma = 0.0_dp
         call assemble_compressible_stiffness_surface(constant_fields, &
             local_drive, local_js, local_jt, local_jz, local_gamma, modes, &
             modes, parities, powers, 1, local_radial_space, 0.375_dp, step, &
             phase_assembly_transformed, finite, local_info)
         call require(local_info == 0, "analytic product gate failed to assemble")
         call assemble_compressible_stiffness_surface(constant_fields, &
-            local_drive, local_js, local_jt, local_jz, 0.0_dp * local_gamma, &
+            local_drive, local_js, local_jt, local_jz, zero_local_gamma, &
             modes, modes, parities, powers, 1, local_radial_space, 0.375_dp, &
             step, phase_assembly_transformed, zero_gamma, local_info)
         call require(local_info == 0, "analytic zero-gamma gate failed")
@@ -190,7 +230,8 @@ contains
             * slopes(2) * eta_div
         expected(6, 3) = expected(3, 6)
         expected(6, 6) = step * gamma_p * abs(jacobian) * eta_div**2
-        call require_close(finite - zero_gamma, expected, 1.0e-13_dp, &
+        difference = finite - zero_gamma
+        call require_close(difference, expected, 1.0e-13_dp, &
             "analytic signed-Jacobian product derivative is wrong")
     end subroutine check_analytic_product_derivatives
 

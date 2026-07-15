@@ -161,18 +161,21 @@ contains
             zeta = two_pi() * real(k - 1, dp) / real(n_zeta, dp)
             do j = 1, n_theta
                 theta = two_pi() * real(j - 1, dp) / real(n_theta, dp)
-                local_fields(j, k, 1:2) = [1.2_dp + 0.05_dp * cos(theta), &
-                    0.7_dp + 0.03_dp * sin(zeta)]
-                local_fields(j, k, 3:6) = [0.04_dp, -0.03_dp, &
-                    0.8_dp + 0.02_dp * cos(zeta), &
-                    0.6_dp - 0.01_dp * sin(theta)]
-                local_fields(j, k, 7:9) = [-1.1_dp &
-                    - 0.02_dp * cos(theta) - 0.03_dp * sin(zeta), &
-                    1.4_dp + 0.04_dp * sin(theta + zeta), &
-                    1.3_dp + 0.03_dp * cos(zeta)]
-                local_fields(j, k, 10:13) = [0.2_dp - 0.01_dp * cos(theta), &
-                    -0.15_dp, 0.1_dp - 0.01_dp * sin(theta), &
-                    -0.12_dp + 0.02_dp * cos(zeta)]
+                local_fields(j, k, 1) = 1.2_dp + 0.05_dp * cos(theta)
+                local_fields(j, k, 2) = 0.7_dp + 0.03_dp * sin(zeta)
+                local_fields(j, k, 3) = 0.04_dp
+                local_fields(j, k, 4) = -0.03_dp
+                local_fields(j, k, 5) = 0.8_dp + 0.02_dp * cos(zeta)
+                local_fields(j, k, 6) = 0.6_dp - 0.01_dp * sin(theta)
+                local_fields(j, k, 7) = -1.1_dp &
+                    - 0.02_dp * cos(theta) - 0.03_dp * sin(zeta)
+                local_fields(j, k, 8) = 1.4_dp &
+                    + 0.04_dp * sin(theta + zeta)
+                local_fields(j, k, 9) = 1.3_dp + 0.03_dp * cos(zeta)
+                local_fields(j, k, 10) = 0.2_dp - 0.01_dp * cos(theta)
+                local_fields(j, k, 11) = -0.15_dp
+                local_fields(j, k, 12) = 0.1_dp - 0.01_dp * sin(theta)
+                local_fields(j, k, 13) = -0.12_dp + 0.02_dp * cos(zeta)
                 local_drive(j, k) = 0.05_dp + 0.01_dp * cos(theta - zeta)
                 local_jacobian_s(j, k) = -0.08_dp &
                     + 0.01_dp * sin(theta + zeta)
