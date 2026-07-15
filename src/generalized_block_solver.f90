@@ -1,7 +1,7 @@
 module generalized_block_solver
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use block_tridiagonal, only: apply_block_tridiagonal, block_factor_t, &
+    use block_tridiagonal, only: apply_block_tridiagonal_into, block_factor_t, &
         block_tridiagonal_t, factorize_shifted, solve_factored
     implicit none
     private
@@ -41,6 +41,7 @@ contains
         real(dp), intent(in) :: vector(:, :), eigenvalue
         real(dp), intent(out) :: quotient, residual
         integer, intent(out) :: info
+        real(dp) :: mass_image(size(vector, 1), size(vector, 2))
         real(dp) :: squared_norm
 
         call validate_generalized_problem(stiffness, mass, info)
@@ -50,7 +51,8 @@ contains
         if (size(vector, 1) /= size(stiffness%diag, 1)) return
         if (size(vector, 2) /= size(stiffness%diag, 3)) return
         if (.not. all(ieee_is_finite(vector))) return
-        squared_norm = sum(vector * apply_block_tridiagonal(mass, vector))
+        call apply_block_tridiagonal_into(mass, vector, mass_image)
+        squared_norm = sum(vector * mass_image)
         if (.not. ieee_is_finite(squared_norm)) return
         if (squared_norm <= 0.0_dp) return
         quotient = generalized_rayleigh_quotient(stiffness, mass, vector)
@@ -86,7 +88,7 @@ contains
         if (info /= generalized_ok) return
         previous = huge(1.0_dp)
         do iteration = 1, 500
-            iterate = apply_block_tridiagonal(mass, vector)
+            call apply_block_tridiagonal_into(mass, vector, iterate)
             call solve_factored(shifted_factor%shifted, &
                 shifted_factor%factor, iterate, info)
             if (info /= 0) then
@@ -117,9 +119,12 @@ contains
         type(block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: vector(:, :)
         real(dp) :: quotient
+        real(dp) :: stiffness_image(size(vector, 1), size(vector, 2))
+        real(dp) :: mass_image(size(vector, 1), size(vector, 2))
 
-        quotient = sum(vector * apply_block_tridiagonal(stiffness, vector)) &
-            / sum(vector * apply_block_tridiagonal(mass, vector))
+        call apply_block_tridiagonal_into(stiffness, vector, stiffness_image)
+        call apply_block_tridiagonal_into(mass, vector, mass_image)
+        quotient = sum(vector * stiffness_image) / sum(vector * mass_image)
     end function generalized_rayleigh_quotient
 
     function generalized_residual(stiffness, mass, vector, eigenvalue) &
@@ -130,8 +135,8 @@ contains
         real(dp) :: stiffness_image(size(vector, 1), size(vector, 2))
         real(dp) :: mass_image(size(vector, 1), size(vector, 2)), scale
 
-        stiffness_image = apply_block_tridiagonal(stiffness, vector)
-        mass_image = apply_block_tridiagonal(mass, vector)
+        call apply_block_tridiagonal_into(stiffness, vector, stiffness_image)
+        call apply_block_tridiagonal_into(mass, vector, mass_image)
         scale = max(1.0_dp, norm2(stiffness_image), &
             abs(eigenvalue) * norm2(mass_image))
         residual = norm2(stiffness_image - eigenvalue * mass_image) / scale
@@ -189,10 +194,12 @@ contains
         real(dp), intent(inout) :: vector(:, :)
         type(block_tridiagonal_t), intent(in) :: mass
         integer, intent(out) :: info
+        real(dp) :: mass_image(size(vector, 1), size(vector, 2))
         real(dp) :: squared_norm
 
         info = generalized_invalid
-        squared_norm = sum(vector * apply_block_tridiagonal(mass, vector))
+        call apply_block_tridiagonal_into(mass, vector, mass_image)
+        squared_norm = sum(vector * mass_image)
         if (.not. ieee_is_finite(squared_norm)) return
         if (squared_norm <= 0.0_dp) return
         vector = vector / sqrt(squared_norm)

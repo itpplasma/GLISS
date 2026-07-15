@@ -1,7 +1,8 @@
 program test_generalized_block_solver
     use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
-    use block_tridiagonal, only: apply_block_tridiagonal, block_tridiagonal_t
+    use block_tridiagonal, only: apply_block_tridiagonal_into, &
+        block_tridiagonal_t
     use family_assembly, only: iterate_block_eigenvalue
     use generalized_block_solver, only: generalized_inertia, &
         generalized_eigenpair_diagnostics, generalized_invalid, &
@@ -188,8 +189,10 @@ contains
         real(dp), intent(in) :: vector(:, :)
         type(block_tridiagonal_t), intent(in) :: mass
         real(dp) :: squared_norm
+        real(dp) :: image(size(vector, 1), size(vector, 2))
 
-        squared_norm = sum(vector * apply_block_tridiagonal(mass, vector))
+        call apply_block_tridiagonal_into(mass, vector, image)
+        squared_norm = sum(vector * image)
     end function mass_norm
 
     subroutine require(condition, message)

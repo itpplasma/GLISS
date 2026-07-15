@@ -1,7 +1,7 @@
 module family_assembly
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use block_tridiagonal, only: apply_block_tridiagonal, &
+    use block_tridiagonal, only: apply_block_tridiagonal_into, &
         block_factor_t, block_tridiagonal_t, factorize_shifted, &
         solve_factored
     use family_point_assembly, only: assemble_direct_surface_resolved, &
@@ -244,7 +244,7 @@ contains
         if (info /= 0) return
         trials = size(blocks%diag, 1)
         nodes = size(blocks%diag, 3)
-        allocate (vector(trials, nodes))
+        allocate (vector(trials, nodes), image(trials, nodes))
         do j = 1, nodes
             do t = 1, trials
                 vector(t, j) = 1.0_dp + 0.1_dp * real(t, dp) &
@@ -260,7 +260,7 @@ contains
             call solve_factored(blocks, factor, vector, info)
             if (info /= 0) return
             vector = vector / norm2(vector)
-            image = apply_block_tridiagonal(blocks, vector)
+            call apply_block_tridiagonal_into(blocks, vector, image)
             rayleigh = sum(vector * image)
             residual = norm2(image - rayleigh * vector) &
                 / max(operator_scale + abs(rayleigh), tiny(1.0_dp))

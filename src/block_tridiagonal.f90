@@ -18,6 +18,7 @@ module block_tridiagonal
     public :: factorize_shifted
     public :: solve_factored
     public :: apply_block_tridiagonal
+    public :: apply_block_tridiagonal_into
 
     interface
         subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
@@ -134,6 +135,14 @@ contains
         type(block_tridiagonal_t), intent(in) :: matrix
         real(dp), contiguous, intent(in) :: vector(:, :)
         real(dp) :: image(size(vector, 1), size(vector, 2))
+
+        call apply_block_tridiagonal_into(matrix, vector, image)
+    end function apply_block_tridiagonal
+
+    subroutine apply_block_tridiagonal_into(matrix, vector, image)
+        type(block_tridiagonal_t), intent(in) :: matrix
+        real(dp), contiguous, intent(in) :: vector(:, :)
+        real(dp), contiguous, intent(out) :: image(:, :)
         integer :: k, nb, i
 
         k = size(matrix%diag, 1)
@@ -150,6 +159,6 @@ contains
                     vector(:, i + 1), 1, 1.0_dp, image(:, i), 1)
             end if
         end do
-    end function apply_block_tridiagonal
+    end subroutine apply_block_tridiagonal_into
 
 end module block_tridiagonal
