@@ -30,8 +30,10 @@ equilibrium export.
 The development API also exposes the shared two-component marginality
 operator through an explicit general 3-D mode table and the axisymmetric
 family used for the pinned Solov'ev comparison with DCON. A separate
-CAS3D2MN phase-envelope entry point preserves labeled sideband multiplicity
-while calling the same production assembly and eigensolver.
+CAS3D2MN phase-envelope entry point translates the ordered carrier/envelope
+table, canonicalizes coincident physical Fourier modes, and calls the same
+production assembly and eigensolver. It reports the original label count for
+provenance without introducing redundant coefficient directions.
 Paired TERPSICHORE FORT.23/FORT.24 files from a `MODELK=0` pressureless-
 pseudoplasma run can be solved through the same public Python package, with
 the stored TERPSICHORE mode available for direct diagnostic comparison. This
@@ -42,8 +44,13 @@ output contracts, direct VMEC conversion, and the optional SIMSOPT adapter.
 
 ## Build
 
-Requires CMake, Ninja, and a Fortran compiler. LAPACK, PkgConfig, and the
-NetCDF C library are also required.
+Requires CMake, Ninja, a Fortran compiler, BLAS/LAPACK, PkgConfig, and the
+NetCDF C library. A clean single-config build defaults to the optimized
+`Release` configuration and prefers threaded OpenBLAS. If OpenBLAS is not
+installed, CMake falls back to another available BLAS/LAPACK provider.
+The provider controls its thread count; for example,
+`OPENBLAS_NUM_THREADS=16` uses 16 OpenBLAS threads and
+`OPENBLAS_NUM_THREADS=1` selects deterministic one-thread controls.
 
 ```sh
 cmake -S . -B build -G Ninja

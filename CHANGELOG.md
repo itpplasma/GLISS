@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Default clean single-config CMake builds to the optimized Release
+  configuration, prefer threaded OpenBLAS, and retain a portable generic
+  BLAS/LAPACK fallback.
+- Remove the duplicate historical fixed-boundary solver and route explicit
+  3-D modes, CAS3D2MN carrier envelopes, axisymmetric convenience calls, and
+  compressible spectra through the shared degree-one through degree-four FEEC
+  assembly.
+- Canonicalize coincident carrier-envelope Fourier sidebands before assembly
+  while reporting the original input-label count as provenance.
 - Add reusable opaque equilibrium contexts to the C and Python interfaces.
 - Return typed native status codes with caller-provided error buffers and
   caller-owned output arrays.

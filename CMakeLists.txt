@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.22)
 
 project(gliss VERSION 0.0.1 LANGUAGES C Fortran)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+        "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
+endif()
+
 include(CTest)
 set(BLA_VENDOR "OpenBLAS" CACHE STRING "BLAS/LAPACK implementation")
 find_package(LAPACK QUIET)

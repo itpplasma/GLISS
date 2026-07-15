@@ -160,7 +160,7 @@ def test_solve_cas3d_marginality_labels_artificial_normalization():
     assert result.fourier_convention == "2*pi*(m*theta - n*zeta/N_T)"
 
 
-def test_solve_cas3d_phase_envelope_retains_labeled_sidebands():
+def test_solve_cas3d_phase_envelope_reports_labeled_input_count():
     library = FakeLibrary()
 
     result = gliss.solve_cas3d_phase_envelope(
