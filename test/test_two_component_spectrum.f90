@@ -94,7 +94,7 @@ contains
         call variable_block_to_dense(problem%mass, mass, status)
         call require(status == variable_block_ok, &
             "artificial mass could not be unpacked")
-        call require(maxval(abs(mass - step * identity(size(mass, 1)))) &
+        call require(scaled_identity_deviation(mass, step) &
             <= 8.0_dp * epsilon(1.0_dp) * step, &
             "artificial mass is not positive on every coefficient")
         call family_negative_count(geometry, poloidal, toroidal, step, &
@@ -117,8 +117,11 @@ contains
         real(dp) :: condensed
         integer :: status
 
-        full = reshape([2.0_dp, 3.0_dp, 3.0_dp, 2.0_dp], [2, 2])
-        mass = identity(2)
+        full(1, 1) = 2.0_dp
+        full(2, 1) = 3.0_dp
+        full(1, 2) = 3.0_dp
+        full(2, 2) = 2.0_dp
+        call set_identity(mass)
         call solve_symmetric_generalized(full, mass, eigenvalues, &
             eigenvectors, status)
         call require(status == 0, "exact generalized fixture solve failed")
@@ -136,16 +139,30 @@ contains
             "fixture finite eigenvalue did not change")
     end subroutine check_condensation_fixture
 
-    pure function identity(order) result(matrix)
-        integer, intent(in) :: order
-        real(dp) :: matrix(order, order)
+    pure function scaled_identity_deviation(matrix, scale) result(deviation)
+        real(dp), intent(in) :: matrix(:, :), scale
+        real(dp) :: deviation, expected
+        integer :: column, row
+
+        deviation = 0.0_dp
+        do column = 1, size(matrix, 2)
+            do row = 1, size(matrix, 1)
+                expected = 0.0_dp
+                if (row == column) expected = scale
+                deviation = max(deviation, abs(matrix(row, column) - expected))
+            end do
+        end do
+    end function scaled_identity_deviation
+
+    pure subroutine set_identity(matrix)
+        real(dp), intent(out) :: matrix(:, :)
         integer :: index
 
         matrix = 0.0_dp
-        do index = 1, order
+        do index = 1, min(size(matrix, 1), size(matrix, 2))
             matrix(index, index) = 1.0_dp
         end do
-    end function identity
+    end subroutine set_identity
 
     subroutine check_count_only(state, poloidal, toroidal, powers)
         type(gvec_cas3d_equilibrium_t), intent(in) :: state

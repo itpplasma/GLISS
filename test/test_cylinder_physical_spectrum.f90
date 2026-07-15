@@ -118,7 +118,9 @@ contains
         real(dp), allocatable :: fields(:, :, :, :), drive(:, :, :)
         real(dp), allocatable :: jacobian_s(:, :, :), jacobian_t(:, :, :)
         real(dp), allocatable :: jacobian_z(:, :, :), gamma_p(:, :, :)
+        real(dp) :: stored_power(1)
         real(dp) :: step
+        integer :: mode_m_array(1), mode_n_array(1), parity_class(1)
         integer :: info
 
         if (present(quadrature_points)) then
@@ -138,9 +140,13 @@ contains
         call require(info == compressible_geometry_ok, &
             "compressible geometry build failed")
         step = 1.0_dp / real(surfaces, dp)
+        mode_m_array(1) = mode_m
+        mode_n_array(1) = mode_n
+        parity_class(1) = 1
+        stored_power(1) = 0.0_dp
         call assemble_compressible_family_stiffness(fields, drive, &
-            jacobian_s, jacobian_t, jacobian_z, gamma_p, [mode_m], &
-            [mode_n], [1], [0.0_dp], 1, radial_space, step, &
+            jacobian_s, jacobian_t, jacobian_z, gamma_p, mode_m_array, &
+            mode_n_array, parity_class, stored_power, 1, radial_space, step, &
             phase_assembly_transformed, stiffness, layout, info)
         if (present(reject_quadrature)) then
             if (reject_quadrature) then
@@ -150,10 +156,13 @@ contains
             end if
         end if
         call require(info == 0, "compressible stiffness assembly failed")
-        density%s = [0.0_dp, 1.0_dp]
-        density%kilograms_per_cubic_metre = [density_kg_m3, density_kg_m3]
-        call assemble_physical_family_mass(fields, density, [mode_m], &
-            [mode_n], [1], [0.0_dp], 1, radial_space, step, &
+        allocate (density%s(2), density%kilograms_per_cubic_metre(2))
+        density%s(1) = 0.0_dp
+        density%s(2) = 1.0_dp
+        density%kilograms_per_cubic_metre(1) = density_kg_m3
+        density%kilograms_per_cubic_metre(2) = density_kg_m3
+        call assemble_physical_family_mass(fields, density, mode_m_array, &
+            mode_n_array, parity_class, stored_power, 1, radial_space, step, &
             phase_assembly_transformed, mass, mass_layout, info)
         call require(info == 0, "physical mass assembly failed")
         call require(mass_layout%total_unknowns == layout%total_unknowns, &

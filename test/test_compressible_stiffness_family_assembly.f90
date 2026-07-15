@@ -33,8 +33,10 @@ program test_compressible_stiffness_family_assembly
     real(dp), allocatable :: jacobian_theta(:, :, :), jacobian_zeta(:, :, :)
     real(dp), allocatable :: gamma_pressure(:, :, :), direct(:, :)
     real(dp), allocatable :: transformed(:, :), zero(:, :), doubled(:, :)
-    real(dp), allocatable :: decomposed(:, :), terms(:, :, :)
+    real(dp), allocatable :: decomposed(:, :), summed_terms(:, :)
+    real(dp), allocatable :: terms(:, :, :)
     real(dp), allocatable :: doubled_gamma(:, :, :), zero_gamma(:, :, :)
+    real(dp), allocatable :: scaled_mu_rows(:, :)
     real(dp) :: probe(22), matrix_energy, element_energy
     type(dynamic_family_layout_t) :: layout, direct_layout
     type(radial_space_config_t) :: radial_space
@@ -55,7 +57,7 @@ program test_compressible_stiffness_family_assembly
         "phase backends produced different stiffness layouts")
     call require_close(direct, transformed, 1.0e-12_dp, &
         "global direct and transformed stiffness matrices differ")
-    call require_close(transformed, transpose(transformed), 1.0e-13_dp, &
+    call require_symmetric(transformed, 1.0e-13_dp, &
         "global compressible stiffness is not symmetric")
     call assemble_compressible_family_stiffness_with_terms(fields, drive, &
         jacobian_radial, jacobian_theta, jacobian_zeta, gamma_pressure, &
@@ -65,7 +67,9 @@ program test_compressible_stiffness_family_assembly
     call require(size(terms, 3) == 5, "stiffness term count is wrong")
     call require_close(decomposed, transformed, 1.0e-14_dp, &
         "term-resolved assembly changed the stiffness")
-    call require_close(sum(terms, dim=3), decomposed, 1.0e-14_dp, &
+    allocate (summed_terms, mold=decomposed)
+    call sum_stiffness_terms(terms, summed_terms)
+    call require_close(summed_terms, decomposed, 1.0e-14_dp, &
         "stiffness terms do not sum to the assembled operator")
     call check_term_symmetry(terms)
     call check_variable_block_structure(transformed, layout)
@@ -99,10 +103,11 @@ program test_compressible_stiffness_family_assembly
         jacobian_zeta, doubled_gamma, phase_assembly_transformed, &
         doubled, layout, info)
     call require(info == 0, "scaled-gamma global stiffness assembly failed")
+    scaled_mu_rows = 2.0_dp * transformed(layout%normal_unknowns &
+        + layout%eta_unknowns + 1:, :)
     call require_close(doubled(layout%normal_unknowns &
         + layout%eta_unknowns + 1:, :), &
-        2.0_dp * transformed(layout%normal_unknowns &
-        + layout%eta_unknowns + 1:, :), 1.0e-13_dp, &
+        scaled_mu_rows, 1.0e-13_dp, &
         "global mu rows are not linear in gamma pressure")
 
     call assemble_compressible_family_stiffness(fields, drive, &
@@ -114,6 +119,22 @@ program test_compressible_stiffness_family_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    pure subroutine sum_stiffness_terms(local_terms, total)
+        real(dp), intent(in) :: local_terms(:, :, :)
+        real(dp), intent(out) :: total(:, :)
+        integer :: column, row, term
+
+        total = 0.0_dp
+        do term = 1, size(local_terms, 3)
+            do column = 1, size(local_terms, 2)
+                do row = 1, size(local_terms, 1)
+                    total(row, column) = total(row, column) &
+                        + local_terms(row, column, term)
+                end do
+            end do
+        end do
+    end subroutine sum_stiffness_terms
 
     pure function quadratic_form(matrix, vector) result(value)
         real(dp), intent(in) :: matrix(:, :), vector(:)
@@ -135,8 +156,7 @@ contains
         integer :: term
 
         do term = 1, size(local_terms, 3)
-            call require_close(local_terms(:, :, term), &
-                transpose(local_terms(:, :, term)), 1.0e-13_dp, &
+            call require_symmetric(local_terms(:, :, term), 1.0e-13_dp, &
                 "a stiffness energy term is not symmetric")
         end do
     end subroutine check_term_symmetry
@@ -197,14 +217,18 @@ contains
             "zero-family stiffness retained identically zero trials")
         call require_close(direct_k, transformed_k, 1.0e-12_dp, &
             "zero-family stiffness phase backends differ")
-        call require_close(transformed_k, transpose(transformed_k), 1.0e-13_dp, &
+        call require_symmetric(transformed_k, 1.0e-13_dp, &
             "zero-family stiffness is not symmetric")
         call check_zero_tangential_stiffness(transformed_k, zero_layout)
         call check_zero_gamma_tangential(local_fields, local_drive, &
             jacobian_s, jacobian_t, jacobian_z, gamma_pressure)
         allocate (density%s(3), density%kilograms_per_cubic_metre(3))
-        density%s = [0.0_dp, 0.5_dp, 1.0_dp]
-        density%kilograms_per_cubic_metre = [2.0_dp, 3.0_dp, 5.0_dp]
+        density%s(1) = 0.0_dp
+        density%s(2) = 0.5_dp
+        density%s(3) = 1.0_dp
+        density%kilograms_per_cubic_metre(1) = 2.0_dp
+        density%kilograms_per_cubic_metre(2) = 3.0_dp
+        density%kilograms_per_cubic_metre(3) = 5.0_dp
         call assemble_physical_family_mass(local_fields, density, zero_m, &
             zero_n, zero_parity, zero_power, 3, radial_space, 0.25_dp, &
             phase_assembly_transformed, mass, zero_layout, local_info)
@@ -237,13 +261,18 @@ contains
         real(dp), intent(in) :: local_fields(:, :, :, :), local_drive(:, :, :)
         real(dp), intent(in) :: jacobian_s(:, :, :), jacobian_t(:, :, :)
         real(dp), intent(in) :: jacobian_z(:, :, :), gamma_pressure(:, :, :)
-        real(dp), allocatable :: stiffness(:, :)
+        real(dp), allocatable :: stiffness(:, :), zero_gamma(:, :, :)
         type(dynamic_family_layout_t) :: local_layout
+        integer, parameter :: zero_m(2) = 0, zero_n(2) = 0
+        integer, parameter :: zero_parity(2) = [1, 2]
+        real(dp), parameter :: zero_power(2) = 0.0_dp
         integer :: local_info, tangential_start
 
+        allocate (zero_gamma, mold=gamma_pressure)
+        zero_gamma = 0.0_dp
         call assemble_compressible_family_stiffness(local_fields, local_drive, &
-            jacobian_s, jacobian_t, jacobian_z, 0.0_dp * gamma_pressure, &
-            [0, 0], [0, 0], [1, 2], [0.0_dp, 0.0_dp], 3, radial_space, &
+            jacobian_s, jacobian_t, jacobian_z, zero_gamma, zero_m, zero_n, &
+            zero_parity, zero_power, 3, radial_space, &
             0.25_dp, phase_assembly_transformed, stiffness, local_layout, &
             local_info)
         call require(local_info == 0, &
@@ -371,10 +400,19 @@ contains
         real(dp), intent(in) :: theta, zeta, s, two_pi
 
         fields = 0.0_dp
-        fields(1:6) = [1.2_dp + 0.02_dp * s, 0.7_dp, 0.04_dp, -0.03_dp, &
-            0.8_dp, 0.6_dp]
+        fields(1) = 1.2_dp + 0.02_dp * s
+        fields(2) = 0.7_dp
+        fields(3) = 0.04_dp
+        fields(4) = -0.03_dp
+        fields(5) = 0.8_dp
+        fields(6) = 0.6_dp
         fields(7) = -1.1_dp - 0.02_dp * cos(theta) - 0.03_dp * sin(zeta)
-        fields(8:13) = [1.4_dp, 1.3_dp, 0.2_dp, -0.15_dp, 0.1_dp, -0.12_dp]
+        fields(8) = 1.4_dp
+        fields(9) = 1.3_dp
+        fields(10) = 0.2_dp
+        fields(11) = -0.15_dp
+        fields(12) = 0.1_dp
+        fields(13) = -0.12_dp
         local_drive = 0.05_dp + 0.01_dp * cos(theta - zeta)
         jacobian_radial = -0.08_dp + 0.01_dp * s
         jacobian_theta = 0.02_dp * two_pi * sin(theta)
@@ -431,8 +469,12 @@ contains
         integer :: local_info
 
         allocate (density%s(3), density%kilograms_per_cubic_metre(3))
-        density%s = [0.0_dp, 0.5_dp, 1.0_dp]
-        density%kilograms_per_cubic_metre = [2.0_dp, 3.0_dp, 5.0_dp]
+        density%s(1) = 0.0_dp
+        density%s(2) = 0.5_dp
+        density%s(3) = 1.0_dp
+        density%kilograms_per_cubic_metre(1) = 2.0_dp
+        density%kilograms_per_cubic_metre(2) = 3.0_dp
+        density%kilograms_per_cubic_metre(3) = 5.0_dp
         call assemble_physical_family_mass(local_fields, density, trial_m, &
             trial_n, trial_parity, stored_power, 3, radial_space, 0.25_dp, &
             phase_assembly_transformed, mass, mass_layout, local_info)
@@ -467,7 +509,8 @@ contains
             eigenvalues, eigenvectors)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: dense_m(:, :)
-        real(dp), intent(in) :: eigenvalues(:), eigenvectors(:, :)
+        real(dp), intent(in) :: eigenvalues(:)
+        real(dp), contiguous, intent(in) :: eigenvectors(:, :)
         real(dp), allocatable :: vector(:)
         real(dp) :: eigenvalue, oracle_quotient, oracle_residual
         real(dp) :: oracle_resolution, overlap, residual, resolution
@@ -518,7 +561,7 @@ contains
         real(dp) :: overlap, projection, mass_image(size(vector))
         integer :: i
 
-        mass_image = matmul(mass, vector)
+        call matrix_vector_product(mass, vector, mass_image)
         overlap = 0.0_dp
         do i = 1, size(eigenvalues)
             if (eigenvalues(i) - eigenvalues(1) > tolerance) exit
@@ -527,6 +570,36 @@ contains
         end do
         overlap = sqrt(overlap)
     end function dense_cluster_overlap
+
+    pure subroutine matrix_vector_product(matrix, vector, image)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp), intent(out) :: image(:)
+        integer :: column, row
+
+        do row = 1, size(matrix, 1)
+            image(row) = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image(row) = image(row) + matrix(row, column) * vector(column)
+            end do
+        end do
+    end subroutine matrix_vector_product
+
+    subroutine require_symmetric(matrix, tolerance, message)
+        real(dp), intent(in) :: matrix(:, :), tolerance
+        character(len=*), intent(in) :: message
+        real(dp) :: difference, scale
+        integer :: column, row
+
+        difference = 0.0_dp
+        do column = 1, size(matrix, 2)
+            do row = 1, column - 1
+                difference = max(difference, abs(matrix(row, column) &
+                    - matrix(column, row)))
+            end do
+        end do
+        scale = max(1.0_dp, maxval(abs(matrix)))
+        call require(difference <= tolerance * scale, message)
+    end subroutine require_symmetric
 
     subroutine require_close(first, second, tolerance, message)
         real(dp), intent(in) :: first(:, :), second(:, :), tolerance

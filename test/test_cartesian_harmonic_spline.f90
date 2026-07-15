@@ -131,7 +131,8 @@ contains
         integer, parameter :: periods = 5
         real(dp) :: b_theta, b_zeta, expected_j, expected_js, expected_jt
         real(dp) :: expected_metric(3, 3), expected_metric_s(3, 3)
-        real(dp) :: expected_second(2, 2), expected_covariant(2)
+        real(dp) :: expected_second(2, 2), expected_contravariant(2)
+        real(dp) :: expected_covariant(2)
         real(dp) :: expected_b, expected_b_s(2), expected_covariant_s(2)
         real(dp) :: angle, radius, surface_radius, two_pi
         integer :: j, k, status
@@ -165,14 +166,16 @@ contains
                     * minor_radius**3 * sqrt(query_s) * sin(angle)
                 b_theta = -chi_slope / (real(periods, dp) * expected_j)
                 b_zeta = -phi_slope / expected_j
-                expected_covariant = [expected_metric(2, 2) * b_theta, &
-                    expected_metric(3, 3) * b_zeta]
-                expected_b_s = -[b_theta, b_zeta] * expected_js / expected_j
-                expected_covariant_s = [ &
-                    expected_metric_s(2, 2) * b_theta &
-                    + expected_metric(2, 2) * expected_b_s(1), &
-                    expected_metric_s(3, 3) * b_zeta &
-                    + expected_metric(3, 3) * expected_b_s(2)]
+                expected_contravariant(1) = b_theta
+                expected_contravariant(2) = b_zeta
+                expected_covariant(1) = expected_metric(2, 2) * b_theta
+                expected_covariant(2) = expected_metric(3, 3) * b_zeta
+                expected_b_s(1) = -b_theta * expected_js / expected_j
+                expected_b_s(2) = -b_zeta * expected_js / expected_j
+                expected_covariant_s(1) = expected_metric_s(2, 2) * b_theta &
+                    + expected_metric(2, 2) * expected_b_s(1)
+                expected_covariant_s(2) = expected_metric_s(3, 3) * b_zeta &
+                    + expected_metric(3, 3) * expected_b_s(2)
                 expected_b = sqrt(b_theta * expected_covariant(1) &
                     + b_zeta * expected_covariant(2))
                 expected_second = 0.0_dp
@@ -191,7 +194,8 @@ contains
                     close_scalar(geometry%jacobian_zeta(j, k), 0.0_dp), &
                     "torus Jacobian derivatives differ")
                 call require(close_vector(geometry%b_contravariant(j, k, :), &
-                    [b_theta, b_zeta]), "torus contravariant field differs")
+                    expected_contravariant), &
+                    "torus contravariant field differs")
                 call require(close_vector(geometry%b_covariant(j, k, :), &
                     expected_covariant), "torus covariant field differs")
                 call require(close_vector( &
@@ -396,13 +400,14 @@ contains
 
     subroutine check_compatible_trace(traces)
         type(compatible_cell_trace_t), intent(in) :: traces(:)
+        integer, parameter :: expected_cells(3) = [1, 3, 6]
         integer, parameter :: expected_map_size(3) = [24, 27, 24]
         integer :: cell, point
 
         call require(size(traces) == 3, "compatible trace count differs")
-        call require(all([(traces(cell)%cell, cell=1, 3)] == [1, 3, 6]), &
-            "compatible trace cell selection differs")
         do cell = 1, size(traces)
+            call require(traces(cell)%cell == expected_cells(cell), &
+                "compatible trace cell selection differs")
             call require(size(traces(cell)%points) == 9, &
                 "compatible trace quadrature count differs")
             do point = 1, size(traces(cell)%points)
@@ -489,17 +494,36 @@ contains
         radius_ss = -minor_radius / (4.0_dp * s**1.5_dp)
         surface_radius = major_radius + radius * ct
         surface_theta = -two_pi * radius * st
-        expected(:, 1) = [surface_radius * cz, surface_radius * sz, &
-            radius * st]
-        expected(:, 2) = radius_s * [ct * cz, ct * sz, st]
-        expected(:, 3) = two_pi * radius * [-st * cz, -st * sz, ct]
-        expected(:, 4) = two_pi * surface_radius * [-sz, cz, 0.0_dp]
-        expected(:, 5) = radius_ss * [ct * cz, ct * sz, st]
-        expected(:, 6) = two_pi * radius_s * [-st * cz, -st * sz, ct]
-        expected(:, 7) = two_pi * radius_s * [-ct * sz, ct * cz, 0.0_dp]
-        expected(:, 8) = -two_pi**2 * radius * [ct * cz, ct * sz, st]
-        expected(:, 9) = two_pi * surface_theta * [-sz, cz, 0.0_dp]
-        expected(:, 10) = -two_pi**2 * surface_radius * [cz, sz, 0.0_dp]
+        expected(1, 1) = surface_radius * cz
+        expected(2, 1) = surface_radius * sz
+        expected(3, 1) = radius * st
+        expected(1, 2) = radius_s * ct * cz
+        expected(2, 2) = radius_s * ct * sz
+        expected(3, 2) = radius_s * st
+        expected(1, 3) = -two_pi * radius * st * cz
+        expected(2, 3) = -two_pi * radius * st * sz
+        expected(3, 3) = two_pi * radius * ct
+        expected(1, 4) = -two_pi * surface_radius * sz
+        expected(2, 4) = two_pi * surface_radius * cz
+        expected(3, 4) = 0.0_dp
+        expected(1, 5) = radius_ss * ct * cz
+        expected(2, 5) = radius_ss * ct * sz
+        expected(3, 5) = radius_ss * st
+        expected(1, 6) = -two_pi * radius_s * st * cz
+        expected(2, 6) = -two_pi * radius_s * st * sz
+        expected(3, 6) = two_pi * radius_s * ct
+        expected(1, 7) = -two_pi * radius_s * ct * sz
+        expected(2, 7) = two_pi * radius_s * ct * cz
+        expected(3, 7) = 0.0_dp
+        expected(1, 8) = -two_pi**2 * radius * ct * cz
+        expected(2, 8) = -two_pi**2 * radius * ct * sz
+        expected(3, 8) = -two_pi**2 * radius * st
+        expected(1, 9) = -two_pi * surface_theta * sz
+        expected(2, 9) = two_pi * surface_theta * cz
+        expected(3, 9) = 0.0_dp
+        expected(1, 10) = -two_pi**2 * surface_radius * cz
+        expected(2, 10) = -two_pi**2 * surface_radius * sz
+        expected(3, 10) = 0.0_dp
     end subroutine torus_jet
 
     subroutine check_invalid_inputs(valid_grid, valid_x, valid_y, valid_z, &

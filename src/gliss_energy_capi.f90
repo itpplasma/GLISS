@@ -45,7 +45,7 @@ contains
         type(energy_terms_c), pointer :: terms
         type(fixed_boundary_energy_terms_t) :: result
         real(c_double), pointer :: vector(:)
-        integer :: count, info
+        integer :: count, info, pointer_shape(1)
 
         status = prepare_energy_output(terms_pointer, error_pointer, &
             error_capacity, terms)
@@ -77,7 +77,8 @@ contains
                 "energy vector pointer is null")
             return
         end if
-        call c_f_pointer(vector_pointer, vector, [count])
+        pointer_shape(1) = count
+        call c_f_pointer(vector_pointer, vector, pointer_shape)
         call diagnose_fixed_boundary_energy(context%problem, int(parity_class), &
             vector, result, info)
         if (info /= fixed_boundary_ok) then
@@ -103,7 +104,7 @@ contains
         type(stability_problem_context_t), pointer :: context
         real(c_double), pointer :: vector(:), gradient(:)
         real(c_double), allocatable :: native_gradient(:)
-        integer :: count, info
+        integer :: count, info, pointer_shape(1)
 
         status = error_buffer_status(error_pointer, error_capacity)
         if (status /= status_ok) return
@@ -143,7 +144,8 @@ contains
                 "Rayleigh cotangent must be finite")
             return
         end if
-        call c_f_pointer(vector_pointer, vector, [count])
+        pointer_shape(1) = count
+        call c_f_pointer(vector_pointer, vector, pointer_shape)
         call fixed_boundary_rayleigh_gradient(context%problem, &
             int(parity_class), vector, native_gradient, info)
         if (info /= fixed_boundary_ok) then
@@ -158,7 +160,7 @@ contains
                 "Rayleigh cotangent scaling produced a nonfinite gradient")
             return
         end if
-        call c_f_pointer(gradient_pointer, gradient, [count])
+        call c_f_pointer(gradient_pointer, gradient, pointer_shape)
         gradient = native_gradient
         status = status_ok
     end function gliss_stability_problem_rayleigh_vjp_c

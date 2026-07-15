@@ -148,7 +148,7 @@ contains
         real(dp), allocatable, intent(out) :: stored_power(:)
         integer(c_int), pointer :: c_mode_m(:), c_mode_n(:)
         integer(c_int) :: status
-        integer :: allocation_status, count, index
+        integer :: allocation_status, count, index, pointer_shape(1)
 
         status = status_invalid_argument
         if (mode_count < 1_c_size_t) return
@@ -156,8 +156,9 @@ contains
         if (.not. c_associated(mode_m_pointer)) return
         if (.not. c_associated(mode_n_pointer)) return
         count = int(mode_count)
-        call c_f_pointer(mode_m_pointer, c_mode_m, [count])
-        call c_f_pointer(mode_n_pointer, c_mode_n, [count])
+        pointer_shape(1) = count
+        call c_f_pointer(mode_m_pointer, c_mode_m, pointer_shape)
+        call c_f_pointer(mode_n_pointer, c_mode_n, pointer_shape)
         allocate (mode_m(count), mode_n(count), stored_power(count), &
             stat=allocation_status)
         if (allocation_status /= 0) then

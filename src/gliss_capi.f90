@@ -227,7 +227,7 @@ contains
         type(mercier_result_t) :: mercier
         real(c_double), pointer :: s_values(:), d_mercier(:)
         integer(c_size_t), pointer :: written_value
-        integer :: info, result_size
+        integer :: info, pointer_shape(1), result_size
 
         status = error_buffer_status(error_pointer, error_capacity)
         if (status /= status_ok) return
@@ -284,8 +284,9 @@ contains
                 "d_mercier output pointer is null")
             return
         end if
-        call c_f_pointer(s_pointer, s_values, [result_size])
-        call c_f_pointer(d_pointer, d_mercier, [result_size])
+        pointer_shape(1) = result_size
+        call c_f_pointer(s_pointer, s_values, pointer_shape)
+        call c_f_pointer(d_pointer, d_mercier, pointer_shape)
         s_values = mercier%s
         d_mercier = mercier%d_mercier
         status = status_ok

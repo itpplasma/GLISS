@@ -204,8 +204,8 @@ contains
 
         call require(size(full%eigenvalues) == certified%unknowns, &
             "full-spectrum eigenvalue count is wrong")
-        call require(all(shape(full%eigenvectors) &
-            == [certified%unknowns, certified%unknowns]), &
+        call require(size(full%eigenvectors, 1) == certified%unknowns &
+            .and. size(full%eigenvectors, 2) == certified%unknowns, &
             "full-spectrum eigenvector shape is wrong")
         call require(all(ieee_is_finite(full%eigenvalues)), &
             "full spectrum contains nonfinite eigenvalues")

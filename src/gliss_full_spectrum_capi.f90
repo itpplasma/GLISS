@@ -38,7 +38,7 @@ contains
         real(c_double), pointer :: eigenvalues(:), residuals(:), resolutions(:)
         real(c_double), pointer :: rayleigh_quotients(:), eigenvectors(:, :)
         integer(c_size_t) :: dimension, required_vectors
-        integer :: count, info
+        integer :: count, info, matrix_shape(2), vector_shape(1)
 
         status = prepare_full_spectrum_outputs(eigenvalues_written_pointer, &
             eigenvectors_written_pointer, error_pointer, error_capacity, &
@@ -90,11 +90,14 @@ contains
                 error_capacity)
             return
         end if
-        call c_f_pointer(eigenvalue_pointer, eigenvalues, [count])
-        call c_f_pointer(residual_pointer, residuals, [count])
-        call c_f_pointer(resolution_pointer, resolutions, [count])
-        call c_f_pointer(rayleigh_pointer, rayleigh_quotients, [count])
-        call c_f_pointer(eigenvector_pointer, eigenvectors, [count, count])
+        vector_shape(1) = count
+        matrix_shape(1) = count
+        matrix_shape(2) = count
+        call c_f_pointer(eigenvalue_pointer, eigenvalues, vector_shape)
+        call c_f_pointer(residual_pointer, residuals, vector_shape)
+        call c_f_pointer(resolution_pointer, resolutions, vector_shape)
+        call c_f_pointer(rayleigh_pointer, rayleigh_quotients, vector_shape)
+        call c_f_pointer(eigenvector_pointer, eigenvectors, matrix_shape)
         eigenvalues = result%eigenvalues
         residuals = result%residuals
         resolutions = result%resolutions
