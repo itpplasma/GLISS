@@ -190,7 +190,7 @@ contains
         type(fixture_ids_t), intent(out) :: ids
         integer, intent(in), optional :: schema_version
         character(len=*), intent(in), optional :: position_frame
-        integer :: dim_s, dim_m, dim_n
+        integer :: dimensions(3), dim_s, dim_m, dim_n
         character(len=16) :: version_text
 
         call require_netcdf(nc_create_netcdf4(filename, ids%ncid))
@@ -200,8 +200,10 @@ contains
         call define_metadata_variables(ids)
         call define_coordinate_variables(ids, grid_kind, dim_s, dim_m, dim_n)
         call define_profile_variables(ids, dim_s)
-        call define_harmonic_variables(ids, symmetric, corrupt, &
-            [dim_s, dim_m, dim_n])
+        dimensions(1) = dim_s
+        dimensions(2) = dim_m
+        dimensions(3) = dim_n
+        call define_harmonic_variables(ids, symmetric, corrupt, dimensions)
         call require_netcdf(nc_put_global_text(ids%ncid, &
             "stellarator_symmetry", merge("True ", "False", symmetric)))
         if (present(schema_version)) then
@@ -237,27 +239,32 @@ contains
     subroutine define_coordinate_variables(ids, grid_kind, dim_s, dim_m, dim_n)
         type(fixture_ids_t), intent(inout) :: ids
         integer, intent(in) :: grid_kind, dim_s, dim_m, dim_n
+        integer :: dimension(1)
 
+        dimension(1) = dim_m
         call require_netcdf(nc_def_variable(ids%ncid, "m", nc_int64, &
-            [dim_m], ids%m))
+            dimension, ids%m))
+        dimension(1) = dim_n
         call require_netcdf(nc_def_variable(ids%ncid, "n", nc_int64, &
-            [dim_n], ids%n))
+            dimension, ids%n))
+        dimension(1) = dim_s
         call require_netcdf(nc_def_variable(ids%ncid, "rho", nc_double, &
-            [dim_s], ids%rho))
+            dimension, ids%rho))
         if (grid_kind == radial_grid_full) then
             call require_netcdf(nc_def_variable(ids%ncid, "s", nc_double, &
-                [dim_s], ids%s))
+                dimension, ids%s))
         end if
     end subroutine define_coordinate_variables
 
     subroutine define_profile_variables(ids, dim_s)
         type(fixture_ids_t), intent(inout) :: ids
         integer, intent(in) :: dim_s
-        integer :: profile
+        integer :: dimension(1), profile
 
+        dimension(1) = dim_s
         do profile = 1, profile_count
             call require_netcdf(nc_def_variable(ids%ncid, &
-                trim(profile_names(profile)), nc_double, [dim_s], &
+                trim(profile_names(profile)), nc_double, dimension, &
                 ids%profiles(profile)))
         end do
     end subroutine define_profile_variables
@@ -323,7 +330,7 @@ contains
 
     subroutine write_harmonics(ids)
         type(fixture_ids_t), intent(in) :: ids
-        real(dp) :: values(nn, nm, ns)
+        real(dp) :: negative_values(nn, nm, ns), values(nn, nm, ns)
         integer :: field, radial, poloidal, toroidal
 
         do field = 1, field_count
@@ -342,8 +349,16 @@ contains
                     ids%pairs(1, field), values))
             end if
             if (ids%pairs(2, field) > 0) then
+                do radial = 1, ns
+                    do poloidal = 1, nm
+                        do toroidal = 1, nn
+                            negative_values(toroidal, poloidal, radial) = &
+                                -values(toroidal, poloidal, radial)
+                        end do
+                    end do
+                end do
                 call require_netcdf(nc_put_real(ids%ncid, &
-                    ids%pairs(2, field), -values))
+                    ids%pairs(2, field), negative_values))
             end if
         end do
     end subroutine write_harmonics
@@ -353,7 +368,9 @@ contains
         real(dp) :: values(ns)
         integer :: ncid, varid
 
-        values = [1.0_dp, ieee_value(0.0_dp, ieee_quiet_nan), 3.0_dp]
+        values(1) = 1.0_dp
+        values(2) = ieee_value(0.0_dp, ieee_quiet_nan)
+        values(3) = 3.0_dp
         call require_netcdf(nc_open_write(filename, ncid))
         call require_netcdf(nc_inquire_variable_id(ncid, "p", varid))
         call require_netcdf(nc_put_real(ncid, varid, values))

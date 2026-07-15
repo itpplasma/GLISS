@@ -26,7 +26,7 @@ contains
 
     subroutine certify_dense_spectrum_orthogonality(mass, eigenvectors, info)
         type(variable_block_tridiagonal_t), intent(in) :: mass
-        real(dp), intent(in) :: eigenvectors(:, :)
+        real(dp), contiguous, intent(in) :: eigenvectors(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: gram(:, :), mass_images(:, :)
         integer :: allocation_status, index, n
@@ -210,7 +210,8 @@ contains
     subroutine diagnose_dense_spectrum(stiffness, mass, eigenvalues, &
             eigenvectors, rayleigh_quotients, residuals, resolutions, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp), intent(in) :: eigenvalues(:), eigenvectors(:, :)
+        real(dp), intent(in) :: eigenvalues(:)
+        real(dp), contiguous, intent(in) :: eigenvectors(:, :)
         real(dp), allocatable, intent(out) :: rayleigh_quotients(:)
         real(dp), allocatable, intent(out) :: residuals(:), resolutions(:)
         integer, intent(out) :: info

@@ -132,13 +132,16 @@ contains
         call build_resolved_dynamic_family_layout(topology, size(fields, 4), &
             layout, info)
         if (info /= dynamic_layout_ok) return
-        if (any(shape(stiffness) /= layout%total_unknowns)) then
+        if (size(stiffness, 1) /= layout%total_unknowns &
+            .or. size(stiffness, 2) /= layout%total_unknowns) then
             info = compressible_family_invalid
             return
         end if
         if (present(stiffness_terms)) then
-            if (any(shape(stiffness_terms) /= [layout%total_unknowns, &
-                layout%total_unknowns, compressible_stiffness_term_count])) then
+            if (size(stiffness_terms, 1) /= layout%total_unknowns &
+                .or. size(stiffness_terms, 2) /= layout%total_unknowns &
+                .or. size(stiffness_terms, 3) &
+                /= compressible_stiffness_term_count) then
                 info = compressible_family_invalid
                 return
             end if
@@ -193,8 +196,10 @@ contains
             radial_step, phase_assembly, element_to_global, stiffness, info)
         if (info /= 0) return
         if (present(stiffness_terms)) then
-            if (any(shape(stiffness_terms) /= [size(stiffness, 1), &
-                size(stiffness, 2), compressible_stiffness_term_count])) then
+            if (size(stiffness_terms, 1) /= size(stiffness, 1) &
+                .or. size(stiffness_terms, 2) /= size(stiffness, 2) &
+                .or. size(stiffness_terms, 3) &
+                /= compressible_stiffness_term_count) then
                 info = compressible_family_invalid
                 return
             end if
@@ -261,7 +266,9 @@ contains
         info = compressible_family_invalid
         trials = size(trial_m)
         intervals = size(fields, 4)
-        angular_radial_shape = [size(fields, 1), size(fields, 2), intervals]
+        angular_radial_shape(1) = size(fields, 1)
+        angular_radial_shape(2) = size(fields, 2)
+        angular_radial_shape(3) = intervals
         if (size(trial_n) /= trials .or. size(trial_parity) /= trials) return
         if (size(stored_power) /= trials) return
         if (size(fields, 3) < 13) return

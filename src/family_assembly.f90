@@ -17,6 +17,18 @@ module family_assembly
     public :: phase_assembly_direct
     public :: phase_assembly_transformed
 
+    interface
+        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            real(dp), intent(in) :: alpha, beta
+            real(dp), intent(in) :: a(lda, *), b(ldb, *)
+            real(dp), intent(inout) :: c(ldc, *)
+        end subroutine dgemm
+    end interface
+
     type, public :: surface_geometry_t
         real(dp), allocatable :: fields(:, :, :)
         real(dp), allocatable :: drive(:, :)
@@ -71,6 +83,7 @@ contains
         integer, intent(out) :: info
         type(radial_space_config_t) :: radial_space
         real(dp), allocatable :: coefficients(:, :), element(:, :)
+        real(dp), allocatable :: element_transform(:, :)
         real(dp), allocatable :: stored_power(:), transform(:, :)
         integer :: i, trials
 
@@ -95,8 +108,14 @@ contains
             transform(trials + i, i) = 1.0_dp
             transform(trials + i, trials + i) = 0.5_dp * radial_step
         end do
-        coefficients = matmul(transpose(transform), &
-            matmul(element, transform)) / radial_step
+        allocate (element_transform(2 * trials, 2 * trials), &
+            coefficients(2 * trials, 2 * trials))
+        call dgemm("N", "N", 2 * trials, 2 * trials, 2 * trials, &
+            1.0_dp, element, 2 * trials, transform, 2 * trials, 0.0_dp, &
+            element_transform, 2 * trials)
+        call dgemm("T", "N", 2 * trials, 2 * trials, 2 * trials, &
+            1.0_dp / radial_step, transform, 2 * trials, element_transform, &
+            2 * trials, 0.0_dp, coefficients, 2 * trials)
         deallocate (f_matrix, k_matrix, g_matrix)
         allocate (f_matrix(trials, trials), k_matrix(trials, trials), &
             g_matrix(trials, trials))

@@ -22,7 +22,7 @@ program test_variable_block_factorization
     type(variable_block_tridiagonal_t) :: blocks
     type(variable_block_factor_t) :: factor, corrupt_factor
     real(dp) :: dense(6, 6), eigenvalues(6), eigenvectors(6, 6)
-    real(dp) :: rhs(6), solution(6), original_rhs(6), shift
+    real(dp) :: residual(6), rhs(6), solution(6), original_rhs(6), shift
     real(dp) :: pivot_dense(2, 2), pivot_rhs(2), short_rhs(1), singular(1, 1)
     integer :: info, i
 
@@ -55,7 +55,8 @@ program test_variable_block_factorization
     solution = rhs
     call solve_variable_factored(factor, solution, info)
     call require(info == variable_block_ok, "variable factored solve failed")
-    call require(norm2(matmul(dense, solution) - original_rhs) < 1.0e-12_dp, &
+    call matrix_residual(dense, solution, original_rhs, residual)
+    call require(norm2(residual) < 1.0e-12_dp, &
         "variable factored solve disagrees with dense residual")
 
     pivot_dense = reshape([0.0_dp, 1.0_dp, 1.0_dp, 0.0_dp], [2, 2])
@@ -115,8 +116,23 @@ program test_variable_block_factorization
 
 contains
 
+    pure subroutine matrix_residual(matrix, vector, rhs, residual)
+        real(dp), intent(in) :: matrix(:, :), vector(:), rhs(:)
+        real(dp), intent(out) :: residual(:)
+        integer :: column, row
+
+        do row = 1, size(matrix, 1)
+            residual(row) = -rhs(row)
+            do column = 1, size(matrix, 2)
+                residual(row) = residual(row) &
+                    + matrix(row, column) * vector(column)
+            end do
+        end do
+    end subroutine matrix_residual
+
     subroutine build_dense_fixture(matrix)
         real(dp), intent(out) :: matrix(:, :)
+        integer :: column, row
 
         matrix = 0.0_dp
         matrix(1:2, 1:2) = reshape([3.0_dp, 0.2_dp, 0.2_dp, 2.5_dp], [2, 2])
@@ -125,14 +141,19 @@ contains
         matrix(6, 6) = 2.2_dp
         matrix(3:5, 1:2) = reshape([-0.4_dp, 0.1_dp, 0.0_dp, 0.2_dp, &
             -0.3_dp, 0.05_dp], [3, 2])
-        matrix(1:2, 3:5) = transpose(matrix(3:5, 1:2))
+        do column = 3, 5
+            do row = 1, 2
+                matrix(row, column) = matrix(column, row)
+            end do
+        end do
         matrix(6, 3:5) = [0.1_dp, -0.2_dp, 0.3_dp]
         matrix(3:5, 6) = matrix(6, 3:5)
     end subroutine build_dense_fixture
 
     subroutine dense_eigenvalues(matrix, eigenvalues, eigenvectors)
         real(dp), intent(in) :: matrix(:, :)
-        real(dp), intent(out) :: eigenvalues(:), eigenvectors(:, :)
+        real(dp), contiguous, intent(out) :: eigenvalues(:)
+        real(dp), contiguous, intent(out) :: eigenvectors(:, :)
         real(dp) :: work(8 * size(matrix, 1))
         integer :: info
 

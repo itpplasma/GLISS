@@ -144,11 +144,15 @@ contains
         real(dp) :: maximum_theta_error, maximum_theta_reference
         real(dp) :: maximum_zeta_error, maximum_zeta_reference
         real(dp) :: reference_scale
+        character(len=5), parameter :: dimension_names(3) = &
+            [character(len=5) :: "s", "theta", "zeta"]
+        integer :: dimensions(3)
         integer :: surface
 
-        call read_real_tensor(file_id, name, &
-            [character(len=5) :: "s", "theta", "zeta"], &
-            [size(state%s), size(theta_coordinates), size(zeta_coordinates)], &
+        dimensions(1) = size(state%s)
+        dimensions(2) = size(theta_coordinates)
+        dimensions(3) = size(zeta_coordinates)
+        call read_real_tensor(file_id, name, dimension_names, dimensions, &
             pointwise, info)
         call require(info == reader_ok, trim(name) // " tensor is invalid")
         maximum_absolute_error = 0.0_dp

@@ -71,6 +71,7 @@ contains
         real(dp), allocatable :: covariant_zeta_slope(:)
         real(dp), allocatable :: pressure_slope(:), iota_slope(:)
         real(dp), allocatable :: flux_curvature(:), volume_curvature(:)
+        real(dp) :: poloidal_flux_slope
         integer :: ns, i
 
         info = mercier_invalid_input
@@ -92,23 +93,25 @@ contains
         do i = 1, ns
             call load_surface(equilibrium, i, theta, zeta, surface, info)
             if (info /= mercier_ok) return
-            covariant_theta(i) = grid_mean(surface%g_tt * surface%b_theta &
-                + surface%g_tz * surface%b_zeta)
-            covariant_zeta(i) = grid_mean(surface%g_tz * surface%b_theta &
-                + surface%g_zz * surface%b_zeta)
-            flux_slope(i) = grid_mean(surface%jacobian * surface%b_zeta)
-            volume_slope(i) = grid_mean(abs(surface%jacobian)) &
+            covariant_theta(i) = grid_two_product_mean(surface%g_tt, &
+                surface%b_theta, surface%g_tz, surface%b_zeta)
+            covariant_zeta(i) = grid_two_product_mean(surface%g_tz, &
+                surface%b_theta, surface%g_zz, surface%b_zeta)
+            flux_slope(i) = grid_product_mean(surface%jacobian, &
+                surface%b_zeta)
+            poloidal_flux_slope = grid_product_mean(surface%jacobian, &
+                surface%b_theta)
+            volume_slope(i) = grid_absolute_mean(surface%jacobian) &
                 * real(equilibrium%field_periods, dp)
             result%iota_deviation(i) = abs(real(equilibrium%field_periods, &
-                dp) * grid_mean(surface%b_theta / surface%b_zeta) &
+                dp) * grid_ratio_mean(surface%b_theta, surface%b_zeta) &
                 - equilibrium%rotational_transform(i))
             result%boozer_deviation(i) = boozer_deviation(surface, &
                 covariant_theta(i), covariant_zeta(i))
-            result%jacobian_identity_deviation(i) = maxval(abs( &
-                surface%mod_b**2 * surface%jacobian &
-                - (flux_slope(i) * covariant_zeta(i) &
-                + grid_mean(surface%jacobian * surface%b_theta) &
-                * covariant_theta(i)))) &
+            result%jacobian_identity_deviation(i) = &
+                jacobian_identity_error(surface, flux_slope(i), &
+                poloidal_flux_slope, covariant_theta(i), &
+                covariant_zeta(i)) &
                 / abs(flux_slope(i) * covariant_zeta(i))
         end do
 
@@ -183,7 +186,7 @@ contains
         result%d_mercier_d_toroidal_flux_slope(i) = d_toroidal_flux_slope
         result%d_mercier_d_poloidal_flux_slope(i) = d_poloidal_flux_slope
         call filter_gauge_kernel(equilibrium, theta, zeta, &
-            grid_mean(surface%jacobian * surface%b_theta), flux_slope, &
+            grid_product_mean(surface%jacobian, surface%b_theta), flux_slope, &
             beta_positions, beta_filtered)
         result%beta_chart_deviation(i) = &
             maxval(abs(beta_filtered - beta_values)) &
@@ -191,7 +194,7 @@ contains
             1.0e-9_dp * abs(covariant_zeta))
         pressure_term = mu0 * pressure_slope * grid_mean(surface%jacobian)
         toroidal_term = flux_slope * covariant_zeta_slope
-        poloidal_term = grid_mean(surface%jacobian * surface%b_theta) &
+        poloidal_term = grid_product_mean(surface%jacobian, surface%b_theta) &
             * covariant_theta_slope
         result%force_balance_residual(i) = &
             abs(pressure_term + toroidal_term + poloidal_term) &
@@ -234,7 +237,8 @@ contains
 
         field_periods = real(equilibrium%field_periods, dp)
         n_grid = real(size(surface%jacobian), dp)
-        poloidal_flux_slope = grid_mean(surface%jacobian * surface%b_theta)
+        poloidal_flux_slope = grid_product_mean(surface%jacobian, &
+            surface%b_theta)
         if (present(poloidal_flux_slope_override)) &
             poloidal_flux_slope = poloidal_flux_slope_override
         call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
@@ -528,14 +532,104 @@ contains
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: covariant_theta, covariant_zeta
         real(dp) :: deviation
-        real(dp) :: scale
+        real(dp) :: scale, theta_value, zeta_value
+        integer :: column, row
 
         scale = max(abs(covariant_theta), abs(covariant_zeta))
-        deviation = max(maxval(abs(surface%g_tt * surface%b_theta &
-            + surface%g_tz * surface%b_zeta - covariant_theta)), &
-            maxval(abs(surface%g_tz * surface%b_theta &
-            + surface%g_zz * surface%b_zeta - covariant_zeta))) / scale
+        deviation = 0.0_dp
+        do column = 1, size(surface%g_tt, 2)
+            do row = 1, size(surface%g_tt, 1)
+                theta_value = surface%g_tt(row, column) &
+                    * surface%b_theta(row, column) &
+                    + surface%g_tz(row, column) * surface%b_zeta(row, column)
+                zeta_value = surface%g_tz(row, column) &
+                    * surface%b_theta(row, column) &
+                    + surface%g_zz(row, column) * surface%b_zeta(row, column)
+                deviation = max(deviation, abs(theta_value - covariant_theta), &
+                    abs(zeta_value - covariant_zeta))
+            end do
+        end do
+        deviation = deviation / scale
     end function boozer_deviation
+
+    pure function grid_product_mean(first, second) result(mean)
+        real(dp), intent(in) :: first(:, :), second(:, :)
+        real(dp) :: mean
+        integer :: column, row
+
+        mean = 0.0_dp
+        do column = 1, size(first, 2)
+            do row = 1, size(first, 1)
+                mean = mean + first(row, column) * second(row, column)
+            end do
+        end do
+        mean = mean / real(size(first), dp)
+    end function grid_product_mean
+
+    pure function grid_two_product_mean(first_a, first_b, second_a, second_b) &
+            result(mean)
+        real(dp), intent(in) :: first_a(:, :), first_b(:, :)
+        real(dp), intent(in) :: second_a(:, :), second_b(:, :)
+        real(dp) :: mean
+        integer :: column, row
+
+        mean = 0.0_dp
+        do column = 1, size(first_a, 2)
+            do row = 1, size(first_a, 1)
+                mean = mean + first_a(row, column) * first_b(row, column) &
+                    + second_a(row, column) * second_b(row, column)
+            end do
+        end do
+        mean = mean / real(size(first_a), dp)
+    end function grid_two_product_mean
+
+    pure function grid_absolute_mean(values) result(mean)
+        real(dp), intent(in) :: values(:, :)
+        real(dp) :: mean
+        integer :: column, row
+
+        mean = 0.0_dp
+        do column = 1, size(values, 2)
+            do row = 1, size(values, 1)
+                mean = mean + abs(values(row, column))
+            end do
+        end do
+        mean = mean / real(size(values), dp)
+    end function grid_absolute_mean
+
+    pure function grid_ratio_mean(numerator, denominator) result(mean)
+        real(dp), intent(in) :: numerator(:, :), denominator(:, :)
+        real(dp) :: mean
+        integer :: column, row
+
+        mean = 0.0_dp
+        do column = 1, size(numerator, 2)
+            do row = 1, size(numerator, 1)
+                mean = mean + numerator(row, column) / denominator(row, column)
+            end do
+        end do
+        mean = mean / real(size(numerator), dp)
+    end function grid_ratio_mean
+
+    pure function jacobian_identity_error(surface, toroidal_flux_slope, &
+            poloidal_flux_slope, covariant_theta, covariant_zeta) result(error)
+        type(surface_data_t), intent(in) :: surface
+        real(dp), intent(in) :: toroidal_flux_slope, poloidal_flux_slope
+        real(dp), intent(in) :: covariant_theta, covariant_zeta
+        real(dp) :: error, residual
+        integer :: column, row
+
+        error = 0.0_dp
+        do column = 1, size(surface%jacobian, 2)
+            do row = 1, size(surface%jacobian, 1)
+                residual = surface%mod_b(row, column)**2 &
+                    * surface%jacobian(row, column) &
+                    - toroidal_flux_slope * covariant_zeta &
+                    - poloidal_flux_slope * covariant_theta
+                error = max(error, abs(residual))
+            end do
+        end do
+    end function jacobian_identity_error
 
     subroutine filter_gauge_kernel(equilibrium, theta, zeta, &
             poloidal_flux_slope, toroidal_flux_slope, values, filtered)

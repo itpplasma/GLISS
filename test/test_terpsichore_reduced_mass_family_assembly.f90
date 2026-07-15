@@ -67,7 +67,8 @@ contains
             s = (real(interval, dp) - 0.5_dp) / real(intervals, dp)
             flux_t_slope(interval) = 1.1_dp + 0.1_dp * s
             radial_weight(interval) = 0.4_dp + 0.2_dp * s
-            radial_factor(:, interval) = [s**0.25_dp, s**0.5_dp]
+            radial_factor(1, interval) = s**0.25_dp
+            radial_factor(2, interval) = s**0.5_dp
             do point = 1, points
                 angle = 2.0_dp * acos(-1.0_dp) * real(point - 1, dp) &
                     / real(points, dp)
@@ -84,7 +85,7 @@ contains
         type(dynamic_family_layout_t), intent(in) :: local_layout
         real(dp) :: expected(size(actual, 1), size(actual, 2))
         real(dp) :: displacement(size(actual, 1)), local_displacement(3 * modes)
-        real(dp) :: direct_energy, global_energy
+        real(dp) :: direct_energy, global_energy, image
         real(dp), allocatable :: element(:, :)
         integer, allocatable :: element_map(:, :)
         integer, parameter :: expected_map(3 * modes, intervals) = reshape([ &
@@ -92,7 +93,7 @@ contains
             1, 0, 2, 0, 0, 5, &
             2, 0, 3, 0, 0, 6, &
             3, 0, 0, 0, 0, 7], [3 * modes, intervals])
-        integer :: a, b, ga, gb, interval, local_info
+        integer :: a, b, ga, gb, interval, local_info, row
 
         expected = 0.0_dp
         call build_dynamic_element_map(local_layout, element_map, local_info)
@@ -119,7 +120,9 @@ contains
         end do
         call require(maxval(abs(actual - expected)) < 2.0e-14_dp, &
             "reduced family gather disagrees with the element oracle")
-        displacement = [(0.1_dp * real(a, dp), a = 1, size(displacement))]
+        do a = 1, size(displacement)
+            displacement(a) = 0.1_dp * real(a, dp)
+        end do
         direct_energy = 0.0_dp
         do interval = 1, intervals
             local_displacement = 0.0_dp
@@ -134,8 +137,15 @@ contains
                 radial_factor(:, interval), radial_weight(interval), &
                 local_displacement)
         end do
-        global_energy = 0.5_dp * dot_product(displacement, &
-            matmul(actual, displacement))
+        global_energy = 0.0_dp
+        do row = 1, size(actual, 1)
+            image = 0.0_dp
+            do a = 1, size(actual, 2)
+                image = image + actual(row, a) * displacement(a)
+            end do
+            global_energy = global_energy + displacement(row) * image
+        end do
+        global_energy = 0.5_dp * global_energy
         call require(abs(global_energy - direct_energy) < 2.0e-13_dp, &
             "reduced family energy disagrees with the cell sum")
     end subroutine check_independent_gather

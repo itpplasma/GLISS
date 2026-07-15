@@ -24,8 +24,8 @@ contains
         type(dynamic_family_layout_t) :: layout
         type(trial_space_topology_t) :: topology
         real(dp), allocatable :: map(:, :), nodal(:, :), global(:, :)
-        real(dp) :: expected, scale
-        integer :: a, b, i, info, k, node
+        real(dp) :: expected, image, scale, symmetric_value
+        integer :: a, b, column, i, info, inner, k, node, row
 
         call make_topology(topology)
         call build_resolved_dynamic_family_layout(topology, intervals, &
@@ -62,9 +62,20 @@ contains
                     + 2.0_dp * real(k - 1, dp) / real(nv, dp)))
             end do
         end do
-        nodal = nodal + 0.03_dp * matmul(reshape(map(:, 3), [nu * nv, 1]), &
-            reshape(map(:, 5), [1, nu * nv]))
-        nodal = 0.5_dp * (nodal + transpose(nodal))
+        do column = 1, nu * nv
+            do row = 1, nu * nv
+                nodal(row, column) = nodal(row, column) &
+                    + 0.03_dp * map(row, 3) * map(column, 5)
+            end do
+        end do
+        do column = 1, nu * nv
+            do row = 1, column
+                symmetric_value = 0.5_dp &
+                    * (nodal(row, column) + nodal(column, row))
+                nodal(row, column) = symmetric_value
+                nodal(column, row) = symmetric_value
+            end do
+        end do
         allocate (global(layout%total_unknowns, layout%total_unknowns), &
             source=0.0_dp)
         do a = 1, layout%total_unknowns
@@ -75,7 +86,14 @@ contains
         call require(info == starwall_fourier_ok, "boundary scatter failed")
         do b = 1, trials
             do a = 1, trials
-                expected = dot_product(map(:, a), matmul(nodal, map(:, b)))
+                expected = 0.0_dp
+                do row = 1, nu * nv
+                    image = 0.0_dp
+                    do inner = 1, nu * nv
+                        image = image + nodal(row, inner) * map(inner, b)
+                    end do
+                    expected = expected + map(row, a) * image
+                end do
                 if (a == b) expected = expected + 0.125_dp
                 call require(abs(global(normal_global_index(layout, intervals, a), &
                     normal_global_index(layout, intervals, b)) - expected) &

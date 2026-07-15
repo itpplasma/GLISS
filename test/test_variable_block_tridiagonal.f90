@@ -11,7 +11,7 @@ program test_variable_block_tridiagonal
     integer, parameter :: widths(3) = [2, 3, 1]
     type(variable_block_tridiagonal_t) :: blocks
     type(dynamic_family_layout_t) :: layout
-    real(dp) :: dense(6, 6), corrupt(6, 6), vector(6), image(6)
+    real(dp) :: dense(6, 6), corrupt(6, 6), vector(6), image(6), reference(6)
     real(dp), allocatable :: reconstructed(:, :), canonical(:, :)
     integer, allocatable :: dynamic_widths(:), permutation(:)
     integer :: expected_permutation(22), info
@@ -26,7 +26,8 @@ program test_variable_block_tridiagonal
     vector = [0.2_dp, -0.1_dp, 0.4_dp, 0.3_dp, -0.2_dp, 0.5_dp]
     call apply_variable_block_tridiagonal(blocks, vector, image, info)
     call require(info == variable_block_ok, "variable block apply failed")
-    call require(maxval(abs(image - matmul(dense, vector))) < 1.0e-14_dp, &
+    call matrix_vector_product(dense, vector, reference)
+    call require(maxval(abs(image - reference)) < 1.0e-14_dp, &
         "variable block apply disagrees with dense matmul")
 
     call build_dynamic_family_layout(2, 4, layout, info)
@@ -72,8 +73,22 @@ program test_variable_block_tridiagonal
 
 contains
 
+    pure subroutine matrix_vector_product(matrix, vector, image)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp), intent(out) :: image(:)
+        integer :: column, row
+
+        do row = 1, size(matrix, 1)
+            image(row) = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image(row) = image(row) + matrix(row, column) * vector(column)
+            end do
+        end do
+    end subroutine matrix_vector_product
+
     subroutine build_dense_fixture(matrix)
         real(dp), intent(out) :: matrix(:, :)
+        integer :: column, row
 
         matrix = 0.0_dp
         matrix(1:2, 1:2) = reshape([3.0_dp, 0.2_dp, 0.2_dp, 2.5_dp], [2, 2])
@@ -82,7 +97,11 @@ contains
         matrix(6, 6) = 2.2_dp
         matrix(3:5, 1:2) = reshape([-0.4_dp, 0.1_dp, 0.0_dp, 0.2_dp, &
             -0.3_dp, 0.05_dp], [3, 2])
-        matrix(1:2, 3:5) = transpose(matrix(3:5, 1:2))
+        do column = 3, 5
+            do row = 1, 2
+                matrix(row, column) = matrix(column, row)
+            end do
+        end do
         matrix(6, 3:5) = [0.1_dp, -0.2_dp, 0.3_dp]
         matrix(3:5, 6) = matrix(6, 3:5)
     end subroutine build_dense_fixture

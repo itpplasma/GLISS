@@ -47,14 +47,13 @@ program test_physical_mass_assembly
     null_vector = 0.0_dp
     null_vector(1:3) = 1.0_dp
     null_vector(4:6) = -1.0_dp
-    energy = dot_product(null_vector, matmul(transformed, null_vector))
+    energy = quadratic_form(transformed, null_vector)
     call require(abs(energy) < 1.0e-12_dp, &
         "midpoint P1 element does not preserve its endpoint null direction")
     do i = 1, 12
         probe_vector(i) = real(i, dp)
     end do
-    call require(dot_product(probe_vector, &
-        matmul(transformed, probe_vector)) > 0.0_dp, &
+    call require(quadratic_form(transformed, probe_vector) > 0.0_dp, &
         "physical mass element is not positive semidefinite")
     call require_positive_semidefinite(transformed)
 
@@ -80,6 +79,21 @@ program test_physical_mass_assembly
     write (*, "(a)") "PASS"
 
 contains
+
+    pure function quadratic_form(matrix, vector) result(value)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp) :: value, image
+        integer :: column, row
+
+        value = 0.0_dp
+        do row = 1, size(matrix, 1)
+            image = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image = image + matrix(row, column) * vector(column)
+            end do
+            value = value + vector(row) * image
+        end do
+    end function quadratic_form
 
     subroutine assemble(fields, profile, radial_space, phase_assembly, &
             mass, info)

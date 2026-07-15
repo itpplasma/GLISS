@@ -70,8 +70,12 @@ contains
         allocate (s(0:3 + vacuum), bjac(4, 0:3 + vacuum), &
             full_surface(4, 0:3 + vacuum))
         s(:3) = [0.0_dp, 0.2_dp, 0.6_dp, 1.0_dp]
-        if (vacuum > 0) s(4:) = [(1.0_dp + 0.3_dp * &
-            real(surface_index, dp), surface_index = 1, vacuum)]
+        if (vacuum > 0) then
+            do surface_index = 1, vacuum
+                s(3 + surface_index) = 1.0_dp &
+                    + 0.3_dp * real(surface_index, dp)
+            end do
+        end if
         pth = 0.0_dp
         fpp = [0.2_dp, 0.25_dp, 0.3_dp, 0.35_dp]
         ftp = [1.0_dp, 1.1_dp, 1.2_dp, 1.3_dp]
