@@ -7,7 +7,8 @@ program gliss_compatible_marginality
         compatible_two_component_problem_t, &
         evaluate_compatible_two_component_vector
     use compatible_problem_assembly_support, only: &
-        evaluate_generalized_eigenpair, quadratic_form, sum_tensor
+        evaluate_generalized_eigenpair, quadratic_form, &
+        quadratic_form_with_absolute_sum, sum_tensor
     use dense_generalized_inverse_iteration, only: dense_inverse_ok, &
         solve_dense_generalized_near_shift
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
@@ -572,11 +573,21 @@ contains
         real(dp), parameter :: profile_angle_limit = 1.0e-3_dp
         real(dp) :: action_residual, angle_bound, backward_error
         real(dp) :: certified_eigenvalue, eigenvalue
+        real(dp) :: bound_evaluation_factor
+        real(dp) :: closure_absolute, closure_bound, closure_bound_relative
+        real(dp) :: closure_ratio, closure_scale, closure_upper
         real(dp) :: equilibrated_action_residual, inverse_shift
+        real(dp) :: matrix_reduction_bound, matrix_reduction_factor
         real(dp) :: mass_reciprocal_condition, neighbor_gap
         real(dp) :: outer_lower, outer_upper, standard_residual_norm
+        real(dp) :: potential_absolute_sum, potential_error_bound
+        real(dp) :: quadratic_reduction_factor
+        real(dp) :: term_absolute_sum(4), term_error_bound(4)
+        real(dp) :: term_energy_absolute_sum, term_energy_sum
+        real(dp) :: term_reduction_bound, term_reduction_factor
+        real(dp) :: term_weighted_absolute_sum
         real(dp) :: vector_residual_bound
-        integer :: iterations, lower_count, point, upper_count
+        integer :: iterations, lower_count, point, term, upper_count
 
         outer_lower = bracket_lower
         outer_upper = bracket_upper
@@ -620,11 +631,59 @@ contains
         call evaluate_generalized_eigenpair(stiffness_operator, problem%mass, &
             eigenvector, eigenvalue, kinetic, potential, residual, info)
         if (info /= 0) call fail_solver("eigenprofile diagnostics", info)
-        do info = 1, 4
-            call quadratic_form(problem%stiffness_terms(:, :, info), &
-                eigenvector, term_energy(info), trial)
+        call quadratic_form_with_absolute_sum(stiffness_operator, eigenvector, &
+            potential, potential_absolute_sum, potential_error_bound, trial)
+        if (trial /= 0) call fail_solver("eigenprofile potential energy", trial)
+        term_energy_sum = 0.0_dp
+        term_energy_absolute_sum = 0.0_dp
+        term_weighted_absolute_sum = 0.0_dp
+        do term = 1, 4
+            call quadratic_form_with_absolute_sum( &
+                problem%stiffness_terms(:, :, term), eigenvector, &
+                term_energy(term), term_absolute_sum(term), &
+                term_error_bound(term), trial)
             if (trial /= 0) call fail_solver("eigenprofile term energy", trial)
+            term_energy_sum = term_energy_sum + term_energy(term)
+            term_energy_absolute_sum = term_energy_absolute_sum &
+                + abs(term_energy(term))
+            term_weighted_absolute_sum = term_weighted_absolute_sum &
+                + term_absolute_sum(term)
         end do
+        quadratic_reduction_factor = roundoff_factor( &
+            2 * size(eigenvector) + 2)
+        matrix_reduction_factor = roundoff_factor(4)
+        term_reduction_factor = roundoff_factor(4)
+        matrix_reduction_bound = matrix_reduction_factor &
+            * term_weighted_absolute_sum &
+            / (1.0_dp - quadratic_reduction_factor)
+        term_reduction_bound = term_reduction_factor &
+            * term_energy_absolute_sum / (1.0_dp - term_reduction_factor)
+        closure_bound = potential_error_bound + matrix_reduction_bound &
+            + term_reduction_bound
+        do term = 1, 4
+            closure_bound = closure_bound + term_error_bound(term)
+        end do
+        ! The independently reduced total and terms can differ through the
+        ! four-term matrix reduction, five quadratic-form evaluations and the
+        ! reported four-term scalar reduction.  Inflate the positive bound for
+        ! the finite-precision arithmetic used to evaluate the bound itself.
+        bound_evaluation_factor = roundoff_factor(32)
+        closure_bound = closure_bound / (1.0_dp - bound_evaluation_factor)
+        closure_absolute = abs(potential - term_energy_sum)
+        closure_scale = max(abs(potential), term_energy_absolute_sum, &
+            tiny(1.0_dp))
+        closure_upper = (closure_absolute + spacing(closure_scale)) &
+            / (1.0_dp - matrix_reduction_factor)
+        closure_ratio = closure_upper / closure_bound
+        closure_bound_relative = closure_bound / closure_scale
+        if (.not. ieee_is_finite(closure_ratio) &
+            .or. closure_ratio > 1.0_dp) then
+            write (error_unit, "(3(a,es24.16))") &
+                "energy closure=", closure_absolute, &
+                " forward bound=", closure_bound, &
+                " ratio=", closure_ratio
+            call fail_solver("eigenprofile energy closure", -1)
+        end if
         allocate (profile_coordinates(profile_points), stat=allocation_status)
         if (allocation_status /= 0) &
             call fail_solver("eigenprofile coordinate allocation", -1)
@@ -644,8 +703,10 @@ contains
             "equilibrated_action_residual,backward_error," // &
             "standard_residual_norm,angle_bound," // &
             "mass_reciprocal_condition,kinetic,potential,bending,shear," // &
-            "compression,drive"
-        write (*, "(i0,5(a,es24.16),a,i0,14(a,es24.16))") &
+            "compression,drive,energy_closure_absolute," // &
+            "energy_closure_bound,energy_closure_ratio," // &
+            "energy_closure_bound_relative"
+        write (*, "(i0,5(a,es24.16),a,i0,18(a,es24.16))") &
             eigenprofile_index, ",", inverse_shift, ",", outer_lower, ",", &
             outer_upper, ",", bracket_lower, ",", bracket_upper, ",", &
             iterations, ",", certified_eigenvalue, ",", eigenvalue, ",", &
@@ -653,7 +714,8 @@ contains
             backward_error, ",", standard_residual_norm, ",", angle_bound, &
             ",", mass_reciprocal_condition, ",", kinetic, ",", potential, &
             ",", term_energy(1), ",", term_energy(2), ",", term_energy(3), &
-            ",", term_energy(4)
+            ",", term_energy(4), ",", closure_absolute, ",", closure_bound, &
+            ",", closure_ratio, ",", closure_bound_relative
         write (*, "(a)") "profile_index,s,r,mode_index,m,n,normal,eta"
         do point = 1, profile_points
             do mode = 1, size(mode_m)
@@ -665,6 +727,14 @@ contains
             end do
         end do
     end subroutine write_eigenprofile
+
+    pure function roundoff_factor(operations) result(gamma)
+        integer, intent(in) :: operations
+        real(dp) :: gamma, product
+
+        product = real(operations, dp) * epsilon(1.0_dp)
+        gamma = product / (1.0_dp - product)
+    end function roundoff_factor
 
     subroutine refine_eigenprofile_bracket(lower_count, upper_count)
         character(len=192) :: message

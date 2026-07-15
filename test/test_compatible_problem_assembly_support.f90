@@ -4,6 +4,7 @@ program test_compatible_problem_assembly_support
         apply_stored_power, build_active_indices, build_uniform_breaks, &
         mode_table_is_unique, &
         evaluate_generalized_eigenpair, quadratic_form, &
+        quadratic_form_with_absolute_sum, &
         replicate_indexed_values, scatter_matrix, sum_tensor, &
         symmetrize_matrix, symmetrize_tensor
     implicit none
@@ -13,6 +14,7 @@ program test_compatible_problem_assembly_support
     call verify_mapped_scatter()
     call verify_matrix_reductions()
     call verify_eigenpair_diagnostics()
+    call verify_cancellation_safe_quadratic_form()
     call verify_mode_uniqueness()
     write (*, "(a)") "PASS"
 
@@ -131,6 +133,33 @@ contains
         call require(info == 0 .and. residual > 0.0_dp, &
             "incorrect eigenvalue produced a zero residual")
     end subroutine verify_eigenpair_diagnostics
+
+    subroutine verify_cancellation_safe_quadratic_form()
+        real(dp), parameter :: stiffness(3, 3) = reshape( &
+            [1.0e16_dp, 0.0_dp, 0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp, &
+            0.0_dp, 0.0_dp, -1.0e16_dp], [3, 3])
+        real(dp), parameter :: mass(3, 3) = reshape( &
+            [1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp, &
+            0.0_dp, 0.0_dp, 1.0_dp], [3, 3])
+        real(dp), parameter :: vector(3) = [1.0_dp, 1.0_dp, 1.0_dp]
+        real(dp) :: absolute_sum, forward_error_bound
+        real(dp) :: kinetic, potential, residual, value
+        integer :: info
+
+        call quadratic_form(stiffness, vector, value, info)
+        call require(info == 0 .and. value == 1.0_dp, &
+            "quadratic form lost a cancellation-scale contribution")
+        call quadratic_form_with_absolute_sum(stiffness, vector, value, &
+            absolute_sum, forward_error_bound, info)
+        call require(info == 0 .and. absolute_sum == 2.0e16_dp, &
+            "quadratic-form absolute contribution sum differs")
+        call require(forward_error_bound >= 1.0_dp, &
+            "quadratic-form bound missed ordinary-sum cancellation")
+        call evaluate_generalized_eigenpair(stiffness, mass, vector, 0.0_dp, &
+            kinetic, potential, residual, info)
+        call require(info == 0 .and. potential == value, &
+            "eigenpair and quadratic-form reductions differ under cancellation")
+    end subroutine verify_cancellation_safe_quadratic_form
 
     subroutine verify_mode_uniqueness()
         call require(mode_table_is_unique([0, 1, 2], [1, -1, -1]), &

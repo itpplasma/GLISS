@@ -15,6 +15,7 @@ module compatible_problem_assembly_support
     public :: evaluate_generalized_eigenpair
     public :: mode_table_is_unique
     public :: quadratic_form
+    public :: quadratic_form_with_absolute_sum
     public :: replicate_indexed_values
     public :: scale_matrix
     public :: scale_tensor
@@ -171,6 +172,8 @@ contains
         real(dp), intent(out) :: kinetic, potential, residual
         integer, intent(out) :: info
         real(dp) :: stiffness_value, mass_value, difference
+        real(dp) :: stiffness_correction, mass_correction
+        real(dp) :: kinetic_correction, potential_correction
         real(dp) :: stiffness_norm, mass_norm, difference_norm
         integer :: column, row
 
@@ -183,21 +186,32 @@ contains
         stiffness_norm = 0.0_dp
         mass_norm = 0.0_dp
         difference_norm = 0.0_dp
+        kinetic_correction = 0.0_dp
+        potential_correction = 0.0_dp
         do row = 1, size(vector)
             stiffness_value = 0.0_dp
             mass_value = 0.0_dp
+            stiffness_correction = 0.0_dp
+            mass_correction = 0.0_dp
             do column = 1, size(vector)
-                stiffness_value = stiffness_value &
-                    + stiffness(row, column) * vector(column)
-                mass_value = mass_value + mass(row, column) * vector(column)
+                call compensated_add(stiffness(row, column) * vector(column), &
+                    stiffness_value, stiffness_correction)
+                call compensated_add(mass(row, column) * vector(column), &
+                    mass_value, mass_correction)
             end do
-            kinetic = kinetic + vector(row) * mass_value
-            potential = potential + vector(row) * stiffness_value
+            stiffness_value = stiffness_value + stiffness_correction
+            mass_value = mass_value + mass_correction
+            call compensated_add(vector(row) * mass_value, kinetic, &
+                kinetic_correction)
+            call compensated_add(vector(row) * stiffness_value, potential, &
+                potential_correction)
             stiffness_norm = stiffness_norm + stiffness_value**2
             mass_norm = mass_norm + mass_value**2
             difference = stiffness_value - eigenvalue * mass_value
             difference_norm = difference_norm + difference**2
         end do
+        kinetic = kinetic + kinetic_correction
+        potential = potential + potential_correction
         residual = sqrt(difference_norm) / max(tiny(1.0_dp), &
             sqrt(stiffness_norm) + abs(eigenvalue) * sqrt(mass_norm))
         info = compatible_support_ok
@@ -207,22 +221,92 @@ contains
         real(dp), intent(in) :: matrix(:, :), vector(:)
         real(dp), intent(out) :: value
         integer, intent(out) :: info
+
+        real(dp) :: absolute_sum, forward_error_bound
+
+        call quadratic_form_with_absolute_sum(matrix, vector, value, &
+            absolute_sum, forward_error_bound, info)
+    end subroutine quadratic_form
+
+    subroutine quadratic_form_with_absolute_sum(matrix, vector, value, &
+            absolute_sum, forward_error_bound, info)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp), intent(out) :: value, absolute_sum, forward_error_bound
+        integer, intent(out) :: info
+        real(dp) :: bound_evaluation_factor, correction, difference, gamma
+        real(dp) :: naive_value
+        real(dp) :: row_absolute_sum, row_correction, row_naive_value, row_value
+        real(dp) :: scale, term
         integer :: column, row
 
         info = compatible_support_invalid
         value = 0.0_dp
+        absolute_sum = 0.0_dp
+        forward_error_bound = huge(1.0_dp)
         if (size(matrix, 1) /= size(vector)) return
         if (size(matrix, 2) /= size(vector)) return
         if (.not. all(ieee_is_finite(matrix))) return
         if (.not. all(ieee_is_finite(vector))) return
-        do column = 1, size(vector)
-            do row = 1, size(vector)
-                value = value + vector(row) * matrix(row, column) &
-                    * vector(column)
+        correction = 0.0_dp
+        naive_value = 0.0_dp
+        do row = 1, size(vector)
+            row_value = 0.0_dp
+            row_correction = 0.0_dp
+            row_naive_value = 0.0_dp
+            row_absolute_sum = 0.0_dp
+            do column = 1, size(vector)
+                term = matrix(row, column) * vector(column)
+                call compensated_add(term, row_value, row_correction)
+                row_naive_value = row_naive_value + term
+                row_absolute_sum = row_absolute_sum + abs(term)
             end do
+            row_value = row_value + row_correction
+            call compensated_add(vector(row) * row_value, value, correction)
+            naive_value = naive_value + vector(row) * row_naive_value
+            absolute_sum = absolute_sum + abs(vector(row)) * row_absolute_sum
         end do
+        value = value + correction
+        if (.not. ieee_is_finite(absolute_sum)) return
+        gamma = roundoff_factor(2 * size(vector) + 2)
+        if (.not. ieee_is_finite(gamma) .or. gamma >= 1.0_dp) return
+        difference = abs(value - naive_value)
+        scale = max(abs(value), abs(naive_value))
+        ! A conventional nested matrix-vector/dot evaluation differs from the
+        ! exact quadratic form by at most gamma_(2*n+2) times its absolute
+        ! contribution sum.  Adding its measured distance from the compensated
+        ! value avoids assuming that the compensation implementation is sound.
+        forward_error_bound = (difference + spacing(scale)) &
+            / (1.0_dp - epsilon(1.0_dp)) &
+            + gamma * absolute_sum / (1.0_dp - gamma)
+        bound_evaluation_factor = roundoff_factor(16)
+        forward_error_bound = forward_error_bound &
+            / (1.0_dp - bound_evaluation_factor)
+        if (.not. ieee_is_finite(forward_error_bound)) return
         info = compatible_support_ok
-    end subroutine quadratic_form
+    end subroutine quadratic_form_with_absolute_sum
+
+    pure function roundoff_factor(operations) result(gamma)
+        integer, intent(in) :: operations
+        real(dp) :: gamma, product
+
+        product = real(operations, dp) * epsilon(1.0_dp)
+        gamma = product / (1.0_dp - product)
+    end function roundoff_factor
+
+    pure subroutine compensated_add(term, total, correction)
+        real(dp), intent(in) :: term
+        real(dp), intent(inout) :: total, correction
+        real(dp) :: increment, next
+
+        next = total + term
+        if (abs(total) >= abs(term)) then
+            increment = (total - next) + term
+        else
+            increment = (term - next) + total
+        end if
+        correction = correction + increment
+        total = next
+    end subroutine compensated_add
 
     function compatible_dimensions(stiffness, mass, vector) result(valid)
         real(dp), intent(in) :: stiffness(:, :), mass(:, :), vector(:)
