@@ -38,7 +38,8 @@ contains
     subroutine variable_generalized_diagnostics(stiffness, mass, vector, &
             eigenvalue, quotient, residual, resolution, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp), intent(in) :: vector(:), eigenvalue
+        real(dp), contiguous, intent(in) :: vector(:)
+        real(dp), intent(in) :: eigenvalue
         real(dp), intent(out) :: quotient, residual, resolution
         integer, intent(out) :: info
         real(dp) :: mass_image(size(vector)), squared_norm
@@ -118,7 +119,7 @@ contains
             iterate, eigenvalue, residual, resolution, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         type(variable_block_factor_t), intent(in) :: factor
-        real(dp), intent(inout) :: vector(:), iterate(:)
+        real(dp), contiguous, intent(inout) :: vector(:), iterate(:)
         real(dp), intent(out) :: eigenvalue, residual, resolution
         integer, intent(out) :: info
 
@@ -246,7 +247,7 @@ contains
     end subroutine form_generalized_shift
 
     subroutine normalize_variable_mass(vector, mass, info)
-        real(dp), intent(inout) :: vector(:)
+        real(dp), contiguous, intent(inout) :: vector(:)
         type(variable_block_tridiagonal_t), intent(in) :: mass
         integer, intent(out) :: info
         real(dp) :: image(size(vector)), squared_norm
@@ -272,7 +273,7 @@ contains
     subroutine variable_rayleigh_quotient(stiffness, mass, vector, quotient, &
             info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp), intent(in) :: vector(:)
+        real(dp), contiguous, intent(in) :: vector(:)
         real(dp), intent(out) :: quotient
         integer, intent(out) :: info
         real(dp) :: stiffness_image(size(vector)), mass_image(size(vector))
@@ -310,7 +311,8 @@ contains
     subroutine variable_residual(stiffness, mass, vector, eigenvalue, &
             residual, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp), intent(in) :: vector(:), eigenvalue
+        real(dp), contiguous, intent(in) :: vector(:)
+        real(dp), intent(in) :: eigenvalue
         real(dp), intent(out) :: residual
         integer, intent(out) :: info
         real(dp) :: stiffness_image(size(vector)), mass_image(size(vector))
@@ -349,7 +351,8 @@ contains
     subroutine variable_resolution(stiffness, mass, vector, eigenvalue, &
             resolution, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp), intent(in) :: vector(:), eigenvalue
+        real(dp), contiguous, intent(in) :: vector(:)
+        real(dp), intent(in) :: eigenvalue
         real(dp), intent(out) :: resolution
         integer, intent(out) :: info
         real(dp) :: absolute_image(size(vector)), mass_image(size(vector))

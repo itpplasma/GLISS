@@ -38,7 +38,8 @@ contains
     subroutine generalized_eigenpair_diagnostics(stiffness, mass, vector, &
             eigenvalue, quotient, residual, info)
         type(block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp), intent(in) :: vector(:, :), eigenvalue
+        real(dp), contiguous, intent(in) :: vector(:, :)
+        real(dp), intent(in) :: eigenvalue
         real(dp), intent(out) :: quotient, residual
         integer, intent(out) :: info
         real(dp) :: mass_image(size(vector, 1), size(vector, 2))
@@ -117,7 +118,7 @@ contains
     function generalized_rayleigh_quotient(stiffness, mass, vector) &
             result(quotient)
         type(block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp), intent(in) :: vector(:, :)
+        real(dp), contiguous, intent(in) :: vector(:, :)
         real(dp) :: quotient
         real(dp) :: stiffness_image(size(vector, 1), size(vector, 2))
         real(dp) :: mass_image(size(vector, 1), size(vector, 2))
@@ -130,7 +131,8 @@ contains
     function generalized_residual(stiffness, mass, vector, eigenvalue) &
             result(residual)
         type(block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp), intent(in) :: vector(:, :), eigenvalue
+        real(dp), contiguous, intent(in) :: vector(:, :)
+        real(dp), intent(in) :: eigenvalue
         real(dp) :: residual
         real(dp) :: stiffness_image(size(vector, 1), size(vector, 2))
         real(dp) :: mass_image(size(vector, 1), size(vector, 2)), scale
@@ -185,13 +187,32 @@ contains
         type(block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: shift
         type(block_tridiagonal_t), intent(out) :: shifted
+        integer :: block, column, row
 
-        allocate (shifted%diag, source=stiffness%diag - shift * mass%diag)
-        allocate (shifted%off, source=stiffness%off - shift * mass%off)
+        allocate (shifted%diag, mold=stiffness%diag)
+        allocate (shifted%off, mold=stiffness%off)
+        do block = 1, size(stiffness%diag, 3)
+            do column = 1, size(stiffness%diag, 2)
+                do row = 1, size(stiffness%diag, 1)
+                    shifted%diag(row, column, block) = &
+                        stiffness%diag(row, column, block) &
+                        - shift * mass%diag(row, column, block)
+                end do
+            end do
+        end do
+        do block = 1, size(stiffness%off, 3)
+            do column = 1, size(stiffness%off, 2)
+                do row = 1, size(stiffness%off, 1)
+                    shifted%off(row, column, block) = &
+                        stiffness%off(row, column, block) &
+                        - shift * mass%off(row, column, block)
+                end do
+            end do
+        end do
     end subroutine form_shifted_matrix
 
     subroutine normalize_in_mass(vector, mass, info)
-        real(dp), intent(inout) :: vector(:, :)
+        real(dp), contiguous, intent(inout) :: vector(:, :)
         type(block_tridiagonal_t), intent(in) :: mass
         integer, intent(out) :: info
         real(dp) :: mass_image(size(vector, 1), size(vector, 2))

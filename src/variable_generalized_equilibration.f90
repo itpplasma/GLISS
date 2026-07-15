@@ -24,7 +24,7 @@ contains
         integer, intent(out) :: info
         type(variable_block_tridiagonal_t) :: next_mass, next_stiffness
         real(dp), allocatable :: row_scale(:), step(:)
-        integer :: pass
+        integer :: index, pass
 
         info = variable_equilibration_invalid
         call validate_variable_blocks(stiffness, info)
@@ -35,6 +35,7 @@ contains
         if (any(stiffness%widths /= mass%widths)) return
         allocate (row_scale(sum(stiffness%widths)))
         allocate (scales(sum(stiffness%widths)), source=1.0_dp)
+        allocate (step(sum(stiffness%widths)))
         balanced_stiffness = stiffness
         balanced_mass = mass
         do pass = 1, equilibration_passes
@@ -43,16 +44,19 @@ contains
             call accumulate_row_scale(balanced_mass, row_scale)
             if (.not. all(ieee_is_finite(row_scale))) return
             if (any(row_scale <= 0.0_dp)) return
-            allocate (step, source=1.0_dp / sqrt(row_scale))
+            do index = 1, size(row_scale)
+                step(index) = 1.0_dp / sqrt(row_scale(index))
+            end do
             if (.not. all(ieee_is_finite(step))) return
             call apply_variable_congruence(balanced_stiffness, step, &
                 next_stiffness)
             call apply_variable_congruence(balanced_mass, step, next_mass)
             balanced_stiffness = next_stiffness
             balanced_mass = next_mass
-            scales = scales * step
+            do index = 1, size(scales)
+                scales(index) = scales(index) * step(index)
+            end do
             if (.not. all(ieee_is_finite(scales))) return
-            deallocate (step)
         end do
         call validate_variable_blocks(balanced_stiffness, info)
         if (info /= variable_block_ok) return
@@ -132,13 +136,17 @@ contains
         real(dp), intent(in) :: scales(:), balanced_vector(:)
         real(dp), allocatable, intent(out) :: vector(:)
         integer, intent(out) :: info
+        integer :: index
 
         info = variable_equilibration_invalid
         if (size(scales) /= size(balanced_vector)) return
         if (.not. all(ieee_is_finite(scales))) return
         if (.not. all(scales > 0.0_dp)) return
         if (.not. all(ieee_is_finite(balanced_vector))) return
-        allocate (vector, source=scales * balanced_vector)
+        allocate (vector(size(scales)))
+        do index = 1, size(scales)
+            vector(index) = scales(index) * balanced_vector(index)
+        end do
         if (.not. all(ieee_is_finite(vector))) return
         info = variable_equilibration_ok
     end subroutine undo_variable_congruence
