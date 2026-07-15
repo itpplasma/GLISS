@@ -26,7 +26,7 @@ contains
         character(len=*), intent(out) :: message
         integer(c_int) :: status
         character(c_char), pointer :: path(:)
-        integer :: allocation_status, i, length
+        integer :: allocation_status, i, length, pointer_shape(1)
 
         message = ""
         if (.not. c_associated(path_pointer)) then
@@ -45,7 +45,8 @@ contains
             return
         end if
         length = int(path_length)
-        call c_f_pointer(path_pointer, path, [length])
+        pointer_shape(1) = length
+        call c_f_pointer(path_pointer, path, pointer_shape)
         allocate (character(len=length) :: filename, stat=allocation_status)
         if (allocation_status /= 0) then
             status = status_allocation_error
@@ -69,13 +70,14 @@ contains
         integer(c_size_t), value, intent(in) :: capacity
         character(len=*), intent(in) :: message
         character(c_char), pointer :: buffer(:)
-        integer :: copy_length, i, mapped_length
+        integer :: copy_length, i, mapped_length, pointer_shape(1)
 
         if (.not. c_associated(buffer_pointer)) return
         if (capacity < 1_c_size_t) return
         mapped_length = int(min(capacity, &
             int(len_trim(message) + 1, c_size_t)))
-        call c_f_pointer(buffer_pointer, buffer, [mapped_length])
+        pointer_shape(1) = mapped_length
+        call c_f_pointer(buffer_pointer, buffer, pointer_shape)
         copy_length = mapped_length - 1
         do i = 1, copy_length
             buffer(i) = message(i:i)

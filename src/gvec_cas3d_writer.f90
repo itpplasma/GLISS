@@ -63,6 +63,7 @@ contains
         type(writer_ids_t), intent(inout) :: ids
         integer, intent(out) :: info
         integer :: dimensions(3), dim_s, dim_m, dim_n, index
+        integer :: vector_dimension(1)
 
         info = writer_netcdf_error
         if (nc_def_dimension(ids%ncid, "s", size(equilibrium%s), dim_s) &
@@ -77,19 +78,25 @@ contains
             /= nc_noerr) return
         if (nc_def_scalar(ids%ncid, "winding", nc_int64, ids%winding) &
             /= nc_noerr) return
-        if (nc_def_variable(ids%ncid, "m", nc_int64, [dim_m], &
+        vector_dimension(1) = dim_m
+        if (nc_def_variable(ids%ncid, "m", nc_int64, vector_dimension, &
             ids%poloidal_modes) /= nc_noerr) return
-        if (nc_def_variable(ids%ncid, "n", nc_int64, [dim_n], &
+        vector_dimension(1) = dim_n
+        if (nc_def_variable(ids%ncid, "n", nc_int64, vector_dimension, &
             ids%toroidal_modes) /= nc_noerr) return
-        if (nc_def_variable(ids%ncid, "rho", nc_double, [dim_s], ids%rho) &
-            /= nc_noerr) return
-        if (nc_def_variable(ids%ncid, "s", nc_double, [dim_s], ids%s) &
+        vector_dimension(1) = dim_s
+        if (nc_def_variable(ids%ncid, "rho", nc_double, vector_dimension, &
+            ids%rho) /= nc_noerr) return
+        if (nc_def_variable(ids%ncid, "s", nc_double, vector_dimension, ids%s) &
             /= nc_noerr) return
         do index = 1, profile_count
             if (nc_def_variable(ids%ncid, trim(profile_names(index)), &
-                nc_double, [dim_s], ids%profiles(index)) /= nc_noerr) return
+                nc_double, vector_dimension, ids%profiles(index)) &
+                /= nc_noerr) return
         end do
-        dimensions = [dim_s, dim_m, dim_n]
+        dimensions(1) = dim_s
+        dimensions(2) = dim_m
+        dimensions(3) = dim_n
         do index = 1, pair_count
             if (index > 13 .and. .not. equilibrium%has_chart_metric) cycle
             if (nc_def_variable(ids%ncid, trim(pair_names(index)) // "_mnc", &
@@ -236,8 +243,9 @@ contains
         if (.not. valid_coordinates(equilibrium)) return
         if (.not. valid_modes(equilibrium)) return
         if (.not. valid_profiles(equilibrium)) return
-        expected_shape = [size(equilibrium%s), &
-            size(equilibrium%poloidal_modes), size(equilibrium%toroidal_modes)]
+        expected_shape(1) = size(equilibrium%s)
+        expected_shape(2) = size(equilibrium%poloidal_modes)
+        expected_shape(3) = size(equilibrium%toroidal_modes)
         do index = 1, 13
             if (.not. valid_named_pair(equilibrium, index, expected_shape)) return
         end do

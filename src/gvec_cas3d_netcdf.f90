@@ -32,6 +32,8 @@ contains
         real(dp), allocatable, intent(out) :: values(:, :, :)
         logical, intent(out) :: present
         integer, intent(out) :: info
+        character(len=1) :: dimension_names(3)
+        integer :: counts(3)
         integer :: nc_status, varid
 
         present = .false.
@@ -46,8 +48,13 @@ contains
             info = reader_data_error
             return
         end if
-        call read_real_tensor(ncid, name, ["s", "m", "n"], [ns, nm, nn], &
-            values, info)
+        dimension_names(1) = "s"
+        dimension_names(2) = "m"
+        dimension_names(3) = "n"
+        counts(1) = ns
+        counts(2) = nm
+        counts(3) = nn
+        call read_real_tensor(ncid, name, dimension_names, counts, values, info)
         if (info /= reader_ok) return
         present = .true.
     end subroutine read_harmonic_component
@@ -84,6 +91,47 @@ contains
         end do
         info = reader_ok
     end subroutine require_variable_dimensions
+
+    subroutine require_scalar_variable(ncid, varid, info)
+        integer, intent(in) :: ncid, varid
+        integer, intent(out) :: info
+        integer :: rank, status
+
+        status = nc_inquire_variable_rank(ncid, varid, rank)
+        if (status /= nc_noerr) then
+            info = reader_data_error
+            return
+        end if
+        if (rank /= 0) then
+            info = reader_schema_error
+            return
+        end if
+        info = reader_ok
+    end subroutine require_scalar_variable
+
+    subroutine require_vector_variable(ncid, varid, dimension_name, count, &
+            info)
+        integer, intent(in) :: ncid, varid, count
+        character(len=*), intent(in) :: dimension_name
+        integer, intent(out) :: info
+        integer :: dimids(1), rank, status
+
+        status = nc_inquire_variable_rank(ncid, varid, rank)
+        if (status /= nc_noerr) then
+            info = reader_data_error
+            return
+        end if
+        if (rank /= 1) then
+            info = reader_schema_error
+            return
+        end if
+        status = nc_inquire_variable_dimensions(ncid, varid, dimids)
+        if (status /= nc_noerr) then
+            info = reader_data_error
+            return
+        end if
+        call require_dimension_id(ncid, dimids(1), dimension_name, count, info)
+    end subroutine require_vector_variable
 
     subroutine read_dimension(ncid, name, length, info)
         integer, intent(in) :: ncid
@@ -148,8 +196,7 @@ contains
             info = reader_schema_error
             return
         end if
-        call require_variable_dimensions(ncid, varid, [character(len=1) ::], &
-            [integer ::], info)
+        call require_scalar_variable(ncid, varid, info)
         if (info /= reader_ok) return
         status = nc_get_integer(ncid, varid, value)
         if (status /= nc_noerr) then
@@ -171,8 +218,7 @@ contains
             info = reader_schema_error
             return
         end if
-        call require_variable_dimensions(ncid, varid, [character(len=1) ::], &
-            [integer ::], info)
+        call require_scalar_variable(ncid, varid, info)
         if (info /= reader_ok) return
         status = nc_get_real(ncid, varid, value)
         if (status /= nc_noerr) then
@@ -199,8 +245,7 @@ contains
             info = reader_schema_error
             return
         end if
-        call require_variable_dimensions(ncid, varid, [dimension_name], &
-            [count], info)
+        call require_vector_variable(ncid, varid, dimension_name, count, info)
         if (info /= reader_ok) return
         allocate (values(count))
         status = nc_get_integer(ncid, varid, values)
@@ -223,8 +268,7 @@ contains
             info = reader_schema_error
             return
         end if
-        call require_variable_dimensions(ncid, varid, [dimension_name], &
-            [count], info)
+        call require_vector_variable(ncid, varid, dimension_name, count, info)
         if (info /= reader_ok) return
         allocate (values(count))
         status = nc_get_real(ncid, varid, values)
