@@ -8,10 +8,11 @@ module compatible_two_component_problem
         assemble_compatible_perpendicular_mass_surface
     use compatible_operator_trace_types, only: build_trace_radial_mass, &
         compatible_cell_trace_t, compatible_radial_point_trace_t
-    use compatible_problem_assembly_support, only: apply_stored_power, &
+    use compatible_problem_assembly_support, only: apply_l2_stored_power, &
+        apply_stored_power, &
         build_active_indices, build_uniform_breaks, &
         compatible_support_allocation, compatible_support_ok, &
-        mode_table_is_unique, replicate_indexed_values, scale_matrix, &
+        mode_table_is_unique, scale_matrix, &
         scale_tensor, scatter_matrix, sum_tensor, symmetrize_matrix, &
         symmetrize_tensor
     use compatible_radial_quadrature, only: accurate_nodes, &
@@ -61,7 +62,7 @@ contains
 
     subroutine build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
-            problem, info, trace_cells, trace, density_kg_m3)
+            problem, info, trace_cells, trace, density_kg_m3, eta_stored_power)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
@@ -71,10 +72,11 @@ contains
         integer, optional, intent(in) :: trace_cells(:)
         type(compatible_cell_trace_t), allocatable, optional, intent(out) :: trace(:)
         real(dp), optional, intent(in) :: density_kg_m3
+        real(dp), optional, intent(in) :: eta_stored_power(:)
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
-        real(dp), allocatable :: breaks(:), theta(:), zeta(:)
+        real(dp), allocatable :: breaks(:), eta_power(:), theta(:), zeta(:)
         integer, allocatable :: eta_rank(:), normal_rank(:), parity(:)
         integer :: allocation_status, intervals, local_info, unknowns
 
@@ -86,6 +88,10 @@ contains
             if (.not. ieee_is_finite(density_kg_m3) &
                 .or. density_kg_m3 <= 0.0_dp) return
         end if
+        if (present(eta_stored_power)) then
+            if (size(eta_stored_power) /= size(mode_m)) return
+            if (.not. all(ieee_is_finite(eta_stored_power))) return
+        end if
         intervals = size(equilibrium%s)
         if (present(trace_cells) .neqv. present(trace)) return
         if (present(trace_cells)) then
@@ -96,13 +102,16 @@ contains
                 return
             end if
         end if
-        allocate (breaks(intervals + 1), parity(size(mode_m)), &
+        allocate (breaks(intervals + 1), eta_power(size(mode_m)), &
+            parity(size(mode_m)), &
             normal_rank(size(mode_m)), eta_rank(size(mode_m)), &
             stat=allocation_status)
         if (allocation_status /= 0) then
             info = compatible_problem_allocation_error
             return
         end if
+        eta_power = 0.0_dp
+        if (present(eta_stored_power)) eta_power = eta_stored_power
         call build_uniform_breaks(intervals, breaks, local_info)
         if (local_info /= compatible_support_ok) return
         parity = parity_class
@@ -146,11 +155,11 @@ contains
         call build_angular_grids(n_theta, n_zeta, theta, zeta)
         if (present(trace)) then
             call assemble_problem(spline, complex, breaks, theta, zeta, &
-                mode_m, mode_n, parity, stored_power, topology, normal_rank, &
+                mode_m, mode_n, parity, stored_power, eta_power, topology, normal_rank, &
                 eta_rank, problem, info, trace_cells, trace, density_kg_m3)
         else
             call assemble_problem(spline, complex, breaks, theta, zeta, &
-                mode_m, mode_n, parity, stored_power, topology, normal_rank, &
+                mode_m, mode_n, parity, stored_power, eta_power, topology, normal_rank, &
                 eta_rank, problem, info, density_kg_m3=density_kg_m3)
         end if
         if (info /= compatible_problem_ok) return
@@ -165,13 +174,13 @@ contains
     end subroutine build_compatible_two_component_problem
 
     subroutine assemble_problem(spline, complex, breaks, theta, zeta, mode_m, &
-            mode_n, parity, stored_power, topology, normal_rank, eta_rank, &
+            mode_n, parity, stored_power, eta_stored_power, topology, normal_rank, eta_rank, &
             problem, info, trace_cells, trace, density_kg_m3)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: breaks(:), theta(:), zeta(:)
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
-        real(dp), intent(in) :: stored_power(:)
+        real(dp), intent(in) :: eta_stored_power(:), stored_power(:)
         type(trial_space_topology_t), intent(in) :: topology
         integer, intent(in) :: normal_rank(:), eta_rank(:)
         type(compatible_two_component_problem_t), intent(inout) :: problem
@@ -205,13 +214,13 @@ contains
                 if (trace_index > 0) then
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
-                        stored_power, topology, normal_rank, eta_rank, &
+                        stored_power, eta_stored_power, topology, normal_rank, eta_rank, &
                         problem, accurate_term, .true., info, &
                         trace(trace_index)%points(point), density_kg_m3)
                 else
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
-                        stored_power, topology, normal_rank, eta_rank, &
+                        stored_power, eta_stored_power, topology, normal_rank, eta_rank, &
                         problem, accurate_term, .true., info, &
                         density_kg_m3=density_kg_m3)
                 end if
@@ -224,13 +233,13 @@ contains
                 if (trace_index > 0) then
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
-                        stored_power, topology, normal_rank, eta_rank, &
+                        stored_power, eta_stored_power, topology, normal_rank, eta_rank, &
                         problem, constraint_term, .false., info, &
                         trace(trace_index)%points(trace_point), density_kg_m3)
                 else
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
-                        stored_power, topology, normal_rank, eta_rank, &
+                        stored_power, eta_stored_power, topology, normal_rank, eta_rank, &
                         problem, constraint_term, .false., info, &
                         density_kg_m3=density_kg_m3)
                 end if
@@ -242,14 +251,15 @@ contains
     end subroutine assemble_problem
 
     subroutine assemble_radial_point(spline, complex, coordinate, weight, &
-            theta, zeta, mode_m, mode_n, parity, stored_power, topology, &
-            normal_rank, eta_rank, problem, term_mask, assemble_mass, info, &
+            theta, zeta, mode_m, mode_n, parity, stored_power, &
+            eta_stored_power, topology, normal_rank, eta_rank, problem, &
+            term_mask, assemble_mass, info, &
             point_trace, density_kg_m3)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: coordinate, weight, theta(:), zeta(:)
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
-        real(dp), intent(in) :: stored_power(:)
+        real(dp), intent(in) :: eta_stored_power(:), stored_power(:)
         type(trial_space_topology_t), intent(in) :: topology
         integer, intent(in) :: normal_rank(:), eta_rank(:)
         type(compatible_two_component_problem_t), intent(inout) :: problem
@@ -295,7 +305,8 @@ contains
         call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
             local_h1, local_dh1, local_info)
         if (local_info /= compatible_support_ok) return
-        call replicate_indexed_values(l2, l2_index, local_l2, local_info)
+        call apply_l2_stored_power(coordinate, eta_stored_power, l2, &
+            l2_index, local_l2, local_info)
         if (local_info /= compatible_support_ok) return
         call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
             zeta, fields, drive, local_info)

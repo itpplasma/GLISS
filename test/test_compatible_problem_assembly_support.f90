@@ -1,7 +1,8 @@
 program test_compatible_problem_assembly_support
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
-    use compatible_problem_assembly_support, only: apply_stored_power, &
-        build_active_indices, build_uniform_breaks, mode_table_is_unique, &
+    use compatible_problem_assembly_support, only: apply_l2_stored_power, &
+        apply_stored_power, build_active_indices, build_uniform_breaks, &
+        mode_table_is_unique, &
         evaluate_generalized_eigenpair, quadratic_form, &
         replicate_indexed_values, scatter_matrix, sum_tensor, &
         symmetrize_matrix, symmetrize_tensor
@@ -40,6 +41,13 @@ contains
         call apply_stored_power(0.25_dp, powers(:2), h1, dh1, indices, values, &
             derivatives, info)
         call require(info == -1, "mismatched stored-power table was accepted")
+        call apply_l2_stored_power(0.25_dp, powers, h1, indices, values, info)
+        call require(info == 0, "L2 stored-power transform rejected valid input")
+        call require(maxval(abs(values - reshape([2.0_dp, -3.0_dp, &
+            8.0_dp, -12.0_dp, 0.5_dp, -0.75_dp], [2, 3]))) &
+            < 1.0e-14_dp, "L2 stored-power values differ")
+        call apply_l2_stored_power(0.0_dp, powers, h1, indices, values, info)
+        call require(info == -1, "axis L2 stored-power evaluation was accepted")
     end subroutine verify_stored_power_transform
 
     subroutine verify_local_index_helpers()

@@ -16,10 +16,11 @@ program gliss_compatible_marginality
 
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(compatible_two_component_problem_t) :: problem
-    character(len=1024) :: filename, stored_power_token, token
+    character(len=1024) :: eta_power_token, filename, stored_power_token, token
     integer, allocatable :: mode_m(:), mode_n(:)
     real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
-    real(dp), allocatable :: stored_power(:), stiffness(:, :), mass(:, :)
+    real(dp), allocatable :: eta_stored_power(:), stored_power(:)
+    real(dp), allocatable :: stiffness(:, :), mass(:, :)
     real(dp), allocatable :: stiffness_operator(:, :), work(:)
     integer, allocatable :: pivots(:)
     real(dp) :: bracket_lower, bracket_tolerance, bracket_upper
@@ -29,7 +30,8 @@ program gliss_compatible_marginality
     integer :: inertia_negative_count, mode, negative_count, work_size
     integer :: n_theta, n_zeta, parity, trial
     integer(int64) :: requested_work_size
-    logical :: bracket_requested, has_m0_power, has_stored_powers, inertia_only
+    logical :: bracket_requested, has_eta_powers, has_m0_power
+    logical :: has_stored_powers, inertia_only
     logical :: physical_mass
 
     interface
@@ -68,6 +70,7 @@ program gliss_compatible_marginality
     bracket_requested = .false.
     has_m0_power = .false.
     has_stored_powers = .false.
+    has_eta_powers = .false.
     density = 0.0_dp
     m0_stored_power = 0.0_dp
     do while (first_mode <= arguments)
@@ -100,6 +103,14 @@ program gliss_compatible_marginality
                 call fail_usage("--stored-powers requires a comma-separated list")
             stored_power_token = token(len("--stored-powers=") + 1:)
             has_stored_powers = .true.
+        else if (index(token, "--eta-stored-powers=") == 1) then
+            if (has_eta_powers) &
+                call fail_usage("duplicate --eta-stored-powers")
+            if (len_trim(token) == len("--eta-stored-powers=")) &
+                call fail_usage( &
+                "--eta-stored-powers requires a comma-separated list")
+            eta_power_token = token(len("--eta-stored-powers=") + 1:)
+            has_eta_powers = .true.
         else if (index(token, "--negative-bracket=") == 1) then
             if (bracket_requested) &
                 call fail_usage("duplicate --negative-bracket")
@@ -118,7 +129,8 @@ program gliss_compatible_marginality
         call fail_usage("--m0-stored-power conflicts with --stored-powers")
     allocate (mode_m(arguments - first_mode + 1), &
         mode_n(arguments - first_mode + 1), &
-        stored_power(arguments - first_mode + 1), stat=allocation_status)
+        stored_power(arguments - first_mode + 1), &
+        eta_stored_power(arguments - first_mode + 1), stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("mode allocation", -1)
     do trial = first_mode, arguments
         mode = trial - first_mode + 1
@@ -145,8 +157,11 @@ program gliss_compatible_marginality
         if (mode_m(mode) == 0 .and. has_m0_power) &
             stored_power(mode) = m0_stored_power
     end do
+    eta_stored_power = 0.0_dp
     if (has_stored_powers) call parse_real_list(stored_power_token, &
         "stored powers", stored_power)
+    if (has_eta_powers) call parse_real_list(eta_power_token, &
+        "eta stored powers", eta_stored_power)
     if (has_stored_powers) then
         do mode = 1, size(mode_m)
             if (mode_m(mode) == 0) m0_stored_power = stored_power(mode)
@@ -157,11 +172,12 @@ program gliss_compatible_marginality
     if (physical_mass) then
         call build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity, degree, n_theta, n_zeta, problem, &
-            info, density_kg_m3=density)
+            info, density_kg_m3=density, &
+            eta_stored_power=eta_stored_power)
     else
         call build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity, degree, n_theta, n_zeta, problem, &
-            info)
+            info, eta_stored_power=eta_stored_power)
     end if
     if (info /= compatible_problem_ok) &
         call fail_solver("compatible marginality problem", info)
@@ -183,6 +199,11 @@ program gliss_compatible_marginality
     do mode = 1, size(mode_m)
         write (*, "(i0,2(a,i0),a,es24.16)") mode, ",", mode_m(mode), &
             ",", mode_n(mode), ",", stored_power(mode)
+    end do
+    write (*, "(a)") "eta_stored_power_index,m,n,power"
+    do mode = 1, size(mode_m)
+        write (*, "(i0,2(a,i0),a,es24.16)") mode, ",", mode_m(mode), &
+            ",", mode_n(mode), ",", eta_stored_power(mode)
     end do
     write (*, "(a)") "radial_surfaces,degree,parity,n_theta,n_zeta," // &
         "physical_mass,density_kg_m3,floor,bracket_requested"
@@ -263,6 +284,7 @@ contains
             "[--inertia-only] [--physical-density=VALUE] " // &
             "[--m0-stored-power=VALUE] " // &
             "[--stored-powers=P0,P1,...] " // &
+            "[--eta-stored-powers=P0,P1,...] " // &
             "[--negative-bracket=LOWER,UPPER,TOLERANCE] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine fail_usage

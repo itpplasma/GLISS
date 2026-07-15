@@ -9,6 +9,7 @@ module compatible_problem_assembly_support
     integer, parameter, public :: compatible_support_allocation = -2
 
     public :: apply_stored_power
+    public :: apply_l2_stored_power
     public :: build_active_indices
     public :: build_uniform_breaks
     public :: evaluate_generalized_eigenpair
@@ -23,6 +24,31 @@ module compatible_problem_assembly_support
     public :: symmetrize_tensor
 
 contains
+
+    subroutine apply_l2_stored_power(coordinate, stored_power, l2, indices, &
+            values, info)
+        real(dp), intent(in) :: coordinate, stored_power(:), l2(:)
+        integer, intent(in) :: indices(:)
+        real(dp), intent(out) :: values(:, :)
+        integer, intent(out) :: info
+        real(dp) :: scale
+        integer :: basis, trial
+
+        info = compatible_support_invalid
+        if (coordinate <= 0.0_dp) return
+        if (size(stored_power) /= size(values, 2)) return
+        if (size(indices) /= size(values, 1)) return
+        if (any(indices < 1) .or. any(indices > size(l2))) return
+        do trial = 1, size(stored_power)
+            scale = coordinate**(-stored_power(trial))
+            if (.not. ieee_is_finite(scale)) return
+            do basis = 1, size(indices)
+                values(basis, trial) = scale * l2(indices(basis))
+            end do
+        end do
+        if (.not. all(ieee_is_finite(values))) return
+        info = compatible_support_ok
+    end subroutine apply_l2_stored_power
 
     subroutine apply_stored_power(coordinate, stored_power, h1, dh1, indices, &
             values, derivatives, info)

@@ -341,7 +341,9 @@ contains
         type(compatible_cell_trace_t), allocatable :: traces(:)
         real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
         real(dp), allocatable :: reference_mass(:, :), reference_stiffness(:, :)
-        real(dp) :: scale
+        real(dp), parameter :: eta_power_zero(3) = 0.0_dp
+        real(dp), parameter :: eta_power_weighted(3) = [0.0_dp, 0.5_dp, 0.0_dp]
+        real(dp) :: invalid_eta_power(3), scale
         integer :: degree, expected_h1, expected_l2, status, term
 
         do degree = 1, 4
@@ -379,6 +381,44 @@ contains
         end do
         reference_stiffness = problem%stiffness
         reference_mass = problem%mass
+        call build_compatible_two_component_problem(equilibrium, &
+            [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, 4, 16, 16, &
+            problem, status, eta_stored_power=eta_power_zero)
+        call require(status == compatible_problem_ok, &
+            "explicit zero eta powers were rejected")
+        call require(all(problem%stiffness == reference_stiffness) &
+            .and. all(problem%mass == reference_mass), &
+            "explicit zero eta powers changed the assembled problem")
+        call build_compatible_two_component_problem(equilibrium, &
+            [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, 4, 16, 16, &
+            problem, status, eta_stored_power=eta_power_weighted)
+        call require(status == compatible_problem_ok, &
+            "weighted eta problem assembly failed")
+        call require(any(problem%stiffness /= reference_stiffness) &
+            .and. any(problem%mass /= reference_mass), &
+            "weighted eta powers did not change the assembled pencil")
+        scale = max(1.0_dp, maxval(abs(problem%stiffness)))
+        call require(maxval(abs(problem%stiffness &
+            - transpose(problem%stiffness))) < 3.0e-14_dp * scale, &
+            "weighted eta stiffness is not symmetric")
+        call require(all(problem%mass == transpose(problem%mass)), &
+            "weighted eta mass is not exactly symmetric")
+        call solve_symmetric_generalized(problem%stiffness, problem%mass, &
+            eigenvalues, eigenvectors, status)
+        call require(status == symmetric_eigensolver_ok, &
+            "weighted eta mass is not positive definite")
+        call build_compatible_two_component_problem(equilibrium, &
+            [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, 4, 16, 16, &
+            problem, status, eta_stored_power=eta_power_zero(:2))
+        call require(status == compatible_problem_invalid, &
+            "wrong-sized eta power table was accepted")
+        invalid_eta_power = eta_power_zero
+        invalid_eta_power(2) = ieee_value(0.0_dp, ieee_quiet_nan)
+        call build_compatible_two_component_problem(equilibrium, &
+            [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, 4, 16, 16, &
+            problem, status, eta_stored_power=invalid_eta_power)
+        call require(status == compatible_problem_invalid, &
+            "nonfinite eta power table was accepted")
         call build_compatible_two_component_problem(equilibrium, &
             [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, 4, 16, 16, &
             problem, status, [1, 3, 6], traces)
