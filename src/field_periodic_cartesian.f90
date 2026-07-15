@@ -45,6 +45,7 @@ contains
         real(dp) :: radial_radial(3), radial_poloidal(3)
         real(dp) :: radial_toroidal(3), poloidal_poloidal(3)
         real(dp) :: poloidal_toroidal(3), toroidal_toroidal(3)
+        real(dp) :: work(3)
 
         value = jet%value(j, k, :)
         radial = jet%radial(j, k, :)
@@ -56,50 +57,45 @@ contains
         poloidal_poloidal = jet%poloidal_poloidal(j, k, :)
         poloidal_toroidal = jet%poloidal_toroidal(j, k, :)
         toroidal_toroidal = jet%toroidal_toroidal(j, k, :)
-        jet%value(j, k, :) = rotate(value, angle)
-        jet%radial(j, k, :) = rotate(radial, angle)
-        jet%poloidal(j, k, :) = rotate(poloidal, angle)
-        jet%toroidal(j, k, :) = rotate(toroidal &
-            + rate * generator(value), angle)
-        jet%radial_radial(j, k, :) = rotate(radial_radial, angle)
-        jet%radial_poloidal(j, k, :) = rotate(radial_poloidal, angle)
-        jet%radial_toroidal(j, k, :) = rotate( &
-            radial_toroidal &
-            + rate * generator(radial), angle)
-        jet%poloidal_poloidal(j, k, :) = rotate(poloidal_poloidal, angle)
-        jet%poloidal_toroidal(j, k, :) = rotate( &
-            poloidal_toroidal &
-            + rate * generator(poloidal), angle)
-        jet%toroidal_toroidal(j, k, :) = rotate( &
-            toroidal_toroidal &
-            + 2.0_dp * rate * generator(toroidal) &
-            + rate**2 * generator_squared(value), angle)
+        call rotate_store(value, angle, jet%value, j, k)
+        call rotate_store(radial, angle, jet%radial, j, k)
+        call rotate_store(poloidal, angle, jet%poloidal, j, k)
+        work(1) = toroidal(1) - rate * value(2)
+        work(2) = toroidal(2) + rate * value(1)
+        work(3) = toroidal(3)
+        call rotate_store(work, angle, jet%toroidal, j, k)
+        call rotate_store(radial_radial, angle, jet%radial_radial, j, k)
+        call rotate_store(radial_poloidal, angle, jet%radial_poloidal, j, k)
+        work(1) = radial_toroidal(1) - rate * radial(2)
+        work(2) = radial_toroidal(2) + rate * radial(1)
+        work(3) = radial_toroidal(3)
+        call rotate_store(work, angle, jet%radial_toroidal, j, k)
+        call rotate_store(poloidal_poloidal, angle, &
+            jet%poloidal_poloidal, j, k)
+        work(1) = poloidal_toroidal(1) - rate * poloidal(2)
+        work(2) = poloidal_toroidal(2) + rate * poloidal(1)
+        work(3) = poloidal_toroidal(3)
+        call rotate_store(work, angle, jet%poloidal_toroidal, j, k)
+        work(1) = toroidal_toroidal(1) - 2.0_dp * rate * toroidal(2) &
+            - rate**2 * value(1)
+        work(2) = toroidal_toroidal(2) + 2.0_dp * rate * toroidal(1) &
+            - rate**2 * value(2)
+        work(3) = toroidal_toroidal(3)
+        call rotate_store(work, angle, jet%toroidal_toroidal, j, k)
     end subroutine convert_point
 
-    pure function rotate(vector, angle) result(rotated)
+    pure subroutine rotate_store(vector, angle, field, j, k)
         real(dp), intent(in) :: vector(3), angle
-        real(dp) :: rotated(3)
+        real(dp), intent(inout) :: field(:, :, :)
+        integer, intent(in) :: j, k
         real(dp) :: cosine, sine
 
         cosine = cos(angle)
         sine = sin(angle)
-        rotated = [cosine * vector(1) - sine * vector(2), &
-            sine * vector(1) + cosine * vector(2), vector(3)]
-    end function rotate
-
-    pure function generator(vector) result(generated)
-        real(dp), intent(in) :: vector(3)
-        real(dp) :: generated(3)
-
-        generated = [-vector(2), vector(1), 0.0_dp]
-    end function generator
-
-    pure function generator_squared(vector) result(generated)
-        real(dp), intent(in) :: vector(3)
-        real(dp) :: generated(3)
-
-        generated = [-vector(1), -vector(2), 0.0_dp]
-    end function generator_squared
+        field(j, k, 1) = cosine * vector(1) - sine * vector(2)
+        field(j, k, 2) = sine * vector(1) + cosine * vector(2)
+        field(j, k, 3) = vector(3)
+    end subroutine rotate_store
 
     function jet_has_shape(jet, n_zeta) result(valid)
         type(cartesian_jet_grid_t), intent(in) :: jet
@@ -109,19 +105,31 @@ contains
 
         valid = jet_is_allocated(jet)
         if (.not. valid) return
-        expected = [size(jet%value, 1), n_zeta, 3]
-        valid = all(shape(jet%value) == expected) &
-            .and. all(shape(jet%radial) == expected) &
-            .and. all(shape(jet%poloidal) == expected) &
-            .and. all(shape(jet%toroidal) == expected) &
-            .and. all(shape(jet%radial_radial) == expected) &
-            .and. all(shape(jet%radial_poloidal) == expected) &
-            .and. all(shape(jet%radial_toroidal) == expected) &
-            .and. all(shape(jet%poloidal_poloidal) == expected) &
-            .and. all(shape(jet%poloidal_toroidal) == expected) &
-            .and. all(shape(jet%toroidal_toroidal) == expected)
+        expected(1) = size(jet%value, 1)
+        expected(2) = n_zeta
+        expected(3) = 3
+        valid = tensor_has_shape(jet%value, expected) &
+            .and. tensor_has_shape(jet%radial, expected) &
+            .and. tensor_has_shape(jet%poloidal, expected) &
+            .and. tensor_has_shape(jet%toroidal, expected) &
+            .and. tensor_has_shape(jet%radial_radial, expected) &
+            .and. tensor_has_shape(jet%radial_poloidal, expected) &
+            .and. tensor_has_shape(jet%radial_toroidal, expected) &
+            .and. tensor_has_shape(jet%poloidal_poloidal, expected) &
+            .and. tensor_has_shape(jet%poloidal_toroidal, expected) &
+            .and. tensor_has_shape(jet%toroidal_toroidal, expected)
         if (valid) valid = jet_is_finite(jet)
     end function jet_has_shape
+
+    pure function tensor_has_shape(tensor, expected) result(valid)
+        real(dp), intent(in) :: tensor(:, :, :)
+        integer, intent(in) :: expected(3)
+        logical :: valid
+
+        valid = size(tensor, 1) == expected(1) &
+            .and. size(tensor, 2) == expected(2) &
+            .and. size(tensor, 3) == expected(3)
+    end function tensor_has_shape
 
     function jet_is_allocated(jet) result(allocated_all)
         type(cartesian_jet_grid_t), intent(in) :: jet

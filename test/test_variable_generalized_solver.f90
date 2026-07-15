@@ -244,6 +244,7 @@ contains
     end subroutine check_long_chain_resolution
 
     subroutine check_scaled_compensated_norm()
+        real(dp), allocatable :: empty(:)
         real(dp) :: values(4)
 
         values = [3.0e200_dp, -4.0e200_dp, 0.0_dp, 0.0_dp]
@@ -254,7 +255,8 @@ contains
         call require(abs(stable_norm2(values) / 5.0e-200_dp - 1.0_dp) &
             < 4.0_dp * epsilon(1.0_dp), &
             "scaled compensated norm underflowed")
-        call require(stable_norm2([real(dp) ::]) == 0.0_dp, &
+        allocate (empty(0))
+        call require(stable_norm2(empty) == 0.0_dp, &
             "empty compensated norm is nonzero")
     end subroutine check_scaled_compensated_norm
 
@@ -323,7 +325,7 @@ contains
     end subroutine build_ill_scaled_pencil
 
     function mass_norm(vector, mass) result(squared_norm)
-        real(dp), intent(in) :: vector(:)
+        real(dp), contiguous, intent(in) :: vector(:)
         type(variable_block_tridiagonal_t), intent(in) :: mass
         real(dp) :: squared_norm, image(size(vector))
         integer :: info
