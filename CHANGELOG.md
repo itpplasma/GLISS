@@ -6,7 +6,7 @@
 - Return typed native status codes with caller-provided error buffers and
   caller-owned output arrays.
 - Install the public `gliss.h` header, expose its wheel location through
-  `gliss.get_include()`, and test it from C and C++.
+  `gliss.get_include()`, and test it from C.
 - Add context-managed fixed-boundary `StabilityProblem` objects and immutable
   certified lowest-eigenpair results for both parity classes.
 - Return mass-normalized eigenvectors in documented dynamic component order
