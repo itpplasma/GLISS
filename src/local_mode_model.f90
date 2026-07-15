@@ -23,7 +23,7 @@ contains
         real(dp), intent(out) :: stiffness(3, 3), mass(3, 3)
         real(dp) :: induction(3, 3)
         real(dp) :: parallel_wave_number
-        integer :: i, j
+        integer :: i, j, k
 
         parallel_wave_number = dot_product(magnetic_field, wave_vector)
         induction = 0.0_dp
@@ -37,10 +37,14 @@ contains
             end do
         end do
 
-        stiffness = matmul(transpose(induction), induction) / &
-            vacuum_permeability
+        stiffness = 0.0_dp
         do j = 1, 3
             do i = 1, 3
+                do k = 1, 3
+                    stiffness(i, j) = stiffness(i, j) &
+                        + induction(k, i) * induction(k, j)
+                end do
+                stiffness(i, j) = stiffness(i, j) / vacuum_permeability
                 stiffness(i, j) = stiffness(i, j) &
                     + adiabatic_index * pressure * wave_vector(i) &
                     * wave_vector(j)

@@ -12,6 +12,7 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     add_compile_options(
         $<$<COMPILE_LANGUAGE:Fortran>:-Wall>
         $<$<COMPILE_LANGUAGE:Fortran>:-Wextra>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Warray-temporaries>
         $<$<COMPILE_LANGUAGE:Fortran>:-Wno-compare-reals>)
     if(SKBUILD)
         add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.>)

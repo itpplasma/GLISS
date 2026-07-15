@@ -203,24 +203,57 @@ contains
     subroutine check_parity_classes(geometry, step)
         type(surface_geometry_t), intent(in) :: geometry(:)
         real(dp), intent(in) :: step
-        real(dp) :: both, first, second
-        integer :: info
+        real(dp), allocatable :: both_k(:, :), first_k(:, :), second_k(:, :)
+        real(dp) :: assembly_difference, both, cross, first, scale, second
+        integer :: column, info, row
         type(family_assembly_options_t) :: options
 
+        call assemble_family_stiffness(geometry, [1], [1], step, both_k, info)
+        call require(info == 0, "dual-class assembly failed")
         call lowest_family_eigenvalue(geometry, [1], [1], step, both, &
             info)
         call require(info == 0, "dual-class solve failed")
         options%parity_class = 1
+        call assemble_family_stiffness(geometry, [1], [1], step, first_k, &
+            info, options)
+        call require(info == 0, "class-1 assembly failed")
         call lowest_family_eigenvalue(geometry, [1], [1], step, first, &
             info, options)
         call require(info == 0, "class-1 solve failed")
         options%parity_class = 2
+        call assemble_family_stiffness(geometry, [1], [1], step, second_k, &
+            info, options)
+        call require(info == 0, "class-2 assembly failed")
         call lowest_family_eigenvalue(geometry, [1], [1], step, &
             second, info, options)
         call require(info == 0, "class-2 solve failed")
+        assembly_difference = 0.0_dp
+        cross = 0.0_dp
+        do column = 1, size(first_k, 2)
+            do row = 1, size(first_k, 1)
+                assembly_difference = max(assembly_difference, &
+                    abs(both_k(2 * row - 1, 2 * column - 1) &
+                    - first_k(row, column)))
+                assembly_difference = max(assembly_difference, &
+                    abs(both_k(2 * row, 2 * column) &
+                    - second_k(row, column)))
+                cross = max(cross, &
+                    abs(both_k(2 * row - 1, 2 * column)))
+                cross = max(cross, &
+                    abs(both_k(2 * row, 2 * column - 1)))
+            end do
+        end do
+        scale = max(1.0_dp, maxval(abs(both_k)))
+        call require(cross < 1.0e-12_dp * scale, &
+            "dual-class assembly has a physical parity coupling")
+        call require(assembly_difference < 1.0e-11_dp * scale, &
+            "class selection changes a same-parity stiffness block")
         call require(abs(first - second) < 1.0e-7_dp * abs(first), &
             "cylinder parity classes are not degenerate")
-        call require(abs(min(first, second) - both) < 1.0e-10_dp &
+        ! The dual and selected LAPACK problems have different dimensions.
+        ! Their stiffness blocks agree more tightly above; compare eigenvalues
+        ! at the observed dense-solver round-off scale, not at a few ulps.
+        call require(abs(min(first, second) - both) < 1.0e-8_dp &
             * abs(both), &
             "class split changes the lowest eigenvalue")
         call check_count_additivity(geometry, [1], [1], step, 0.0_dp)
@@ -835,7 +868,7 @@ contains
         real(dp), intent(in) :: radius
         type(surface_geometry_t), intent(out) :: surface
         real(dp) :: angle, even
-        integer :: component, j, l
+        integer :: j, l
 
         call cylinder_surface(radius, surface)
         do l = 1, n_zeta

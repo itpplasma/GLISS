@@ -458,7 +458,7 @@ contains
         integer, intent(in) :: field_periods, phase_assembly
         type(radial_space_config_t), intent(in) :: radial_space
         real(dp), intent(in) :: radial_coordinate, radial_step
-        real(dp), intent(out) :: element(:, :)
+        real(dp), contiguous, intent(out) :: element(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: full(:, :)
         integer :: trials, k
@@ -484,9 +484,9 @@ contains
     end subroutine condensed_element
 
     subroutine condense_tangential(full, trials, element, info)
-        real(dp), intent(in) :: full(:, :)
+        real(dp), contiguous, intent(in) :: full(:, :)
         integer, intent(in) :: trials
-        real(dp), intent(out) :: element(:, :)
+        real(dp), contiguous, intent(out) :: element(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: yy(:, :), yx(:, :)
         integer :: two_k
@@ -496,8 +496,10 @@ contains
         yx = full(two_k + 1:, 1:two_k)
         call dposv("U", trials, two_k, yy, trials, yx, trials, info)
         if (info /= 0) return
-        element = full(1:two_k, 1:two_k) &
-            - matmul(full(1:two_k, two_k + 1:), yx)
+        element = full(1:two_k, 1:two_k)
+        call dgemm("N", "N", two_k, two_k, trials, -1.0_dp, &
+            full(:, two_k + 1:), size(full, 1), yx, trials, 1.0_dp, element, &
+            size(element, 1))
     end subroutine condense_tangential
 
 end module family_assembly

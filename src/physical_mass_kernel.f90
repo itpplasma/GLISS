@@ -20,6 +20,7 @@ contains
         real(dp), intent(in) :: beta_tilde, density_kg_m3
         real(dp), intent(out) :: mass(3, 3)
         real(dp) :: coefficients(3, 3), flux_norm_squared, grad_s
+        integer :: i, j, k
 
         flux_norm_squared = flux_t_slope**2 + flux_p_slope**2
         grad_s = sqrt(grad_s2)
@@ -31,8 +32,16 @@ contains
         coefficients(3, 2) = -(current_i * flux_p_slope &
             - current_j * flux_t_slope) / (bmag * flux_norm_squared)
         coefficients(3, 3) = bmag / flux_norm_squared
-        mass = density_kg_m3 * abs(signed_sqrtg) &
-            * matmul(transpose(coefficients), coefficients)
+        mass = 0.0_dp
+        do j = 1, 3
+            do i = 1, 3
+                do k = 1, 3
+                    mass(i, j) = mass(i, j) &
+                        + coefficients(k, i) * coefficients(k, j)
+                end do
+                mass(i, j) = density_kg_m3 * abs(signed_sqrtg) * mass(i, j)
+            end do
+        end do
     end subroutine physical_mass_matrix
 
     pure function physical_mass_energy(flux_t_slope, flux_p_slope, &

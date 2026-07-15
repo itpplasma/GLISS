@@ -109,8 +109,9 @@ contains
 
         low = 0.10_dp
         high = 1.00_dp
-        bracketed = .not. unstable(low, mode, surfaces) .and. &
-            unstable(high, mode, surfaces)
+        bracketed = .not. unstable(low, mode, surfaces)
+        if (.not. bracketed) return
+        bracketed = unstable(high, mode, surfaces)
         if (.not. bracketed) return
         do iteration = 1, 16
             middle = 0.5_dp * (low + high)

@@ -139,7 +139,7 @@ contains
             actual%toroidal_toroidal(n_theta, n_zeta, 3))
     end subroutine allocate_jet
 
-    function jets_close(actual, expected) result(matches)
+    pure function jets_close(actual, expected) result(matches)
         type(cartesian_jet_grid_t), intent(in) :: actual, expected
         logical :: matches
 
@@ -158,7 +158,7 @@ contains
             expected%toroidal_toroidal)
     end function jets_close
 
-    function close(actual, expected) result(matches)
+    pure function close(actual, expected) result(matches)
         real(dp), intent(in) :: actual(..), expected(..)
         logical :: matches
 
@@ -166,8 +166,9 @@ contains
             rank (1)
             select rank (expected)
                 rank (1)
-                matches = all(shape(actual) == shape(expected)) &
-                    .and. all(abs(actual - expected) <= 3.0e-12_dp &
+                matches = all(shape(actual) == shape(expected))
+                if (.not. matches) return
+                matches = all(abs(actual - expected) <= 3.0e-12_dp &
                     * max(1.0_dp, abs(expected)))
                 rank default
                 matches = .false.
@@ -175,8 +176,9 @@ contains
             rank (3)
             select rank (expected)
                 rank (3)
-                matches = all(shape(actual) == shape(expected)) &
-                    .and. all(abs(actual - expected) <= 3.0e-12_dp &
+                matches = all(shape(actual) == shape(expected))
+                if (.not. matches) return
+                matches = all(abs(actual - expected) <= 3.0e-12_dp &
                     * max(1.0_dp, abs(expected)))
                 rank default
                 matches = .false.

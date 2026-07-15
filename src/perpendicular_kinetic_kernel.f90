@@ -16,13 +16,22 @@ contains
         real(dp), intent(in) :: signed_sigma_tilde, density_kg_m3
         real(dp), intent(out) :: mass(2, 2)
         real(dp) :: coefficients(2, 2)
+        integer :: i, j, k
 
         coefficients = 0.0_dp
         coefficients(1, 1) = 1.0_dp / sqrt(grad_s2)
         coefficients(2, 1) = signed_sigma_tilde / sqrt(grad_s2)
         coefficients(2, 2) = sqrt(grad_s2) / bmag
-        mass = density_kg_m3 * abs(signed_sqrtg) &
-            * matmul(transpose(coefficients), coefficients)
+        mass = 0.0_dp
+        do j = 1, 2
+            do i = 1, 2
+                do k = 1, 2
+                    mass(i, j) = mass(i, j) &
+                        + coefficients(k, i) * coefficients(k, j)
+                end do
+                mass(i, j) = density_kg_m3 * abs(signed_sqrtg) * mass(i, j)
+            end do
+        end do
     end subroutine perpendicular_kinetic_matrix
 
     pure function perpendicular_kinetic_energy(signed_sqrtg, bmag, grad_s2, &

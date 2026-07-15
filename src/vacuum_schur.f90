@@ -27,17 +27,19 @@ module vacuum_schur
             real(dp), intent(inout) :: b(ldb, *)
             integer, intent(out) :: info
         end subroutine dpotrs
+
     end interface
 
 contains
 
     subroutine eliminate_vacuum(plasma, vacuum, coupling, effective, &
             response, info)
-        real(dp), intent(in) :: plasma(:, :), vacuum(:, :), coupling(:, :)
+        real(dp), intent(in) :: plasma(:, :), vacuum(:, :)
+        real(dp), intent(in) :: coupling(:, :)
         real(dp), allocatable, intent(out) :: effective(:, :), response(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: factor(:, :)
-        integer :: n_plasma, n_vacuum, lapack_info
+        integer :: i, j, k, n_plasma, n_vacuum, lapack_info
 
         info = vacuum_schur_invalid_input
         n_plasma = size(plasma, 1)
@@ -67,7 +69,16 @@ contains
             n_vacuum, lapack_info)
         if (lapack_info /= 0) return
         response = -response
-        effective = plasma + matmul(coupling, response)
+        allocate (effective(n_plasma, n_plasma))
+        effective = plasma
+        do j = 1, n_plasma
+            do k = 1, n_vacuum
+                do i = 1, n_plasma
+                    effective(i, j) = effective(i, j) &
+                        + coupling(i, k) * response(k, j)
+                end do
+            end do
+        end do
         info = vacuum_schur_ok
     end subroutine eliminate_vacuum
 

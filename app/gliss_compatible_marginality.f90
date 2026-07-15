@@ -131,7 +131,7 @@ program gliss_compatible_marginality
         size(stiffness_operator, 2)), stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("stiffness allocation", -1)
     call add_mass_shift(stiffness_operator, problem%mass, floor, stiffness)
-    if (size(stiffness, 1) > huge(work_size) / 64) &
+    if (size(stiffness, 1) > (huge(work_size) - 63) / 64) &
         call fail_solver("workspace size", -1)
     work_size = 64 * size(stiffness, 1)
     allocate (pivots(size(stiffness, 1)), work(work_size), &
