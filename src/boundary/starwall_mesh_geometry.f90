@@ -10,7 +10,7 @@ module starwall_mesh_geometry
 contains
 
     function meshes_intersect(first, second) result(intersect)
-        real(dp), intent(in) :: first(:, :, :), second(:, :, :)
+        real(dp), contiguous, intent(in) :: first(:, :, :), second(:, :, :)
         logical :: intersect
         integer :: i, j
 
@@ -28,7 +28,7 @@ contains
     function point_inside_mesh(point, triangles) result(inside)
         real(dp), intent(in) :: point(3), triangles(:, :, :)
         logical :: inside
-        real(dp) :: a(3), b(3), c(3), denominator, solid_angle
+        real(dp) :: a(3), b(3), c(3), cross(3), denominator, solid_angle
         integer :: triangle
 
         solid_angle = 0.0_dp
@@ -40,8 +40,9 @@ contains
                 + dot_product(a, b) * norm2(c) &
                 + dot_product(b, c) * norm2(a) &
                 + dot_product(c, a) * norm2(b)
-            solid_angle = solid_angle + 2.0_dp * atan2( &
-                dot_product(a, cross_product(b, c)), denominator)
+            call cross_product(b, c, cross)
+            solid_angle = solid_angle + 2.0_dp &
+                * atan2(dot_product(a, cross), denominator)
         end do
         inside = abs(solid_angle) > 2.0_dp * pi
     end function point_inside_mesh
@@ -49,14 +50,19 @@ contains
     function triangles_intersect(first, second) result(intersect)
         real(dp), intent(in) :: first(3, 3), second(3, 3)
         logical :: intersect
-        real(dp) :: distance_first(3), distance_second(3), normal_first(3)
-        real(dp) :: normal_second(3), normal_scale, scale, tolerance
+        real(dp) :: distance_first(3), distance_second(3)
+        real(dp) :: first_edge1(3), first_edge2(3), normal_cross(3)
+        real(dp) :: normal_first(3), normal_second(3)
+        real(dp) :: second_edge1(3), second_edge2(3)
+        real(dp) :: normal_scale, scale, tolerance
         integer :: edge, next
 
-        normal_first = cross_product(first(:, 2) - first(:, 1), &
-            first(:, 3) - first(:, 1))
-        normal_second = cross_product(second(:, 2) - second(:, 1), &
-            second(:, 3) - second(:, 1))
+        first_edge1 = first(:, 2) - first(:, 1)
+        first_edge2 = first(:, 3) - first(:, 1)
+        second_edge1 = second(:, 2) - second(:, 1)
+        second_edge2 = second(:, 3) - second(:, 1)
+        call cross_product(first_edge1, first_edge2, normal_first)
+        call cross_product(second_edge1, second_edge2, normal_second)
         scale = max(max_edge(first), max_edge(second))
         tolerance = 4096.0_dp * epsilon(1.0_dp) * scale
         distance_second = plane_distances(second, first(:, 1), normal_first)
@@ -69,7 +75,8 @@ contains
         end if
 
         normal_scale = norm2(normal_first) * norm2(normal_second)
-        if (norm2(cross_product(normal_first, normal_second)) &
+        call cross_product(normal_first, normal_second, normal_cross)
+        if (norm2(normal_cross) &
             <= 4096.0_dp * epsilon(1.0_dp) * normal_scale) then
             if (maxval(abs(distance_second)) > tolerance * norm2(normal_first)) then
                 intersect = .false.
@@ -95,7 +102,9 @@ contains
         integer :: i
 
         do i = 1, 3
-            distance(i) = dot_product(points(:, i) - origin, normal)
+            distance(i) = (points(1, i) - origin(1)) * normal(1) &
+                + (points(2, i) - origin(2)) * normal(2) &
+                + (points(3, i) - origin(3)) * normal(3)
         end do
     end function plane_distances
 
@@ -116,7 +125,7 @@ contains
         direction = second - first
         edge1 = triangle(:, 2) - triangle(:, 1)
         edge2 = triangle(:, 3) - triangle(:, 1)
-        h = cross_product(direction, edge2)
+        call cross_product(direction, edge2, h)
         determinant = dot_product(edge1, h)
         if (abs(determinant) <= tolerance * norm2(edge1) * norm2(edge2)) then
             intersect = .false.
@@ -125,7 +134,7 @@ contains
         inverse = 1.0_dp / determinant
         s = first - triangle(:, 1)
         u = inverse * dot_product(s, h)
-        q = cross_product(s, edge1)
+        call cross_product(s, edge1, q)
         v = inverse * dot_product(direction, q)
         parameter = inverse * dot_product(edge2, q)
         intersect = u >= -tolerance .and. v >= -tolerance &
@@ -177,9 +186,9 @@ contains
         logical :: inside
         real(dp) :: orientation(3)
 
-        orientation = [orient2d(triangle(:, 1), triangle(:, 2), point), &
-            orient2d(triangle(:, 2), triangle(:, 3), point), &
-            orient2d(triangle(:, 3), triangle(:, 1), point)]
+        orientation(1) = orient2d(triangle(:, 1), triangle(:, 2), point)
+        orientation(2) = orient2d(triangle(:, 2), triangle(:, 3), point)
+        orientation(3) = orient2d(triangle(:, 3), triangle(:, 1), point)
         inside = all(orientation >= -tolerance) &
             .or. all(orientation <= tolerance)
     end function point_in_triangle_2d
@@ -216,13 +225,13 @@ contains
             norm2(triangle(:, 1) - triangle(:, 3)))
     end function max_edge
 
-    pure function cross_product(first, second) result(value)
+    pure subroutine cross_product(first, second, value)
         real(dp), intent(in) :: first(3), second(3)
-        real(dp) :: value(3)
+        real(dp), intent(out) :: value(3)
 
-        value = [first(2) * second(3) - first(3) * second(2), &
-            first(3) * second(1) - first(1) * second(3), &
-            first(1) * second(2) - first(2) * second(1)]
-    end function cross_product
+        value(1) = first(2) * second(3) - first(3) * second(2)
+        value(2) = first(3) * second(1) - first(1) * second(3)
+        value(3) = first(1) * second(2) - first(2) * second(1)
+    end subroutine cross_product
 
 end module starwall_mesh_geometry
