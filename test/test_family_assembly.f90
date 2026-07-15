@@ -203,7 +203,7 @@ contains
     subroutine check_parity_classes(geometry, step)
         type(surface_geometry_t), intent(in) :: geometry(:)
         real(dp), intent(in) :: step
-        real(dp) :: both, first, second
+        real(dp) :: both, eigen_tolerance, first, second
         integer :: info
         type(family_assembly_options_t) :: options
 
@@ -220,8 +220,13 @@ contains
         call require(info == 0, "class-2 solve failed")
         call require(abs(first - second) < 1.0e-7_dp * abs(first), &
             "cylinder parity classes are not degenerate")
-        call require(abs(min(first, second) - both) < 1.0e-10_dp &
-            * abs(both), &
+        call verify_parity_split(geometry, [1], [1], step, &
+            "cylinder", eigen_tolerance)
+        if (abs(min(first, second) - both) >= eigen_tolerance) then
+            write (error_unit, "(3(a,es24.16))") &
+                "dual=", both, " class_1=", first, " class_2=", second
+        end if
+        call require(abs(min(first, second) - both) < eigen_tolerance, &
             "class split changes the lowest eigenvalue")
         call check_count_additivity(geometry, [1], [1], step, 0.0_dp)
         call check_count_additivity(geometry, [1], [1], step, &
@@ -232,7 +237,7 @@ contains
         real(dp), intent(in) :: step
         type(surface_geometry_t), allocatable :: shaped(:)
         real(dp), allocatable :: stiffness(:, :)
-        real(dp) :: both, first, second, cross, scale
+        real(dp) :: both, eigen_tolerance, first, second, cross, scale
         integer :: info, i, row, column, trials
         type(family_assembly_options_t) :: options
 
@@ -268,14 +273,81 @@ contains
         call lowest_family_eigenvalue(shaped, [1, 2], [1, 1], step, &
             second, info, options)
         call require(info == 0, "shaped class-2 solve failed")
-        call require(abs(min(first, second) - both) < 1.0e-10_dp &
-            * abs(both), &
+        call verify_parity_split(shaped, [1, 2], [1, 1], step, &
+            "shaped", eigen_tolerance)
+        if (abs(min(first, second) - both) >= eigen_tolerance) then
+            write (error_unit, "(3(a,es24.16))") &
+                "shaped dual=", both, " class_1=", first, &
+                " class_2=", second
+        end if
+        call require(abs(min(first, second) - both) < eigen_tolerance, &
             "shaped class split changes the lowest eigenvalue")
         call check_count_additivity(shaped, [1, 2], [1, 1], step, &
             0.0_dp)
         call check_count_additivity(shaped, [1, 2], [1, 1], step, &
             0.5_dp * both)
     end subroutine check_symmetric_decoupling
+
+    subroutine verify_parity_split(geometry, mode_m, mode_n, step, label, &
+            eigen_tolerance)
+        type(surface_geometry_t), intent(in) :: geometry(:)
+        integer, intent(in) :: mode_m(:), mode_n(:)
+        real(dp), intent(in) :: step
+        character(len=*), intent(in) :: label
+        real(dp), intent(out) :: eigen_tolerance
+        type(family_assembly_options_t) :: options
+        real(dp), allocatable :: dual(:, :), first(:, :), second(:, :)
+        real(dp) :: block_difference, cross_block, matrix_scale
+        integer :: column, dual_column, dual_row, info, row
+
+        call assemble_family_stiffness(geometry, mode_m, mode_n, step, &
+            dual, info)
+        call require(info == 0, trim(label) // " dual matrix assembly failed")
+        options%parity_class = 1
+        call assemble_family_stiffness(geometry, mode_m, mode_n, step, &
+            first, info, options)
+        call require(info == 0, trim(label) // " class-1 matrix assembly failed")
+        options%parity_class = 2
+        call assemble_family_stiffness(geometry, mode_m, mode_n, step, &
+            second, info, options)
+        call require(info == 0, trim(label) // " class-2 matrix assembly failed")
+        call require(size(dual, 1) == 2 * size(first, 1), &
+            trim(label) // " dual matrix row count differs")
+        call require(all(shape(first) == shape(second)), &
+            trim(label) // " split matrix shapes differ")
+        block_difference = 0.0_dp
+        cross_block = 0.0_dp
+        do column = 1, size(first, 2)
+            do row = 1, size(first, 1)
+                dual_row = 2 * row - 1
+                dual_column = 2 * column - 1
+                block_difference = max(block_difference, &
+                    abs(dual(dual_row, dual_column) - first(row, column)), &
+                    abs(dual(dual_row + 1, dual_column + 1) &
+                    - second(row, column)))
+                cross_block = max(cross_block, &
+                    abs(dual(dual_row, dual_column + 1)), &
+                    abs(dual(dual_row + 1, dual_column)))
+            end do
+        end do
+        matrix_scale = max(1.0_dp, maxval(abs(dual)))
+        if (block_difference > 128.0_dp * epsilon(1.0_dp) &
+            * real(size(dual, 1), dp) * matrix_scale &
+            .or. cross_block > 128.0_dp * epsilon(1.0_dp) &
+            * real(size(dual, 1), dp) * matrix_scale) then
+            write (error_unit, "(3(a,es24.16))") &
+                trim(label) // " block_difference=", block_difference, &
+                " cross_block=", cross_block, " matrix_scale=", matrix_scale
+        end if
+        call require(block_difference <= 128.0_dp * epsilon(1.0_dp) &
+            * real(size(dual, 1), dp) * matrix_scale, &
+            trim(label) // " split matrices differ from dual blocks")
+        call require(cross_block <= 128.0_dp * epsilon(1.0_dp) &
+            * real(size(dual, 1), dp) * matrix_scale, &
+            trim(label) // " dual matrix couples parity blocks")
+        eigen_tolerance = 256.0_dp * epsilon(1.0_dp) &
+            * real(size(dual, 1), dp) * matrix_scale / step
+    end subroutine verify_parity_split
 
     subroutine check_count_additivity(geometry, mode_m, mode_n, step, &
             shift)
