@@ -1,7 +1,8 @@
 program gliss_compatible_marginality
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_c_binding, only: c_int
-    use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit, int64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit, &
+        int64, iostat_end
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_problem_ok, &
         compatible_two_component_problem_t, &
@@ -21,6 +22,7 @@ program gliss_compatible_marginality
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(compatible_two_component_problem_t) :: problem
     character(len=1024) :: count_shift_token, eta_power_token, filename
+    character(len=1024) :: external_vector_file
     character(len=1024) :: stored_power_token, token
     integer, allocatable :: mode_m(:), mode_n(:)
     real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
@@ -42,8 +44,10 @@ program gliss_compatible_marginality
     integer :: n_theta, n_zeta, parity, trial
     integer(int64) :: requested_work_size
     logical :: has_count_shifts, has_eigenprofile, has_eta_powers, has_m0_power
+    logical :: has_external_vector
     logical :: has_profile_points
     logical :: has_stored_powers, inertia_only
+    logical :: minimize_compression, minimize_potential
     logical :: physical_mass
 
     interface
@@ -60,6 +64,15 @@ program gliss_compatible_marginality
             real(dp), intent(inout) :: work(*)
             integer, intent(out) :: info
         end subroutine dsytrf
+        subroutine dsytrs(uplo, n, nrhs, a, lda, ipiv, b, ldb, info)
+            import dp
+            character(len=1), intent(in) :: uplo
+            integer, intent(in) :: n, nrhs, lda, ldb
+            real(dp), intent(in) :: a(lda, *)
+            integer, intent(in) :: ipiv(*)
+            real(dp), intent(inout) :: b(ldb, *)
+            integer, intent(out) :: info
+        end subroutine dsytrs
     end interface
 
     arguments = command_argument_count()
@@ -79,12 +92,15 @@ program gliss_compatible_marginality
     first_mode = 7
     inertia_only = .false.
     physical_mass = .false.
+    minimize_compression = .false.
+    minimize_potential = .false.
     bracket_kind = 0
     has_m0_power = .false.
     has_stored_powers = .false.
     has_eta_powers = .false.
     has_count_shifts = .false.
     has_eigenprofile = .false.
+    has_external_vector = .false.
     has_profile_points = .false.
     eigenprofile_index = 0
     profile_points = 201
@@ -96,6 +112,14 @@ program gliss_compatible_marginality
         if (trim(token) == "--inertia-only") then
             if (inertia_only) call fail_usage("duplicate --inertia-only")
             inertia_only = .true.
+        else if (trim(token) == "--minimize-compression") then
+            if (minimize_compression) &
+                call fail_usage("duplicate --minimize-compression")
+            minimize_compression = .true.
+        else if (trim(token) == "--minimize-potential") then
+            if (minimize_potential) &
+                call fail_usage("duplicate --minimize-potential")
+            minimize_potential = .true.
         else if (index(token, "--physical-density=") == 1) then
             if (physical_mass) call fail_usage("duplicate --physical-density")
             if (len_trim(token) == len("--physical-density=")) &
@@ -178,6 +202,13 @@ program gliss_compatible_marginality
             if (profile_points < 8 .or. profile_points > 10000) &
                 call fail_usage("profile points must lie in [8,10000]")
             has_profile_points = .true.
+        else if (index(token, "--evaluate-vector=") == 1) then
+            if (has_external_vector) &
+                call fail_usage("duplicate --evaluate-vector")
+            if (len_trim(token) == len("--evaluate-vector=")) &
+                call fail_usage("--evaluate-vector requires a file")
+            external_vector_file = token(len("--evaluate-vector=") + 1:)
+            has_external_vector = .true.
         else
             call fail_usage("unknown option " // trim(token))
         end if
@@ -188,8 +219,10 @@ program gliss_compatible_marginality
         call fail_usage("--m0-stored-power conflicts with --stored-powers")
     if (has_count_shifts .and. inertia_only) &
         call fail_usage("--count-shifts conflicts with --inertia-only")
-    if (has_profile_points .and. .not. has_eigenprofile) &
-        call fail_usage("--profile-points requires --eigenprofile-index")
+    if (has_profile_points .and. .not. has_eigenprofile &
+        .and. .not. has_external_vector) &
+        call fail_usage( &
+        "--profile-points requires --eigenprofile-index or --evaluate-vector")
     if (has_eigenprofile .and. has_count_shifts) &
         call fail_usage("--eigenprofile-index conflicts with --count-shifts")
     if (has_eigenprofile .and. inertia_only) &
@@ -200,6 +233,15 @@ program gliss_compatible_marginality
     if (has_eigenprofile .and. bracket_kind == 1) &
         call fail_usage( &
         "--eigenprofile-index conflicts with --negative-bracket")
+    if (has_external_vector .and. (has_eigenprofile .or. inertia_only &
+        .or. has_count_shifts .or. bracket_kind /= 0)) &
+        call fail_usage("--evaluate-vector conflicts with solver options")
+    if (minimize_compression .and. .not. has_external_vector) &
+        call fail_usage("--minimize-compression requires --evaluate-vector")
+    if (minimize_potential .and. .not. has_external_vector) &
+        call fail_usage("--minimize-potential requires --evaluate-vector")
+    if (minimize_compression .and. minimize_potential) &
+        call fail_usage("eta minimization options conflict")
     allocate (mode_m(arguments - first_mode + 1), &
         mode_n(arguments - first_mode + 1), &
         stored_power(arguments - first_mode + 1), &
@@ -260,6 +302,11 @@ program gliss_compatible_marginality
         size(problem%stiffness, 2)), stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("operator allocation", -1)
     call sum_tensor(problem%stiffness_terms, stiffness_operator)
+    call write_problem_metadata
+    if (has_external_vector) then
+        call write_external_vector_energy
+        call terminate_process(0_c_int)
+    end if
     allocate (stiffness(size(stiffness_operator, 1), &
         size(stiffness_operator, 2)), stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("stiffness allocation", -1)
@@ -270,22 +317,6 @@ program gliss_compatible_marginality
     allocate (pivots(size(stiffness, 1)), work(work_size), &
         stat=allocation_status)
     if (allocation_status /= 0) call fail_solver("workspace allocation", -1)
-    write (*, "(a)") "stored_power_index,m,n,power"
-    do mode = 1, size(mode_m)
-        write (*, "(i0,2(a,i0),a,es24.16)") mode, ",", mode_m(mode), &
-            ",", mode_n(mode), ",", stored_power(mode)
-    end do
-    write (*, "(a)") "eta_stored_power_index,m,n,power"
-    do mode = 1, size(mode_m)
-        write (*, "(i0,2(a,i0),a,es24.16)") mode, ",", mode_m(mode), &
-            ",", mode_n(mode), ",", eta_stored_power(mode)
-    end do
-    write (*, "(a)") "radial_surfaces,degree,parity,n_theta,n_zeta," // &
-        "physical_mass,density_kg_m3,floor,bracket_requested"
-    write (*, "(i0,5(a,i0),2(a,es24.16),a,i0)") size(equilibrium%s), &
-        ",", degree, ",", parity, ",", n_theta, ",", n_zeta, ",", &
-        merge(1, 0, physical_mass), ",", density, ",", floor, ",", &
-        merge(1, 0, bracket_kind /= 0)
     if (has_eigenprofile) then
         call write_eigenprofile
         call terminate_process(0_c_int)
@@ -349,6 +380,165 @@ program gliss_compatible_marginality
 
 contains
 
+    subroutine write_problem_metadata
+        write (*, "(a)") "stored_power_index,m,n,power"
+        do mode = 1, size(mode_m)
+            write (*, "(i0,2(a,i0),a,es24.16)") mode, ",", mode_m(mode), &
+                ",", mode_n(mode), ",", stored_power(mode)
+        end do
+        write (*, "(a)") "eta_stored_power_index,m,n,power"
+        do mode = 1, size(mode_m)
+            write (*, "(i0,2(a,i0),a,es24.16)") mode, ",", mode_m(mode), &
+                ",", mode_n(mode), ",", eta_stored_power(mode)
+        end do
+        write (*, "(a)") "radial_surfaces,degree,parity,n_theta,n_zeta," // &
+            "physical_mass,density_kg_m3,floor,bracket_requested"
+        write (*, "(i0,5(a,i0),2(a,es24.16),a,i0)") size(equilibrium%s), &
+            ",", degree, ",", parity, ",", n_theta, ",", n_zeta, ",", &
+            merge(1, 0, physical_mass), ",", density, ",", floor, ",", &
+            merge(1, 0, bracket_kind /= 0)
+    end subroutine write_problem_metadata
+
+    subroutine write_external_vector_energy
+        character(len=4096) :: line
+        real(dp) :: closure, term_sum
+        integer :: file_index, io_status, point, term, unit
+
+        allocate (eigenvector(size(problem%mass, 1)), stat=allocation_status)
+        if (allocation_status /= 0) &
+            call fail_solver("external vector allocation", -1)
+        open (newunit=unit, file=trim(external_vector_file), status="old", &
+            action="read", form="formatted", iostat=io_status)
+        if (io_status /= 0) call fail_external_vector("cannot open file")
+        read (unit, "(a)", iostat=io_status) line
+        if (io_status /= 0 .or. trim(line) /= "index,value") &
+            call fail_external_vector("first row must be index,value")
+        do point = 1, size(eigenvector)
+            read (unit, "(a)", iostat=io_status) line
+            if (io_status /= 0) call fail_external_vector( &
+                "file ends before the expected vector size")
+            if (len_trim(line) == len(line)) &
+                call fail_external_vector("input row is too long")
+            call parse_external_vector_row(line, file_index, eigenvector(point))
+            if (file_index /= point) call fail_external_vector( &
+                "indices must be consecutive from one")
+        end do
+        read (unit, "(a)", iostat=io_status) line
+        if (io_status /= iostat_end) call fail_external_vector( &
+            "file contains rows after the expected vector")
+        close (unit)
+        if (minimize_compression) call project_minimizing_eta( &
+            problem%stiffness_terms(:, :, 3))
+        if (minimize_potential) call project_minimizing_eta(stiffness_operator)
+        call quadratic_form(problem%mass, eigenvector, kinetic, info)
+        if (info /= 0 .or. kinetic <= 0.0_dp) &
+            call fail_external_vector("vector has nonpositive mass norm")
+        call quadratic_form(stiffness_operator, eigenvector, potential, info)
+        if (info /= 0) call fail_solver("external vector potential", info)
+        term_sum = 0.0_dp
+        do term = 1, 4
+            call quadratic_form(problem%stiffness_terms(:, :, term), &
+                eigenvector, term_energy(term), info)
+            if (info /= 0) call fail_solver("external vector term", info)
+            term_sum = term_sum + term_energy(term)
+        end do
+        closure = abs(potential - term_sum) / kinetic
+        write (*, "(a)") "unknowns,eta_relaxation,kinetic,potential," // &
+            "rayleigh_quotient,bending,shear,compression,drive," // &
+            "energy_closure_absolute"
+        write (*, "(i0,a,i0,8(a,es24.16))") size(eigenvector), ",", &
+            merge(1, merge(2, 0, minimize_potential), &
+            minimize_compression), ",", kinetic, ",", &
+            potential, ",", potential / kinetic, ",", &
+            term_energy(1) / kinetic, ",", term_energy(2) / kinetic, ",", &
+            term_energy(3) / kinetic, ",", term_energy(4) / kinetic, ",", &
+            closure
+        allocate (profile_coordinates(profile_points), stat=allocation_status)
+        if (allocation_status /= 0) &
+            call fail_solver("external profile coordinate allocation", -1)
+        do point = 1, profile_points
+            profile_coordinates(point) = &
+                (real(point, dp) - 0.5_dp) / real(profile_points, dp)
+        end do
+        call evaluate_compatible_two_component_vector(size(equilibrium%s), &
+            mode_m, mode_n, stored_power, eta_stored_power, parity, degree, &
+            profile_coordinates, eigenvector, profile_normal, profile_eta, &
+            info)
+        if (info /= compatible_problem_ok) &
+            call fail_solver("external profile vector evaluation", info)
+        write (*, "(a)") "profile_index,s,r,mode_index,m,n,normal,eta"
+        do point = 1, profile_points
+            do mode = 1, size(mode_m)
+                write (*, "(i0,2(a,es24.16),3(a,i0),2(a,es24.16))") &
+                    point, ",", profile_coordinates(point), ",", &
+                    sqrt(profile_coordinates(point)), ",", mode, ",", &
+                    mode_m(mode), ",", mode_n(mode), ",", &
+                    profile_normal(point, mode), ",", profile_eta(point, mode)
+            end do
+        end do
+    end subroutine write_external_vector_energy
+
+    subroutine project_minimizing_eta(operator)
+        real(dp), intent(in) :: operator(:, :)
+        real(dp), allocatable :: eta_matrix(:, :), rhs(:, :), solve_work(:)
+        integer, allocatable :: eta_pivots(:)
+        integer :: column, eta_unknowns, normal_unknowns, row, solve_work_size
+
+        normal_unknowns = problem%normal_unknowns
+        eta_unknowns = problem%eta_unknowns
+        solve_work_size = 64 * eta_unknowns
+        allocate (eta_matrix(eta_unknowns, eta_unknowns), &
+            rhs(eta_unknowns, 1), eta_pivots(eta_unknowns), &
+            solve_work(solve_work_size), stat=allocation_status)
+        if (allocation_status /= 0) &
+            call fail_solver("eta projection allocation", -1)
+        do column = 1, eta_unknowns
+            do row = 1, eta_unknowns
+                eta_matrix(row, column) = operator( &
+                    normal_unknowns + row, normal_unknowns + column)
+            end do
+        end do
+        rhs = 0.0_dp
+        do column = 1, normal_unknowns
+            do row = 1, eta_unknowns
+                rhs(row, 1) = rhs(row, 1) - operator( &
+                    normal_unknowns + row, column) * eigenvector(column)
+            end do
+        end do
+        call dsytrf("U", eta_unknowns, eta_matrix, eta_unknowns, eta_pivots, &
+            solve_work, solve_work_size, info)
+        if (info /= 0) call fail_solver("eta projection factor", info)
+        call dsytrs("U", eta_unknowns, 1, eta_matrix, eta_unknowns, &
+            eta_pivots, rhs, eta_unknowns, info)
+        if (info /= 0) call fail_solver("eta projection solve", info)
+        do row = 1, eta_unknowns
+            eigenvector(normal_unknowns + row) = rhs(row, 1)
+        end do
+    end subroutine project_minimizing_eta
+
+    subroutine parse_external_vector_row(line, index_value, value)
+        character(len=*), intent(in) :: line
+        integer, intent(out) :: index_value
+        real(dp), intent(out) :: value
+        integer :: comma
+
+        comma = index(line, ",")
+        if (comma <= 1 .or. comma == len_trim(line) &
+            .or. index(line(comma + 1:), ",") > 0) &
+            call fail_external_vector("rows must contain exactly index,value")
+        call parse_integer(line(:comma - 1), "external vector index", &
+            index_value)
+        call parse_real(line(comma + 1:), "external vector value", value)
+    end subroutine parse_external_vector_row
+
+    subroutine fail_external_vector(message)
+        character(len=*), intent(in) :: message
+
+        write (error_unit, "(a)") "gliss_compatible_marginality: " // &
+            "invalid external vector: " // trim(message)
+        call terminate_process(2_c_int)
+    end subroutine fail_external_vector
+
     subroutine add_mass_shift(operator, mass_matrix, shift, shifted)
         real(dp), intent(in) :: operator(:, :), mass_matrix(:, :), shift
         real(dp), intent(out) :: shifted(:, :)
@@ -376,6 +566,8 @@ contains
             "[--eigenvalue-bracket=LOWER,UPPER,TOLERANCE] " // &
             "[--count-shifts=S0,S1,...] " // &
             "[--eigenprofile-index=INDEX] [--profile-points=COUNT] " // &
+            "[--evaluate-vector=INDEXED_CSV] " // &
+            "[--minimize-compression] [--minimize-potential] " // &
             "m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
