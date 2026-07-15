@@ -214,19 +214,33 @@ contains
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: shift
         type(variable_block_tridiagonal_t), intent(out) :: shifted
-        integer :: block
+        integer :: block, column, row
 
         allocate (shifted%widths, source=stiffness%widths)
         allocate (shifted%diagonal(size(stiffness%diagonal)))
         allocate (shifted%lower(size(stiffness%lower)))
         do block = 1, size(stiffness%widths)
-            allocate (shifted%diagonal(block)%values, &
-                source=stiffness%diagonal(block)%values &
-                - shift * mass%diagonal(block)%values)
+            allocate (shifted%diagonal(block)%values( &
+                size(stiffness%diagonal(block)%values, 1), &
+                size(stiffness%diagonal(block)%values, 2)))
+            do column = 1, size(shifted%diagonal(block)%values, 2)
+                do row = 1, size(shifted%diagonal(block)%values, 1)
+                    shifted%diagonal(block)%values(row, column) = &
+                        stiffness%diagonal(block)%values(row, column) &
+                        - shift * mass%diagonal(block)%values(row, column)
+                end do
+            end do
             if (block < size(stiffness%widths)) then
-                allocate (shifted%lower(block)%values, &
-                    source=stiffness%lower(block)%values &
-                    - shift * mass%lower(block)%values)
+                allocate (shifted%lower(block)%values( &
+                    size(stiffness%lower(block)%values, 1), &
+                    size(stiffness%lower(block)%values, 2)))
+                do column = 1, size(shifted%lower(block)%values, 2)
+                    do row = 1, size(shifted%lower(block)%values, 1)
+                        shifted%lower(block)%values(row, column) = &
+                            stiffness%lower(block)%values(row, column) &
+                            - shift * mass%lower(block)%values(row, column)
+                    end do
+                end do
             end if
         end do
     end subroutine form_generalized_shift
@@ -300,7 +314,8 @@ contains
         real(dp), intent(out) :: residual
         integer, intent(out) :: info
         real(dp) :: stiffness_image(size(vector)), mass_image(size(vector))
-        real(dp) :: mass_norm
+        real(dp) :: residual_image(size(vector)), mass_norm
+        integer :: index
 
         call apply_variable_block_tridiagonal(stiffness, vector, &
             stiffness_image, info)
@@ -318,8 +333,12 @@ contains
             info = variable_generalized_invalid
             return
         end if
-        residual = stable_norm2(stiffness_image - eigenvalue * mass_image) &
-            / mass_norm
+        residual_image = stiffness_image
+        do index = 1, size(vector)
+            residual_image(index) = residual_image(index) &
+                - eigenvalue * mass_image(index)
+        end do
+        residual = stable_norm2(residual_image) / mass_norm
         if (.not. ieee_is_finite(residual)) then
             info = variable_generalized_invalid
             return
@@ -372,34 +391,46 @@ contains
         real(dp), intent(in) :: vector(:), eigenvalue
         real(dp), intent(out) :: image(:)
         integer, intent(out) :: maximum_terms
-        integer :: block, first, last, next_first, next_last, terms
+        real(dp) :: value
+        integer :: block, column, first, last, next_first, row, terms
 
         first = 1
         maximum_terms = 0
         do block = 1, size(stiffness%widths)
             last = first + stiffness%widths(block) - 1
-            image(first:last) = matmul(abs(stiffness%diagonal(block)%values) &
-                + abs(eigenvalue) * abs(mass%diagonal(block)%values), &
-                abs(vector(first:last)))
             terms = stiffness%widths(block)
-            if (block > 1) then
-                next_first = first - stiffness%widths(block - 1)
-                next_last = first - 1
-                image(first:last) = image(first:last) + matmul( &
-                    abs(stiffness%lower(block - 1)%values) + abs(eigenvalue) &
-                    * abs(mass%lower(block - 1)%values), &
-                    abs(vector(next_first:next_last)))
-                terms = terms + stiffness%widths(block - 1)
-            end if
-            if (block < size(stiffness%widths)) then
-                next_first = last + 1
-                next_last = last + stiffness%widths(block + 1)
-                image(first:last) = image(first:last) + matmul(transpose( &
-                    abs(stiffness%lower(block)%values) + abs(eigenvalue) &
-                    * abs(mass%lower(block)%values)), &
-                    abs(vector(next_first:next_last)))
+            if (block > 1) terms = terms + stiffness%widths(block - 1)
+            if (block < size(stiffness%widths)) &
                 terms = terms + stiffness%widths(block + 1)
-            end if
+            do row = 1, stiffness%widths(block)
+                value = 0.0_dp
+                do column = 1, stiffness%widths(block)
+                    value = value + (abs( &
+                        stiffness%diagonal(block)%values(row, column)) &
+                        + abs(eigenvalue) * abs( &
+                        mass%diagonal(block)%values(row, column))) &
+                        * abs(vector(first + column - 1))
+                end do
+                if (block > 1) then
+                    next_first = first - stiffness%widths(block - 1)
+                    do column = 1, stiffness%widths(block - 1)
+                        value = value + (abs(stiffness%lower( &
+                            block - 1)%values(row, column)) + abs(eigenvalue) &
+                            * abs(mass%lower(block - 1)%values(row, column))) &
+                            * abs(vector(next_first + column - 1))
+                    end do
+                end if
+                if (block < size(stiffness%widths)) then
+                    next_first = last + 1
+                    do column = 1, stiffness%widths(block + 1)
+                        value = value + (abs(stiffness%lower( &
+                            block)%values(column, row)) + abs(eigenvalue) &
+                            * abs(mass%lower(block)%values(column, row))) &
+                            * abs(vector(next_first + column - 1))
+                    end do
+                end if
+                image(first + row - 1) = value
+            end do
             maximum_terms = max(maximum_terms, terms)
             first = last + 1
         end do

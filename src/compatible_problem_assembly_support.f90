@@ -205,8 +205,10 @@ contains
 
         dimension = size(vector)
         valid = dimension >= 1
-        valid = valid .and. all(shape(stiffness) == [dimension, dimension])
-        valid = valid .and. all(shape(mass) == [dimension, dimension])
+        valid = valid .and. size(stiffness, 1) == dimension
+        valid = valid .and. size(stiffness, 2) == dimension
+        valid = valid .and. size(mass, 1) == dimension
+        valid = valid .and. size(mass, 2) == dimension
         valid = valid .and. all(ieee_is_finite(stiffness))
         valid = valid .and. all(ieee_is_finite(mass))
         valid = valid .and. all(ieee_is_finite(vector))

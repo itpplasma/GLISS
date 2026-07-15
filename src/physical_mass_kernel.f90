@@ -44,13 +44,13 @@ contains
         real(dp), intent(in) :: bmag, grad_s2, signed_sigma_tilde
         real(dp), intent(in) :: beta_tilde, density_kg_m3
         real(dp), intent(in) :: displacement(3)
-        real(dp) :: energy, mass(3, 3)
+        real(dp) :: energy, mass(3, 3), image(3)
 
         call physical_mass_matrix(flux_t_slope, flux_p_slope, current_i, &
             current_j, signed_sqrtg, bmag, grad_s2, signed_sigma_tilde, &
             beta_tilde, density_kg_m3, mass)
-        energy = 0.5_dp * dot_product(displacement, &
-            matmul(mass, displacement))
+        image = matmul(mass, displacement)
+        energy = 0.5_dp * dot_product(displacement, image)
     end function physical_mass_energy
 
     pure function benchmark_physical_mass_energy(active) result(energy) &
@@ -59,8 +59,9 @@ contains
         real(c_double) :: energy
         real(dp) :: displacement(3)
 
-        displacement = [0.4_dp + 0.02_dp * active, &
-            -0.3_dp + 0.01_dp * active, 0.2_dp - 0.03_dp * active]
+        displacement(1) = 0.4_dp + 0.02_dp * active
+        displacement(2) = -0.3_dp + 0.01_dp * active
+        displacement(3) = 0.2_dp - 0.03_dp * active
         energy = physical_mass_energy(1.2_dp + 0.05_dp * active, &
             0.7_dp - 0.03_dp * active, 0.8_dp + 0.02_dp * active, &
             0.6_dp - 0.01_dp * active, -1.1_dp + 0.01_dp * active, &

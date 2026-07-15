@@ -42,6 +42,23 @@ module variable_block_tridiagonal
     public :: variable_block_to_dense
 
     interface
+        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            real(dp), intent(in) :: alpha, beta
+            real(dp), intent(in) :: a(lda, *), b(ldb, *)
+            real(dp), intent(inout) :: c(ldc, *)
+        end subroutine dgemm
+        subroutine dgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
+            import :: dp
+            character(len=1), intent(in) :: trans
+            integer, intent(in) :: m, n, lda, incx, incy
+            real(dp), intent(in) :: alpha, beta
+            real(dp), intent(in) :: a(lda, *), x(*)
+            real(dp), intent(inout) :: y(*)
+        end subroutine dgemv
         subroutine dsytrf(uplo, n, a, lda, ipiv, work, lwork, info)
             import :: dp
             character(len=1), intent(in) :: uplo
@@ -139,30 +156,37 @@ contains
             factor, lower, coupled, info)
         integer, intent(in) :: block, previous_width, current_width
         type(variable_block_factor_t), intent(inout) :: factor
-        real(dp), intent(in) :: lower(:, :)
-        real(dp), intent(inout) :: coupled(:, :)
+        real(dp), contiguous, intent(in) :: lower(:, :)
+        real(dp), contiguous, intent(inout) :: coupled(:, :)
         integer, intent(out) :: info
+        integer :: column, row
 
-        coupled(1:previous_width, 1:current_width) = transpose(lower)
+        do column = 1, current_width
+            do row = 1, previous_width
+                coupled(row, column) = lower(column, row)
+            end do
+        end do
         call dsytrs("U", previous_width, current_width, &
             factor%schur(block - 1)%values, previous_width, &
-            factor%pivots(block - 1)%values, coupled, size(coupled, 1), info)
+            factor%pivots(block - 1)%values, coupled, &
+            size(coupled, 1), info)
         if (info /= 0) then
             info = variable_block_invalid
             return
         end if
-        factor%schur(block)%values = factor%schur(block)%values &
-            - matmul(lower, coupled(1:previous_width, 1:current_width))
+        call dgemm("N", "N", current_width, current_width, previous_width, &
+            -1.0_dp, lower, current_width, coupled, size(coupled, 1), &
+            1.0_dp, factor%schur(block)%values, current_width)
         info = variable_block_ok
     end subroutine update_variable_schur
 
     subroutine solve_variable_factored(factor, rhs, info)
         type(variable_block_factor_t), intent(in) :: factor
-        real(dp), intent(inout) :: rhs(:)
+        real(dp), contiguous, intent(inout) :: rhs(:)
         integer, intent(out) :: info
         integer, allocatable :: offsets(:)
         real(dp), allocatable :: partial(:)
-        integer :: block, first, last, next_first, next_last, width
+        integer :: block, first, last, next_first, width
 
         call validate_variable_factor(factor, info)
         if (info /= variable_block_ok) return
@@ -175,26 +199,28 @@ contains
             first = offsets(block)
             last = offsets(block + 1) - 1
             width = factor%widths(block)
+            partial(1:width) = rhs(first:last)
             if (block > 1) then
-                rhs(first:last) = rhs(first:last) &
-                    - matmul(factor%lower(block - 1)%values, &
-                    rhs(offsets(block - 1):first - 1))
+                call dgemv("N", width, factor%widths(block - 1), -1.0_dp, &
+                    factor%lower(block - 1)%values, width, &
+                    rhs(offsets(block - 1):), 1, 1.0_dp, partial, 1)
             end if
             call dsytrs("U", width, 1, factor%schur(block)%values, width, &
-                factor%pivots(block)%values, rhs(first:last), width, info)
+                factor%pivots(block)%values, partial, width, info)
             if (info /= 0) then
                 info = variable_block_invalid
                 return
             end if
+            rhs(first:last) = partial(1:width)
         end do
         do block = size(factor%widths) - 1, 1, -1
             first = offsets(block)
             last = offsets(block + 1) - 1
             next_first = offsets(block + 1)
-            next_last = offsets(block + 2) - 1
             width = factor%widths(block)
-            partial(1:width) = matmul(transpose( &
-                factor%lower(block)%values), rhs(next_first:next_last))
+            call dgemv("T", factor%widths(block + 1), width, 1.0_dp, &
+                factor%lower(block)%values, factor%widths(block + 1), &
+                rhs(next_first:), 1, 0.0_dp, partial, 1)
             call dsytrs("U", width, 1, factor%schur(block)%values, width, &
                 factor%pivots(block)%values, partial, width, info)
             if (info /= 0) then
@@ -319,10 +345,10 @@ contains
 
     subroutine apply_variable_block_tridiagonal(blocks, vector, image, info)
         type(variable_block_tridiagonal_t), intent(in) :: blocks
-        real(dp), intent(in) :: vector(:)
-        real(dp), intent(out) :: image(:)
+        real(dp), contiguous, intent(in) :: vector(:)
+        real(dp), contiguous, intent(out) :: image(:)
         integer, intent(out) :: info
-        integer :: block, first, last, next_first, next_last
+        integer :: block, first, last, next_first
 
         call validate_variable_blocks(blocks, info)
         if (info /= variable_block_ok) return
@@ -333,21 +359,23 @@ contains
         first = 1
         do block = 1, size(blocks%widths)
             last = first + blocks%widths(block) - 1
-            image(first:last) = matmul(blocks%diagonal(block)%values, &
-                vector(first:last))
+            call dgemv("N", blocks%widths(block), blocks%widths(block), &
+                1.0_dp, blocks%diagonal(block)%values, &
+                blocks%widths(block), vector(first:), 1, 0.0_dp, &
+                image(first:), 1)
             if (block > 1) then
                 next_first = first - blocks%widths(block - 1)
-                next_last = first - 1
-                image(first:last) = image(first:last) &
-                    + matmul(blocks%lower(block - 1)%values, &
-                    vector(next_first:next_last))
+                call dgemv("N", blocks%widths(block), &
+                    blocks%widths(block - 1), 1.0_dp, &
+                    blocks%lower(block - 1)%values, blocks%widths(block), &
+                    vector(next_first:), 1, 1.0_dp, image(first:), 1)
             end if
             if (block < size(blocks%widths)) then
                 next_first = last + 1
-                next_last = last + blocks%widths(block + 1)
-                image(first:last) = image(first:last) &
-                    + matmul(transpose(blocks%lower(block)%values), &
-                    vector(next_first:next_last))
+                call dgemv("T", blocks%widths(block + 1), &
+                    blocks%widths(block), 1.0_dp, &
+                    blocks%lower(block)%values, blocks%widths(block + 1), &
+                    vector(next_first:), 1, 1.0_dp, image(first:), 1)
             end if
             first = last + 1
         end do

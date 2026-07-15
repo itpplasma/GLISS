@@ -172,19 +172,19 @@ contains
         trials = size(rows, 2) / (size(h1_values) + size(l2_values))
         do basis = 1, size(h1_values)
             column = (basis - 1) * trials + trial
-            inputs = [value * h1_values(basis), &
-                value * h1_derivatives(basis), &
-                two_pi * real(m, dp) * dvalue * h1_values(basis), &
-                -two_pi * toroidal_wave * dvalue * h1_values(basis), &
-                0.0_dp, 0.0_dp]
+            inputs(1) = value * h1_values(basis)
+            inputs(2) = value * h1_derivatives(basis)
+            inputs(3) = two_pi * real(m, dp) * dvalue * h1_values(basis)
+            inputs(4) = -two_pi * toroidal_wave * dvalue * h1_values(basis)
+            inputs(5:6) = 0.0_dp
             rows(1:3, column) = matmul(coefficients, inputs)
             rows(4, column) = value * h1_values(basis)
         end do
         do basis = 1, size(l2_values)
             column = size(h1_values) * trials + (basis - 1) * trials + trial
-            inputs = [0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, &
-                two_pi * real(m, dp) * dother * l2_values(basis), &
-                -two_pi * toroidal_wave * dother * l2_values(basis)]
+            inputs(1:4) = 0.0_dp
+            inputs(5) = two_pi * real(m, dp) * dother * l2_values(basis)
+            inputs(6) = -two_pi * toroidal_wave * dother * l2_values(basis)
             rows(1:3, column) = matmul(coefficients, inputs)
         end do
     end subroutine add_trial_columns
@@ -232,9 +232,10 @@ contains
 
         do b = 1, size(full, 2)
             do a = 1, size(full, 1)
-                contributions = [rows(1, a) * rows(1, b), &
-                    rows(2, a) * rows(2, b), rows(3, a) * rows(3, b), &
-                    -drive * rows(4, a) * rows(4, b)]
+                contributions(1) = rows(1, a) * rows(1, b)
+                contributions(2) = rows(2, a) * rows(2, b)
+                contributions(3) = rows(3, a) * rows(3, b)
+                contributions(4) = -drive * rows(4, a) * rows(4, b)
                 full(a, b) = full(a, b) + weight * sum(contributions)
                 if (present(terms)) terms(a, b, :) = terms(a, b, :) &
                     + weight * contributions
@@ -322,8 +323,8 @@ contains
         expected = trials * (size(h1_values, 1) + size(l2_values, 1))
         if (any(shape(full) /= expected)) return
         if (present(terms)) then
-            if (any(shape(terms) /= &
-                [expected, expected, compatible_two_component_term_count])) &
+            if (size(terms, 1) /= expected .or. size(terms, 2) /= expected &
+                .or. size(terms, 3) /= compatible_two_component_term_count) &
                 return
         end if
         if (size(fields, 1) < 1 .or. size(fields, 2) < 1 &

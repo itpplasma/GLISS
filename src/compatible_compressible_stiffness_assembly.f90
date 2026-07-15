@@ -95,7 +95,8 @@ contains
         real(dp), intent(inout) :: stiffness(:, :)
         real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
         real(dp) :: coefficients(5, 2, size(stiffness, 1))
-        real(dp) :: responses(5, size(stiffness, 1)), phase, cosine, sine
+        real(dp) :: responses(5, size(stiffness, 1)), factors(5)
+        real(dp) :: phase, cosine, sine
         integer :: column, trial, trials
 
         call build_response_coefficients(fields, jacobian_radial, &
@@ -112,8 +113,8 @@ contains
             responses(:, column) = coefficients(:, phase_cosine, column) &
                 * cosine + coefficients(:, phase_sine, column) * sine
         end do
-        call rank_update(responses, response_factors(drive, gamma_pressure, &
-            fields(7)), weight, stiffness, stiffness_terms)
+        call build_response_factors(drive, gamma_pressure, fields(7), factors)
+        call rank_update(responses, factors, weight, stiffness, stiffness_terms)
     end subroutine accumulate_direct
 
     subroutine accumulate_transformed(fields, drive, jacobian_radial, &
@@ -128,7 +129,7 @@ contains
         real(dp), intent(inout) :: stiffness(:, :)
         real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
         real(dp) :: coefficients(5, 2, size(stiffness, 1))
-        real(dp) :: cosine(size(trial_m)), sine(size(trial_m)), phase
+        real(dp) :: cosine(size(trial_m)), sine(size(trial_m)), factors(5), phase
         integer :: trial
 
         call build_response_coefficients(fields, jacobian_radial, &
@@ -141,9 +142,9 @@ contains
             cosine(trial) = cos(phase)
             sine(trial) = sin(phase)
         end do
+        call build_response_factors(drive, gamma_pressure, fields(7), factors)
         call transformed_rank_update(coefficients, cosine, sine, trial_n, &
-            field_periods, response_factors(drive, gamma_pressure, fields(7)), &
-            weight, stiffness, stiffness_terms)
+            field_periods, factors, weight, stiffness, stiffness_terms)
     end subroutine accumulate_transformed
 
     pure subroutine build_response_coefficients(fields, jacobian_radial, &
@@ -152,7 +153,7 @@ contains
         real(dp), intent(in) :: fields(:), jacobian_radial, jacobian_theta
         real(dp), intent(in) :: jacobian_zeta, h1(:, :), dh1(:, :), l2(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
-        real(dp), intent(out) :: responses(:, :, :)
+        real(dp), contiguous, intent(out) :: responses(:, :, :)
         real(dp) :: basis(9, 2)
         real(dp) :: phase_coefficients(2)
         integer :: basis_index, column, trial, trials
@@ -165,11 +166,16 @@ contains
                 basis(xi_value, parity(trial)) = h1(basis_index, trial)
                 basis(xi_radial, parity(trial)) = dh1(basis_index, trial)
                 phase_coefficients = basis(xi_value, :)
-                basis(xi_theta, :) = angular_derivative( &
-                    phase_coefficients, two_pi * real(trial_m(trial), dp))
-                basis(xi_zeta, :) = angular_derivative( &
-                    phase_coefficients, -two_pi * real(trial_n(trial), dp) &
-                    / real(field_periods, dp))
+                call angular_derivative(phase_coefficients(phase_cosine), &
+                    phase_coefficients(phase_sine), &
+                    two_pi * real(trial_m(trial), dp), &
+                    basis(xi_theta, phase_cosine), &
+                    basis(xi_theta, phase_sine))
+                call angular_derivative(phase_coefficients(phase_cosine), &
+                    phase_coefficients(phase_sine), &
+                    -two_pi * real(trial_n(trial), dp) &
+                    / real(field_periods, dp), basis(xi_zeta, phase_cosine), &
+                    basis(xi_zeta, phase_sine))
                 column = (basis_index - 1) * trials + trial
                 call build_energy_responses(fields, jacobian_radial, &
                     jacobian_theta, jacobian_zeta, basis, &
@@ -217,25 +223,33 @@ contains
         phase_coefficients(kind) = value
         if (is_eta) then
             basis(eta_value, :) = phase_coefficients
-            basis(eta_theta, :) = angular_derivative(phase_coefficients, &
-                two_pi * real(mode_m, dp))
-            basis(eta_zeta, :) = angular_derivative(phase_coefficients, &
-                -two_pi * real(mode_n, dp) / real(field_periods, dp))
+            call angular_derivative(phase_coefficients(phase_cosine), &
+                phase_coefficients(phase_sine), two_pi * real(mode_m, dp), &
+                basis(eta_theta, phase_cosine), &
+                basis(eta_theta, phase_sine))
+            call angular_derivative(phase_coefficients(phase_cosine), &
+                phase_coefficients(phase_sine), -two_pi * real(mode_n, dp) &
+                / real(field_periods, dp), basis(eta_zeta, phase_cosine), &
+                basis(eta_zeta, phase_sine))
         else
-            basis(mu_theta, :) = angular_derivative(phase_coefficients, &
-                two_pi * real(mode_m, dp))
-            basis(mu_zeta, :) = angular_derivative(phase_coefficients, &
-                -two_pi * real(mode_n, dp) / real(field_periods, dp))
+            call angular_derivative(phase_coefficients(phase_cosine), &
+                phase_coefficients(phase_sine), two_pi * real(mode_m, dp), &
+                basis(mu_theta, phase_cosine), basis(mu_theta, phase_sine))
+            call angular_derivative(phase_coefficients(phase_cosine), &
+                phase_coefficients(phase_sine), -two_pi * real(mode_n, dp) &
+                / real(field_periods, dp), basis(mu_zeta, phase_cosine), &
+                basis(mu_zeta, phase_sine))
         end if
     end subroutine build_tangential_basis
 
-    pure function angular_derivative(coefficients, wavenumber) result(values)
-        real(dp), intent(in) :: coefficients(2), wavenumber
-        real(dp) :: values(2)
+    pure subroutine angular_derivative(cosine, sine, wavenumber, &
+            derivative_cosine, derivative_sine)
+        real(dp), intent(in) :: cosine, sine, wavenumber
+        real(dp), intent(out) :: derivative_cosine, derivative_sine
 
-        values(phase_cosine) = wavenumber * coefficients(phase_sine)
-        values(phase_sine) = -wavenumber * coefficients(phase_cosine)
-    end function angular_derivative
+        derivative_cosine = wavenumber * sine
+        derivative_sine = -wavenumber * cosine
+    end subroutine angular_derivative
 
     pure subroutine build_energy_responses(fields, jacobian_radial, &
             jacobian_theta, jacobian_zeta, basis, responses)
@@ -325,15 +339,15 @@ contains
         end do
     end subroutine transformed_rank_update
 
-    pure function response_factors(drive, gamma_pressure, signed_sqrtg) &
-            result(factors)
+    pure subroutine build_response_factors(drive, gamma_pressure, signed_sqrtg, &
+            factors)
         real(dp), intent(in) :: drive, gamma_pressure, signed_sqrtg
-        real(dp) :: factors(5)
+        real(dp), intent(out) :: factors(5)
 
         factors(1:3) = abs(signed_sqrtg) / vacuum_permeability
         factors(4) = -drive * abs(signed_sqrtg) / vacuum_permeability
         factors(5) = gamma_pressure * abs(signed_sqrtg)
-    end function response_factors
+    end subroutine build_response_factors
 
     subroutine validate_inputs(fields, drive, jacobian_radial, &
             jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
@@ -348,11 +362,10 @@ contains
         real(dp), intent(in) :: radial_weight, stiffness(:, :)
         integer, intent(out) :: info
         real(dp), optional, intent(in) :: terms(:, :, :)
-        integer :: angular_shape(2), expected, trials
+        integer :: expected, trials
 
         info = -1
         trials = size(trial_m)
-        angular_shape = [size(fields, 1), size(fields, 2)]
         if (trials < 1 .or. field_periods < 1) return
         if (size(trial_n) /= trials .or. size(parity) /= trials) return
         if (any(trial_m < 0) .or. any(parity < 1) .or. any(parity > 2)) return
@@ -362,15 +375,16 @@ contains
         expected = trials * (size(h1, 1) + 2 * size(l2, 1))
         if (any(shape(stiffness) /= expected)) return
         if (present(terms)) then
-            if (any(shape(terms) /= [expected, expected, 5])) return
+            if (size(terms, 1) /= expected .or. size(terms, 2) /= expected &
+                .or. size(terms, 3) /= compatible_stiffness_term_count) return
         end if
         if (size(fields, 1) < 1 .or. size(fields, 2) < 1 &
             .or. size(fields, 3) < 13) return
-        if (any(shape(drive) /= angular_shape) &
-            .or. any(shape(jacobian_radial) /= angular_shape) &
-            .or. any(shape(jacobian_theta) /= angular_shape) &
-            .or. any(shape(jacobian_zeta) /= angular_shape) &
-            .or. any(shape(gamma_pressure) /= angular_shape)) return
+        if (.not. has_angular_shape(drive, fields) &
+            .or. .not. has_angular_shape(jacobian_radial, fields) &
+            .or. .not. has_angular_shape(jacobian_theta, fields) &
+            .or. .not. has_angular_shape(jacobian_zeta, fields) &
+            .or. .not. has_angular_shape(gamma_pressure, fields)) return
         if (.not. all(ieee_is_finite(fields(:, :, 1:13))) &
             .or. .not. all(ieee_is_finite(drive)) &
             .or. .not. all(ieee_is_finite(jacobian_radial)) &
@@ -391,5 +405,12 @@ contains
         if (any(fields(:, :, 1)**2 + fields(:, :, 2)**2 <= 0.0_dp)) return
         info = 0
     end subroutine validate_inputs
+
+    pure logical function has_angular_shape(values, fields) result(valid)
+        real(dp), intent(in) :: values(:, :), fields(:, :, :)
+
+        valid = size(values, 1) == size(fields, 1) &
+            .and. size(values, 2) == size(fields, 2)
+    end function has_angular_shape
 
 end module compatible_compressible_stiffness_assembly
