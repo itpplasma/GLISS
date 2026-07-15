@@ -85,6 +85,7 @@ add_library(gliss
     src/terpsichore_solution_fixture.f90
     src/terpsichore_topology.f90
     src/terpsichore_fixed_boundary_spectrum.f90
+    src/terpsichore_pseudoplasma_spectrum.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
     src/boundary/starwall_cylinder_limit.f90

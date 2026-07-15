@@ -141,6 +141,24 @@ typedef struct gliss_terpsichore_fixed_boundary_result {
     double resolution;
 } gliss_terpsichore_fixed_boundary_result;
 
+typedef struct gliss_terpsichore_pseudoplasma_result {
+    size_t struct_size;
+    size_t unknowns;
+    size_t negative_count;
+    double eigenvalue;
+    double certificate;
+    double residual;
+    double resolution;
+    double growth_rate;
+    double reference_eigenvalue;
+    double reference_potential;
+    double computed_potential;
+    double reference_kinetic;
+    double computed_kinetic;
+    double reference_residual;
+    double mode_overlap;
+} gliss_terpsichore_pseudoplasma_result;
+
 typedef struct gliss_axisymmetric_spectrum_result {
     size_t struct_size;
     int32_t has_eigenpair;
@@ -184,6 +202,22 @@ gliss_status gliss_terpsichore_fixed_boundary(
     const char *path,
     size_t path_length,
     gliss_terpsichore_fixed_boundary_result *result,
+    char *error,
+    size_t error_capacity);
+
+/* Solve the lowest negative eigenpair represented by TERPSICHORE FORT.23 and
+ * FORT.24 files produced with IVAC>0 and MODELK=0. vacuum_intervals must match
+ * both files. The pressureless pseudo-plasma vacuum is eliminated by its Schur
+ * complement. The reference fields report diagnostics of the TERPSICHORE
+ * solution stored in FORT.23. Set result->struct_size to sizeof(*result). The
+ * result is not modified on failure. */
+gliss_status gliss_terpsichore_pseudoplasma(
+    const char *matrix_path,
+    size_t matrix_path_length,
+    int32_t vacuum_intervals,
+    const char *vacuum_path,
+    size_t vacuum_path_length,
+    gliss_terpsichore_pseudoplasma_result *result,
     char *error,
     size_t error_capacity);
 

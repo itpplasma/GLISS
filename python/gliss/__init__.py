@@ -115,7 +115,9 @@ from .stability import (  # noqa: E402
 from .full_spectrum import FullSpectrumResult, FullStabilityResult  # noqa: E402
 from .terpsichore import (  # noqa: E402
     TerpsichoreFixedBoundaryResult as TerpsichoreFixedBoundaryResult,
+    TerpsichorePseudoplasmaResult as TerpsichorePseudoplasmaResult,
     solve_terpsichore_fixed_boundary as solve_terpsichore_fixed_boundary,
+    solve_terpsichore_pseudoplasma as solve_terpsichore_pseudoplasma,
 )
 from .axisymmetric import (  # noqa: E402
     AxisymmetricResult as AxisymmetricResult,
@@ -163,9 +165,11 @@ __all__ = [
     "StabilityProblem",
     "StabilityResult",
     "TerpsichoreFixedBoundaryResult",
+    "TerpsichorePseudoplasmaResult",
     "solve_axisymmetric",
     "solve_cas3d_marginality",
     "solve_terpsichore_fixed_boundary",
+    "solve_terpsichore_pseudoplasma",
     "version",
     "write_run_manifest",
     "write_full_run_manifest",

@@ -37,6 +37,9 @@
 - Assemble degree-one through degree-four compatible H1/L2 radial problems
   with five-point Gaussian quadrature while routing the historical P1/P0
   closure through the same angular kernel.
+- Expose fixed-boundary and pressureless-pseudoplasma TERPSICHORE FORT.23/24
+  compatibility solves through the hand-written C and Python interfaces,
+  including inertia, eigenpair, energy, residual, and mode-overlap diagnostics.
 
 ## 0.0.1 - 2026-07-13
 

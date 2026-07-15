@@ -384,11 +384,11 @@
         "topology": "terpsichore-mask"
       },
       "entrypoint": {
-        "path": "app/gliss_terpsichore_eigen.f90",
-        "token": "add_terpsichore_pseudoplasma_schur"
+        "path": "python/gliss/terpsichore.py",
+        "token": "def solve_terpsichore_pseudoplasma"
       },
       "id": "terpsichore-pseudoplasma",
-      "interface": "native"
+      "interface": "python"
     }
   ],
   "schema_version": 1

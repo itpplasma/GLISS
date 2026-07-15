@@ -93,7 +93,9 @@ failed conversion removes the temporary file. Install-time dependency errors,
 invalid options, failed VMEC solves and numerical identity failures produce
 distinct Python exceptions with the rejected condition in the message.
 
-## TERPSICHORE fixed-boundary input
+## TERPSICHORE compatibility input
+
+### Fixed boundary
 
 Use the FORT.23 file from an `IVAC=0`, `MODELK=0` TERPSICHORE run directly:
 
@@ -130,6 +132,39 @@ files raise `GlissIOError`; assembly and eigensolver failures raise
 `GlissComputationError`. No Fortran allocation crosses the ABI. The complete
 read, assembly, inertia count, and inverse iteration execute in one native
 call.
+
+### Pressureless-pseudoplasma free boundary
+
+For a TERPSICHORE run with `IVAC>0` and `MODELK=0`, pass its paired FORT.23 and
+FORT.24 files and the exact number of vacuum intervals:
+
+```python
+from pathlib import Path
+
+import gliss
+
+result = gliss.solve_terpsichore_pseudoplasma(
+    Path("fort.23"),
+    vacuum_intervals=16,
+    vacuum_path=Path("fort.24"),
+)
+print(result.eigenvalue, result.growth_rate, result.mode_overlap)
+```
+
+GLISS assembles the plasma and pressureless-pseudoplasma blocks, eliminates
+the vacuum unknowns with the TERPSICHORE Schur complement, and solves the
+reduced generalized eigenproblem. The result reports the certified lowest
+negative eigenpair and the instability count. It also reports potential and
+kinetic quadratic forms, the residual of the solution stored in FORT.23, and
+the normalized mode overlap. These diagnostics permit a direct comparison
+with the originating TERPSICHORE run; they are not a substitute for an
+independent cross-code validation.
+
+`vacuum_intervals` must be a positive signed 32-bit integer and must agree
+with both files. GLISS rejects fixed-boundary files, nonzero `MODELK`, cosine
+parity, mismatched interval counts, malformed records, nonfinite matrices,
+and failed factorizations with typed exceptions. FORT.23 and FORT.24 use the
+same native sequential-unformatted portability restrictions described above.
 
 ## Axisymmetric fixed-boundary family
 
@@ -703,6 +738,14 @@ new ABI version.
 Initialize `gliss_terpsichore_fixed_boundary_result.struct_size` with
 `sizeof` before calling `gliss_terpsichore_fixed_boundary()`. The caller owns
 the result and error buffer. GLISS does not modify the result on failure.
+
+The free-boundary compatibility call follows the same ownership rule:
+initialize `gliss_terpsichore_pseudoplasma_result.struct_size`, supply the
+paired FORT.23/FORT.24 byte paths with explicit lengths, and pass their
+positive `IVAC` interval count to `gliss_terpsichore_pseudoplasma()`. The
+result includes both the computed eigenpair certificate and diagnostics for
+the TERPSICHORE vector stored in FORT.23. No file path or array is retained
+after the call returns.
 
 `gliss_equilibrium_schema_version()` returns 0 for legacy exports and 1 for
 GLISS exports. `gliss_equilibrium_write()` writes schema 1 and never replaces

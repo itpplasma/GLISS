@@ -302,10 +302,10 @@ PROFILES = (
     ),
     Profile(
         "terpsichore-pseudoplasma",
-        "native",
+        "python",
         _evidence(
-            "app/gliss_terpsichore_eigen.f90",
-            "add_terpsichore_pseudoplasma_schur",
+            "python/gliss/terpsichore.py",
+            "def solve_terpsichore_pseudoplasma",
         ),
         (
             ("equilibrium", "terpsichore-fort23"),

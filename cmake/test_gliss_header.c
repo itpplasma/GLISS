@@ -10,6 +10,7 @@ int main(void) {
     gliss_spectrum_summary summary;
     gliss_energy_terms energy;
     gliss_terpsichore_fixed_boundary_result terpsichore;
+    gliss_terpsichore_pseudoplasma_result pseudoplasma;
     gliss_axisymmetric_spectrum_result axisymmetric;
     gliss_cas3d_marginality_result marginality;
     int32_t mode_m[1] = {1};
@@ -23,6 +24,7 @@ int main(void) {
     memset(&energy, 0, sizeof(energy));
     energy.struct_size = sizeof(energy);
     memset(&terpsichore, 0, sizeof(terpsichore));
+    memset(&pseudoplasma, 0, sizeof(pseudoplasma));
     memset(&axisymmetric, 0, sizeof(axisymmetric));
     axisymmetric.struct_size = sizeof(axisymmetric);
     axisymmetric.mode_count = 123;
@@ -96,6 +98,38 @@ int main(void) {
             sizeof(error)) !=
         GLISS_STATUS_INVALID_ARGUMENT) {
         return 16;
+    }
+    if (gliss_terpsichore_pseudoplasma(
+            missing_fort23, strlen(missing_fort23), 1, missing_fort23,
+            strlen(missing_fort23), &pseudoplasma, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 30;
+    }
+    pseudoplasma.struct_size = sizeof(pseudoplasma);
+    pseudoplasma.unknowns = 123;
+    if (gliss_terpsichore_pseudoplasma(
+            missing_fort23, strlen(missing_fort23), 0, missing_fort23,
+            strlen(missing_fort23), &pseudoplasma, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 31;
+    }
+    if (pseudoplasma.unknowns != 123 || error[0] == '\0') {
+        return 32;
+    }
+    if (gliss_terpsichore_pseudoplasma(
+            missing_fort23, strlen(missing_fort23), 1, missing_fort23,
+            strlen(missing_fort23), &pseudoplasma, error, sizeof(error)) !=
+        GLISS_STATUS_READ_ERROR) {
+        return 33;
+    }
+    if (pseudoplasma.unknowns != 123 || error[0] == '\0') {
+        return 34;
+    }
+    if (gliss_terpsichore_pseudoplasma(
+            missing_fort23, strlen(missing_fort23), 1, missing_fort23,
+            strlen(missing_fort23), NULL, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 35;
     }
     if (gliss_axisymmetric_spectrum(
             equilibrium, 1, 8, 1, 1, &axisymmetric, error, sizeof(error)) !=
