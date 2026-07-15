@@ -64,7 +64,7 @@ contains
         character(c_char), allocatable :: c_path(:)
         integer(c_int) :: c_ncid
 
-        c_path = c_string(path)
+        call build_c_string(path, c_path)
         status = c_nc_open(c_path, 0_c_int, c_ncid)
         ncid = int(c_ncid)
     end function nc_open_read
@@ -75,7 +75,7 @@ contains
         character(c_char), allocatable :: c_path(:)
         integer(c_int) :: c_ncid
 
-        c_path = c_string(path)
+        call build_c_string(path, c_path)
         status = c_nc_open(c_path, 1_c_int, c_ncid)
         ncid = int(c_ncid)
     end function nc_open_write
@@ -86,7 +86,7 @@ contains
         character(c_char), allocatable :: c_path(:)
         integer(c_int) :: c_ncid
 
-        c_path = c_string(path)
+        call build_c_string(path, c_path)
         status = c_nc_create(c_path, int(z'1000', c_int), c_ncid)
         ncid = int(c_ncid)
     end function nc_create_netcdf4
@@ -97,7 +97,7 @@ contains
         character(c_char), allocatable :: c_path(:)
         integer(c_int) :: c_ncid
 
-        c_path = c_string(path)
+        call build_c_string(path, c_path)
         status = c_nc_create(c_path, int(z'1004', c_int), c_ncid)
         ncid = int(c_ncid)
     end function nc_create_netcdf4_exclusive
@@ -115,7 +115,7 @@ contains
         character(c_char), allocatable :: c_name(:)
         integer(c_int) :: c_dimid
 
-        c_name = c_string(name)
+        call build_c_string(name, c_name)
         status = c_nc_inq_dimid(int(ncid, c_int), c_name, c_dimid)
         dimid = int(c_dimid)
     end function nc_inquire_dimension_id
@@ -147,7 +147,7 @@ contains
         character(c_char), allocatable :: c_name(:)
         integer(c_int) :: c_varid
 
-        c_name = c_string(name)
+        call build_c_string(name, c_name)
         status = c_nc_inq_varid(int(ncid, c_int), c_name, c_varid)
         varid = int(c_varid)
     end function nc_inquire_variable_id
@@ -228,7 +228,7 @@ contains
         integer :: index
 
         value = ""
-        c_name = c_string(name)
+        call build_c_string(name, c_name)
         status = c_nc_inq_attlen(int(ncid, c_int), int(nc_global, c_int), &
             c_name, length)
         if (status /= nc_noerr) return
@@ -253,7 +253,7 @@ contains
         character(c_char), allocatable :: c_name(:)
         integer(c_int) :: c_dimid
 
-        c_name = c_string(name)
+        call build_c_string(name, c_name)
         status = c_nc_def_dim(int(ncid, c_int), c_name, &
             int(length, c_size_t), c_dimid)
         dimid = int(c_dimid)
@@ -266,7 +266,7 @@ contains
         character(c_char), allocatable :: c_name(:)
         integer(c_int) :: c_varid
 
-        c_name = c_string(name)
+        call build_c_string(name, c_name)
         status = c_nc_def_var(int(ncid, c_int), c_name, int(xtype, c_int), &
             0_c_int, c_null_ptr, c_varid)
         varid = int(c_varid)
@@ -281,7 +281,7 @@ contains
         integer(c_int), allocatable, target :: c_dimids(:)
         integer(c_int) :: c_varid
 
-        c_name = c_string(name)
+        call build_c_string(name, c_name)
         c_dimids = int(dimids, c_int)
         status = c_nc_def_var(int(ncid, c_int), c_name, int(xtype, c_int), &
             int(size(dimids), c_int), c_loc(c_dimids(1)), c_varid)
@@ -296,7 +296,7 @@ contains
         integer :: index, length
 
         length = len_trim(value)
-        c_name = c_string(name)
+        call build_c_string(name, c_name)
         if (length == 0) then
             status = c_nc_put_att_text(int(ncid, c_int), &
                 int(nc_global, c_int), c_name, 0_c_size_t, c_null_ptr)
@@ -360,9 +360,9 @@ contains
             c_loc(values(1, 1, 1)))
     end function nc_put_real_tensor
 
-    function c_string(value) result(c_value)
+    subroutine build_c_string(value, c_value)
         character(len=*), intent(in) :: value
-        character(c_char), allocatable :: c_value(:)
+        character(c_char), allocatable, intent(out) :: c_value(:)
         integer :: index, length
 
         length = len_trim(value)
@@ -371,7 +371,7 @@ contains
             c_value(index) = value(index:index)
         end do
         c_value(length + 1) = c_null_char
-    end function c_string
+    end subroutine build_c_string
 
     subroutine copy_c_string(c_value, value)
         character(c_char), intent(in) :: c_value(:)
