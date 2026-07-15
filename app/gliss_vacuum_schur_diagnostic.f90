@@ -34,10 +34,12 @@ contains
     subroutine report_scale(scale)
         real(dp), intent(in) :: scale
         real(dp), allocatable :: effective(:, :), response(:, :)
-        real(dp) :: scaled_vacuum(2, 2), vacuum_state(2)
+        real(dp) :: coupling_image(2), effective_image(2), plasma_image(2)
+        real(dp) :: scaled_vacuum(2, 2), vacuum_image(2), vacuum_state(2)
         real(dp) :: response_residual, full_energy, reduced_energy
         real(dp) :: energy_closure, symmetry_defect, fixed_boundary_error
-        integer :: info
+        real(dp) :: residual_value
+        integer :: column, info, inner, row
 
         scaled_vacuum = scale * vacuum
         call eliminate_vacuum(plasma, scaled_vacuum, coupling, effective, &
@@ -46,23 +48,53 @@ contains
             write (error_unit, "(a)") "vacuum Schur elimination failed"
             error stop 1
         end if
-        vacuum_state = matmul(response, plasma_state)
-        response_residual = maxval(abs(matmul(scaled_vacuum, response) &
-            + transpose(coupling)))
-        full_energy = 0.5_dp * dot_product(plasma_state, &
-            matmul(plasma, plasma_state)) + dot_product(plasma_state, &
-            matmul(coupling, vacuum_state)) + 0.5_dp * &
-            dot_product(vacuum_state, matmul(scaled_vacuum, vacuum_state))
-        reduced_energy = 0.5_dp * dot_product(plasma_state, &
-            matmul(effective, plasma_state))
+        call matrix_vector_product(response, plasma_state, vacuum_state)
+        response_residual = 0.0_dp
+        do column = 1, size(response, 2)
+            do row = 1, size(response, 1)
+                residual_value = coupling(column, row)
+                do inner = 1, size(response, 1)
+                    residual_value = residual_value &
+                        + scaled_vacuum(row, inner) * response(inner, column)
+                end do
+                response_residual = max(response_residual, abs(residual_value))
+            end do
+        end do
+        call matrix_vector_product(plasma, plasma_state, plasma_image)
+        call matrix_vector_product(coupling, vacuum_state, coupling_image)
+        call matrix_vector_product(scaled_vacuum, vacuum_state, vacuum_image)
+        call matrix_vector_product(effective, plasma_state, effective_image)
+        full_energy = 0.5_dp * dot_product(plasma_state, plasma_image) &
+            + dot_product(plasma_state, coupling_image) + 0.5_dp &
+            * dot_product(vacuum_state, vacuum_image)
+        reduced_energy = 0.5_dp * dot_product(plasma_state, effective_image)
         energy_closure = abs(full_energy - reduced_energy)
-        symmetry_defect = maxval(abs(effective - transpose(effective)))
-        fixed_boundary_error = maxval(abs(effective - plasma))
+        symmetry_defect = abs(effective(1, 2) - effective(2, 1))
+        fixed_boundary_error = 0.0_dp
+        do column = 1, 2
+            do row = 1, 2
+                fixed_boundary_error = max(fixed_boundary_error, &
+                    abs(effective(row, column) - plasma(row, column)))
+            end do
+        end do
         write (*, "(es24.16,12(',',es24.16))") scale, &
             effective(1, 1), effective(1, 2), effective(2, 1), &
             effective(2, 2), response(1, 1), response(1, 2), &
             response(2, 1), response(2, 2), response_residual, &
             energy_closure, symmetry_defect, fixed_boundary_error
     end subroutine report_scale
+
+    pure subroutine matrix_vector_product(matrix, vector, image)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp), intent(out) :: image(:)
+        integer :: column, row
+
+        do row = 1, size(matrix, 1)
+            image(row) = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image(row) = image(row) + matrix(row, column) * vector(column)
+            end do
+        end do
+    end subroutine matrix_vector_product
 
 end program gliss_vacuum_schur_diagnostic
