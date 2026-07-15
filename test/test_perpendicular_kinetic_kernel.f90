@@ -17,7 +17,7 @@ program test_perpendicular_kinetic_kernel
     real(dp), parameter :: density = 2.3_dp
     real(dp) :: perpendicular(2, 2), physical(3, 3), expected(2, 2)
     real(dp) :: reflected(2, 2)
-    real(dp) :: parallel(2), displacement(2), energy, scale
+    real(dp) :: parallel(2), displacement(2), energy, image(2), scale
     real(dp) :: delta, flux_norm_squared
 
     call perpendicular_kinetic_matrix(signed_sqrtg, bmag, grad_s2, &
@@ -60,8 +60,11 @@ program test_perpendicular_kinetic_kernel
     displacement = [0.4_dp, -0.3_dp]
     energy = perpendicular_kinetic_energy(signed_sqrtg, bmag, grad_s2, &
         sigma_tilde, density, displacement)
-    call require(abs(energy - 0.5_dp * dot_product(displacement, &
-        matmul(perpendicular, displacement))) &
+    image(1) = perpendicular(1, 1) * displacement(1) &
+        + perpendicular(1, 2) * displacement(2)
+    image(2) = perpendicular(2, 1) * displacement(1) &
+        + perpendicular(2, 2) * displacement(2)
+    call require(abs(energy - 0.5_dp * dot_product(displacement, image)) &
         < 2.0e-14_dp * max(1.0_dp, energy), &
         "perpendicular kinetic energy is inconsistent with its matrix")
 

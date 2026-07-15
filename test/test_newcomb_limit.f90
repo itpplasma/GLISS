@@ -127,9 +127,9 @@ contains
     subroutine test_full_operator_radial_convergence()
         integer, parameter :: meshes(3) = [16, 32, 64]
         type(cylinder_profiles_t) :: theta_pinch
-        real(dp), allocatable :: stiffness(:, :), displacement(:)
+        real(dp), allocatable :: stiffness(:, :), displacement(:), image(:)
         real(dp) :: errors(3), reference, radius, step
-        integer :: i, info, level
+        integer :: column, i, info, level
 
         theta_pinch%length = two_pi()
         theta_pinch%b_axial = 1.0_dp
@@ -138,15 +138,22 @@ contains
             call assemble_single_mode_stiffness(theta_pinch, 1, 1, 1.0_dp, &
                 meshes(level), stiffness, info)
             call require(info == newcomb_ok, "full theta-pinch assembly failed")
-            allocate (displacement(size(stiffness, 1)))
+            allocate (displacement(size(stiffness, 1)), &
+                image(size(stiffness, 1)))
             step = 1.0_dp / real(meshes(level), dp)
             do i = 1, size(displacement)
                 radius = real(i - 1, dp) * step
                 displacement(i) = 1.0_dp - radius**2
             end do
-            errors(level) = abs(dot_product(displacement, &
-                matmul(stiffness, displacement)) - reference)
-            deallocate (stiffness, displacement)
+            do i = 1, size(image)
+                image(i) = 0.0_dp
+                do column = 1, size(displacement)
+                    image(i) = image(i) &
+                        + stiffness(i, column) * displacement(column)
+                end do
+            end do
+            errors(level) = abs(dot_product(displacement, image) - reference)
+            deallocate (stiffness, displacement, image)
         end do
         call require(all(errors(2:) < errors(:2)), &
             "full Newcomb operator does not converge monotonically")
@@ -202,11 +209,12 @@ contains
             "production Newcomb axis ratio is wrong")
         magnitude = abs(mode_m)
         if (magnitude == 0) then
-            roots = [-1.0_dp, 1.0_dp]
+            roots(1) = -1.0_dp
+            roots(2) = 1.0_dp
             polynomial = roots**2 - ratio
         else
-            roots = [-1.0_dp - real(magnitude, dp), &
-                -1.0_dp + real(magnitude, dp)]
+            roots(1) = -1.0_dp - real(magnitude, dp)
+            roots(2) = -1.0_dp + real(magnitude, dp)
             polynomial = roots * (roots + 2.0_dp) - ratio
         end if
         call require(maxval(abs(polynomial)) < 2.0e-3_dp, &

@@ -91,21 +91,29 @@ contains
     end subroutine test_invalid_coordinates
 
     subroutine test_invalid_fourier_inputs()
-        real(dp) :: nan
+        integer, parameter :: paired_m(2) = [0, 1]
+        integer, parameter :: zero_mode(1) = [0]
+        real(dp), parameter :: one_coefficient(1) = [1.0_dp]
+        real(dp), parameter :: zero_coefficient(1) = [0.0_dp]
+        real(dp) :: nan, nan_coefficient(1)
 
         nan = ieee_value(0.0_dp, ieee_quiet_nan)
-        call reconstruct_fourier_scalar(0.0_dp, 0.0_dp, 0, [0], [0], &
-            [1.0_dp], [0.0_dp], value, derivative_theta, &
+        nan_coefficient(1) = nan
+        call reconstruct_fourier_scalar(0.0_dp, 0.0_dp, 0, zero_mode, &
+            zero_mode, one_coefficient, zero_coefficient, value, &
+            derivative_theta, &
             derivative_zeta_full, info)
         call require(info == adapter_invalid_field_periods, &
             "zero field periods were accepted")
-        call reconstruct_fourier_scalar(0.0_dp, 0.0_dp, 1, [0, 1], [0], &
-            [1.0_dp], [0.0_dp], value, derivative_theta, &
+        call reconstruct_fourier_scalar(0.0_dp, 0.0_dp, 1, paired_m, &
+            zero_mode, one_coefficient, zero_coefficient, value, &
+            derivative_theta, &
             derivative_zeta_full, info)
         call require(info == adapter_shape_mismatch, &
             "mismatched Fourier arrays were accepted")
-        call reconstruct_fourier_scalar(0.0_dp, 0.0_dp, 1, [0], [0], &
-            [nan], [0.0_dp], value, derivative_theta, &
+        call reconstruct_fourier_scalar(0.0_dp, 0.0_dp, 1, zero_mode, &
+            zero_mode, nan_coefficient, zero_coefficient, value, &
+            derivative_theta, &
             derivative_zeta_full, info)
         call require(info == adapter_nonfinite_input, &
             "nonfinite Fourier coefficient was accepted")
