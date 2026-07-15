@@ -119,7 +119,6 @@ contains
         real(dp), allocatable :: stored_power(:)
         integer :: allocation_status, mode, parity_class
 
-        problem = fixed_boundary_problem_t()
         info = fixed_boundary_invalid
         if (.not. valid_inputs(equilibrium, adiabatic_index, density_kg_m3, &
             zero_floor, mode_m, mode_n, degree)) return

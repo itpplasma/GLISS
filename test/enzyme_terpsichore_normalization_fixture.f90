@@ -20,17 +20,34 @@ contains
         real(dp) :: ftp, fpp, radial_weight
         integer :: info
 
-        signed_jacobian = [-28.0_dp - 0.1_dp * active, &
-            -30.0_dp + 0.2_dp * active, -29.0_dp - 0.3_dp * active, &
-            -31.0_dp + 0.4_dp * active]
-        normal_phase = reshape([0.2_dp, -0.4_dp, 0.5_dp, 0.1_dp, &
-            -0.3_dp, 0.6_dp, 0.4_dp, -0.2_dp], [2, 4]) + 0.01_dp * active
-        tangential_phase = reshape([0.7_dp, 0.1_dp, -0.2_dp, 0.8_dp, &
-            0.3_dp, -0.5_dp, 0.6_dp, 0.2_dp], [2, 4]) - 0.02_dp * active
-        radial_factor = [0.9_dp + 0.01_dp * active, &
-            1.1_dp - 0.02_dp * active]
-        displacement = [0.2_dp, -0.1_dp, 0.4_dp, 0.3_dp, -0.2_dp, 0.5_dp] &
-            + 0.03_dp * active
+        signed_jacobian(1) = -28.0_dp - 0.1_dp * active
+        signed_jacobian(2) = -30.0_dp + 0.2_dp * active
+        signed_jacobian(3) = -29.0_dp - 0.3_dp * active
+        signed_jacobian(4) = -31.0_dp + 0.4_dp * active
+        normal_phase(1, 1) = 0.2_dp + 0.01_dp * active
+        normal_phase(2, 1) = -0.4_dp + 0.01_dp * active
+        normal_phase(1, 2) = 0.5_dp + 0.01_dp * active
+        normal_phase(2, 2) = 0.1_dp + 0.01_dp * active
+        normal_phase(1, 3) = -0.3_dp + 0.01_dp * active
+        normal_phase(2, 3) = 0.6_dp + 0.01_dp * active
+        normal_phase(1, 4) = 0.4_dp + 0.01_dp * active
+        normal_phase(2, 4) = -0.2_dp + 0.01_dp * active
+        tangential_phase(1, 1) = 0.7_dp - 0.02_dp * active
+        tangential_phase(2, 1) = 0.1_dp - 0.02_dp * active
+        tangential_phase(1, 2) = -0.2_dp - 0.02_dp * active
+        tangential_phase(2, 2) = 0.8_dp - 0.02_dp * active
+        tangential_phase(1, 3) = 0.3_dp - 0.02_dp * active
+        tangential_phase(2, 3) = -0.5_dp - 0.02_dp * active
+        tangential_phase(1, 4) = 0.6_dp - 0.02_dp * active
+        tangential_phase(2, 4) = 0.2_dp - 0.02_dp * active
+        radial_factor(1) = 0.9_dp + 0.01_dp * active
+        radial_factor(2) = 1.1_dp - 0.02_dp * active
+        displacement(1) = 0.2_dp + 0.03_dp * active
+        displacement(2) = -0.1_dp + 0.03_dp * active
+        displacement(3) = 0.4_dp + 0.03_dp * active
+        displacement(4) = 0.3_dp + 0.03_dp * active
+        displacement(5) = -0.2_dp + 0.03_dp * active
+        displacement(6) = 0.5_dp + 0.03_dp * active
         call map_gliss_export_flip_pol_cell_to_terpsichore(3, 4, &
             0.25_dp - 0.01_dp * active, 0.5_dp + 0.01_dp * active, &
             signed_jacobian, -0.5_dp - 0.02_dp * active, &

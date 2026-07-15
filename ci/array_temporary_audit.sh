@@ -27,5 +27,20 @@ export FO_CACHE_DIR="$audit_worktree/.fo-cache"
 
 cd "$audit_worktree"
 fo clean --cache
+lint_report=$(fo lint --json)
+python3 -c '
+import json
+import sys
+
+report = json.load(sys.stdin)
+if report["count"]:
+    for warning in report["warnings"]:
+        print(
+            f"{warning['file']}:{warning['line']}:{warning['column']}: "
+            f"{warning['message']}",
+            file=sys.stderr,
+        )
+    raise SystemExit(1)
+' <<<"$lint_report"
 fo build --flag '-O3 -Warray-temporaries -Werror=array-temporaries'
 fo test

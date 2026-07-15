@@ -71,6 +71,15 @@ program test_fixed_boundary_spectrum
         "repeated solve changed the eigenvalue")
     call require(all(repeated%eigenvector == first%eigenvector), &
         "repeated solve changed the eigenvector")
+    call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
+        2.0_dp, 1.0_dp, [1, 2], [1, 1], 1, problem, info)
+    call require(info == fixed_boundary_ok, "same-object rebuild failed")
+    call solve_fixed_boundary_class(problem, 1, repeated, info)
+    call require(info == fixed_boundary_ok, "rebuilt problem solve failed")
+    call require(repeated%lowest_eigenvalue == first%lowest_eigenvalue, &
+        "same-object rebuild changed the eigenvalue")
+    call require(all(repeated%eigenvector == first%eigenvector), &
+        "same-object rebuild changed the eigenvector")
 
     call check_invalid_inputs(equilibrium)
     call check_row_permutation()

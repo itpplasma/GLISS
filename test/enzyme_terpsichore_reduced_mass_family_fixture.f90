@@ -29,17 +29,20 @@ contains
                 + 0.01_dp * active
             radial_weight(interval) = 0.4_dp + 0.1_dp * interval &
                 - 0.02_dp * active
-            radial_factor(:, interval) = [0.8_dp + 0.01_dp * interval &
-                + 0.02_dp * active, 1.1_dp - 0.01_dp * active]
+            radial_factor(1, interval) = 0.8_dp + 0.01_dp * interval &
+                + 0.02_dp * active
+            radial_factor(2, interval) = 1.1_dp - 0.01_dp * active
             do point = 1, 4
                 signed_bjac(point, interval) = -(1.0_dp + 0.03_dp * point &
                     + 0.02_dp * interval + 0.01_dp * active * point)
-                normal_phase(:, point, interval) = &
-                    [0.1_dp * point + 0.01_dp * active, &
-                    0.2_dp * interval - 0.02_dp * active]
-                tangential_phase(:, point, interval) = &
-                    [0.15_dp * interval + 0.02_dp * active, &
-                    0.12_dp * point - 0.01_dp * active]
+                normal_phase(1, point, interval) = &
+                    0.1_dp * point + 0.01_dp * active
+                normal_phase(2, point, interval) = &
+                    0.2_dp * interval - 0.02_dp * active
+                tangential_phase(1, point, interval) = &
+                    0.15_dp * interval + 0.02_dp * active
+                tangential_phase(2, point, interval) = &
+                    0.12_dp * point - 0.01_dp * active
             end do
         end do
         call assemble_terpsichore_reduced_family_mass_fixed_layout( &
