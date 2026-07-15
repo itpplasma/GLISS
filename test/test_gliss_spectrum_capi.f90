@@ -13,7 +13,7 @@ program test_gliss_spectrum_capi
     integer(c_int), parameter :: status_invalid_argument = 4
     character(len=*), parameter :: fixture = "spectrum_capi_cylinder.nc"
     real(c_double), parameter :: expected_lowest = &
-        -1.2278817247994587e2_c_double
+        -7.9144227183717817e1_c_double
     real(c_double), parameter :: reference_certificate_limit = 1.2e-3_c_double
     real(c_double), parameter :: reference_relative_limit = 1.0e-8_c_double
 
@@ -23,7 +23,7 @@ program test_gliss_spectrum_capi
         integer(c_int) :: has_eigenvector
         integer(c_int) :: field_periods
         integer(c_int) :: parity_class
-        integer(c_int) :: radial_quadrature
+        integer(c_int) :: degree
         integer(c_int) :: angular_theta
         integer(c_int) :: angular_zeta
         integer(c_size_t) :: mode_count
@@ -103,7 +103,7 @@ program test_gliss_spectrum_capi
         end function equilibrium_destroy
 
         function problem_create(equilibrium_handle, gamma, density, floor, &
-                mode_count, poloidal, toroidal, radial_quadrature, handle, &
+                mode_count, poloidal, toroidal, degree, handle, &
                 error_pointer, error_capacity) &
                 bind(c, name="gliss_stability_problem_create") result(result)
             import c_double, c_int, c_ptr, c_size_t
@@ -111,7 +111,7 @@ program test_gliss_spectrum_capi
             type(c_ptr), value :: handle, error_pointer
             real(c_double), value :: gamma, density, floor
             integer(c_size_t), value :: mode_count, error_capacity
-            integer(c_int), value :: radial_quadrature
+            integer(c_int), value :: degree
             integer(c_int) :: result
         end function problem_create
 
@@ -221,12 +221,12 @@ program test_gliss_spectrum_capi
         "empty mode arrays were accepted")
     status = problem_create(equilibrium, 5.0_c_double / 3.0_c_double, &
         2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
-        c_loc(mode_n), 2_c_int, c_loc(rejected), c_loc(error_buffer), &
+        c_loc(mode_n), 5_c_int, c_loc(rejected), c_loc(error_buffer), &
         int(size(error_buffer), c_size_t))
     call require(status == status_invalid_argument, &
-        "unsafe interpolated quadrature was accepted")
+        "invalid FEEC degree was accepted")
     call require(.not. c_associated(rejected), &
-        "rejected quadrature returned a problem handle")
+        "rejected degree returned a problem handle")
     status = problem_create(equilibrium, 5.0_c_double / 3.0_c_double, &
         2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
         c_loc(mode_n), 1_c_int, c_null_ptr, c_loc(error_buffer), &
@@ -311,7 +311,7 @@ program test_gliss_spectrum_capi
         "summary mu size is wrong")
     call require(summary%negative_count == 1_c_size_t, &
         "negative inertia count is wrong")
-    call require(summary%floor_count == 5_c_size_t, &
+    call require(summary%floor_count == 12_c_size_t, &
         "floor count is wrong")
     call require(summary%certificate <= reference_certificate_limit, &
         "C API reference eigenvalue certificate is too wide")

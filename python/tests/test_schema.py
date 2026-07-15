@@ -15,7 +15,7 @@ def spectrum(parity_class, lowest):
         parity_class=parity_class,
         field_periods=3,
         modes=((1, 1), (2, -1)),
-        radial_quadrature="midpoint",
+        degree=2,
         angular_resolution=(64, 64),
         adiabatic_index=5.0 / 3.0,
         density_kg_m3=2.0,
@@ -43,7 +43,7 @@ def configuration():
         adiabatic_index=5.0 / 3.0,
         density_kg_m3=2.0,
         zero_floor=1.0,
-        radial_quadrature="midpoint",
+        degree=2,
     )
 
 
@@ -63,11 +63,11 @@ def test_configuration_round_trip_is_deterministic(configuration, tmp_path):
     assert first.read_bytes() == second.read_bytes()
     document = json.loads(first.read_text(encoding="utf-8"))
     assert document["schema"] == "gliss.stability.configuration"
-    assert document["schema_version"] == 1
+    assert document["schema_version"] == 3
     assert document["boundary_condition"] == "fixed"
 
 
-def test_schema_two_round_trip_preserves_solver_tolerances(configuration, result):
+def test_schema_three_round_trip_preserves_solver_tolerances(configuration, result):
     tolerances = gliss.SolverTolerances(
         eigenvalue_relative=2.0e-13,
         residual_relative=3.0e-12,
@@ -78,26 +78,37 @@ def test_schema_two_round_trip_preserves_solver_tolerances(configuration, result
     )
     configured = replace(configuration, solver_tolerances=tolerances)
     configured_document = configured.to_dict()
-    assert configured_document["schema_version"] == 2
+    assert configured_document["schema_version"] == 3
     assert gliss.StabilityConfiguration.from_dict(configured_document) == configured
 
     controlled_result = gliss.StabilityResult(
         tuple(replace(item, solver_tolerances=tolerances) for item in result.classes)
     )
     result_document = controlled_result.to_dict()
-    assert result_document["schema_version"] == 2
+    assert result_document["schema_version"] == 3
     loaded = gliss.StabilityResult.read_dict(result_document)
     assert all(item.solver_tolerances == tolerances for item in loaded.classes)
 
 
 def test_schema_one_reads_historical_solver_tolerances(configuration, result):
-    assert configuration.to_dict()["schema_version"] == 1
-    assert result.to_dict()["schema_version"] == 1
+    configuration_document = configuration.to_dict()
+    configuration_document["schema_version"] = 1
+    configuration_document["radial_quadrature"] = "midpoint"
+    configuration_document.pop("degree")
+    configuration_document.pop("solver_tolerances")
+    result_document = result.to_dict()
+    result_document["schema_version"] = 1
+    for item in result_document["classes"]:
+        item["radial_quadrature"] = "midpoint"
+        item.pop("degree")
+        item.pop("solver_tolerances")
     loaded_configuration = gliss.StabilityConfiguration.from_dict(
-        configuration.to_dict()
+        configuration_document
     )
-    loaded_result = gliss.StabilityResult.read_dict(result.to_dict())
+    loaded_result = gliss.StabilityResult.read_dict(result_document)
     defaults = gliss.SolverTolerances.historical_defaults()
+    assert loaded_configuration.degree == 1
+    assert all(item.degree == 1 for item in loaded_result.classes)
     assert loaded_configuration.solver_tolerances == defaults
     assert all(item.solver_tolerances == defaults for item in loaded_result.classes)
 
@@ -107,7 +118,10 @@ def test_schema_one_reads_historical_solver_tolerances(configuration, result):
     [
         (lambda value: value.update(extra=1), "unknown field 'extra'"),
         (lambda value: value.pop("modes"), "missing field 'modes'"),
-        (lambda value: value.update(schema_version=3), "schema_version.*expected 1 or 2"),
+        (
+            lambda value: value.update(schema_version=4),
+            "schema_version.*expected 1 or 2 or 3",
+        ),
         (lambda value: value.update(boundary_condition="free"), "fixed"),
         (lambda value: value.update(density_kg_m3=float("nan")), "finite"),
         (lambda value: value.update(modes=[[1, 1], [1, 1]]), "duplicate"),
@@ -287,7 +301,7 @@ def test_manifest_rejects_changed_equilibrium(configuration, result, tmp_path):
     path = tmp_path / "run.json"
     document = {
         "schema": "gliss.stability.run",
-        "schema_version": 1,
+        "schema_version": 3,
         "equilibrium": {
             "format": "gvec-cas3d-netcdf",
             "schema_version": 1,
@@ -356,7 +370,7 @@ def test_manifest_reader_accepts_legacy_and_rejects_unknown_equilibrium_schema(
     path = tmp_path / "run.json"
     document = {
         "schema": "gliss.stability.run",
-        "schema_version": 1,
+        "schema_version": 3,
         "equilibrium": {
             "format": "gvec-cas3d-netcdf",
             "schema_version": 0,

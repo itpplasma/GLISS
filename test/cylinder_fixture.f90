@@ -230,6 +230,8 @@ contains
         end if
         call require_netcdf(nc_put_global_text(ncid, &
             "stellarator_symmetry", "False"))
+        call require_netcdf(nc_put_global_text(ncid, "position_frame", &
+            "xhat,yhat rotated by winding*zeta_B"))
         call require_netcdf(nc_end_definitions(ncid))
     end subroutine define_fixture_variables
 

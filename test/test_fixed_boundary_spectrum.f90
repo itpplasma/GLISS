@@ -17,7 +17,7 @@ program test_fixed_boundary_spectrum
 
     character(len=*), parameter :: fixture = "fixed_boundary_spectrum.nc"
     real(dp), parameter :: reference_lowest(2) = &
-        [-1.2278817247994587e2_dp, -1.2278817251871921e2_dp]
+        [-7.9144227183717817e1_dp, -7.9144227377194269e1_dp]
     real(dp), parameter :: reference_certificate_limit = 1.2e-3_dp
     real(dp), parameter :: reference_relative_limit = 1.0e-8_dp
     type(gvec_cas3d_equilibrium_t) :: equilibrium
@@ -287,13 +287,13 @@ contains
         call require(status == fixed_boundary_invalid, &
             "zero floor was accepted")
         call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
-            2.0_dp, 1.0_dp, [1], [1], 2, invalid_problem, status)
+            2.0_dp, 1.0_dp, [1], [1], 0, invalid_problem, status)
         call require(status == fixed_boundary_invalid, &
-            "unsafe interpolated quadrature was accepted")
+            "degree zero was accepted")
         call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
-            2.0_dp, 1.0_dp, [1], [1], 3, invalid_problem, status)
+            2.0_dp, 1.0_dp, [1], [1], 5, invalid_problem, status)
         call require(status == fixed_boundary_invalid, &
-            "unknown radial quadrature was accepted")
+            "degree five was accepted")
         call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
             2.0_dp, 1.0_dp, [1, 1], [1, 1], 1, invalid_problem, status)
         call require(status == fixed_boundary_invalid, &

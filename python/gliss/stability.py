@@ -32,9 +32,6 @@ if TYPE_CHECKING:
     from .full_spectrum import FullSpectrumResult, FullStabilityResult
     from .schema import RunManifest, StabilityConfiguration
 
-_QUADRATURE = {"midpoint": 1}
-
-
 class _SpectrumSummary(ctypes.Structure):
     _fields_ = [
         ("struct_size", ctypes.c_size_t),
@@ -42,7 +39,7 @@ class _SpectrumSummary(ctypes.Structure):
         ("has_eigenvector", ctypes.c_int32),
         ("field_periods", ctypes.c_int32),
         ("parity_class", ctypes.c_int32),
-        ("radial_quadrature", ctypes.c_int32),
+        ("degree", ctypes.c_int32),
         ("angular_theta", ctypes.c_int32),
         ("angular_zeta", ctypes.c_int32),
         ("mode_count", ctypes.c_size_t),
@@ -123,7 +120,7 @@ class SpectrumResult:
     parity_class: int
     field_periods: int
     modes: Tuple[Tuple[int, int], ...]
-    radial_quadrature: str
+    degree: int
     angular_resolution: Tuple[int, int]
     adiabatic_index: float
     density_kg_m3: float
@@ -214,20 +211,19 @@ class StabilityProblem:
         adiabatic_index: float = 5.0 / 3.0,
         density_kg_m3: float = 1.0,
         zero_floor: float = 1.0,
-        radial_quadrature: str = "midpoint",
+        degree: int = 2,
         solver_tolerances: SolverTolerances = SolverTolerances(),
     ):
         if not isinstance(equilibrium, Equilibrium):
             raise TypeError("equilibrium must be a gliss.Equilibrium")
         if equilibrium.closed:
             raise RuntimeError("Equilibrium is closed")
-        if not isinstance(radial_quadrature, str):
-            raise TypeError("radial_quadrature must be a string")
-        if radial_quadrature not in _QUADRATURE:
-            raise ValueError("radial_quadrature must be 'midpoint'")
+        degree = mode_integer(degree, "degree")
+        if degree < 1 or degree > 4:
+            raise ValueError("degree must be between 1 and 4")
         self.modes = validate_modes(modes)
         self.adiabatic_index = real_parameter(
-            adiabatic_index, "adiabatic_index", allow_zero=True
+            adiabatic_index, "adiabatic_index", allow_zero=False
         )
         self.density_kg_m3 = real_parameter(
             density_kg_m3, "density_kg_m3", allow_zero=False
@@ -235,7 +231,7 @@ class StabilityProblem:
         self.zero_floor = real_parameter(zero_floor, "zero_floor", allow_zero=False)
         if self.zero_floor > 0.125 * np.finfo(np.float64).max:
             raise ValueError("zero_floor is too large for spectrum certification")
-        self.radial_quadrature = radial_quadrature
+        self.degree = degree
         if not isinstance(solver_tolerances, SolverTolerances):
             raise TypeError("solver_tolerances must be a gliss.SolverTolerances")
         self.solver_tolerances = solver_tolerances
@@ -264,7 +260,7 @@ class StabilityProblem:
             count,
             mode_m,
             mode_n,
-            _QUADRATURE[self.radial_quadrature],
+            self.degree,
             ctypes.byref(self._handle),
             error,
             len(error),
@@ -327,7 +323,7 @@ class StabilityProblem:
             self.adiabatic_index,
             self.density_kg_m3,
             self.zero_floor,
-            self.radial_quadrature,
+            self.degree,
             self.solver_tolerances,
         )
 
@@ -464,16 +460,15 @@ class StabilityProblem:
     def _result_from_summary(
         self, summary: _SpectrumSummary, vector: np.ndarray
     ) -> SpectrumResult:
-        quadrature = {value: key for key, value in _QUADRATURE.items()}
-        if summary.radial_quadrature not in quadrature:
+        if summary.degree < 1 or summary.degree > 4:
             raise GlissInternalError(
-                f"GLISS returned unknown radial quadrature {summary.radial_quadrature}"
+                f"GLISS returned invalid FEEC degree {summary.degree}"
             )
         return SpectrumResult(
             parity_class=summary.parity_class,
             field_periods=summary.field_periods,
             modes=self.modes,
-            radial_quadrature=quadrature[summary.radial_quadrature],
+            degree=summary.degree,
             angular_resolution=(summary.angular_theta, summary.angular_zeta),
             adiabatic_index=summary.adiabatic_index,
             density_kg_m3=summary.density_kg_m3,

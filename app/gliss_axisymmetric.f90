@@ -11,7 +11,7 @@ program gliss_axisymmetric
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(axisymmetric_spectrum_result_t) :: result
     character(len=1024) :: filename, message, token
-    integer :: arguments, info, poloidal_max, quadrature, toroidal_mode
+    integer :: arguments, degree, info, poloidal_max, toroidal_mode
     logical :: count_only
 
     interface
@@ -29,19 +29,15 @@ program gliss_axisymmetric
     call read_integer_argument(3, "MMAX", poloidal_max)
     if (toroidal_mode <= 0) call fail_usage("N must be positive")
     if (poloidal_max < 1) call fail_usage("MMAX must be positive")
-    quadrature = 1
+    degree = 2
     count_only = .false.
     if (arguments >= 5) then
         call read_argument(4, "option", token)
-        if (trim(token) /= "--quadrature") &
-            call fail_usage("the optional argument must be --quadrature")
-        call read_argument(5, "quadrature rule", token)
-        select case (trim(token))
-        case ("midpoint")
-            quadrature = 1
-        case default
-            call fail_usage("quadrature RULE must be midpoint")
-        end select
+        if (trim(token) /= "--degree") &
+            call fail_usage("the optional argument must be --degree")
+        call read_integer_argument(5, "DEGREE", degree)
+        if (degree < 1 .or. degree > 4) &
+            call fail_usage("DEGREE must be between 1 and 4")
         if (arguments == 6) then
             call read_argument(6, "option", token)
             if (trim(token) /= "--count-only") &
@@ -58,7 +54,7 @@ program gliss_axisymmetric
     call read_gvec_cas3d_file(trim(filename), equilibrium, info)
     if (info /= reader_ok) call fail("equilibrium export could not be read")
     call compute_axisymmetric_spectrum(equilibrium, toroidal_mode, &
-        poloidal_max, quadrature, .not. count_only, result, info, message)
+        poloidal_max, degree, .not. count_only, result, info, message)
     if (info == axisymmetric_spectrum_invalid_input .and. &
         index(message, "aliases") > 0) &
         call fail_usage("MMAX aliases the fixed angular quadrature")
@@ -67,14 +63,14 @@ program gliss_axisymmetric
     write (*, "(a)") "chart_metric,field_periods,toroidal_mode," // &
         "poloidal_max,modes,radial_surfaces,parity_class," // &
         "lowest_eigenvalue,inertia_certificate,eigenpair_residual," // &
-        "negative_count,force_balance_residual,radial_quadrature_points"
+        "negative_count,force_balance_residual,degree"
     write (*, "(l1, 6(a, i0), 3(a, es24.16), a, i0, a, es24.16, a, i0)") &
         equilibrium%has_chart_metric, ",", equilibrium%field_periods, ",", &
         toroidal_mode, ",", poloidal_max, ",", result%mode_count, ",", &
         result%radial_surfaces, ",", result%parity_class, ",", &
         result%lowest_eigenvalue, ",", result%certificate, ",", &
         result%eigenpair_residual, ",", result%negative_count, ",", &
-        result%force_balance_residual, ",", result%radial_quadrature
+        result%force_balance_residual, ",", result%degree
 
 contains
 
@@ -84,7 +80,7 @@ contains
         write (error_unit, "(a)") "gliss_axisymmetric: " // trim(message)
         write (error_unit, "(a)") &
             "usage: gliss_axisymmetric EXPORT_FILE N MMAX " // &
-            "[--quadrature midpoint] [--count-only]"
+            "[--degree DEGREE] [--count-only]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
 

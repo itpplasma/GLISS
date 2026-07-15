@@ -202,8 +202,8 @@ Both functions return a frozen `AxisymmetricResult`. `negative_count` is the
 inertia of the assembled operator below zero. A zero count is stable within
 the selected Fourier and radial discretization; a positive count gives the
 number of unstable directions. `solve_axisymmetric()` also returns the lowest
-eigenvalue, a `certificate` combining the inertia-bracket width, backward
-error, and roundoff resolution, and the backward error in
+eigenvalue, a `certificate` combining backward error and numerical
+resolution, and the backward error in
 `eigenpair_residual`. The count-only function sets these three fields to
 `None`. `force_balance_residual` is the maximum dimensionless residual of the
 equilibrium identity used while reconstructing the kernel geometry.
@@ -213,8 +213,9 @@ operator. It uses normalized toroidal flux `s`, a fixed plasma boundary at
 `s=1`, and the sine-parity class. The mode table is `(0,+n)`, followed by
 `(m,-n),(m,+n)` for `m=1,...,poloidal_max`. The stored radial factor enforces
 the regular physical behavior `xi^s ~ s^(m/2)` at the magnetic axis. Fourier
-phases use `2*pi*(m*theta-n*zeta)`. Angular quadrature is fixed at 64 by 8;
-radial quadrature is `"midpoint"`.
+phases use `2*pi*(m*theta-n*zeta)`. Angular quadrature is fixed at 64 by 8.
+`degree` selects the compatible radial FEEC degree from 1 through 4 and
+defaults to 2.
 
 The eigenvalue and certificate use the native normalization of this
 two-component comparison operator. They are not an SI `omega^2` or a growth
@@ -222,9 +223,9 @@ rate. Use their sign, convergence under radial and Fourier refinement, and a
 matched normalization for cross-code comparisons. The residual and inertia
 count are dimensionless.
 
-The equilibrium must contain the `g_st` and `g_sz` chart metrics, use one
-field period, contain no nonaxisymmetric harmonics, and provide at least five
-half-grid surfaces. `toroidal_mode` and `poloidal_max` are positive signed
+The equilibrium must use one field period, contain no nonaxisymmetric
+primitive harmonics, and provide at least four half-grid surfaces.
+`toroidal_mode` and `poloidal_max` are positive signed
 32-bit integers. The fixed angular grid also requires
 `2*poloidal_max + max(abs(equilibrium poloidal modes)) < 64`. Python rejects
 bad types and ranges before the native call. Native compatibility failures
@@ -262,21 +263,16 @@ with gliss.Equilibrium(Path("w7x.nc")) as equilibrium:
         print(result.lowest_eigenvalue, result.certificate)
 ```
 
-These functions use the historical incompressible, two-component CAS3D
-functional. The mass matrix is the artificial L2 norm of the transformed
-normal and tangential components described by Schwab. Its eigenvalue is not
-an SI frequency or physical growth rate. Matrix inertia and the zero crossing
-are independent of this positive norm. A numerical eigenvalue can be compared
-to CAS3D only when the equilibrium, Fourier table, radial space, quadrature,
-boundary condition, and artificial norm all match the reference calculation.
-The finite-spectrum solve retains the P1 normal and P0 tangential coefficients
-in one generalized problem. It does not use the zero-shift tangential Schur
-complement, which preserves marginal inertia but changes finite eigenvalues.
-Before inverse iteration, GLISS applies a symmetric diagonal congruence to
-equilibrate the pencil. The transformation preserves generalized eigenvalues,
-inertia, positive mass, block sparsity, units, and boundary conditions. The
-reported residual is recomputed in the original coefficient coordinates after
-back-transformation.
+These functions use the incompressible, two-component ideal-MHD functional
+on the same compatible radial FEEC complex used by the compressible solver.
+The mass matrix is the positive perpendicular L2 norm of the normal and
+tangential components. Its eigenvalue is not an SI frequency or physical
+growth rate. Matrix inertia and the zero crossing are independent of the
+chosen positive norm. A finite numerical eigenvalue is comparable to CAS3D
+only when the equilibrium, Fourier table, radial space, boundary condition,
+and normalization are matched. `degree` selects FEEC degree 1 through 4 and
+defaults to 2. The reported residual is evaluated in the assembled physical
+coefficient coordinates.
 
 `modes` is the ordered sequence of `(m, n)` Fourier pairs. Poloidal mode `m`
 must be nonnegative, `(0, n)` requires nonnegative `n`, and pairs must be
@@ -284,8 +280,7 @@ unique. GLISS derives the regular-axis factor for each mode. The angular phase
 is `2*pi*(m*theta - n*zeta/N_T)`, where `N_T` is the number of field periods
 on the full torus. `theta` has period one; `zeta` advances by one per field
 period and spans `0 <= zeta < N_T`. `parity_class` selects either of the two
-stellarator-symmetric parity families. The plasma edge is fixed and radial
-quadrature is currently `"midpoint"`.
+stellarator-symmetric parity families. The plasma edge is fixed.
 
 Both calls return a frozen `Cas3dMarginalityResult`. The count-only call sets
 `lowest_eigenvalue`, `certificate`, and `eigenpair_residual` to `None`. The
@@ -322,18 +317,12 @@ written with the opposite sign in its toroidal envelope phase must negate
 that envelope `n` before calling GLISS. The envelope sequence must start with
 `(0, 0)` and contain unique nonnegative-`m` pairs.
 
-The returned count is `2*len(envelope_modes)-1`. It counts labels, not unique
-physical Fourier pairs: conjugate envelope cells can produce coincident
-sidebands after canonicalization, especially for a zero-poloidal carrier
-offset. GLISS intentionally retains those labels because the CAS3D2MN
-artificial mass is diagonal in labeled coefficient space. The resulting
-exact null directions are classified in the closed band
-`abs(lambda) <= result.inertia_zero_floor`, currently `1e-8`;
-`negative_count` therefore means `lambda < -1e-8` once a coincident sideband
-is present. This band is a
-numerical classification convention, not physics and not an SI growth-rate
-tolerance. The lowest nonzero W7-X values used in the validation are more
-than four orders of magnitude outside it.
+The returned count is `2*len(envelope_modes)-1`: it records the input labels,
+not the number of unique physical Fourier pairs. Conjugate envelope cells can
+produce coincident sidebands after canonicalization. GLISS assembles each
+physical sideband once, so duplicated labels do not introduce redundant null
+coefficient directions. `negative_count` uses the common numerical floor
+`lambda < -result.inertia_zero_floor`, currently `1e-12`.
 
 `cas3d_phase_envelope_inertia` is the count-only form. Both functions return
 a frozen `Cas3dPhaseEnvelopeResult` containing the carrier, the exact ordered
@@ -470,7 +459,7 @@ with Equilibrium(Path("equilibrium_export.nc")) as equilibrium:
         adiabatic_index=5.0 / 3.0,
         density_kg_m3=1.0,
         zero_floor=1.0,
-        radial_quadrature="midpoint",
+        degree=2,
     ) as problem:
         result = problem.solve()
 
@@ -486,16 +475,15 @@ for parity in result.classes:
 `modes` contains explicit `(m, n)` integer pairs. GLISS uses the Fourier phase
 `2*pi*(m*theta - n*zeta/N_T)`, where `N_T` is the number of field periods.
 Poloidal mode `m` must be nonnegative; an axis mode with `m=0` also requires
-`n>=0`. Duplicate modes are rejected. `adiabatic_index` is nonnegative,
+`n>=0`. Duplicate modes are rejected. `adiabatic_index` is positive,
 `density_kg_m3` is a positive SI mass density, and `zero_floor` is a positive
-`omega^2` threshold in `s^-2`. Radial quadrature currently accepts only
-`"midpoint"`. GLISS rejects higher-order quadrature until equilibrium
-primitives can be reconstructed at its nodes without interpolating derived
-midpoint kernels. Angular quadrature is currently fixed at 64 by 64.
+`omega^2` threshold in `s^-2`. `degree` selects a compatible radial FEEC
+degree from 1 through 4 and defaults to 2. Angular quadrature is currently
+fixed at 64 by 64.
 
 The assembled problem uses the physical compressible stiffness and mass,
-transformed one-period Fourier assembly, P1/P0/P0 radial spaces and exact
-fixed-edge elimination. It owns the assembled matrices; the source
+transformed one-period Fourier assembly, compatible H1/L2 radial spaces and
+exact fixed-edge trace elimination. It owns the assembled matrices; the source
 `Equilibrium` may be closed after construction. Repeated calls to `solve()`
 reuse those matrices.
 
@@ -644,7 +632,7 @@ configuration = gliss.StabilityConfiguration(
     adiabatic_index=5.0 / 3.0,
     density_kg_m3=1.0,
     zero_floor=1.0,
-    radial_quadrature="midpoint",
+    degree=2,
 )
 configuration.write("configuration.json")
 
@@ -662,15 +650,15 @@ manifest = gliss.RunManifest.read("run.json")
 manifest.verify_equilibrium("equilibrium_export.nc")
 ```
 
-Configuration schema `gliss.stability.configuration`, version 1, records the
-fixed boundary, mode pairs, physical scalars and radial quadrature. Result
-schema `gliss.stability.result`, version 1, stores both parity classes with all
+Configuration schema `gliss.stability.configuration`, version 3, records the
+fixed boundary, mode pairs, physical scalars, FEEC degree, and solver controls.
+Result schema `gliss.stability.result`, version 3, stores both parity classes with all
 reported conventions, certificate terms and read-only eigenvectors. A round
 trip preserves every binary64 value. Rewriting an unchanged object produces
 the same bytes. This JSON schema stores the certified active pair only. It is
 unchanged by the separate full-spectrum format.
 
-Run schema `gliss.stability.run`, version 1, embeds the configuration and
+Run schema `gliss.stability.run`, version 3, embeds the configuration and
 result. It records the equilibrium export format, base filename, byte count
 and SHA-256, including equilibrium schema 0 or 1. It also records the GLISS
 Python/native versions and ABI, plus the NumPy and Python versions. Absolute
@@ -713,10 +701,9 @@ It is self-contained except for the checksummed NetCDF equilibrium. Use
 `StabilityProblem.write_full_manifest()` to reject an equilibrium file that
 changed after assembly.
 
-The historical controls write schema version 1 byte-for-byte.  Non-default
-solver controls write version 2 and are embedded in the configuration and
-each certified parity result.  Readers accept both versions and recover the
-historical controls when reading version 1.  Full-spectrum readers require the
+Writers always emit schema version 3. Readers also accept versions 1 and 2,
+map their `radial_quadrature="midpoint"` field to FEEC degree 1, and recover
+historical solver controls when they are absent. Full-spectrum readers require the
 exact entry set for the declared version, stored without compression or
 encryption. They reject invalid entry sets, malformed
 metadata, incompatible versions, wrong array types or shapes, inconsistent
@@ -754,7 +741,7 @@ an external equilibrium solve before evaluating it again.
 ## Native library and ABI
 
 `gliss.version()` reports the loaded native version. The Python package checks
-ABI version 1 before every native call and rejects an incompatible library.
+ABI version 2 before every native call and rejects an incompatible library.
 Platform wheels load their bundled library automatically. Developers can test
 a local build explicitly:
 
@@ -770,7 +757,7 @@ and debugging facility, not required for normal use.
 
 The installed C header is `gliss.h`. `gliss.get_include()` returns its directory
 in a wheel installation; CMake source installs place it under the configured
-include prefix. ABI version 1 defines fixed numeric status values, opaque
+include prefix. ABI version 2 defines fixed numeric status values, opaque
 equilibrium and stability-problem handles, caller-owned output arrays, `size_t`
 capacities, and caller-provided error buffers. An error buffer may be omitted
 only by passing both a null pointer and zero capacity. Destroy accepts a null
@@ -785,9 +772,10 @@ needs from its equilibrium, so the two handles have independent lifetimes.
 per-pair arrays and flattened eigenvectors. On a capacity error it reports
 both required counts without modifying any data buffer. The header documents
 the eigenpair-major layout and dense cost.
-Existing ABI-v1 symbols and status values remain unchanged when functions are
-added; an incompatible signature, layout or numeric status change requires a
-new ABI version.
+ABI 2 changes the radial integer from midpoint selection to FEEC degree 1--4.
+Existing ABI-2 symbols and status values remain unchanged when functions are
+added; an incompatible signature, layout, semantic, or numeric status change
+requires a new ABI version.
 
 Initialize `gliss_terpsichore_fixed_boundary_result.struct_size` with
 `sizeof` before calling `gliss_terpsichore_fixed_boundary()`. The caller owns

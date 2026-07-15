@@ -20,7 +20,7 @@ module gliss_spectrum_capi
         integer(c_int) :: has_eigenvector
         integer(c_int) :: field_periods
         integer(c_int) :: parity_class
-        integer(c_int) :: radial_quadrature
+        integer(c_int) :: degree
         integer(c_int) :: angular_theta
         integer(c_int) :: angular_zeta
         integer(c_size_t) :: mode_count
@@ -49,7 +49,7 @@ contains
 
     function gliss_stability_problem_create_c(equilibrium_handle, &
             adiabatic_index, density_kg_m3, zero_floor, mode_count, &
-            mode_m_pointer, mode_n_pointer, radial_quadrature, handle_pointer, &
+            mode_m_pointer, mode_n_pointer, degree, handle_pointer, &
             error_pointer, error_capacity) &
             bind(c, name="gliss_stability_problem_create") result(status)
         type(c_ptr), value, intent(in) :: equilibrium_handle
@@ -57,7 +57,7 @@ contains
         real(c_double), value, intent(in) :: zero_floor
         integer(c_size_t), value, intent(in) :: mode_count
         type(c_ptr), value, intent(in) :: mode_m_pointer, mode_n_pointer
-        integer(c_int), value, intent(in) :: radial_quadrature
+        integer(c_int), value, intent(in) :: degree
         type(c_ptr), value, intent(in) :: handle_pointer, error_pointer
         integer(c_size_t), value, intent(in) :: error_capacity
         integer(c_int) :: status
@@ -97,7 +97,7 @@ contains
         end if
         call build_fixed_boundary_problem(equilibrium%equilibrium, &
             adiabatic_index, density_kg_m3, zero_floor, mode_m, mode_n, &
-            int(radial_quadrature), context%problem, info)
+            int(degree), context%problem, info)
         if (info /= fixed_boundary_ok) then
             deallocate (context)
             call report_problem_error(info, status, error_pointer, &
@@ -350,7 +350,7 @@ contains
             result%has_eigenvector)
         summary%field_periods = int(result%field_periods, c_int)
         summary%parity_class = int(result%parity_class, c_int)
-        summary%radial_quadrature = int(result%radial_quadrature, c_int)
+        summary%degree = int(result%degree, c_int)
         summary%angular_theta = int(result%angular_theta, c_int)
         summary%angular_zeta = int(result%angular_zeta, c_int)
         summary%mode_count = int(result%mode_count, c_size_t)

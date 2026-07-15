@@ -3,6 +3,7 @@
 import operator
 import os
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -48,6 +49,14 @@ def _integer(value: Any, name: str, minimum: int, maximum: int) -> int:
     if not minimum <= result <= maximum:
         raise ValueError(f"{name} must be between {minimum} and {maximum}")
     return result
+
+
+def _force_balance_policy(value: Any) -> str:
+    if not isinstance(value, str):
+        raise TypeError("force_balance_policy must be a string")
+    if value not in {"error", "warn"}:
+        raise ValueError("force_balance_policy must be 'error' or 'warn'")
+    return value
 
 
 def _dependencies():
@@ -170,14 +179,18 @@ def convert_vmec(
     toroidal_max: int = 7,
     transform_factor: int = 4,
     radial_surfaces: Optional[int] = None,
+    force_balance_policy: str = "error",
     overwrite: bool = False,
 ) -> Path:
     """Convert a stellarator-symmetric VMEC ``wout`` file for GLISS.
 
     The result uses the left-handed, one-field-period Boozer convention of
     pyGVEC's CAS3D exporter. ``radial_surfaces`` optionally selects an exact
-    centered uniform subset of the VMEC half grid. Existing outputs are
-    preserved unless ``overwrite=True``.
+    centered uniform subset of the VMEC half grid. A failed pointwise
+    force-balance closure rejects the conversion by default; the explicit
+    ``force_balance_policy="warn"`` option retains the diagnostic export for
+    convergence studies. Existing outputs are preserved unless
+    ``overwrite=True``.
     """
     source_path = _path(input_path, "input_path", True)
     destination = _path(output_path, "output_path", False)
@@ -186,6 +199,7 @@ def convert_vmec(
     transform_factor = _integer(transform_factor, "transform_factor", 2, 16)
     if radial_surfaces is not None:
         radial_surfaces = _integer(radial_surfaces, "radial_surfaces", 5, 1_000_000)
+    force_balance_policy = _force_balance_policy(force_balance_policy)
     if not isinstance(overwrite, bool):
         raise TypeError("overwrite must be a bool")
     if destination.exists() and not overwrite:
@@ -214,6 +228,15 @@ def convert_vmec(
     if bool(transform.asym):
         raise ValueError("booz_xform reported asymmetric geometry")
     converted = convert_geometry(transform, beta_average, poloidal_max, toroidal_max)
+    force_balance = converted.residuals["force_balance"]
+    if force_balance > 1.0e-1:
+        message = (
+            "VMEC conversion failed field-identity checks: "
+            f"{converted.residuals}"
+        )
+        if force_balance_policy == "error":
+            raise ValueError(message)
+        warnings.warn(message, RuntimeWarning, stacklevel=2)
     descriptor, temporary_name = tempfile.mkstemp(
         dir=destination.parent, prefix=f".{destination.name}.", suffix=".tmp"
     )

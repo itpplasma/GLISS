@@ -272,7 +272,7 @@ def _parse_result_metadata(document: Any) -> StabilityResult:
         {"schema", "schema_version", "storage", "certified_result"},
         "full result",
     )
-    version = schema(value, FULL_RESULT_SCHEMA, "full result", (1, 2))
+    version = schema(value, FULL_RESULT_SCHEMA, "full result", (1, 2, 3))
     storage = fields(value["storage"], set(_STORAGE), "full result.storage")
     for name, expected in _STORAGE.items():
         if storage[name] != expected:
@@ -453,7 +453,7 @@ class FullRunManifest:
                 },
                 "full run",
             )
-            schema(value, FULL_RUN_SCHEMA, "full run", (1, 2))
+            schema(value, FULL_RUN_SCHEMA, "full run", (1, 2, 3))
             result = _read_full_result(archive, value["result"], source)
             base_document = dict(value)
             base_document["schema"] = "gliss.stability.run"

@@ -31,7 +31,7 @@ class FakeLibrary:
         mode_m,
         mode_n,
         parity_class,
-        radial_quadrature,
+        degree,
         angular_theta,
         angular_zeta,
         solve_eigenpair,
@@ -44,7 +44,7 @@ class FakeLibrary:
             tuple(mode_m),
             tuple(mode_n),
             parity_class,
-            radial_quadrature,
+            degree,
             angular_theta,
             angular_zeta,
             solve_eigenpair,
@@ -55,7 +55,7 @@ class FakeLibrary:
         native.mode_count = mode_count
         native.radial_surfaces = 48
         native.parity_class = parity_class
-        native.radial_quadrature = radial_quadrature
+        native.degree = degree
         native.angular_theta = angular_theta
         native.angular_zeta = angular_zeta
         native.negative_count = 2
@@ -75,7 +75,7 @@ class FakeLibrary:
         envelope_m,
         envelope_n,
         parity_class,
-        radial_quadrature,
+        degree,
         angular_theta,
         angular_zeta,
         solve_eigenpair,
@@ -89,7 +89,7 @@ class FakeLibrary:
             tuple(envelope_m),
             tuple(envelope_n),
             parity_class,
-            radial_quadrature,
+            degree,
             angular_theta,
             angular_zeta,
             solve_eigenpair,
@@ -100,7 +100,7 @@ class FakeLibrary:
         native.mode_count = 2 * envelope_count - 1
         native.radial_surfaces = 48
         native.parity_class = parity_class
-        native.radial_quadrature = radial_quadrature
+        native.degree = degree
         native.angular_theta = angular_theta
         native.angular_zeta = angular_zeta
         native.negative_count = 3
@@ -131,13 +131,13 @@ def test_cas3d_marginality_inertia_uses_explicit_general_modes():
         angular_zeta=48,
     )
 
-    assert library.arguments == (23, (3, 8), (-2, -7), 2, 1, 72, 48, 0)
+    assert library.arguments == (23, (3, 8), (-2, -7), 2, 2, 72, 48, 0)
     assert result.has_eigenpair is False
     assert result.field_periods == 5
     assert result.modes == ((3, -2), (8, -7))
     assert result.radial_surfaces == 48
     assert result.parity_class == 2
-    assert result.radial_quadrature == "midpoint"
+    assert result.degree == 2
     assert result.angular_resolution == (72, 48)
     assert result.negative_count == 2
     assert result.lowest_eigenvalue is None
@@ -153,7 +153,7 @@ def test_solve_cas3d_marginality_labels_artificial_normalization():
     assert result.lowest_eigenvalue == pytest.approx(-5.3e-4)
     assert result.certificate == pytest.approx(2.0e-10)
     assert result.eigenpair_residual == pytest.approx(4.0e-13)
-    assert "artificial" in result.normalization
+    assert "compatible" in result.normalization
     assert "not a physical growth rate" in result.interpretation
     assert result.boundary_condition == "fixed"
     assert result.coordinate_handedness == "left-handed"
@@ -178,7 +178,7 @@ def test_solve_cas3d_phase_envelope_retains_labeled_sidebands():
         (0, 1, 0, 0),
         (0, 0, 1, -1),
         2,
-        1,
+        2,
         72,
         48,
         1,
@@ -186,10 +186,10 @@ def test_solve_cas3d_phase_envelope_retains_labeled_sidebands():
     assert result.base_mode == (3, 2)
     assert result.envelope_modes == ((0, 0), (1, 0), (0, 1), (0, -1))
     assert result.labeled_sideband_count == 7
-    assert result.inertia_zero_floor == 1.0e-8
+    assert result.inertia_zero_floor == 1.0e-12
     assert result.negative_count == 3
     assert result.lowest_eigenvalue == pytest.approx(-3.8e-4)
-    assert "labeled" in result.normalization
+    assert "physical modes" in result.normalization
     assert result.base_fourier_convention == "2*pi*(M*theta - N*zeta/N_T)"
     assert result.envelope_fourier_convention == "2*pi*(m*theta - n*zeta)"
 
@@ -229,8 +229,9 @@ def test_cas3d_phase_envelope_rejects_invalid_input(keyword, value, exception, m
         ("modes", [(True, 1)], TypeError, "integer"),
         ("parity_class", True, TypeError, "integer"),
         ("parity_class", 0, ValueError, "1 or 2"),
-        ("radial_quadrature", 1, TypeError, "string"),
-        ("radial_quadrature", "gauss2", ValueError, "midpoint"),
+        ("degree", True, TypeError, "integer"),
+        ("degree", 0, ValueError, "between 1 and 4"),
+        ("degree", 5, ValueError, "between 1 and 4"),
         ("angular_theta", 3, ValueError, "at least 4"),
         ("angular_theta", 2**31, ValueError, "32-bit"),
         ("angular_zeta", 4.5, TypeError, "integer"),

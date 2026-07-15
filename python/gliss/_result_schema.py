@@ -15,11 +15,7 @@ from ._schema_support import (
 )
 from .equilibrium import PathLike
 from ._stability_input import validate_modes as _validate_modes
-from .stability import (
-    _QUADRATURE,
-    SpectrumResult,
-    StabilityResult,
-)
+from .stability import SpectrumResult, StabilityResult
 from .solver import SolverTolerances
 
 RESULT_SCHEMA = "gliss.stability.result"
@@ -27,7 +23,7 @@ _SPECTRUM_FIELDS = {
     "parity_class",
     "field_periods",
     "modes",
-    "radial_quadrature",
+    "degree",
     "angular_resolution",
     "adiabatic_index",
     "density_kg_m3",
@@ -51,7 +47,11 @@ _SPECTRUM_FIELDS = {
     "coordinate_handedness",
     "fourier_convention",
 }
-_SPECTRUM_FIELDS_V2 = _SPECTRUM_FIELDS | {"solver_tolerances"}
+_SPECTRUM_FIELDS_OLD = (_SPECTRUM_FIELDS - {"degree"}) | {
+    "radial_quadrature"
+}
+_SPECTRUM_FIELDS_V2 = _SPECTRUM_FIELDS_OLD | {"solver_tolerances"}
+_SPECTRUM_FIELDS_V3 = _SPECTRUM_FIELDS | {"solver_tolerances"}
 
 
 def _spectrum_to_dict(result: SpectrumResult) -> Dict[str, Any]:
@@ -59,7 +59,7 @@ def _spectrum_to_dict(result: SpectrumResult) -> Dict[str, Any]:
         "parity_class": result.parity_class,
         "field_periods": result.field_periods,
         "modes": [list(mode) for mode in result.modes],
-        "radial_quadrature": result.radial_quadrature,
+        "degree": result.degree,
         "angular_resolution": list(result.angular_resolution),
         "adiabatic_index": result.adiabatic_index,
         "density_kg_m3": result.density_kg_m3,
@@ -83,19 +83,23 @@ def _spectrum_to_dict(result: SpectrumResult) -> Dict[str, Any]:
         "coordinate_handedness": result.coordinate_handedness,
         "fourier_convention": result.fourier_convention,
     }
-    if result.solver_tolerances != SolverTolerances.historical_defaults():
-        document["solver_tolerances"] = result.solver_tolerances.to_dict()
+    document["solver_tolerances"] = result.solver_tolerances.to_dict()
     return document
 
 
-def _problem_metadata(value: Mapping[str, Any], context: str) -> tuple:
+def _problem_metadata(value: Mapping[str, Any], context: str, version: int) -> tuple:
     try:
         modes = _validate_modes(value["modes"])
     except (TypeError, ValueError) as error:
         raise ValueError(f"{context}.modes: {error}") from error
-    quadrature = value["radial_quadrature"]
-    if quadrature not in _QUADRATURE:
-        raise ValueError(f"{context}.radial_quadrature must be 'midpoint'")
+    if version in (1, 2):
+        if value["radial_quadrature"] != "midpoint":
+            raise ValueError(f"{context}.radial_quadrature must be 'midpoint'")
+        degree = 1
+    else:
+        degree = integer(value["degree"], f"{context}.degree", 1)
+        if degree > 4:
+            raise ValueError(f"{context}.degree must be between 1 and 4")
     angular = value["angular_resolution"]
     if not isinstance(angular, list) or len(angular) != 2:
         raise ValueError(f"{context}.angular_resolution must contain two integers")
@@ -103,7 +107,7 @@ def _problem_metadata(value: Mapping[str, Any], context: str) -> tuple:
         integer(angular[0], f"{context}.angular_resolution[0]", 1),
         integer(angular[1], f"{context}.angular_resolution[1]", 1),
     )
-    return modes, quadrature, resolution
+    return modes, degree, resolution
 
 
 def _component_vector(value: Mapping[str, Any], context: str) -> tuple:
@@ -167,18 +171,26 @@ def _certificate_components(value: Mapping[str, Any], context: str) -> Dict[str,
 
 def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResult:
     context = f"result.classes[{index}]"
-    expected = _SPECTRUM_FIELDS_V2 if version == 2 else _SPECTRUM_FIELDS
+    if version == 1:
+        expected = _SPECTRUM_FIELDS_OLD
+    elif version == 2:
+        expected = _SPECTRUM_FIELDS_V2
+    else:
+        expected = _SPECTRUM_FIELDS_V3
     value = fields(document, expected, context)
     parity = integer(value["parity_class"], f"{context}.parity_class", 1)
     if parity not in (1, 2):
         raise ValueError(f"{context}.parity_class must be 1 or 2")
     field_periods = integer(value["field_periods"], f"{context}.field_periods", 1)
-    modes, quadrature, angular_resolution = _problem_metadata(value, context)
+    modes, degree, angular_resolution = _problem_metadata(value, context, version)
     gamma = real(value["adiabatic_index"], f"{context}.adiabatic_index", 0.0)
     density = real(value["density_kg_m3"], f"{context}.density_kg_m3")
     floor = real(value["zero_floor"], f"{context}.zero_floor")
-    if density <= 0.0 or floor <= 0.0:
-        raise ValueError(f"{context} density_kg_m3 and zero_floor must be positive")
+    if gamma <= 0.0 or density <= 0.0 or floor <= 0.0:
+        raise ValueError(
+            f"{context} adiabatic_index, density_kg_m3, and zero_floor "
+            "must be positive"
+        )
     counts, has_vector, vector = _component_vector(value, context)
     chart_metric = value["has_chart_metric"]
     if not isinstance(chart_metric, bool):
@@ -189,7 +201,7 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
         parity_class=parity,
         field_periods=field_periods,
         modes=modes,
-        radial_quadrature=quadrature,
+        degree=degree,
         angular_resolution=angular_resolution,
         adiabatic_index=gamma,
         density_kg_m3=density,
@@ -211,7 +223,7 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
         has_eigenvector=has_vector,
         solver_tolerances=(
             SolverTolerances.from_dict(value["solver_tolerances"])
-            if version == 2
+            if version in (2, 3)
             else SolverTolerances.historical_defaults()
         ),
     )
@@ -221,11 +233,8 @@ def stability_result_to_dict(result: StabilityResult) -> Dict[str, Any]:
     """Return a validated canonical versioned result document."""
     if not isinstance(result, StabilityResult):
         raise TypeError("result must be a gliss.StabilityResult")
-    version = 2 if any(
-        item.solver_tolerances != SolverTolerances.historical_defaults()
-        for item in result.classes
-    ) else SCHEMA_VERSION
-    if version == 2 and len({item.solver_tolerances for item in result.classes}) != 1:
+    version = SCHEMA_VERSION
+    if len({item.solver_tolerances for item in result.classes}) != 1:
         raise ValueError("result parity classes have inconsistent solver tolerances")
     document = {
         "schema": RESULT_SCHEMA,
@@ -239,7 +248,7 @@ def stability_result_to_dict(result: StabilityResult) -> Dict[str, Any]:
 def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
     """Validate and construct a versioned result document."""
     value = fields(document, {"schema", "schema_version", "classes"}, "result")
-    version = schema(value, RESULT_SCHEMA, "result", (1, 2))
+    version = schema(value, RESULT_SCHEMA, "result", (1, 2, 3))
     classes = value["classes"]
     if not isinstance(classes, list) or len(classes) != 2:
         raise ValueError("result.classes must contain parity classes 1 then 2")
@@ -256,7 +265,7 @@ def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
         shared = (
             "field_periods",
             "modes",
-            "radial_quadrature",
+            "degree",
             "angular_resolution",
             "adiabatic_index",
             "density_kg_m3",

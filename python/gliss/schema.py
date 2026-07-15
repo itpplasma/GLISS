@@ -30,13 +30,10 @@ from .equilibrium import (
     _file_identity,
     _stable_file_digest,
 )
+from ._stability_input import mode_integer as _mode_integer
 from ._stability_input import real_parameter as _real_parameter
 from ._stability_input import validate_modes as _validate_modes
-from .stability import (
-    _QUADRATURE,
-    StabilityProblem,
-    StabilityResult,
-)
+from .stability import StabilityProblem, StabilityResult
 from .solver import SolverTolerances
 
 _CONFIGURATION_SCHEMA = "gliss.stability.configuration"
@@ -52,19 +49,19 @@ class StabilityConfiguration:
     adiabatic_index: float = 5.0 / 3.0
     density_kg_m3: float = 1.0
     zero_floor: float = 1.0
-    radial_quadrature: str = "midpoint"
+    degree: int = 2
     solver_tolerances: SolverTolerances = SolverTolerances()
 
     def __post_init__(self) -> None:
-        if not isinstance(self.radial_quadrature, str):
-            raise TypeError("radial_quadrature must be a string")
-        if self.radial_quadrature not in _QUADRATURE:
-            raise ValueError("radial_quadrature must be 'midpoint'")
+        degree = _mode_integer(self.degree, "degree")
+        if degree < 1 or degree > 4:
+            raise ValueError("degree must be between 1 and 4")
+        object.__setattr__(self, "degree", degree)
         object.__setattr__(self, "modes", _validate_modes(self.modes))
         object.__setattr__(
             self,
             "adiabatic_index",
-            _real_parameter(self.adiabatic_index, "adiabatic_index", True),
+            _real_parameter(self.adiabatic_index, "adiabatic_index", False),
         )
         object.__setattr__(
             self,
@@ -86,7 +83,7 @@ class StabilityConfiguration:
             self.adiabatic_index,
             self.density_kg_m3,
             self.zero_floor,
-            self.radial_quadrature,
+            self.degree,
             self.solver_tolerances,
         )
 
@@ -100,17 +97,15 @@ class StabilityConfiguration:
             "adiabatic_index": self.adiabatic_index,
             "density_kg_m3": self.density_kg_m3,
             "zero_floor": self.zero_floor,
-            "radial_quadrature": self.radial_quadrature,
+            "degree": self.degree,
+            "solver_tolerances": self.solver_tolerances.to_dict(),
         }
-        if self.solver_tolerances != SolverTolerances.historical_defaults():
-            document["schema_version"] = 2
-            document["solver_tolerances"] = self.solver_tolerances.to_dict()
         return document
 
     @classmethod
     def from_dict(cls, document: Mapping[str, Any]) -> "StabilityConfiguration":
         """Validate and construct a versioned configuration document."""
-        base = {
+        common = {
             "schema",
             "schema_version",
             "boundary_condition",
@@ -118,26 +113,38 @@ class StabilityConfiguration:
             "adiabatic_index",
             "density_kg_m3",
             "zero_floor",
-            "radial_quadrature",
         }
         if not isinstance(document, dict):
             raise ValueError("configuration must be an object")
         version = document.get("schema_version")
-        expected = base | ({"solver_tolerances"} if version == 2 else set())
+        if version in (1, 2):
+            expected = common | {"radial_quadrature"}
+            if version == 2:
+                expected.add("solver_tolerances")
+        else:
+            expected = common | {"degree", "solver_tolerances"}
         value = fields(document, expected, "configuration")
-        schema(value, _CONFIGURATION_SCHEMA, "configuration", (1, 2))
+        schema(value, _CONFIGURATION_SCHEMA, "configuration", (1, 2, 3))
         if value["boundary_condition"] != "fixed":
             raise ValueError("configuration.boundary_condition must be 'fixed'")
+        if version in (1, 2) and value["radial_quadrature"] != "midpoint":
+            raise ValueError(
+                "configuration.radial_quadrature must be 'midpoint'"
+            )
         try:
             return cls(
                 modes=value["modes"],
                 adiabatic_index=value["adiabatic_index"],
                 density_kg_m3=value["density_kg_m3"],
                 zero_floor=value["zero_floor"],
-                radial_quadrature=value["radial_quadrature"],
+                degree=(
+                    1
+                    if version in (1, 2)
+                    else value.get("degree")
+                ),
                 solver_tolerances=(
                     SolverTolerances.from_dict(value["solver_tolerances"])
-                    if version == 2
+                    if version in (2, 3)
                     else SolverTolerances.historical_defaults()
                 ),
             )
@@ -192,8 +199,8 @@ class RunManifest:
         string(self.gliss_python_version, "gliss_python_version")
         string(self.gliss_native_version, "gliss_native_version")
         abi = integer(self.gliss_abi_version, "gliss_abi_version", 1)
-        if abi != 1:
-            raise ValueError("gliss_abi_version is incompatible; expected 1")
+        if abi not in (1, 2):
+            raise ValueError("gliss_abi_version must be 1 or 2")
         string(self.numpy_version, "numpy_version")
         string(self.python_version, "python_version")
         stability_result_to_dict(self.result)
@@ -251,7 +258,7 @@ class RunManifest:
             "result",
         }
         value = fields(document, expected, "run")
-        run_version = schema(value, _RUN_SCHEMA, "run", (1, 2))
+        run_version = schema(value, _RUN_SCHEMA, "run", (1, 2, 3))
         equilibrium = fields(
             value["equilibrium"],
             {"format", "schema_version", "filename", "size_bytes", "sha256"},
@@ -273,8 +280,8 @@ class RunManifest:
             "run.software",
         )
         abi = integer(software["gliss_abi"], "run.software.gliss_abi", 1)
-        if abi != 1:
-            raise ValueError("run.software.gliss_abi is incompatible; expected 1")
+        if abi not in (1, 2):
+            raise ValueError("run.software.gliss_abi must be 1 or 2")
         configuration = StabilityConfiguration.from_dict(value["configuration"])
         result = stability_result_from_dict(value["result"])
         nested_versions = {
@@ -325,7 +332,7 @@ def _validate_result_configuration(
         "adiabatic_index",
         "density_kg_m3",
         "zero_floor",
-        "radial_quadrature",
+        "degree",
         "solver_tolerances",
     )
     for name in names:
@@ -398,7 +405,7 @@ def _create_run_manifest(
         result=result,
         gliss_python_version=__version__,
         gliss_native_version=_native_version(),
-        gliss_abi_version=1,
+        gliss_abi_version=2,
         numpy_version=np.__version__,
         python_version=platform.python_version(),
     )

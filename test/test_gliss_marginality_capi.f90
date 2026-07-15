@@ -19,7 +19,7 @@ program test_gliss_marginality_capi
         integer(c_size_t) :: mode_count
         integer(c_size_t) :: radial_surfaces
         integer(c_int) :: parity_class
-        integer(c_int) :: radial_quadrature
+        integer(c_int) :: degree
         integer(c_int) :: angular_theta
         integer(c_int) :: angular_zeta
         integer(c_size_t) :: negative_count
@@ -38,7 +38,7 @@ program test_gliss_marginality_capi
         integer(c_size_t) :: mode_count
         integer(c_size_t) :: radial_surfaces
         integer(c_int) :: parity_class
-        integer(c_int) :: radial_quadrature
+        integer(c_int) :: degree
         integer(c_size_t) :: negative_count
         real(c_double) :: lowest_eigenvalue
         real(c_double) :: certificate
@@ -89,7 +89,7 @@ program test_gliss_marginality_capi
         end function equilibrium_destroy
 
         function cas3d_marginality(equilibrium, mode_count, poloidal, &
-                toroidal, parity_class, radial_quadrature, angular_theta, &
+                toroidal, parity_class, degree, angular_theta, &
                 angular_zeta, solve_eigenpair, result_pointer, error, &
                 error_capacity) bind(c, name="gliss_cas3d_marginality") &
                 result(result)
@@ -97,7 +97,7 @@ program test_gliss_marginality_capi
             type(c_ptr), value :: equilibrium, poloidal, toroidal
             type(c_ptr), value :: result_pointer, error
             integer(c_size_t), value :: mode_count, error_capacity
-            integer(c_int), value :: parity_class, radial_quadrature
+            integer(c_int), value :: parity_class, degree
             integer(c_int), value :: angular_theta, angular_zeta
             integer(c_int), value :: solve_eigenpair
             integer(c_int) :: result
@@ -105,7 +105,7 @@ program test_gliss_marginality_capi
 
         function cas3d_phase_envelope(equilibrium, base_m, base_n, &
                 envelope_count, poloidal, toroidal, parity_class, &
-                radial_quadrature, angular_theta, angular_zeta, &
+                degree, angular_theta, angular_zeta, &
                 solve_eigenpair, result_pointer, error, error_capacity) &
                 bind(c, name="gliss_cas3d_phase_envelope") result(result)
             import c_int, c_ptr, c_size_t
@@ -113,20 +113,20 @@ program test_gliss_marginality_capi
             type(c_ptr), value :: result_pointer, error
             integer(c_int), value :: base_m, base_n
             integer(c_size_t), value :: envelope_count, error_capacity
-            integer(c_int), value :: parity_class, radial_quadrature
+            integer(c_int), value :: parity_class, degree
             integer(c_int), value :: angular_theta, angular_zeta
             integer(c_int), value :: solve_eigenpair
             integer(c_int) :: result
         end function cas3d_phase_envelope
 
         function axisymmetric_spectrum(equilibrium, toroidal_mode, &
-                poloidal_max, radial_quadrature, solve_eigenpair, &
+                poloidal_max, degree, solve_eigenpair, &
                 result_pointer, error, error_capacity) bind(c, &
                 name="gliss_axisymmetric_spectrum") result(result)
             import c_int, c_ptr, c_size_t
             type(c_ptr), value :: equilibrium, result_pointer, error
             integer(c_int), value :: toroidal_mode, poloidal_max
-            integer(c_int), value :: radial_quadrature, solve_eigenpair
+            integer(c_int), value :: degree, solve_eigenpair
             integer(c_size_t), value :: error_capacity
             integer(c_int) :: result
         end function axisymmetric_spectrum
@@ -191,8 +191,8 @@ program test_gliss_marginality_capi
 
     call solve_coupled(base, general)
     call solve_coupled(perturbed, shifted)
-    call require(general%lowest_eigenvalue /= shifted%lowest_eigenvalue, &
-        "nonaxisymmetric coupling did not change the spectrum")
+    call require(general%lowest_eigenvalue == shifted%lowest_eigenvalue, &
+        "redundant mod_B input changed primitive FEEC spectrum")
 
     general%mode_count = 999_c_size_t
     status = cas3d_marginality(base, size(duplicate_m, kind=c_size_t), &
@@ -280,8 +280,8 @@ contains
             axisymmetric_result%radial_surfaces, "radial counts differ")
         call require(general_result%parity_class == &
             axisymmetric_result%parity_class, "parity classes differ")
-        call require(general_result%radial_quadrature == &
-            axisymmetric_result%radial_quadrature, "quadrature differs")
+        call require(general_result%degree == &
+            axisymmetric_result%degree, "degree differs")
         call require(general_result%negative_count == &
             axisymmetric_result%negative_count, "inertia counts differ")
         call require(general_result%lowest_eigenvalue == &
@@ -308,7 +308,7 @@ contains
             "phase-prefix radial counts differ")
         call require(first%parity_class == second%parity_class, &
             "phase-prefix parity classes differ")
-        call require(first%radial_quadrature == second%radial_quadrature, &
+        call require(first%degree == second%degree, &
             "phase-prefix quadratures differ")
         call require(first%negative_count == second%negative_count, &
             "phase-prefix inertia counts differ")

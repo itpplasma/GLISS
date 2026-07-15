@@ -6,10 +6,10 @@ module gliss_marginality_capi
         status_allocation_error, status_compute_error, &
         status_invalid_argument, status_ok, write_error
     use gliss_c_contexts, only: equilibrium_context_t
-    use two_component_spectrum, only: compute_phase_envelope_spectrum, &
-        compute_two_component_spectrum, two_component_spectrum_compute_error, &
-        two_component_spectrum_invalid, two_component_spectrum_ok, &
-        two_component_spectrum_result_t
+    use marginality_spectrum, only: compute_marginality_spectrum, &
+        compute_phase_envelope_spectrum, marginality_spectrum_compute_error, &
+        marginality_spectrum_invalid, marginality_spectrum_ok, &
+        marginality_spectrum_result_t
     implicit none
     private
 
@@ -20,7 +20,7 @@ module gliss_marginality_capi
         integer(c_size_t) :: mode_count
         integer(c_size_t) :: radial_surfaces
         integer(c_int) :: parity_class
-        integer(c_int) :: radial_quadrature
+        integer(c_int) :: degree
         integer(c_int) :: angular_theta
         integer(c_int) :: angular_zeta
         integer(c_size_t) :: negative_count
@@ -36,14 +36,14 @@ module gliss_marginality_capi
 contains
 
     function gliss_cas3d_marginality_c(equilibrium_handle, mode_count, &
-            mode_m_pointer, mode_n_pointer, parity_class, radial_quadrature, &
+            mode_m_pointer, mode_n_pointer, parity_class, degree, &
             angular_theta, angular_zeta, solve_eigenpair, result_pointer, &
             error_pointer, error_capacity) bind(c, &
             name="gliss_cas3d_marginality") result(status)
         type(c_ptr), value, intent(in) :: equilibrium_handle
         integer(c_size_t), value, intent(in) :: mode_count
         type(c_ptr), value, intent(in) :: mode_m_pointer, mode_n_pointer
-        integer(c_int), value, intent(in) :: parity_class, radial_quadrature
+        integer(c_int), value, intent(in) :: parity_class, degree
         integer(c_int), value, intent(in) :: angular_theta, angular_zeta
         integer(c_int), value, intent(in) :: solve_eigenpair
         type(c_ptr), value, intent(in) :: result_pointer, error_pointer
@@ -51,7 +51,7 @@ contains
         integer(c_int) :: status
         type(equilibrium_context_t), pointer :: equilibrium
         type(marginality_result_c), pointer :: result
-        type(two_component_spectrum_result_t) :: native
+        type(marginality_spectrum_result_t) :: native
         integer, allocatable :: mode_m(:), mode_n(:)
         real(dp), allocatable :: stored_power(:)
         character(len=128) :: message
@@ -78,19 +78,19 @@ contains
             end if
             return
         end if
-        call compute_two_component_spectrum(equilibrium%equilibrium, mode_m, &
-            mode_n, stored_power, int(parity_class), int(radial_quadrature), &
+        call compute_marginality_spectrum(equilibrium%equilibrium, mode_m, &
+            mode_n, stored_power, int(parity_class), int(degree), &
             int(angular_theta), int(angular_zeta), &
             solve_eigenpair == 1_c_int, native, info, message)
         select case (info)
-        case (two_component_spectrum_ok)
+        case (marginality_spectrum_ok)
             call fill_result(native, int(angular_theta), int(angular_zeta), &
                 result)
             status = status_ok
-        case (two_component_spectrum_invalid)
+        case (marginality_spectrum_invalid)
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, trim(message))
-        case (two_component_spectrum_compute_error)
+        case (marginality_spectrum_compute_error)
             status = status_compute_error
             call write_error(error_pointer, error_capacity, trim(message))
         case default
@@ -102,7 +102,7 @@ contains
 
     function gliss_cas3d_phase_envelope_c(equilibrium_handle, base_m, &
             base_n, envelope_count, envelope_m_pointer, envelope_n_pointer, &
-            parity_class, radial_quadrature, angular_theta, angular_zeta, &
+            parity_class, degree, angular_theta, angular_zeta, &
             solve_eigenpair, result_pointer, error_pointer, error_capacity) &
             bind(c, name="gliss_cas3d_phase_envelope") result(status)
         type(c_ptr), value, intent(in) :: equilibrium_handle
@@ -110,7 +110,7 @@ contains
         integer(c_size_t), value, intent(in) :: envelope_count
         type(c_ptr), value, intent(in) :: envelope_m_pointer
         type(c_ptr), value, intent(in) :: envelope_n_pointer
-        integer(c_int), value, intent(in) :: parity_class, radial_quadrature
+        integer(c_int), value, intent(in) :: parity_class, degree
         integer(c_int), value, intent(in) :: angular_theta, angular_zeta
         integer(c_int), value, intent(in) :: solve_eigenpair
         type(c_ptr), value, intent(in) :: result_pointer, error_pointer
@@ -118,7 +118,7 @@ contains
         integer(c_int) :: status
         type(equilibrium_context_t), pointer :: equilibrium
         type(marginality_result_c), pointer :: result
-        type(two_component_spectrum_result_t) :: native
+        type(marginality_spectrum_result_t) :: native
         integer, allocatable :: envelope_m(:), envelope_n(:)
         real(dp), allocatable :: unused_power(:)
         character(len=128) :: message
@@ -147,18 +147,18 @@ contains
         end if
         call compute_phase_envelope_spectrum(equilibrium%equilibrium, &
             int(base_m), int(base_n), envelope_m, envelope_n, &
-            int(parity_class), int(radial_quadrature), int(angular_theta), &
+            int(parity_class), int(degree), int(angular_theta), &
             int(angular_zeta), solve_eigenpair == 1_c_int, native, info, &
             message)
         select case (info)
-        case (two_component_spectrum_ok)
+        case (marginality_spectrum_ok)
             call fill_result(native, int(angular_theta), int(angular_zeta), &
                 result)
             status = status_ok
-        case (two_component_spectrum_invalid)
+        case (marginality_spectrum_invalid)
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, trim(message))
-        case (two_component_spectrum_compute_error)
+        case (marginality_spectrum_compute_error)
             status = status_compute_error
             call write_error(error_pointer, error_capacity, trim(message))
         case default
@@ -246,7 +246,7 @@ contains
     end function decode_mode_table
 
     subroutine fill_result(native, angular_theta, angular_zeta, result)
-        type(two_component_spectrum_result_t), intent(in) :: native
+        type(marginality_spectrum_result_t), intent(in) :: native
         integer, intent(in) :: angular_theta, angular_zeta
         type(marginality_result_c), intent(out) :: result
 
@@ -256,7 +256,7 @@ contains
         result%mode_count = int(native%mode_count, c_size_t)
         result%radial_surfaces = int(native%radial_surfaces, c_size_t)
         result%parity_class = int(native%parity_class, c_int)
-        result%radial_quadrature = int(native%radial_quadrature, c_int)
+        result%degree = int(native%degree, c_int)
         result%angular_theta = int(angular_theta, c_int)
         result%angular_zeta = int(angular_zeta, c_int)
         result%negative_count = int(native%negative_count, c_size_t)

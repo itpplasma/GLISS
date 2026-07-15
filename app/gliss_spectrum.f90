@@ -17,7 +17,7 @@ program gliss_spectrum
     integer, allocatable :: mode_m(:), mode_n(:)
     real(dp) :: adiabatic_index, density_kg_m3, zero_floor
     integer :: info, i, j, arguments, comma, selector_position, mode_index
-    integer :: family_index, poloidal_max, toroidal_max, radial_quadrature
+    integer :: family_index, poloidal_max, toroidal_max, degree
     logical :: generated_family
 
     interface
@@ -33,14 +33,14 @@ program gliss_spectrum
     call read_real_argument(2, "GAMMA", adiabatic_index)
     call read_real_argument(3, "DENSITY", density_kg_m3)
     call read_real_argument(4, "FLOOR", zero_floor)
-    if (adiabatic_index < 0.0_dp) call fail_usage("GAMMA must be nonnegative")
+    if (adiabatic_index <= 0.0_dp) call fail_usage("GAMMA must be positive")
     if (density_kg_m3 <= 0.0_dp) call fail_usage("DENSITY must be positive")
     if (zero_floor <= 0.0_dp) call fail_usage("FLOOR must be positive")
-    radial_quadrature = 1
+    degree = 2
     selector_position = 5
     call read_argument(selector_position, "mode or option", token)
-    if (trim(token) == "--quadrature") then
-        call parse_quadrature(arguments, selector_position, radial_quadrature)
+    if (trim(token) == "--degree") then
+        call parse_degree(arguments, selector_position, degree)
     end if
     generated_family = trim(token) == "--family"
     if (generated_family) then
@@ -60,36 +60,32 @@ program gliss_spectrum
         mode_n = family%toroidal
     end if
     call build_fixed_boundary_problem(equilibrium, adiabatic_index, &
-        density_kg_m3, zero_floor, mode_m, mode_n, radial_quadrature, &
+        density_kg_m3, zero_floor, mode_m, mode_n, degree, &
         problem, info)
     if (info /= fixed_boundary_ok) call fail_solver("spectrum problem", info)
 
     write (*, "(a)") "chart_metric,field_periods,modes,parity_class," // &
         "adiabatic_index,density_kg_m3,unknowns,negative_count," // &
         "floor_count,lowest_eigenvalue,certificate,eigenpair_residual," // &
-        "eigenpair_resolution,inertia_interval,radial_quadrature_points"
+        "eigenpair_resolution,inertia_interval,degree"
     do i = 1, 2
         call report_class(i)
     end do
 
 contains
 
-    subroutine parse_quadrature(count, selector, quadrature)
+    subroutine parse_degree(count, selector, degree_value)
         integer, intent(in) :: count
-        integer, intent(inout) :: selector, quadrature
+        integer, intent(inout) :: selector, degree_value
 
         if (count < 7) &
-            call fail_usage("--quadrature requires RULE and a mode selector")
-        call read_argument(6, "quadrature rule", token)
-        select case (trim(token))
-        case ("midpoint")
-            quadrature = 1
-        case default
-            call fail_usage("quadrature RULE must be midpoint")
-        end select
+            call fail_usage("--degree requires DEGREE and a mode selector")
+        call read_integer_argument(6, "DEGREE", degree_value)
+        if (degree_value < 1 .or. degree_value > 4) &
+            call fail_usage("DEGREE must be between 1 and 4")
         selector = 7
         call read_argument(selector, "mode or --family", token)
-    end subroutine parse_quadrature
+    end subroutine parse_degree
 
     subroutine parse_family(count, selector, index_value, m_max, n_max)
         integer, intent(in) :: count, selector
@@ -150,7 +146,7 @@ contains
             result%floor_count, ",", result%lowest_eigenvalue, ",", &
             result%certificate, ",", result%eigenpair_residual, ",", &
             result%eigenpair_resolution, ",", result%inertia_interval, ",", &
-            result%radial_quadrature
+            result%degree
     end subroutine report_class
 
     subroutine fail_usage(message)
@@ -159,7 +155,7 @@ contains
         write (error_unit, "(a)") "gliss_spectrum: " // trim(message)
         write (error_unit, "(a)") &
             "usage: gliss_spectrum EXPORT_FILE GAMMA DENSITY FLOOR " // &
-            "[--quadrature midpoint] " // &
+            "[--degree DEGREE] " // &
             "m,n [m,n ...] | --family INDEX MMAX NMAX"
         call terminate_process(2_c_int)
     end subroutine fail_usage

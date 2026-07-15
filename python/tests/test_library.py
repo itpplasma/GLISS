@@ -22,13 +22,13 @@ def test_bundled_library_is_preferred(monkeypatch, tmp_path):
 def test_incompatible_abi_is_rejected(monkeypatch):
     class Function:
         def __call__(self):
-            return 2
+            return 1
 
     class Library:
         gliss_abi_version = Function()
 
     monkeypatch.setattr(gliss, "_open_library", lambda: Library())
-    with pytest.raises(OSError, match="ABI version 2.*requires 1"):
+    with pytest.raises(OSError, match="ABI version 1.*requires 2"):
         gliss._load_library()
 
 

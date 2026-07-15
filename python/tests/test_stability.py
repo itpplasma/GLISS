@@ -91,7 +91,7 @@ class FakeLibrary:
         mode_count,
         mode_m,
         mode_n,
-        radial_quadrature,
+        degree,
         handle,
         error,
         error_capacity,
@@ -149,7 +149,7 @@ class FakeLibrary:
         values.has_eigenvector = int(self.has_eigenvector)
         values.field_periods = 3
         values.parity_class = parity_class
-        values.radial_quadrature = 1
+        values.degree = 2
         values.angular_theta = 64
         values.angular_zeta = 64
         values.mode_count = 2
@@ -310,9 +310,9 @@ def test_stability_problem_lifecycle_and_results(contexts):
         ("density_kg_m3", 0.0, "positive"),
         ("zero_floor", -1.0, "positive"),
         ("zero_floor", np.finfo(np.float64).max, "too large"),
-        ("radial_quadrature", "gauss2", "midpoint"),
-        ("radial_quadrature", "unknown", "midpoint"),
-        ("radial_quadrature", 1, "string"),
+        ("degree", "gauss2", "integer"),
+        ("degree", 0, "between 1 and 4"),
+        ("degree", 5, "between 1 and 4"),
         ("solver_tolerances", {}, "gliss.SolverTolerances"),
     ],
 )

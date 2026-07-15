@@ -1,17 +1,15 @@
 module fixed_boundary_spectrum
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use compressible_geometry, only: build_compressible_geometry, &
-        compressible_geometry_ok
-    use compressible_stiffness_family_assembly, only: &
-        assemble_compressible_family_stiffness_with_terms, &
-        compressible_family_allocation_error
+    use compatible_three_component_problem, only: &
+        build_compatible_three_component_problem, &
+        compatible_three_component_allocation_error, &
+        compatible_three_component_invalid, compatible_three_component_ok, &
+        compatible_three_component_problem_t
     use dense_spectrum_support, only: certify_dense_spectrum_inertia, &
         certify_dense_spectrum_orthogonality, dense_spectrum_allocation, &
         dense_spectrum_is_certified, dense_spectrum_ok, &
-        diagnose_dense_spectrum, refine_dense_spectrum, &
-        unpermute_dense_vectors
-    use dynamic_family_layout, only: build_dynamic_block_permutation, &
-        dynamic_family_layout_t, dynamic_layout_ok
+        diagnose_dense_spectrum, refine_dense_spectrum
     use fixed_boundary_energy, only: diagnose_fixed_boundary_energy_store, &
         fixed_boundary_energy_allocation, fixed_boundary_energy_invalid, &
         fixed_boundary_energy_ok, fixed_boundary_energy_store_t, &
@@ -19,19 +17,12 @@ module fixed_boundary_spectrum
         rayleigh_gradient_fixed_boundary_store
     use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
         fixed_boundary_bracket_ok
-    use fixed_boundary_input_validation, only: valid_fixed_boundary_inputs
     use fixed_boundary_solver_controls, only: &
         fixed_boundary_solver_controls_t, valid_fixed_boundary_solver_controls
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
-    use mass_density_policy, only: mass_density_ok, &
-        mass_density_profile_t, validate_mass_density_profile
-    use mercier_diagnostic, only: build_kernel_geometry, mercier_ok
-    use phase_assembly_policy, only: phase_assembly_transformed
-    use physical_mass_family_assembly, only: assemble_physical_family_mass
-    use radial_space_policy, only: radial_space_config_t
     use symmetric_eigensolver, only: solve_symmetric_generalized_allocated, &
         symmetric_eigensolver_allocation, symmetric_eigensolver_ok
-    use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
+    use variable_block_tridiagonal, only: pack_variable_blocks, &
         variable_block_allocation, variable_block_ok, &
         variable_block_to_dense, variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
@@ -66,7 +57,7 @@ module fixed_boundary_spectrum
         logical :: ready = .false.
         logical :: has_chart_metric = .false.
         integer :: field_periods = 0
-        integer :: radial_quadrature = 0
+        integer :: degree = 0
         real(dp) :: adiabatic_index = 0.0_dp
         real(dp) :: density_kg_m3 = 0.0_dp
         real(dp) :: zero_floor = 0.0_dp
@@ -82,7 +73,7 @@ module fixed_boundary_spectrum
         integer :: field_periods = 0
         integer :: mode_count = 0
         integer :: parity_class = 0
-        integer :: radial_quadrature = 0
+        integer :: degree = 0
         integer :: angular_theta = 0
         integer :: angular_zeta = 0
         integer :: unknowns = 0
@@ -119,123 +110,148 @@ module fixed_boundary_spectrum
 contains
 
     subroutine build_fixed_boundary_problem(equilibrium, adiabatic_index, &
-            density_kg_m3, zero_floor, mode_m, mode_n, radial_quadrature, &
-            problem, info)
+            density_kg_m3, zero_floor, mode_m, mode_n, degree, problem, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3, zero_floor
-        integer, intent(in) :: mode_m(:), mode_n(:), radial_quadrature
+        integer, intent(in) :: mode_m(:), mode_n(:), degree
         type(fixed_boundary_problem_t), intent(out) :: problem
         integer, intent(out) :: info
-        real(dp), allocatable :: fields(:, :, :, :), drive(:, :, :)
-        real(dp), allocatable :: jacobian_s(:, :, :), jacobian_t(:, :, :)
-        real(dp), allocatable :: jacobian_z(:, :, :), gamma_p(:, :, :)
-        integer :: parity_class
+        real(dp), allocatable :: stored_power(:)
+        integer :: allocation_status, mode, parity_class
 
+        problem = fixed_boundary_problem_t()
         info = fixed_boundary_invalid
-        if (.not. valid_fixed_boundary_inputs(adiabatic_index, density_kg_m3, &
-            zero_floor, mode_m, mode_n, radial_quadrature)) return
-        if (equilibrium%field_periods < 1) return
-        call build_kernel_geometry(equilibrium, fixed_boundary_n_theta, &
-            fixed_boundary_n_zeta, fields, drive, info)
-        if (info /= mercier_ok) then
-            info = fixed_boundary_geometry_error
+        if (.not. valid_inputs(equilibrium, adiabatic_index, density_kg_m3, &
+            zero_floor, mode_m, mode_n, degree)) return
+        allocate (stored_power(size(mode_m)), problem%mode_m(size(mode_m)), &
+            problem%mode_n(size(mode_n)), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = fixed_boundary_allocation_error
             return
         end if
-        call build_compressible_geometry(equilibrium, fixed_boundary_n_theta, &
-            fixed_boundary_n_zeta, adiabatic_index, jacobian_s, jacobian_t, &
-            jacobian_z, gamma_p, info)
-        if (info /= compressible_geometry_ok) then
-            info = fixed_boundary_geometry_error
-            return
-        end if
+        do mode = 1, size(mode_m)
+            stored_power(mode) = 0.0_dp
+            if (mode_m(mode) > 0) stored_power(mode) = &
+                1.0_dp - 0.5_dp * real(mode_m(mode), dp)
+            problem%mode_m(mode) = mode_m(mode)
+            problem%mode_n(mode) = mode_n(mode)
+        end do
         do parity_class = 1, 2
-            call assemble_class(equilibrium, fields, drive, jacobian_s, &
-                jacobian_t, jacobian_z, gamma_p, density_kg_m3, mode_m, &
-                mode_n, radial_quadrature, parity_class, &
+            call assemble_class(equilibrium, adiabatic_index, density_kg_m3, &
+                mode_m, mode_n, stored_power, parity_class, degree, &
                 problem%classes(parity_class), info)
             if (info /= fixed_boundary_ok) return
         end do
         problem%has_chart_metric = equilibrium%has_chart_metric
         problem%field_periods = equilibrium%field_periods
-        problem%radial_quadrature = radial_quadrature
+        problem%degree = degree
         problem%adiabatic_index = adiabatic_index
         problem%density_kg_m3 = density_kg_m3
         problem%zero_floor = zero_floor
-        allocate (problem%mode_m, source=mode_m)
-        allocate (problem%mode_n, source=mode_n)
         problem%ready = .true.
         info = fixed_boundary_ok
     end subroutine build_fixed_boundary_problem
 
-    subroutine assemble_class(equilibrium, fields, drive, jacobian_s, &
-            jacobian_t, jacobian_z, gamma_p, density_kg_m3, mode_m, mode_n, &
-            radial_quadrature, parity_class, class_problem, info)
+    subroutine assemble_class(equilibrium, adiabatic_index, density_kg_m3, &
+            mode_m, mode_n, stored_power, parity_class, degree, &
+            class_problem, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
-        real(dp), intent(in) :: fields(:, :, :, :), drive(:, :, :)
-        real(dp), intent(in) :: jacobian_s(:, :, :), jacobian_t(:, :, :)
-        real(dp), intent(in) :: jacobian_z(:, :, :), gamma_p(:, :, :)
-        real(dp), intent(in) :: density_kg_m3
-        integer, intent(in) :: mode_m(:), mode_n(:), radial_quadrature
-        integer, intent(in) :: parity_class
+        real(dp), intent(in) :: adiabatic_index, density_kg_m3
+        integer, intent(in) :: mode_m(:), mode_n(:), parity_class, degree
+        real(dp), intent(in) :: stored_power(:)
         type(fixed_boundary_class_problem_t), intent(out) :: class_problem
         integer, intent(out) :: info
-        type(dynamic_family_layout_t) :: layout, mass_layout
-        type(mass_density_profile_t) :: density
-        type(radial_space_config_t) :: radial_space
-        real(dp), allocatable :: stiffness(:, :), stiffness_terms(:, :, :)
-        real(dp), allocatable :: mass(:, :)
-        real(dp), allocatable :: stored_power(:)
-        integer, allocatable :: trial_parity(:), widths(:)
-        real(dp) :: radial_step
+        type(compatible_three_component_problem_t) :: compatible
+        integer :: compatible_info
 
-        info = fixed_boundary_assembly_error
-        radial_space%quadrature_points = radial_quadrature
-        allocate (trial_parity(size(mode_m)), source=parity_class)
-        allocate (stored_power(size(mode_m)), source=0.0_dp)
-        allocate (density%s(2), density%kilograms_per_cubic_metre(2))
-        density%s(1) = 0.0_dp
-        density%s(2) = 1.0_dp
-        density%kilograms_per_cubic_metre(1) = density_kg_m3
-        density%kilograms_per_cubic_metre(2) = density_kg_m3
-        call validate_mass_density_profile(density, info)
-        if (info /= mass_density_ok) then
-            info = fixed_boundary_invalid
-            return
-        end if
-        radial_step = 1.0_dp / real(size(equilibrium%s), dp)
-        call assemble_compressible_family_stiffness_with_terms(fields, drive, &
-            jacobian_s, jacobian_t, jacobian_z, gamma_p, mode_m, mode_n, &
-            trial_parity, stored_power, equilibrium%field_periods, &
-            radial_space, radial_step, phase_assembly_transformed, stiffness, &
-            stiffness_terms, layout, info)
-        if (info /= 0) then
-            if (info == compressible_family_allocation_error) then
+        call build_compatible_three_component_problem(equilibrium, &
+            adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
+            parity_class, degree, fixed_boundary_n_theta, &
+            fixed_boundary_n_zeta, compatible, compatible_info)
+        if (compatible_info /= compatible_three_component_ok) then
+            if (compatible_info == compatible_three_component_allocation_error) then
                 info = fixed_boundary_allocation_error
+            else if (compatible_info == compatible_three_component_invalid) then
+                info = fixed_boundary_invalid
             else
                 info = fixed_boundary_assembly_error
             end if
             return
         end if
-        call assemble_physical_family_mass(fields, density, mode_m, mode_n, &
-            trial_parity, stored_power, equilibrium%field_periods, &
-            radial_space, radial_step, phase_assembly_transformed, mass, &
-            mass_layout, info)
-        if (info /= 0) then
-            info = fixed_boundary_assembly_error
-            return
-        end if
-        if (mass_layout%total_unknowns /= layout%total_unknowns) then
-            info = fixed_boundary_assembly_error
-            return
-        end if
-        call pack_class_matrices(stiffness, mass, layout, class_problem, &
-            widths, info)
-        if (info /= fixed_boundary_ok) return
-        call pack_fixed_boundary_energy_store(stiffness_terms, &
-            class_problem%permutation, widths, class_problem%energy, info)
-        if (info /= fixed_boundary_energy_ok) &
-            info = fixed_boundary_assembly_error
+        call pack_class_problem(compatible, class_problem, info)
     end subroutine assemble_class
+
+    subroutine pack_class_problem(compatible, class_problem, info)
+        type(compatible_three_component_problem_t), intent(in) :: compatible
+        type(fixed_boundary_class_problem_t), intent(out) :: class_problem
+        integer, intent(out) :: info
+        integer :: allocation_status, index, local_info, width(1)
+
+        info = fixed_boundary_assembly_error
+        width(1) = size(compatible%stiffness, 1)
+        call pack_variable_blocks(compatible%stiffness, width, &
+            class_problem%stiffness, local_info)
+        if (local_info /= variable_block_ok) then
+            if (local_info == variable_block_allocation) &
+                info = fixed_boundary_allocation_error
+            return
+        end if
+        call pack_variable_blocks(compatible%mass, width, class_problem%mass, &
+            local_info)
+        if (local_info /= variable_block_ok) then
+            if (local_info == variable_block_allocation) &
+                info = fixed_boundary_allocation_error
+            return
+        end if
+        allocate (class_problem%permutation(width(1)), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = fixed_boundary_allocation_error
+            return
+        end if
+        do index = 1, width(1)
+            class_problem%permutation(index) = index
+        end do
+        call pack_fixed_boundary_energy_store(compatible%stiffness_terms, &
+            class_problem%permutation, width, class_problem%energy, local_info)
+        if (local_info /= fixed_boundary_energy_ok) then
+            if (local_info == fixed_boundary_energy_allocation) &
+                info = fixed_boundary_allocation_error
+            return
+        end if
+        class_problem%unknowns = width(1)
+        class_problem%normal_unknowns = compatible%normal_unknowns
+        class_problem%eta_unknowns = compatible%eta_unknowns
+        class_problem%mu_unknowns = compatible%mu_unknowns
+        info = fixed_boundary_ok
+    end subroutine pack_class_problem
+
+    function valid_inputs(equilibrium, adiabatic_index, density_kg_m3, &
+            zero_floor, mode_m, mode_n, degree) result(valid)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        real(dp), intent(in) :: adiabatic_index, density_kg_m3, zero_floor
+        integer, intent(in) :: mode_m(:), mode_n(:), degree
+        logical :: valid
+        integer :: first, second
+
+        valid = .false.
+        if (.not. ieee_is_finite(adiabatic_index) &
+            .or. adiabatic_index <= 0.0_dp) return
+        if (.not. ieee_is_finite(density_kg_m3) &
+            .or. density_kg_m3 <= 0.0_dp) return
+        if (.not. ieee_is_finite(zero_floor) .or. zero_floor <= 0.0_dp) return
+        if (degree < 1 .or. degree > 4) return
+        if (equilibrium%field_periods < 1) return
+        if (size(mode_m) < 1 .or. size(mode_n) /= size(mode_m)) return
+        do first = 1, size(mode_m)
+            if (mode_m(first) < 0) return
+            if (mode_m(first) == 0 .and. mode_n(first) < 0) return
+            do second = 1, first - 1
+                if (mode_m(first) == mode_m(second) &
+                    .and. mode_n(first) == mode_n(second)) return
+            end do
+        end do
+        valid = .true.
+    end function valid_inputs
 
     subroutine diagnose_fixed_boundary_energy(problem, parity_class, vector, &
             result, info)
@@ -284,39 +300,6 @@ contains
             status = fixed_boundary_allocation_error
         if (info == fixed_boundary_energy_invalid) status = fixed_boundary_invalid
     end function map_fixed_boundary_energy_info
-
-    subroutine pack_class_matrices(stiffness, mass, layout, class_problem, &
-            widths, info)
-        real(dp), intent(in) :: stiffness(:, :), mass(:, :)
-        type(dynamic_family_layout_t), intent(in) :: layout
-        type(fixed_boundary_class_problem_t), intent(out) :: class_problem
-        integer, allocatable, intent(out) :: widths(:)
-        integer, intent(out) :: info
-
-        call build_dynamic_block_permutation(layout, widths, &
-            class_problem%permutation, info)
-        if (info /= dynamic_layout_ok) then
-            info = fixed_boundary_assembly_error
-            return
-        end if
-        call pack_permuted_variable_blocks(stiffness, &
-            class_problem%permutation, widths, class_problem%stiffness, info)
-        if (info /= variable_block_ok) then
-            info = fixed_boundary_assembly_error
-            return
-        end if
-        call pack_permuted_variable_blocks(mass, class_problem%permutation, &
-            widths, class_problem%mass, info)
-        if (info /= variable_block_ok) then
-            info = fixed_boundary_assembly_error
-            return
-        end if
-        class_problem%unknowns = layout%total_unknowns
-        class_problem%normal_unknowns = layout%normal_unknowns
-        class_problem%eta_unknowns = layout%eta_unknowns
-        class_problem%mu_unknowns = layout%mu_unknowns
-        info = fixed_boundary_ok
-    end subroutine pack_class_matrices
 
     subroutine solve_fixed_boundary_class(problem, parity_class, result, info)
         type(fixed_boundary_problem_t), intent(in) :: problem
@@ -367,7 +350,7 @@ contains
         result%field_periods = problem%field_periods
         result%mode_count = size(problem%mode_m)
         result%parity_class = parity_class
-        result%radial_quadrature = problem%radial_quadrature
+        result%degree = problem%degree
         result%angular_theta = fixed_boundary_n_theta
         result%angular_zeta = fixed_boundary_n_zeta
         result%adiabatic_index = problem%adiabatic_index
@@ -472,15 +455,7 @@ contains
             info = fixed_boundary_solver_error
             return
         end if
-        call unpermute_dense_vectors(result%eigenvectors, &
-            problem%classes(parity_class)%permutation, info)
-        if (info == dense_spectrum_allocation) then
-            info = fixed_boundary_allocation_error
-        else if (info /= dense_spectrum_ok) then
-            info = fixed_boundary_solver_error
-        else
-            info = fixed_boundary_ok
-        end if
+        info = fixed_boundary_ok
     end subroutine solve_fixed_boundary_full_spectrum
 
     subroutine resolve_lowest(class_problem, summary, controls, result, info)
@@ -491,10 +466,15 @@ contains
         integer, intent(out) :: info
         real(dp), allocatable :: solver_vector(:)
         real(dp) :: shift
+        integer :: allocation_status
 
         if (summary%negative_count == 0) then
             if (.not. summary%has_positive) then
-                allocate (result%eigenvector(0))
+                allocate (result%eigenvector(0), stat=allocation_status)
+                if (allocation_status /= 0) then
+                    info = fixed_boundary_allocation_error
+                    return
+                end if
                 result%inertia_interval = summary%zero_floor
                 info = fixed_boundary_ok
                 return
@@ -521,22 +501,15 @@ contains
             info = fixed_boundary_solver_error
             return
         end if
-        call unpermute_vector(solver_vector, class_problem%permutation, &
-            result%eigenvector)
+        allocate (result%eigenvector(size(solver_vector)), &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = fixed_boundary_allocation_error
+            return
+        end if
+        result%eigenvector = solver_vector
         result%has_eigenvector = .true.
         info = fixed_boundary_ok
     end subroutine resolve_lowest
-
-    subroutine unpermute_vector(permuted, permutation, original)
-        real(dp), intent(in) :: permuted(:)
-        integer, intent(in) :: permutation(:)
-        real(dp), allocatable, intent(out) :: original(:)
-        integer :: index
-
-        allocate (original(size(permuted)))
-        do index = 1, size(permuted)
-            original(permutation(index)) = permuted(index)
-        end do
-    end subroutine unpermute_vector
 
 end module fixed_boundary_spectrum

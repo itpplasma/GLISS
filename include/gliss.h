@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define GLISS_ABI_VERSION 1
+#define GLISS_ABI_VERSION 2
 
 typedef struct gliss_equilibrium gliss_equilibrium;
 typedef struct gliss_stability_problem gliss_stability_problem;
@@ -87,7 +87,7 @@ typedef struct gliss_spectrum_summary {
     int32_t has_eigenvector;
     int32_t field_periods;
     int32_t parity_class;
-    int32_t radial_quadrature;
+    int32_t degree;
     int32_t angular_theta;
     int32_t angular_zeta;
     size_t mode_count;
@@ -168,7 +168,7 @@ typedef struct gliss_axisymmetric_spectrum_result {
     size_t mode_count;
     size_t radial_surfaces;
     int32_t parity_class;
-    int32_t radial_quadrature;
+    int32_t degree;
     size_t negative_count;
     double lowest_eigenvalue;
     double certificate;
@@ -183,7 +183,7 @@ typedef struct gliss_cas3d_marginality_result {
     size_t mode_count;
     size_t radial_surfaces;
     int32_t parity_class;
-    int32_t radial_quadrature;
+    int32_t degree;
     int32_t angular_theta;
     int32_t angular_zeta;
     size_t negative_count;
@@ -224,7 +224,7 @@ gliss_status gliss_terpsichore_pseudoplasma(
 /* Evaluate the fixed-boundary, sine-parity axisymmetric family on an existing
  * equilibrium. The native mode table is (0,+n), then (m,-n),(m,+n) through
  * poloidal_max, with the regular-axis powers used by gliss_axisymmetric.
- * radial_quadrature must be 1 for midpoint quadrature.
+ * degree selects the compatible radial FEEC degree from 1 through 4.
  * solve_eigenpair is 0 for inertia only or 1 for the certified lowest pair.
  * Set result->struct_size to sizeof(*result). The result is unchanged on
  * failure. */
@@ -232,17 +232,17 @@ gliss_status gliss_axisymmetric_spectrum(
     const gliss_equilibrium *equilibrium,
     int32_t toroidal_mode,
     int32_t poloidal_max,
-    int32_t radial_quadrature,
+    int32_t degree,
     int32_t solve_eigenpair,
     gliss_axisymmetric_spectrum_result *result,
     char *error,
     size_t error_capacity);
 
-/* Evaluate the historical CAS3D two-component incompressible functional on
- * an explicit 3-D mode table. Its artificial L2 normalization preserves the
+/* Evaluate the compatible two-component incompressible functional on an
+ * explicit 3-D mode table. Its perpendicular normalization preserves the
  * inertia and marginal boundary but does not define a physical growth rate.
  * The regular-axis factor s^(m/2) is derived from each nonnegative poloidal
- * mode. radial_quadrature must be 1. parity_class must be 1 or 2.
+ * mode. degree must be between 1 and 4. parity_class must be 1 or 2.
  * solve_eigenpair is 0 for inertia only or 1 for the certified lowest pair.
  * Set result->struct_size to sizeof(*result). The result is unchanged on
  * failure. */
@@ -252,7 +252,7 @@ gliss_status gliss_cas3d_marginality(
     const int32_t *mode_m,
     const int32_t *mode_n,
     int32_t parity_class,
-    int32_t radial_quadrature,
+    int32_t degree,
     int32_t angular_theta,
     int32_t angular_zeta,
     int32_t solve_eigenpair,
@@ -263,11 +263,9 @@ gliss_status gliss_cas3d_marginality(
 /* Evaluate the CAS3D2MN phase-envelope representation. base_m and base_n
  * use the GLISS phase 2*pi*(m*theta - n*zeta/N_T). Envelope modes use
  * 2*pi*(m*theta - n*zeta) on one field period and must begin with (0,0).
- * Each later envelope mode expands to two labeled physical sidebands. Labels
- * are retained when sidebands coincide because CAS3D's artificial norm acts
- * on the labeled coefficients. The result mode_count is 2*envelope_count-1.
- * Exact null directions from coincident labels are classified in the closed
- * band |lambda| <= 1e-8; negative_count then counts lambda < -1e-8.
+ * Each later envelope mode expands to two labeled physical sidebands.
+ * Coincident sidebands are assembled once in the physical FEEC space while
+ * result mode_count remains the labeled count 2*envelope_count-1.
  * Other arguments and the result contract match gliss_cas3d_marginality. */
 gliss_status gliss_cas3d_phase_envelope(
     const gliss_equilibrium *equilibrium,
@@ -277,7 +275,7 @@ gliss_status gliss_cas3d_phase_envelope(
     const int32_t *envelope_m,
     const int32_t *envelope_n,
     int32_t parity_class,
-    int32_t radial_quadrature,
+    int32_t degree,
     int32_t angular_theta,
     int32_t angular_zeta,
     int32_t solve_eigenpair,
@@ -287,8 +285,8 @@ gliss_status gliss_cas3d_phase_envelope(
 
 /* A fixed-boundary problem copies and assembles all data it needs, so the
  * equilibrium may be destroyed after successful construction. mode_m and
- * mode_n are mode_count contiguous int32_t values. radial_quadrature must be
- * 1 for midpoint quadrature. */
+ * mode_n are mode_count contiguous int32_t values. degree selects the
+ * compatible radial FEEC degree from 1 through 4. */
 gliss_status gliss_stability_problem_create(
     const gliss_equilibrium *equilibrium,
     double adiabatic_index,
@@ -297,7 +295,7 @@ gliss_status gliss_stability_problem_create(
     size_t mode_count,
     const int32_t *mode_m,
     const int32_t *mode_n,
-    int32_t radial_quadrature,
+    int32_t degree,
     gliss_stability_problem **problem,
     char *error,
     size_t error_capacity);

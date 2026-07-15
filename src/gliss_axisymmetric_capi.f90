@@ -19,7 +19,7 @@ module gliss_axisymmetric_capi
         integer(c_size_t) :: mode_count
         integer(c_size_t) :: radial_surfaces
         integer(c_int) :: parity_class
-        integer(c_int) :: radial_quadrature
+        integer(c_int) :: degree
         integer(c_size_t) :: negative_count
         real(c_double) :: lowest_eigenvalue
         real(c_double) :: certificate
@@ -32,13 +32,13 @@ module gliss_axisymmetric_capi
 contains
 
     function gliss_axisymmetric_spectrum_c(equilibrium_handle, &
-            toroidal_mode, poloidal_max, radial_quadrature, solve_eigenpair, &
+            toroidal_mode, poloidal_max, degree, solve_eigenpair, &
             result_pointer, error_pointer, error_capacity) bind(c, &
             name="gliss_axisymmetric_spectrum") result(status)
         type(c_ptr), value, intent(in) :: equilibrium_handle, result_pointer
         type(c_ptr), value, intent(in) :: error_pointer
         integer(c_int), value, intent(in) :: toroidal_mode, poloidal_max
-        integer(c_int), value, intent(in) :: radial_quadrature, solve_eigenpair
+        integer(c_int), value, intent(in) :: degree, solve_eigenpair
         integer(c_size_t), value, intent(in) :: error_capacity
         integer(c_int) :: status
         type(axisymmetric_spectrum_result_c), pointer :: result
@@ -57,7 +57,7 @@ contains
             return
         end if
         call compute_axisymmetric_spectrum(equilibrium%equilibrium, &
-            int(toroidal_mode), int(poloidal_max), int(radial_quadrature), &
+            int(toroidal_mode), int(poloidal_max), int(degree), &
             solve_eigenpair == 1_c_int, native, info, message)
         select case (info)
         case (axisymmetric_spectrum_ok)
@@ -130,7 +130,7 @@ contains
         result%mode_count = int(native%mode_count, c_size_t)
         result%radial_surfaces = int(native%radial_surfaces, c_size_t)
         result%parity_class = int(native%parity_class, c_int)
-        result%radial_quadrature = int(native%radial_quadrature, c_int)
+        result%degree = int(native%degree, c_int)
         result%negative_count = int(native%negative_count, c_size_t)
         result%lowest_eigenvalue = native%lowest_eigenvalue
         result%certificate = native%certificate

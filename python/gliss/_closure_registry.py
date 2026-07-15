@@ -72,10 +72,15 @@ CLOSURES = (
         ),
     ),
     Closure(
-        "cas3d-p1-p0-p0",
+        "radial-feec-p1-p4",
         "basis",
-        ("src/radial_space_policy.f90",),
-        (_evidence("test/test_radial_space_policy.f90", "normal_degree"),),
+        ("src/radial_feec_complex.f90",),
+        (
+            _evidence(
+                "test/test_radial_feec_complex.f90",
+                "commuting derivative identity failed",
+            ),
+        ),
     ),
     Closure(
         "terpsichore-p1-p0",
@@ -98,7 +103,7 @@ CLOSURES = (
         "axisymmetric-family",
         "topology",
         ("src/axisymmetric_spectrum.f90",),
-        (_evidence("test/test_two_component_spectrum.f90", "require_same_result"),),
+        (_evidence("test/test_gliss_marginality_capi.f90", "require_same_result"),),
     ),
     Closure(
         "terpsichore-mask",
@@ -130,13 +135,18 @@ CLOSURES = (
         ),
     ),
     Closure(
-        "midpoint-block",
+        "compatible-primitive-feec",
         "assembly",
         (
-            "src/family_assembly.f90",
-            "src/compressible_stiffness_family_assembly.f90",
+            "src/compatible_two_component_problem.f90",
+            "src/compatible_three_component_problem.f90",
         ),
-        (_evidence("test/test_family_assembly.f90", "family_negative_count"),),
+        (
+            _evidence(
+                "test/test_cartesian_harmonic_spline.f90",
+                "compatible problem assembly failed",
+            ),
+        ),
     ),
     Closure(
         "terpsichore-preassembled",
@@ -152,17 +162,22 @@ CLOSURES = (
     Closure(
         "physical-kinetic",
         "norm",
-        ("src/physical_mass_family_assembly.f90",),
-        (_evidence("test/test_physical_mass_assembly.f90", "positive"),),
-    ),
-    Closure(
-        "artificial-marginality",
-        "norm",
-        ("src/two_component_artificial_problem.f90",),
+        ("src/compatible_physical_mass_assembly.f90",),
         (
             _evidence(
-                "test/test_two_component_spectrum.f90",
-                "full artificial problem omitted tangential coefficients",
+                "test/test_cartesian_harmonic_spline.f90",
+                "compatible mass is not positive definite",
+            ),
+        ),
+    ),
+    Closure(
+        "perpendicular-marginality",
+        "norm",
+        ("src/compatible_physical_mass_assembly.f90",),
+        (
+            _evidence(
+                "test/test_gliss_marginality_capi.f90",
+                "forced-general solve failed",
             ),
         ),
     ),
@@ -178,7 +193,18 @@ CLOSURES = (
         ),
     ),
     Closure(
-        "fixed-edge",
+        "feec-fixed-edge",
+        "boundary",
+        ("src/radial_feec_complex.f90",),
+        (
+            _evidence(
+                "test/test_radial_feec_complex.f90",
+                "right trace was not eliminated",
+            ),
+        ),
+    ),
+    Closure(
+        "terpsichore-fixed-edge",
         "boundary",
         ("src/dynamic_family_layout.f90",),
         (
@@ -200,10 +226,13 @@ CLOSURES = (
         ),
     ),
     Closure(
-        "certified-block-inertia",
+        "certified-feec-inertia",
         "solver",
-        ("src/eigenvalue_tracking.f90", "src/variable_generalized_solver.f90"),
-        (_evidence("test/test_eigenvalue_tracking.f90", "certificate"),),
+        (
+            "src/fixed_boundary_eigen_bracket.f90",
+            "src/variable_generalized_solver.f90",
+        ),
+        (_evidence("test/test_fixed_boundary_spectrum.f90", "certificate"),),
     ),
     Closure(
         "dense-lapack-complete",
@@ -227,13 +256,13 @@ PROFILES = (
         _evidence("python/gliss/stability.py", "def solve_class"),
         (
             ("equilibrium", "gvec-cas3d-v1"),
-            ("basis", "cas3d-p1-p0-p0"),
+            ("basis", "radial-feec-p1-p4"),
             ("topology", "stellarator-parity"),
             ("physics", "compressible-ideal-mhd"),
-            ("assembly", "midpoint-block"),
+            ("assembly", "compatible-primitive-feec"),
             ("norm", "physical-kinetic"),
-            ("boundary", "fixed-edge"),
-            ("solver", "certified-block-inertia"),
+            ("boundary", "feec-fixed-edge"),
+            ("solver", "certified-feec-inertia"),
             ("derivative", "rayleigh-displacement"),
         ),
     ),
@@ -243,12 +272,12 @@ PROFILES = (
         _evidence("python/gliss/stability.py", "def solve_full_spectrum_class"),
         (
             ("equilibrium", "vmec-symmetric"),
-            ("basis", "cas3d-p1-p0-p0"),
+            ("basis", "radial-feec-p1-p4"),
             ("topology", "stellarator-parity"),
             ("physics", "compressible-ideal-mhd"),
-            ("assembly", "midpoint-block"),
+            ("assembly", "compatible-primitive-feec"),
             ("norm", "physical-kinetic"),
-            ("boundary", "fixed-edge"),
+            ("boundary", "feec-fixed-edge"),
             ("solver", "dense-lapack-complete"),
             ("derivative", "rayleigh-displacement"),
         ),
@@ -259,13 +288,13 @@ PROFILES = (
         _evidence("python/gliss/axisymmetric.py", "def solve_axisymmetric"),
         (
             ("equilibrium", "gvec-cas3d-v1"),
-            ("basis", "cas3d-p1-p0-p0"),
+            ("basis", "radial-feec-p1-p4"),
             ("topology", "axisymmetric-family"),
             ("physics", "incompressible-two-component"),
-            ("assembly", "midpoint-block"),
-            ("norm", "artificial-marginality"),
-            ("boundary", "fixed-edge"),
-            ("solver", "certified-block-inertia"),
+            ("assembly", "compatible-primitive-feec"),
+            ("norm", "perpendicular-marginality"),
+            ("boundary", "feec-fixed-edge"),
+            ("solver", "certified-feec-inertia"),
         ),
     ),
     Profile(
@@ -274,13 +303,13 @@ PROFILES = (
         _evidence("python/gliss/marginality.py", "def solve_cas3d_marginality"),
         (
             ("equilibrium", "gvec-cas3d-v1"),
-            ("basis", "cas3d-p1-p0-p0"),
+            ("basis", "radial-feec-p1-p4"),
             ("topology", "stellarator-parity"),
             ("physics", "incompressible-two-component"),
-            ("assembly", "midpoint-block"),
-            ("norm", "artificial-marginality"),
-            ("boundary", "fixed-edge"),
-            ("solver", "certified-block-inertia"),
+            ("assembly", "compatible-primitive-feec"),
+            ("norm", "perpendicular-marginality"),
+            ("boundary", "feec-fixed-edge"),
+            ("solver", "certified-feec-inertia"),
         ),
     ),
     Profile(
@@ -289,13 +318,13 @@ PROFILES = (
         _evidence("python/gliss/marginality.py", "def solve_cas3d_phase_envelope"),
         (
             ("equilibrium", "gvec-cas3d-v1"),
-            ("basis", "cas3d-p1-p0-p0"),
+            ("basis", "radial-feec-p1-p4"),
             ("topology", "stellarator-parity"),
             ("physics", "incompressible-two-component"),
-            ("assembly", "midpoint-block"),
-            ("norm", "artificial-marginality"),
-            ("boundary", "fixed-edge"),
-            ("solver", "certified-block-inertia"),
+            ("assembly", "compatible-primitive-feec"),
+            ("norm", "perpendicular-marginality"),
+            ("boundary", "feec-fixed-edge"),
+            ("solver", "certified-feec-inertia"),
         ),
     ),
     Profile(
@@ -311,8 +340,8 @@ PROFILES = (
             ("physics", "terpsichore-modelk0"),
             ("assembly", "terpsichore-preassembled"),
             ("norm", "terpsichore-reduced"),
-            ("boundary", "fixed-edge"),
-            ("solver", "certified-block-inertia"),
+            ("boundary", "terpsichore-fixed-edge"),
+            ("solver", "certified-feec-inertia"),
         ),
     ),
     Profile(
@@ -330,7 +359,7 @@ PROFILES = (
             ("assembly", "terpsichore-preassembled"),
             ("norm", "terpsichore-reduced"),
             ("boundary", "pseudoplasma-vacuum"),
-            ("solver", "certified-block-inertia"),
+            ("solver", "certified-feec-inertia"),
         ),
     ),
 )

@@ -28,7 +28,7 @@ class FakeLibrary:
         equilibrium,
         toroidal_mode,
         poloidal_max,
-        radial_quadrature,
+        degree,
         solve_eigenpair,
         result,
         error,
@@ -38,7 +38,7 @@ class FakeLibrary:
             equilibrium.value,
             toroidal_mode,
             poloidal_max,
-            radial_quadrature,
+            degree,
             solve_eigenpair,
         )
         native = result._obj
@@ -49,7 +49,7 @@ class FakeLibrary:
         native.mode_count = 2 * poloidal_max + 1
         native.radial_surfaces = 768
         native.parity_class = 1
-        native.radial_quadrature = radial_quadrature
+        native.degree = degree
         native.negative_count = 1
         native.lowest_eigenvalue = -2.5e-7 if solve_eigenpair else np.nan
         native.certificate = 1.0e-11 if solve_eigenpair else np.nan
@@ -74,10 +74,10 @@ def test_axisymmetric_inertia_uses_loaded_equilibrium():
         equilibrium(library),
         toroidal_mode=2,
         poloidal_max=7,
-        radial_quadrature="midpoint",
+        degree=3,
     )
 
-    assert library.arguments == (17, 2, 7, 1, 0)
+    assert library.arguments == (17, 2, 7, 3, 0)
     assert result.has_eigenpair is False
     assert result.field_periods == 1
     assert result.toroidal_mode == 2
@@ -85,7 +85,7 @@ def test_axisymmetric_inertia_uses_loaded_equilibrium():
     assert result.mode_count == 15
     assert result.radial_surfaces == 768
     assert result.parity_class == 1
-    assert result.radial_quadrature == "midpoint"
+    assert result.degree == 3
     assert result.negative_count == 1
     assert result.lowest_eigenvalue is None
     assert result.certificate is None
@@ -98,7 +98,7 @@ def test_solve_axisymmetric_returns_certified_pair():
 
     result = gliss.solve_axisymmetric(equilibrium(library))
 
-    assert library.arguments == (17, 1, 8, 1, 1)
+    assert library.arguments == (17, 1, 8, 2, 1)
     assert result.has_eigenpair is True
     assert result.lowest_eigenvalue == pytest.approx(-2.5e-7)
     assert result.certificate == pytest.approx(1.0e-11)
@@ -125,9 +125,9 @@ def test_axisymmetric_rejects_non_equilibrium():
         ("toroidal_mode", True, TypeError, "must be an integer"),
         ("toroidal_mode", 0, ValueError, "must be positive"),
         ("poloidal_max", 0, ValueError, "must be positive"),
-        ("radial_quadrature", 1, TypeError, "must be a string"),
-        ("radial_quadrature", "gauss2", ValueError, "must be midpoint"),
-        ("radial_quadrature", "bad", ValueError, "must be midpoint"),
+        ("degree", True, TypeError, "must be an integer"),
+        ("degree", 0, ValueError, "between 1 and 4"),
+        ("degree", 5, ValueError, "between 1 and 4"),
     ],
 )
 def test_axisymmetric_rejects_invalid_input(keyword, value, exception, match):

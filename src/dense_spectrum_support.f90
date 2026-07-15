@@ -19,6 +19,7 @@ module dense_spectrum_support
     public :: certify_dense_spectrum_orthogonality
     public :: diagnose_dense_spectrum
     public :: dense_spectrum_is_certified
+    public :: refine_dense_eigenpair
     public :: refine_dense_spectrum
     public :: unpermute_dense_vectors
 
@@ -104,9 +105,9 @@ contains
         type(fixed_boundary_solver_controls_t), intent(in) :: controls
         real(dp), intent(inout) :: eigenvalues(:), eigenvectors(:, :)
         integer, intent(out) :: info
-        real(dp), allocatable :: initial(:), seeds(:), vector(:)
-        real(dp) :: eigenvalue, initial_scale, residual, resolution, shift
-        integer :: allocation_status, entry, index
+        real(dp), allocatable :: seeds(:), vector(:)
+        real(dp) :: eigenvalue, residual, resolution
+        integer :: allocation_status, index
 
         info = dense_spectrum_invalid
         if (size(eigenvalues) < 1) return
@@ -118,32 +119,57 @@ contains
         info = dense_spectrum_allocation
         allocate (seeds, source=eigenvalues, stat=allocation_status)
         if (allocation_status /= 0) return
-        allocate (initial(size(eigenvalues)), stat=allocation_status)
-        if (allocation_status /= 0) return
         do index = 1, size(eigenvalues)
-            call bracket_indexed_eigenvalue(stiffness, mass, seeds, index, &
-                controls, shift, info)
+            call refine_dense_eigenpair(stiffness, mass, controls, seeds, &
+                index, eigenvectors(:, index), eigenvalue, vector, residual, &
+                resolution, info)
             if (info /= dense_spectrum_ok) return
-            initial = eigenvectors(:, index)
-            initial_scale = sqrt(epsilon(1.0_dp)) &
-                * norm2(eigenvectors(:, index)) &
-                / sqrt(real(size(initial), dp))
-            do entry = 1, size(initial)
-                initial(entry) = initial(entry) + initial_scale &
-                    * (1.0_dp + 0.1_dp * real(entry, dp))
-            end do
-            call iterate_variable_generalized_eigenvalue(stiffness, mass, &
-                shift, eigenvalue, vector, residual, resolution, info, &
-                controls, initial=initial)
-            if (info /= variable_generalized_ok) then
-                info = dense_spectrum_invalid
-                return
-            end if
             eigenvalues(index) = eigenvalue
             eigenvectors(:, index) = vector
         end do
         info = dense_spectrum_ok
     end subroutine refine_dense_spectrum
+
+    subroutine refine_dense_eigenpair(stiffness, mass, controls, seeds, &
+            target, seed_vector, eigenvalue, vector, residual, resolution, &
+            info)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        type(fixed_boundary_solver_controls_t), intent(in) :: controls
+        real(dp), intent(in) :: seeds(:), seed_vector(:)
+        integer, intent(in) :: target
+        real(dp), intent(out) :: eigenvalue, residual, resolution
+        real(dp), allocatable, intent(out) :: vector(:)
+        integer, intent(out) :: info
+        real(dp), allocatable :: initial(:)
+        real(dp) :: initial_scale, shift
+        integer :: allocation_status, entry
+
+        info = dense_spectrum_invalid
+        if (target < 1 .or. target > size(seeds)) return
+        if (size(seed_vector) /= size(seeds)) return
+        if (.not. all(ieee_is_finite(seeds))) return
+        if (.not. all(ieee_is_finite(seed_vector))) return
+        info = dense_spectrum_allocation
+        allocate (initial, source=seed_vector, stat=allocation_status)
+        if (allocation_status /= 0) return
+        call bracket_indexed_eigenvalue(stiffness, mass, seeds, target, &
+            controls, shift, info)
+        if (info /= dense_spectrum_ok) return
+        initial_scale = sqrt(epsilon(1.0_dp)) * norm2(seed_vector) &
+            / sqrt(real(size(initial), dp))
+        do entry = 1, size(initial)
+            initial(entry) = initial(entry) + initial_scale &
+                * (1.0_dp + 0.1_dp * real(entry, dp))
+        end do
+        call iterate_variable_generalized_eigenvalue(stiffness, mass, shift, &
+            eigenvalue, vector, residual, resolution, info, controls, &
+            initial=initial)
+        if (info /= variable_generalized_ok) then
+            info = dense_spectrum_invalid
+            return
+        end if
+        info = dense_spectrum_ok
+    end subroutine refine_dense_eigenpair
 
     subroutine bracket_indexed_eigenvalue(stiffness, mass, seeds, target, &
             controls, shift, info)

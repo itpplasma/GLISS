@@ -14,19 +14,16 @@ from .equilibrium import (
     _raise_for_status,
 )
 
-_QUADRATURE = {"midpoint": 1}
-
-
 @dataclass(frozen=True)
 class Cas3dMarginalityResult:
-    """Inertia and optional eigenpair in the artificial CAS3D norm."""
+    """Inertia and optional eigenpair from the compatible FEEC problem."""
 
     has_eigenpair: bool
     field_periods: int
     modes: Tuple[Tuple[int, int], ...]
     radial_surfaces: int
     parity_class: int
-    radial_quadrature: str
+    degree: int
     angular_resolution: Tuple[int, int]
     negative_count: int
     lowest_eigenvalue: Optional[float]
@@ -34,7 +31,7 @@ class Cas3dMarginalityResult:
     eigenpair_residual: Optional[float]
     force_balance_residual: float
     normalization: str = (
-        "CAS3D artificial L2 norm of transformed normal and tangential components"
+        "compatible perpendicular L2 norm of normal and tangential components"
     )
     interpretation: str = "stability and marginality only; not a physical growth rate"
     boundary_condition: str = "fixed"
@@ -53,15 +50,15 @@ class Cas3dPhaseEnvelopeResult:
     labeled_sideband_count: int
     radial_surfaces: int
     parity_class: int
-    radial_quadrature: str
+    degree: int
     angular_resolution: Tuple[int, int]
     negative_count: int
     lowest_eigenvalue: Optional[float]
     certificate: Optional[float]
     eigenpair_residual: Optional[float]
     force_balance_residual: float
-    inertia_zero_floor: float = 1.0e-8
-    normalization: str = "CAS3D2MN artificial L2 norm of labeled coefficients"
+    inertia_zero_floor: float = 1.0e-12
+    normalization: str = "compatible perpendicular L2 norm on physical modes"
     interpretation: str = "stability and marginality only; not a physical growth rate"
     boundary_condition: str = "fixed"
     coordinate_handedness: str = "left-handed"
@@ -77,7 +74,7 @@ class _Cas3dMarginalityResult(ctypes.Structure):
         ("mode_count", ctypes.c_size_t),
         ("radial_surfaces", ctypes.c_size_t),
         ("parity_class", ctypes.c_int32),
-        ("radial_quadrature", ctypes.c_int32),
+        ("degree", ctypes.c_int32),
         ("angular_theta", ctypes.c_int32),
         ("angular_zeta", ctypes.c_int32),
         ("negative_count", ctypes.c_size_t),
@@ -152,20 +149,18 @@ def _parity_class(value: Any) -> int:
     return result
 
 
-def _quadrature(value: Any) -> int:
-    if not isinstance(value, str):
-        raise TypeError("radial_quadrature must be a string")
-    try:
-        return _QUADRATURE[value]
-    except KeyError as error:
-        raise ValueError("radial_quadrature must be midpoint") from error
+def _degree(value: Any) -> int:
+    result = mode_integer(value, "degree")
+    if result < 1 or result > 4:
+        raise ValueError("degree must be between 1 and 4")
+    return result
 
 
 def _result(
     native: _Cas3dMarginalityResult,
     modes: Tuple[Tuple[int, int], ...],
     parity_class: int,
-    radial_quadrature: int,
+    degree: int,
     angular_resolution: Tuple[int, int],
     solve_eigenpair: bool,
 ) -> Cas3dMarginalityResult:
@@ -175,7 +170,7 @@ def _result(
         and native.mode_count == len(modes)
         and native.radial_surfaces >= 2
         and native.parity_class == parity_class
-        and native.radial_quadrature == radial_quadrature
+        and native.degree == degree
         and (native.angular_theta, native.angular_zeta) == angular_resolution
         and math.isfinite(native.force_balance_residual)
         and native.force_balance_residual >= 0.0
@@ -195,14 +190,13 @@ def _result(
         pair_valid = all(math.isnan(value) for value in eigenpair)
     if not metadata_valid or not pair_valid:
         raise GlissInternalError("GLISS returned an invalid CAS3D marginality result")
-    quadrature = {value: name for name, value in _QUADRATURE.items()}
     return Cas3dMarginalityResult(
         has_eigenpair=solve_eigenpair,
         field_periods=native.field_periods,
         modes=modes,
         radial_surfaces=native.radial_surfaces,
         parity_class=native.parity_class,
-        radial_quadrature=quadrature[native.radial_quadrature],
+        degree=native.degree,
         angular_resolution=angular_resolution,
         negative_count=native.negative_count,
         lowest_eigenvalue=native.lowest_eigenvalue if solve_eigenpair else None,
@@ -216,7 +210,7 @@ def _calculate(
     equilibrium: Equilibrium,
     modes: Sequence[Tuple[int, int]],
     parity_class: int,
-    radial_quadrature: str,
+    degree: int,
     angular_theta: int,
     angular_zeta: int,
     solve_eigenpair: bool,
@@ -226,7 +220,7 @@ def _calculate(
     equilibrium._require_open()
     validated_modes = validate_modes(modes)
     validated_parity = _parity_class(parity_class)
-    quadrature = _quadrature(radial_quadrature)
+    degree = _degree(degree)
     resolution = (
         _angular_resolution(angular_theta, "angular_theta"),
         _angular_resolution(angular_zeta, "angular_zeta"),
@@ -244,7 +238,7 @@ def _calculate(
         mode_m,
         mode_n,
         validated_parity,
-        quadrature,
+        degree,
         resolution[0],
         resolution[1],
         int(solve_eigenpair),
@@ -257,7 +251,7 @@ def _calculate(
         native,
         validated_modes,
         validated_parity,
-        quadrature,
+        degree,
         resolution,
         solve_eigenpair,
     )
@@ -309,7 +303,7 @@ def _phase_envelope_result(
     base_mode: Tuple[int, int],
     envelope_modes: Tuple[Tuple[int, int], ...],
     parity_class: int,
-    radial_quadrature: int,
+    degree: int,
     angular_resolution: Tuple[int, int],
     solve_eigenpair: bool,
 ) -> Cas3dPhaseEnvelopeResult:
@@ -320,7 +314,7 @@ def _phase_envelope_result(
         and native.mode_count == sideband_count
         and native.radial_surfaces >= 2
         and native.parity_class == parity_class
-        and native.radial_quadrature == radial_quadrature
+        and native.degree == degree
         and (native.angular_theta, native.angular_zeta) == angular_resolution
         and math.isfinite(native.force_balance_residual)
         and native.force_balance_residual >= 0.0
@@ -340,7 +334,6 @@ def _phase_envelope_result(
         pair_valid = all(math.isnan(value) for value in eigenpair)
     if not metadata_valid or not pair_valid:
         raise GlissInternalError("GLISS returned an invalid CAS3D2MN result")
-    quadrature = {value: name for name, value in _QUADRATURE.items()}
     return Cas3dPhaseEnvelopeResult(
         has_eigenpair=solve_eigenpair,
         field_periods=native.field_periods,
@@ -349,7 +342,7 @@ def _phase_envelope_result(
         labeled_sideband_count=sideband_count,
         radial_surfaces=native.radial_surfaces,
         parity_class=native.parity_class,
-        radial_quadrature=quadrature[native.radial_quadrature],
+        degree=native.degree,
         angular_resolution=angular_resolution,
         negative_count=native.negative_count,
         lowest_eigenvalue=native.lowest_eigenvalue if solve_eigenpair else None,
@@ -364,7 +357,7 @@ def _calculate_phase_envelope(
     base_mode: Tuple[int, int],
     envelope_modes: Sequence[Tuple[int, int]],
     parity_class: int,
-    radial_quadrature: str,
+    degree: int,
     angular_theta: int,
     angular_zeta: int,
     solve_eigenpair: bool,
@@ -374,7 +367,7 @@ def _calculate_phase_envelope(
     equilibrium._require_open()
     base, envelopes = _validate_phase_envelope(base_mode, envelope_modes)
     validated_parity = _parity_class(parity_class)
-    quadrature = _quadrature(radial_quadrature)
+    degree = _degree(degree)
     resolution = (
         _angular_resolution(angular_theta, "angular_theta"),
         _angular_resolution(angular_zeta, "angular_zeta"),
@@ -394,7 +387,7 @@ def _calculate_phase_envelope(
         envelope_m,
         envelope_n,
         validated_parity,
-        quadrature,
+        degree,
         resolution[0],
         resolution[1],
         int(solve_eigenpair),
@@ -408,7 +401,7 @@ def _calculate_phase_envelope(
         base,
         envelopes,
         validated_parity,
-        quadrature,
+        degree,
         resolution,
         solve_eigenpair,
     )
@@ -419,18 +412,18 @@ def cas3d_phase_envelope_inertia(
     base_mode: Tuple[int, int],
     envelope_modes: Sequence[Tuple[int, int]],
     parity_class: int = 1,
-    radial_quadrature: str = "midpoint",
+    degree: int = 2,
     angular_theta: int = 64,
     angular_zeta: int = 64,
 ) -> Cas3dPhaseEnvelopeResult:
-    """Count negative directions in a labeled CAS3D2MN envelope."""
+    """Count negative directions in a CAS3D2MN phase envelope."""
 
     return _calculate_phase_envelope(
         equilibrium,
         base_mode,
         envelope_modes,
         parity_class,
-        radial_quadrature,
+        degree,
         angular_theta,
         angular_zeta,
         solve_eigenpair=False,
@@ -442,18 +435,18 @@ def solve_cas3d_phase_envelope(
     base_mode: Tuple[int, int],
     envelope_modes: Sequence[Tuple[int, int]],
     parity_class: int = 1,
-    radial_quadrature: str = "midpoint",
+    degree: int = 2,
     angular_theta: int = 64,
     angular_zeta: int = 64,
 ) -> Cas3dPhaseEnvelopeResult:
-    """Return inertia and the lowest pair for a labeled CAS3D2MN envelope."""
+    """Return inertia and the lowest pair for a CAS3D2MN phase envelope."""
 
     return _calculate_phase_envelope(
         equilibrium,
         base_mode,
         envelope_modes,
         parity_class,
-        radial_quadrature,
+        degree,
         angular_theta,
         angular_zeta,
         solve_eigenpair=True,
@@ -464,17 +457,17 @@ def cas3d_marginality_inertia(
     equilibrium: Equilibrium,
     modes: Sequence[Tuple[int, int]],
     parity_class: int = 1,
-    radial_quadrature: str = "midpoint",
+    degree: int = 2,
     angular_theta: int = 64,
     angular_zeta: int = 64,
 ) -> Cas3dMarginalityResult:
-    """Count negative directions in the artificial CAS3D normalization."""
+    """Count negative directions in the compatible FEEC discretization."""
 
     return _calculate(
         equilibrium,
         modes,
         parity_class,
-        radial_quadrature,
+        degree,
         angular_theta,
         angular_zeta,
         solve_eigenpair=False,
@@ -485,17 +478,17 @@ def solve_cas3d_marginality(
     equilibrium: Equilibrium,
     modes: Sequence[Tuple[int, int]],
     parity_class: int = 1,
-    radial_quadrature: str = "midpoint",
+    degree: int = 2,
     angular_theta: int = 64,
     angular_zeta: int = 64,
 ) -> Cas3dMarginalityResult:
-    """Return inertia and the lowest artificial-norm CAS3D eigenpair."""
+    """Return inertia and the lowest compatible FEEC eigenpair."""
 
     return _calculate(
         equilibrium,
         modes,
         parity_class,
-        radial_quadrature,
+        degree,
         angular_theta,
         angular_zeta,
         solve_eigenpair=True,

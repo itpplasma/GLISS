@@ -16,7 +16,7 @@ def _certified(parity_class, eigenvalues):
         parity_class=parity_class,
         field_periods=3,
         modes=((1, 1), (2, -1)),
-        radial_quadrature="midpoint",
+        degree=2,
         angular_resolution=(64, 64),
         adiabatic_index=5.0 / 3.0,
         density_kg_m3=2.0,
@@ -87,7 +87,7 @@ def test_full_result_round_trip_is_exact_read_only_and_deterministic(
     with zipfile.ZipFile(first) as archive:
         metadata = json.loads(archive.read("metadata.json"))
         assert metadata["schema"] == "gliss.stability.full-result"
-        assert metadata["schema_version"] == 1
+        assert metadata["schema_version"] == 3
         assert metadata["storage"]["array_order"] == "eigenpair-component"
         assert all(
             item.compress_type == zipfile.ZIP_STORED for item in archive.infolist()
@@ -115,7 +115,7 @@ def test_full_result_round_trip_is_exact_read_only_and_deterministic(
             assert not array.flags.writeable
 
 
-def test_full_result_schema_two_preserves_solver_tolerances(full_result, tmp_path):
+def test_full_result_schema_three_preserves_solver_tolerances(full_result, tmp_path):
     tolerances = gliss.SolverTolerances(residual_relative=2.0e-12)
     classes = tuple(
         replace(
@@ -132,7 +132,7 @@ def test_full_result_schema_two_preserves_solver_tolerances(full_result, tmp_pat
 
     with zipfile.ZipFile(path) as archive:
         metadata = json.loads(archive.read("metadata.json"))
-    assert metadata["schema_version"] == 2
+    assert metadata["schema_version"] == 3
     loaded = gliss.FullStabilityResult.read(path)
     assert all(
         item.certified_lowest.solver_tolerances == tolerances

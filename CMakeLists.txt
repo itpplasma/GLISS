@@ -30,22 +30,13 @@ add_library(gliss
     src/gvec_cas3d_integrals.f90
     src/gvec_cas3d_types.f90
     src/block_tridiagonal.f90
-    src/compressible_geometry.f90
     src/compressible_stiffness_validation.f90
     src/compatible_compressible_stiffness_assembly.f90
-    src/compressible_stiffness_assembly.f90
-    src/compressible_stiffness_family_assembly.f90
-    src/generalized_block_solver.f90
-    src/eigenvalue_tracking.f90
     src/dynamic_family_layout.f90
-    src/family_point_assembly.f90
     src/helical_cylinder_limit.f90
     src/local_mode_model.f90
-    src/mass_density_policy.f90
     src/phase_assembly_policy.f90
     src/compatible_physical_mass_assembly.f90
-    src/physical_mass_assembly.f90
-    src/physical_mass_family_assembly.f90
     src/physical_mass_kernel.f90
     src/nonuniform_derivative.f90
     src/fourier_phase_kind.f90
@@ -65,7 +56,6 @@ add_library(gliss
     src/primitive_geometry_grid.f90
     src/primitive_equilibrium_spline.f90
     src/radial_feec_complex.f90
-    src/radial_space_policy.f90
     src/perpendicular_kinetic_kernel.f90
     src/symmetric_pivot_inertia.f90
     src/terpsichore_model_policy.f90
@@ -102,12 +92,9 @@ add_library(gliss
     src/dense_spectrum_support.f90
     src/fixed_boundary_energy.f90
     src/fixed_boundary_eigen_bracket.f90
-    src/fixed_boundary_input_validation.f90
     src/fixed_boundary_spectrum.f90
     src/newcomb_limit.f90
-    src/family_assembly.f90
-    src/two_component_artificial_problem.f90
-    src/two_component_spectrum.f90
+    src/marginality_spectrum.f90
     src/axisymmetric_spectrum.f90
     src/field_profile_identities.f90
     src/export_surface_geometry.f90
@@ -204,25 +191,9 @@ target_link_libraries(gliss_primitive_geometry_trace PRIVATE gliss)
 set_target_properties(gliss_primitive_geometry_trace PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
-add_executable(gliss_family app/gliss_family.f90)
-target_link_libraries(gliss_family PRIVATE gliss)
-set_target_properties(gliss_family PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
-
 add_executable(gliss_spectrum app/gliss_spectrum.f90)
 target_link_libraries(gliss_spectrum PRIVATE gliss)
 set_target_properties(gliss_spectrum PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
-
-add_executable(gliss_compatible_spectrum app/gliss_compatible_spectrum.f90)
-target_link_libraries(gliss_compatible_spectrum PRIVATE gliss)
-set_target_properties(gliss_compatible_spectrum PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
-
-add_executable(gliss_compatible_marginality
-    app/gliss_compatible_marginality.f90)
-target_link_libraries(gliss_compatible_marginality PRIVATE gliss)
-set_target_properties(gliss_compatible_marginality PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gliss_compatible_operator_trace
@@ -235,11 +206,6 @@ set_target_properties(gliss_compatible_operator_trace PROPERTIES
 add_executable(gliss_axisymmetric app/gliss_axisymmetric.f90)
 target_link_libraries(gliss_axisymmetric PRIVATE gliss)
 set_target_properties(gliss_axisymmetric PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
-
-add_executable(gliss_axisymmetric_fkg app/gliss_axisymmetric_fkg.f90)
-target_link_libraries(gliss_axisymmetric_fkg PRIVATE gliss)
-set_target_properties(gliss_axisymmetric_fkg PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gliss_terpsichore_eigen
@@ -289,7 +255,7 @@ if(BUILD_TESTING)
     add_spectrum_cli_rejection(spectrum_cli_bad_gamma
         "GAMMA must be a number" missing.nc bad 1.0 1.0 1,1)
     add_spectrum_cli_rejection(spectrum_cli_negative_gamma
-        "GAMMA must be nonnegative" missing.nc -1.0 1.0 1.0 1,1)
+        "GAMMA must be positive" missing.nc -1.0 1.0 1.0 1,1)
     add_spectrum_cli_rejection(spectrum_cli_nonfinite_floor
         "FLOOR must be finite" missing.nc 1.6666666666666667 1.0 NaN 1,1)
     add_spectrum_cli_rejection(spectrum_cli_zero_density
@@ -302,15 +268,15 @@ if(BUILD_TESTING)
     add_spectrum_cli_rejection(spectrum_cli_incomplete_family
         "--family requires exactly INDEX MMAX NMAX"
         missing.nc 1.6666666666666667 1.0 1.0 --family 0 8)
-    add_spectrum_cli_rejection(spectrum_cli_bad_quadrature
-        "quadrature RULE must be midpoint"
-        missing.nc 1.6666666666666667 1.0 1.0 --quadrature bad 1,1)
-    add_spectrum_cli_rejection(spectrum_cli_rejects_gauss2
-        "quadrature RULE must be midpoint"
-        missing.nc 1.6666666666666667 1.0 1.0 --quadrature gauss2 1,1)
-    add_spectrum_cli_rejection(spectrum_cli_incomplete_quadrature
-        "--quadrature requires RULE and a mode selector"
-        missing.nc 1.6666666666666667 1.0 1.0 --quadrature)
+    add_spectrum_cli_rejection(spectrum_cli_bad_degree
+        "DEGREE must be an integer"
+        missing.nc 1.6666666666666667 1.0 1.0 --degree bad 1,1)
+    add_spectrum_cli_rejection(spectrum_cli_degree_too_large
+        "DEGREE must be between 1 and 4"
+        missing.nc 1.6666666666666667 1.0 1.0 --degree 5 1,1)
+    add_spectrum_cli_rejection(spectrum_cli_incomplete_degree
+        "--degree requires DEGREE and a mode selector"
+        missing.nc 1.6666666666666667 1.0 1.0 --degree)
 
     function(add_axisymmetric_cli_rejection name expected)
         add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
@@ -327,30 +293,18 @@ if(BUILD_TESTING)
     add_axisymmetric_cli_rejection(axisymmetric_cli_zero_mmax
         "MMAX must be positive" missing.nc 1 0)
     add_axisymmetric_cli_rejection(axisymmetric_cli_bad_option
-        "the optional argument must be --quadrature"
-        missing.nc 1 4 --bad gauss2)
-    add_axisymmetric_cli_rejection(axisymmetric_cli_bad_quadrature
-        "quadrature RULE must be midpoint"
-        missing.nc 1 4 --quadrature bad)
-    add_axisymmetric_cli_rejection(axisymmetric_cli_rejects_gauss2
-        "quadrature RULE must be midpoint"
-        missing.nc 1 4 --quadrature gauss2)
+        "the optional argument must be --degree"
+        missing.nc 1 4 --bad 2)
+    add_axisymmetric_cli_rejection(axisymmetric_cli_bad_degree
+        "DEGREE must be an integer"
+        missing.nc 1 4 --degree bad)
+    add_axisymmetric_cli_rejection(axisymmetric_cli_degree_too_large
+        "DEGREE must be between 1 and 4"
+        missing.nc 1 4 --degree 5)
 
-    function(add_axisymmetric_fkg_cli_rejection name expected)
-        add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
-            -DPROGRAM=$<TARGET_FILE:gliss_axisymmetric_fkg>
-            "-DEXPECTED=gliss_axisymmetric_fkg: ${expected}"
-            "-DARGUMENTS=${ARGN}"
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
-    endfunction()
-
-    add_axisymmetric_fkg_cli_rejection(axisymmetric_fkg_cli_bad_n
-        "N must be an integer" missing.nc bad 4)
-    add_axisymmetric_fkg_cli_rejection(axisymmetric_fkg_cli_zero_mmax
-        "MMAX must be positive" missing.nc 1 0)
     add_axisymmetric_cli_rejection(axisymmetric_cli_bad_final_option
         "the final option must be --count-only"
-        missing.nc 1 4 --quadrature midpoint --bad)
+        missing.nc 1 4 --degree 2 --bad)
 
     add_executable(test_local_mode test/test_local_mode.f90)
     target_link_libraries(test_local_mode PRIVATE gliss)
@@ -441,28 +395,6 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
     endfunction()
 
-    add_compatible_cli_rejection(compatible_spectrum_cli_missing
-        gliss_compatible_spectrum
-        "gliss_compatible_spectrum: missing required arguments")
-    add_compatible_cli_rejection(compatible_spectrum_cli_nonfinite_gamma
-        gliss_compatible_spectrum
-        "gliss_compatible_spectrum: GAMMA must be finite"
-        missing.nc 2 8 8 nan 1 1 1 1,0)
-    add_compatible_cli_rejection(compatible_spectrum_cli_duplicate_mode
-        gliss_compatible_spectrum
-        "gliss_compatible_spectrum: duplicate mode"
-        missing.nc 2 8 8 1 1 1 1 1,0 1,0)
-    add_compatible_cli_rejection(compatible_marginality_cli_missing
-        gliss_compatible_marginality
-        "gliss_compatible_marginality: missing required arguments")
-    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_floor
-        gliss_compatible_marginality
-        "gliss_compatible_marginality: FLOOR must be finite"
-        missing.nc 2 8 8 nan 1 1,0)
-    add_compatible_cli_rejection(compatible_marginality_cli_missing_density
-        gliss_compatible_marginality
-        "gliss_compatible_marginality: --physical-density requires a value"
-        missing.nc 2 8 8 1e-8 1 --physical-density=)
     add_compatible_cli_rejection(compatible_trace_cli_missing
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: missing required arguments")
@@ -531,11 +463,6 @@ if(BUILD_TESTING)
             -DARG1=missing.nc -DARG2=8 -DARG3=8
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_failure.cmake)
 
-    add_executable(test_radial_space_policy
-        test/test_radial_space_policy.f90)
-    target_link_libraries(test_radial_space_policy PRIVATE gliss)
-    add_test(NAME radial_space_policy COMMAND test_radial_space_policy)
-
     add_executable(test_gvec_cas3d_reconstruction
         test/test_gvec_cas3d_reconstruction.f90)
     target_link_libraries(test_gvec_cas3d_reconstruction PRIVATE gliss)
@@ -566,19 +493,6 @@ if(BUILD_TESTING)
     target_link_libraries(test_gliss_header PRIVATE gliss_c)
     add_test(NAME gliss_header COMMAND test_gliss_header)
 
-    add_executable(test_export_assembly test/test_export_assembly.f90)
-    target_link_libraries(test_export_assembly PRIVATE gliss_test_support)
-    add_test(NAME export_assembly COMMAND test_export_assembly)
-
-    add_executable(test_family_assembly test/test_family_assembly.f90)
-    target_link_libraries(test_family_assembly PRIVATE gliss)
-    add_test(NAME family_assembly COMMAND test_family_assembly)
-
-    add_executable(test_generalized_block_solver
-        test/test_generalized_block_solver.f90)
-    target_link_libraries(test_generalized_block_solver PRIVATE gliss)
-    add_test(NAME generalized_block_solver COMMAND test_generalized_block_solver)
-
     add_executable(test_newcomb_limit test/test_newcomb_limit.f90)
     target_link_libraries(test_newcomb_limit PRIVATE gliss)
     add_test(NAME newcomb_limit COMMAND test_newcomb_limit)
@@ -603,35 +517,6 @@ if(BUILD_TESTING)
     target_link_libraries(test_perpendicular_kinetic_kernel PRIVATE gliss)
     add_test(NAME perpendicular_kinetic_kernel
         COMMAND test_perpendicular_kinetic_kernel)
-
-    add_executable(test_mass_density_policy
-        test/test_mass_density_policy.f90)
-    target_link_libraries(test_mass_density_policy PRIVATE gliss)
-    add_test(NAME mass_density_policy COMMAND test_mass_density_policy)
-
-    add_executable(test_physical_mass_assembly
-        test/test_physical_mass_assembly.f90)
-    target_link_libraries(test_physical_mass_assembly PRIVATE gliss)
-    add_test(NAME physical_mass_assembly COMMAND test_physical_mass_assembly)
-
-    add_executable(test_compressible_stiffness_assembly
-        test/test_compressible_stiffness_assembly.f90)
-    target_link_libraries(test_compressible_stiffness_assembly PRIVATE gliss)
-    add_test(NAME compressible_stiffness_assembly
-        COMMAND test_compressible_stiffness_assembly)
-
-    add_executable(test_compatible_three_component_assembly
-        test/test_compatible_three_component_assembly.f90)
-    target_link_libraries(test_compatible_three_component_assembly PRIVATE gliss)
-    add_test(NAME compatible_three_component_assembly
-        COMMAND test_compatible_three_component_assembly)
-
-    add_executable(test_compressible_stiffness_family_assembly
-        test/test_compressible_stiffness_family_assembly.f90)
-    target_link_libraries(test_compressible_stiffness_family_assembly PRIVATE
-        gliss)
-    add_test(NAME compressible_stiffness_family_assembly
-        COMMAND test_compressible_stiffness_family_assembly)
 
     add_executable(test_dynamic_family_layout
         test/test_dynamic_family_layout.f90)
@@ -662,38 +547,12 @@ if(BUILD_TESTING)
     add_test(NAME variable_spectrum_analysis
         COMMAND test_variable_spectrum_analysis)
 
-    add_executable(test_physical_mass_family_assembly
-        test/test_physical_mass_family_assembly.f90)
-    target_link_libraries(test_physical_mass_family_assembly PRIVATE gliss)
-    add_test(NAME physical_mass_family_assembly
-        COMMAND test_physical_mass_family_assembly)
-
-    add_executable(test_zero_family_homogeneous_spectrum
-        test/test_zero_family_homogeneous_spectrum.f90)
-    target_link_libraries(test_zero_family_homogeneous_spectrum PRIVATE gliss)
-    add_test(NAME zero_family_homogeneous_spectrum
-        COMMAND test_zero_family_homogeneous_spectrum)
-
-    add_executable(test_cylinder_physical_spectrum
-        test/test_cylinder_physical_spectrum.f90)
-    target_link_libraries(test_cylinder_physical_spectrum PRIVATE
-        gliss_test_support)
-    add_test(NAME cylinder_physical_spectrum
-        COMMAND test_cylinder_physical_spectrum)
-
     add_executable(test_fixed_boundary_spectrum
         test/test_fixed_boundary_spectrum.f90)
     target_link_libraries(test_fixed_boundary_spectrum PRIVATE
         gliss_test_support)
     add_test(NAME fixed_boundary_spectrum
         COMMAND test_fixed_boundary_spectrum)
-
-    add_executable(test_two_component_spectrum
-        test/test_two_component_spectrum.f90)
-    target_link_libraries(test_two_component_spectrum PRIVATE
-        gliss_test_support)
-    add_test(NAME two_component_spectrum
-        COMMAND test_two_component_spectrum)
 
     add_executable(test_mode_topology test/test_mode_topology.f90)
     target_link_libraries(test_mode_topology PRIVATE gliss)
@@ -842,25 +701,6 @@ if(BUILD_TESTING)
     target_link_libraries(test_gvec_cas3d_integrals PRIVATE gliss)
     add_test(NAME gvec_cas3d_integrals COMMAND test_gvec_cas3d_integrals)
 
-    add_executable(test_suydam_marginal test/test_suydam_marginal.f90)
-    target_link_libraries(test_suydam_marginal PRIVATE gliss_test_support)
-    add_test(NAME suydam_marginal_m4 COMMAND test_suydam_marginal 4)
-    add_test(NAME suydam_marginal_m6 COMMAND test_suydam_marginal 6)
-    add_test(NAME suydam_marginal_cli_bad_mode COMMAND ${CMAKE_COMMAND}
-        -DPROGRAM=$<TARGET_FILE:test_suydam_marginal>
-        "-DEXPECTED=test_suydam_marginal: MODE must be 4 or 6"
-        "-DARGUMENTS=5"
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
-    add_test(NAME suydam_marginal_cli_extra COMMAND ${CMAKE_COMMAND}
-        -DPROGRAM=$<TARGET_FILE:test_suydam_marginal>
-        "-DEXPECTED=test_suydam_marginal: usage:"
-        "-DARGUMENTS=4;out.csv;extra"
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
-
-    add_executable(test_eigenvalue_tracking
-        test/test_eigenvalue_tracking.f90)
-    target_link_libraries(test_eigenvalue_tracking PRIVATE gliss)
-    add_test(NAME eigenvalue_tracking COMMAND test_eigenvalue_tracking)
 endif()
 
 option(GLISS_ENABLE_ENZYME "Build Enzyme derivative checks" OFF)
@@ -875,15 +715,6 @@ if(GLISS_ENABLE_ENZYME)
         SOURCES
             src/helical_cylinder_limit.f90
             test/enzyme_helical_cylinder_gradient.f90)
-    add_enzyme_fortran_test(enzyme_phase_assembly_gradient
-        SOURCES
-            src/fourier_phase_kind.f90
-            src/phase_factor_topology.f90
-            src/radial_space_policy.f90
-            src/two_component_kernel.f90
-            src/family_point_assembly.f90
-            test/enzyme_phase_fixture.f90
-            test/enzyme_phase_assembly_gradient.f90)
     add_enzyme_fortran_test(enzyme_physical_mass_gradient
         SOURCES
             src/physical_mass_kernel.f90
@@ -912,62 +743,10 @@ if(GLISS_ENABLE_ENZYME)
             src/terpsichore_reduced_mass_family_assembly.f90
             test/enzyme_terpsichore_reduced_mass_family_fixture.f90
             test/enzyme_terpsichore_reduced_mass_family_gradient.f90)
-    add_enzyme_fortran_test(enzyme_physical_mass_assembly_gradient
-        SOURCES
-            src/fourier_phase_kind.f90
-            src/mass_density_policy.f90
-            src/phase_assembly_policy.f90
-            src/phase_factor_topology.f90
-            src/physical_mass_kernel.f90
-            src/radial_space_policy.f90
-            src/physical_mass_assembly.f90
-            test/enzyme_physical_mass_assembly_fixture.f90
-            test/enzyme_physical_mass_assembly_gradient.f90)
-    add_enzyme_fortran_test(enzyme_physical_mass_family_gradient
-        SOURCES
-            src/fourier_phase_kind.f90
-            src/trial_space_topology.f90
-            src/dynamic_family_layout.f90
-            src/mass_density_policy.f90
-            src/phase_assembly_policy.f90
-            src/phase_factor_topology.f90
-            src/physical_mass_kernel.f90
-            src/radial_space_policy.f90
-            src/physical_mass_assembly.f90
-            src/physical_mass_family_assembly.f90
-            test/enzyme_physical_mass_family_fixture.f90
-            test/enzyme_physical_mass_family_gradient.f90)
     add_enzyme_fortran_test(enzyme_three_component_gradient
         SOURCES
             src/physical_constants.f90
             src/two_component_kernel.f90
             src/three_component_kernel.f90
             test/enzyme_three_component_gradient.f90)
-    add_enzyme_fortran_test(enzyme_compressible_stiffness_gradient
-        SOURCES
-            src/fourier_phase_kind.f90
-            src/phase_assembly_policy.f90
-            src/phase_factor_topology.f90
-            src/physical_constants.f90
-            src/radial_space_policy.f90
-            src/two_component_kernel.f90
-            src/three_component_kernel.f90
-            src/compressible_stiffness_assembly.f90
-            test/enzyme_compressible_stiffness_fixture.f90
-            test/enzyme_compressible_stiffness_gradient.f90)
-    add_enzyme_fortran_test(enzyme_compressible_stiffness_family_gradient
-        SOURCES
-            src/fourier_phase_kind.f90
-            src/trial_space_topology.f90
-            src/dynamic_family_layout.f90
-            src/phase_assembly_policy.f90
-            src/phase_factor_topology.f90
-            src/physical_constants.f90
-            src/radial_space_policy.f90
-            src/two_component_kernel.f90
-            src/three_component_kernel.f90
-            src/compressible_stiffness_assembly.f90
-            src/compressible_stiffness_family_assembly.f90
-            test/enzyme_compressible_stiffness_family_fixture.f90
-            test/enzyme_compressible_stiffness_family_gradient.f90)
 endif()

@@ -74,24 +74,8 @@ name = "cartesian_harmonic_spline"
 main = "test_cartesian_harmonic_spline.f90"
 
 [[test]]
-name = "radial_space_policy"
-main = "test_radial_space_policy.f90"
-
-[[test]]
 name = "gvec_cas3d_reconstruction"
 main = "test_gvec_cas3d_reconstruction.f90"
-
-[[test]]
-name = "export_assembly"
-main = "test_export_assembly.f90"
-
-[[test]]
-name = "family_assembly"
-main = "test_family_assembly.f90"
-
-[[test]]
-name = "generalized_block_solver"
-main = "test_generalized_block_solver.f90"
 
 [[test]]
 name = "newcomb_limit"
@@ -114,22 +98,6 @@ name = "perpendicular_kinetic_kernel"
 main = "test_perpendicular_kinetic_kernel.f90"
 
 [[test]]
-name = "mass_density_policy"
-main = "test_mass_density_policy.f90"
-
-[[test]]
-name = "physical_mass_assembly"
-main = "test_physical_mass_assembly.f90"
-
-[[test]]
-name = "compressible_stiffness_assembly"
-main = "test_compressible_stiffness_assembly.f90"
-
-[[test]]
-name = "compressible_stiffness_family_assembly"
-main = "test_compressible_stiffness_family_assembly.f90"
-
-[[test]]
 name = "dynamic_family_layout"
 main = "test_dynamic_family_layout.f90"
 
@@ -150,24 +118,8 @@ name = "variable_spectrum_analysis"
 main = "test_variable_spectrum_analysis.f90"
 
 [[test]]
-name = "physical_mass_family_assembly"
-main = "test_physical_mass_family_assembly.f90"
-
-[[test]]
-name = "zero_family_homogeneous_spectrum"
-main = "test_zero_family_homogeneous_spectrum.f90"
-
-[[test]]
-name = "cylinder_physical_spectrum"
-main = "test_cylinder_physical_spectrum.f90"
-
-[[test]]
 name = "fixed_boundary_spectrum"
 main = "test_fixed_boundary_spectrum.f90"
-
-[[test]]
-name = "two_component_spectrum"
-main = "test_two_component_spectrum.f90"
 
 [[test]]
 name = "gliss_spectrum_capi"
@@ -240,12 +192,3 @@ main = "test_field_profile_identities.f90"
 [[test]]
 name = "gvec_cas3d_integrals"
 main = "test_gvec_cas3d_integrals.f90"
-
-# test_suydam_marginal requires a mandatory poloidal-mode CLI argument that
-# fpm cannot bake into a manifest entry, so it is omitted from the blanket
-# `fpm test` run. CMake ctest covers it (suydam_marginal_m4, suydam_marginal_m6);
-# under fpm run it explicitly, e.g. `fpm test suydam_marginal -- 4`.
-
-[[test]]
-name = "eigenvalue_tracking"
-main = "test_eigenvalue_tracking.f90"

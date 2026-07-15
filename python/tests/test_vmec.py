@@ -37,7 +37,7 @@ class _BoozModule:
     Booz_xform = _Transform
 
 
-def _geometry(m_max=2, n_max=1):
+def _geometry(m_max=2, n_max=1, force_balance=0.0):
     shape = (5, m_max + 1, 2 * n_max + 1)
     harmonics = {}
     for name in _EVEN_FIELDS | _ODD_FIELDS:
@@ -54,7 +54,7 @@ def _geometry(m_max=2, n_max=1):
         (np.arange(5) + 0.5) / 5,
         profiles,
         harmonics,
-        {"toroidal_flux": 0.0},
+        {"toroidal_flux": 0.0, "force_balance": force_balance},
     )
 
 
@@ -122,6 +122,54 @@ def test_convert_vmec_rejects_boolean_integer_options(tmp_path, name):
     source.write_bytes(b"input")
     with pytest.raises(TypeError, match=f"{name} must be an integer"):
         vmec.convert_vmec(source, tmp_path / "out.nc", **{name: True})
+
+
+@pytest.mark.parametrize("value", [None, True, 1])
+def test_convert_vmec_rejects_nonstring_force_balance_policy(tmp_path, value):
+    source = tmp_path / "wout.nc"
+    source.write_bytes(b"input")
+    with pytest.raises(TypeError, match="force_balance_policy must be a string"):
+        vmec.convert_vmec(
+            source, tmp_path / "out.nc", force_balance_policy=value
+        )
+
+
+def test_convert_vmec_rejects_unknown_force_balance_policy(tmp_path):
+    source = tmp_path / "wout.nc"
+    source.write_bytes(b"input")
+    with pytest.raises(ValueError, match="must be 'error' or 'warn'"):
+        vmec.convert_vmec(
+            source, tmp_path / "out.nc", force_balance_policy="ignore"
+        )
+
+
+@pytest.mark.parametrize("policy", ["error", "warn"])
+def test_convert_vmec_force_balance_policy_is_explicit(
+    tmp_path, monkeypatch, policy
+):
+    source = tmp_path / "wout.nc"
+    source.write_bytes(b"input")
+    destination = tmp_path / "converted.nc"
+    monkeypatch.setattr(vmec, "_dependencies", lambda: (_BoozModule, netcdf_file))
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: 0.02)
+    monkeypatch.setattr(
+        vmec, "convert_geometry", lambda *args: _geometry(force_balance=0.2)
+    )
+    if policy == "error":
+        with pytest.raises(ValueError, match="force_balance"):
+            vmec.convert_vmec(source, destination)
+        assert not destination.exists()
+    else:
+        with pytest.warns(RuntimeWarning, match="force_balance"):
+            vmec.convert_vmec(
+                source,
+                destination,
+                poloidal_max=2,
+                toroidal_max=1,
+                force_balance_policy="warn",
+            )
+        with netcdf_file(destination, "r", mmap=False) as file:
+            assert float(file.conversion_residual_force_balance) == 0.2
 
 
 def test_convert_vmec_is_atomic_and_writes_reader_schema(tmp_path, monkeypatch):

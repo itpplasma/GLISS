@@ -45,13 +45,13 @@
       "category": "basis",
       "evidence": [
         {
-          "path": "test/test_radial_space_policy.f90",
-          "token": "normal_degree"
+          "path": "test/test_radial_feec_complex.f90",
+          "token": "commuting derivative identity failed"
         }
       ],
-      "id": "cas3d-p1-p0-p0",
+      "id": "radial-feec-p1-p4",
       "implementations": [
-        "src/radial_space_policy.f90"
+        "src/radial_feec_complex.f90"
       ]
     },
     {
@@ -85,7 +85,7 @@
       "category": "topology",
       "evidence": [
         {
-          "path": "test/test_two_component_spectrum.f90",
+          "path": "test/test_gliss_marginality_capi.f90",
           "token": "require_same_result"
         }
       ],
@@ -150,14 +150,14 @@
       "category": "assembly",
       "evidence": [
         {
-          "path": "test/test_family_assembly.f90",
-          "token": "family_negative_count"
+          "path": "test/test_cartesian_harmonic_spline.f90",
+          "token": "compatible problem assembly failed"
         }
       ],
-      "id": "midpoint-block",
+      "id": "compatible-primitive-feec",
       "implementations": [
-        "src/family_assembly.f90",
-        "src/compressible_stiffness_family_assembly.f90"
+        "src/compatible_two_component_problem.f90",
+        "src/compatible_three_component_problem.f90"
       ]
     },
     {
@@ -177,26 +177,26 @@
       "category": "norm",
       "evidence": [
         {
-          "path": "test/test_physical_mass_assembly.f90",
-          "token": "positive"
+          "path": "test/test_cartesian_harmonic_spline.f90",
+          "token": "compatible mass is not positive definite"
         }
       ],
       "id": "physical-kinetic",
       "implementations": [
-        "src/physical_mass_family_assembly.f90"
+        "src/compatible_physical_mass_assembly.f90"
       ]
     },
     {
       "category": "norm",
       "evidence": [
         {
-          "path": "test/test_two_component_spectrum.f90",
-          "token": "full artificial problem omitted tangential coefficients"
+          "path": "test/test_gliss_marginality_capi.f90",
+          "token": "forced-general solve failed"
         }
       ],
-      "id": "artificial-marginality",
+      "id": "perpendicular-marginality",
       "implementations": [
-        "src/two_component_artificial_problem.f90"
+        "src/compatible_physical_mass_assembly.f90"
       ]
     },
     {
@@ -216,11 +216,24 @@
       "category": "boundary",
       "evidence": [
         {
+          "path": "test/test_radial_feec_complex.f90",
+          "token": "right trace was not eliminated"
+        }
+      ],
+      "id": "feec-fixed-edge",
+      "implementations": [
+        "src/radial_feec_complex.f90"
+      ]
+    },
+    {
+      "category": "boundary",
+      "evidence": [
+        {
           "path": "test/test_dynamic_family_layout.f90",
           "token": "edge normal coefficient was retained"
         }
       ],
-      "id": "fixed-edge",
+      "id": "terpsichore-fixed-edge",
       "implementations": [
         "src/dynamic_family_layout.f90"
       ]
@@ -242,13 +255,13 @@
       "category": "solver",
       "evidence": [
         {
-          "path": "test/test_eigenvalue_tracking.f90",
+          "path": "test/test_fixed_boundary_spectrum.f90",
           "token": "certificate"
         }
       ],
-      "id": "certified-block-inertia",
+      "id": "certified-feec-inertia",
       "implementations": [
-        "src/eigenvalue_tracking.f90",
+        "src/fixed_boundary_eigen_bracket.f90",
         "src/variable_generalized_solver.f90"
       ]
     },
@@ -282,14 +295,14 @@
   "profiles": [
     {
       "closures": {
-        "assembly": "midpoint-block",
-        "basis": "cas3d-p1-p0-p0",
-        "boundary": "fixed-edge",
+        "assembly": "compatible-primitive-feec",
+        "basis": "radial-feec-p1-p4",
+        "boundary": "feec-fixed-edge",
         "derivative": "rayleigh-displacement",
         "equilibrium": "gvec-cas3d-v1",
         "norm": "physical-kinetic",
         "physics": "compressible-ideal-mhd",
-        "solver": "certified-block-inertia",
+        "solver": "certified-feec-inertia",
         "topology": "stellarator-parity"
       },
       "entrypoint": {
@@ -301,9 +314,9 @@
     },
     {
       "closures": {
-        "assembly": "midpoint-block",
-        "basis": "cas3d-p1-p0-p0",
-        "boundary": "fixed-edge",
+        "assembly": "compatible-primitive-feec",
+        "basis": "radial-feec-p1-p4",
+        "boundary": "feec-fixed-edge",
         "derivative": "rayleigh-displacement",
         "equilibrium": "vmec-symmetric",
         "norm": "physical-kinetic",
@@ -320,13 +333,13 @@
     },
     {
       "closures": {
-        "assembly": "midpoint-block",
-        "basis": "cas3d-p1-p0-p0",
-        "boundary": "fixed-edge",
+        "assembly": "compatible-primitive-feec",
+        "basis": "radial-feec-p1-p4",
+        "boundary": "feec-fixed-edge",
         "equilibrium": "gvec-cas3d-v1",
-        "norm": "artificial-marginality",
+        "norm": "perpendicular-marginality",
         "physics": "incompressible-two-component",
-        "solver": "certified-block-inertia",
+        "solver": "certified-feec-inertia",
         "topology": "axisymmetric-family"
       },
       "entrypoint": {
@@ -338,13 +351,13 @@
     },
     {
       "closures": {
-        "assembly": "midpoint-block",
-        "basis": "cas3d-p1-p0-p0",
-        "boundary": "fixed-edge",
+        "assembly": "compatible-primitive-feec",
+        "basis": "radial-feec-p1-p4",
+        "boundary": "feec-fixed-edge",
         "equilibrium": "gvec-cas3d-v1",
-        "norm": "artificial-marginality",
+        "norm": "perpendicular-marginality",
         "physics": "incompressible-two-component",
-        "solver": "certified-block-inertia",
+        "solver": "certified-feec-inertia",
         "topology": "stellarator-parity"
       },
       "entrypoint": {
@@ -356,13 +369,13 @@
     },
     {
       "closures": {
-        "assembly": "midpoint-block",
-        "basis": "cas3d-p1-p0-p0",
-        "boundary": "fixed-edge",
+        "assembly": "compatible-primitive-feec",
+        "basis": "radial-feec-p1-p4",
+        "boundary": "feec-fixed-edge",
         "equilibrium": "gvec-cas3d-v1",
-        "norm": "artificial-marginality",
+        "norm": "perpendicular-marginality",
         "physics": "incompressible-two-component",
-        "solver": "certified-block-inertia",
+        "solver": "certified-feec-inertia",
         "topology": "stellarator-parity"
       },
       "entrypoint": {
@@ -376,11 +389,11 @@
       "closures": {
         "assembly": "terpsichore-preassembled",
         "basis": "terpsichore-p1-p0",
-        "boundary": "fixed-edge",
+        "boundary": "terpsichore-fixed-edge",
         "equilibrium": "terpsichore-fort23",
         "norm": "terpsichore-reduced",
         "physics": "terpsichore-modelk0",
-        "solver": "certified-block-inertia",
+        "solver": "certified-feec-inertia",
         "topology": "terpsichore-mask"
       },
       "entrypoint": {
@@ -398,7 +411,7 @@
         "equilibrium": "terpsichore-fort23",
         "norm": "terpsichore-reduced",
         "physics": "terpsichore-modelk0",
-        "solver": "certified-block-inertia",
+        "solver": "certified-feec-inertia",
         "topology": "terpsichore-mask"
       },
       "entrypoint": {

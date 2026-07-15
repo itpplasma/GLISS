@@ -456,7 +456,6 @@ def convert_geometry(
         residuals["toroidal_flux"] > 1.0e-2
         or residuals["poloidal_flux"] > 5.0e-2
         or residuals["boozer_jacobian"] > 3.0e-2
-        or residuals["force_balance"] > 1.0e-1
     ):
         raise ValueError(f"VMEC conversion failed field-identity checks: {residuals}")
     if not np.isfinite(beta_average):

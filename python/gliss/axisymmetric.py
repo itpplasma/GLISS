@@ -14,9 +14,6 @@ from .equilibrium import (
     _raise_for_status,
 )
 
-_QUADRATURE = {"midpoint": 1}
-
-
 @dataclass(frozen=True)
 class AxisymmetricResult:
     """Inertia and optional certified eigenpair for one axisymmetric family."""
@@ -28,7 +25,7 @@ class AxisymmetricResult:
     mode_count: int
     radial_surfaces: int
     parity_class: int
-    radial_quadrature: str
+    degree: int
     negative_count: int
     lowest_eigenvalue: Optional[float]
     certificate: Optional[float]
@@ -46,7 +43,7 @@ class _AxisymmetricResult(ctypes.Structure):
         ("mode_count", ctypes.c_size_t),
         ("radial_surfaces", ctypes.c_size_t),
         ("parity_class", ctypes.c_int32),
-        ("radial_quadrature", ctypes.c_int32),
+        ("degree", ctypes.c_int32),
         ("negative_count", ctypes.c_size_t),
         ("lowest_eigenvalue", ctypes.c_double),
         ("certificate", ctypes.c_double),
@@ -82,20 +79,18 @@ def _positive_mode(value: Any, name: str) -> int:
     return result
 
 
-def _quadrature(value: Any) -> int:
-    if not isinstance(value, str):
-        raise TypeError("radial_quadrature must be a string")
-    try:
-        return _QUADRATURE[value]
-    except KeyError as error:
-        raise ValueError("radial_quadrature must be midpoint") from error
+def _degree(value: Any) -> int:
+    result = mode_integer(value, "degree")
+    if result < 1 or result > 4:
+        raise ValueError("degree must be between 1 and 4")
+    return result
 
 
 def _result(
     native: _AxisymmetricResult,
     toroidal_mode: int,
     poloidal_max: int,
-    radial_quadrature: int,
+    degree: int,
     solve_eigenpair: bool,
 ) -> AxisymmetricResult:
     metadata_valid = (
@@ -106,7 +101,7 @@ def _result(
         and native.mode_count == 2 * poloidal_max + 1
         and native.radial_surfaces >= 1
         and native.parity_class == 1
-        and native.radial_quadrature == radial_quadrature
+        and native.degree == degree
         and math.isfinite(native.force_balance_residual)
         and native.force_balance_residual >= 0.0
     )
@@ -125,7 +120,6 @@ def _result(
         pair_valid = all(math.isnan(value) for value in eigenpair)
     if not metadata_valid or not pair_valid:
         raise GlissInternalError("GLISS returned an invalid axisymmetric result")
-    quadrature = {value: name for name, value in _QUADRATURE.items()}
     return AxisymmetricResult(
         has_eigenpair=solve_eigenpair,
         field_periods=native.field_periods,
@@ -134,7 +128,7 @@ def _result(
         mode_count=native.mode_count,
         radial_surfaces=native.radial_surfaces,
         parity_class=native.parity_class,
-        radial_quadrature=quadrature[native.radial_quadrature],
+        degree=native.degree,
         negative_count=native.negative_count,
         lowest_eigenvalue=native.lowest_eigenvalue if solve_eigenpair else None,
         certificate=native.certificate if solve_eigenpair else None,
@@ -147,7 +141,7 @@ def _calculate(
     equilibrium: Equilibrium,
     toroidal_mode: int,
     poloidal_max: int,
-    radial_quadrature: str,
+    degree: int,
     solve_eigenpair: bool,
 ) -> AxisymmetricResult:
     if not isinstance(equilibrium, Equilibrium):
@@ -155,7 +149,7 @@ def _calculate(
     equilibrium._require_open()
     toroidal_mode = _positive_mode(toroidal_mode, "toroidal_mode")
     poloidal_max = _positive_mode(poloidal_max, "poloidal_max")
-    quadrature = _quadrature(radial_quadrature)
+    degree = _degree(degree)
     _bind(equilibrium._library)
     native = _AxisymmetricResult(struct_size=ctypes.sizeof(_AxisymmetricResult))
     error = _error_buffer()
@@ -163,7 +157,7 @@ def _calculate(
         equilibrium._handle,
         toroidal_mode,
         poloidal_max,
-        quadrature,
+        degree,
         int(solve_eigenpair),
         ctypes.byref(native),
         error,
@@ -171,7 +165,7 @@ def _calculate(
     )
     _raise_for_status(status, error, "gliss_axisymmetric_spectrum")
     return _result(
-        native, toroidal_mode, poloidal_max, quadrature, solve_eigenpair
+        native, toroidal_mode, poloidal_max, degree, solve_eigenpair
     )
 
 
@@ -179,7 +173,7 @@ def axisymmetric_inertia(
     equilibrium: Equilibrium,
     toroidal_mode: int = 1,
     poloidal_max: int = 8,
-    radial_quadrature: str = "midpoint",
+    degree: int = 2,
 ) -> AxisymmetricResult:
     """Count negative eigenvalues in one axisymmetric Fourier family."""
 
@@ -187,7 +181,7 @@ def axisymmetric_inertia(
         equilibrium,
         toroidal_mode,
         poloidal_max,
-        radial_quadrature,
+        degree,
         solve_eigenpair=False,
     )
 
@@ -196,7 +190,7 @@ def solve_axisymmetric(
     equilibrium: Equilibrium,
     toroidal_mode: int = 1,
     poloidal_max: int = 8,
-    radial_quadrature: str = "midpoint",
+    degree: int = 2,
 ) -> AxisymmetricResult:
     """Return inertia and the certified lowest axisymmetric eigenpair."""
 
@@ -204,6 +198,6 @@ def solve_axisymmetric(
         equilibrium,
         toroidal_mode,
         poloidal_max,
-        radial_quadrature,
+        degree,
         solve_eigenpair=True,
     )
