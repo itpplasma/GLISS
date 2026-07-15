@@ -166,6 +166,13 @@ parity, mismatched interval counts, malformed records, nonfinite matrices,
 and failed factorizations with typed exceptions. FORT.23 and FORT.24 use the
 same native sequential-unformatted portability restrictions described above.
 
+This is a same-basis cross-code compatibility path, not GLISS's production
+physical free-boundary solver. It currently assembles dense fixture matrices:
+the 191-mode, 24,448-unknown QAS3 validation case took about four minutes and
+15 GiB peak resident memory on the validation host. Use it for reproducible
+TERPSICHORE comparisons, not as the default interactive solve for a new
+equilibrium.
+
 ## Axisymmetric fixed-boundary family
 
 Load one axisymmetric GVEC/CAS3D export, then reuse it for cheap inertia scans
