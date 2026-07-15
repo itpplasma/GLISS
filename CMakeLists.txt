@@ -519,6 +519,11 @@ if(BUILD_TESTING)
         gliss_c gliss_test_support)
     add_test(NAME gliss_marginality_capi COMMAND test_gliss_marginality_capi)
 
+    add_executable(test_marginality_spectrum
+        test/test_marginality_spectrum.f90)
+    target_link_libraries(test_marginality_spectrum PRIVATE gliss)
+    add_test(NAME marginality_spectrum COMMAND test_marginality_spectrum)
+
     add_executable(test_gliss_header cmake/test_gliss_header.c)
     target_include_directories(test_gliss_header PRIVATE include)
     target_link_libraries(test_gliss_header PRIVATE gliss_c)

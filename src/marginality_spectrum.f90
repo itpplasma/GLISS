@@ -41,6 +41,7 @@ module marginality_spectrum
 
     public :: compute_marginality_spectrum
     public :: compute_phase_envelope_spectrum
+    public :: solve_compatible_marginality_problem
 
 contains
 
@@ -130,7 +131,8 @@ contains
             message = "compatible FEEC marginality assembly failed"
             return
         end if
-        call solve_problem(problem, solve_eigenpair, result, info, message)
+        call solve_compatible_marginality_problem(problem, solve_eigenpair, &
+            result, info, message)
         if (info /= marginality_spectrum_ok) return
         call compute_field_profile_identities(equilibrium, n_theta, n_zeta, &
             identities, info)
@@ -151,12 +153,14 @@ contains
         message = ""
     end subroutine compute_spectrum
 
-    subroutine solve_problem(problem, solve_eigenpair, result, info, message)
+    subroutine solve_compatible_marginality_problem(problem, solve_eigenpair, &
+            result, info, message, eigenvector)
         type(compatible_two_component_problem_t), intent(in) :: problem
         logical, intent(in) :: solve_eigenpair
-        type(marginality_spectrum_result_t), intent(inout) :: result
+        type(marginality_spectrum_result_t), intent(out) :: result
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
+        real(dp), allocatable, optional, intent(out) :: eigenvector(:)
         type(fixed_boundary_solver_controls_t) :: controls
         type(variable_block_tridiagonal_t) :: block_k, block_m
         real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
@@ -164,6 +168,10 @@ contains
         real(dp) :: eigenvalue, residual, resolution
         integer :: allocation_status, local_info
 
+        result = marginality_spectrum_result_t()
+        info = marginality_spectrum_invalid
+        message = "compatible FEEC problem is invalid"
+        if (.not. valid_compatible_problem(problem)) return
         call pack_problem(problem, block_k, block_m, info)
         if (info /= marginality_spectrum_ok) then
             message = "compatible FEEC matrix packing failed"
@@ -176,10 +184,12 @@ contains
             message = "zero-shift compatible FEEC inertia failed"
             return
         end if
+        result%has_eigenpair = solve_eigenpair
         if (.not. solve_eigenpair) then
             result%lowest_eigenvalue = ieee_value(0.0_dp, ieee_quiet_nan)
             result%certificate = ieee_value(0.0_dp, ieee_quiet_nan)
             result%eigenpair_residual = ieee_value(0.0_dp, ieee_quiet_nan)
+            if (present(eigenvector)) allocate (eigenvector(0))
             info = marginality_spectrum_ok
             message = ""
             return
@@ -212,9 +222,35 @@ contains
         result%lowest_eigenvalue = eigenvalue
         result%eigenpair_residual = residual
         result%certificate = residual + resolution
+        if (present(eigenvector)) call move_alloc(vector, eigenvector)
         info = marginality_spectrum_ok
         message = ""
-    end subroutine solve_problem
+    end subroutine solve_compatible_marginality_problem
+
+    function valid_compatible_problem(problem) result(valid)
+        type(compatible_two_component_problem_t), intent(in) :: problem
+        logical :: valid
+        integer :: unknowns
+
+        valid = .false.
+        if (.not. allocated(problem%stiffness)) return
+        if (.not. allocated(problem%mass)) return
+        if (.not. allocated(problem%stiffness_terms)) return
+        unknowns = size(problem%stiffness, 1)
+        if (unknowns < 1) return
+        if (size(problem%stiffness, 2) /= unknowns) return
+        if (size(problem%mass, 1) /= unknowns) return
+        if (size(problem%mass, 2) /= unknowns) return
+        if (size(problem%stiffness_terms, 1) /= unknowns) return
+        if (size(problem%stiffness_terms, 2) /= unknowns) return
+        if (size(problem%stiffness_terms, 3) /= 4) return
+        if (problem%normal_unknowns < 0 .or. problem%eta_unknowns < 0) return
+        if (problem%normal_unknowns + problem%eta_unknowns /= unknowns) return
+        if (.not. all(ieee_is_finite(problem%stiffness))) return
+        if (.not. all(ieee_is_finite(problem%mass))) return
+        if (.not. all(ieee_is_finite(problem%stiffness_terms))) return
+        valid = .true.
+    end function valid_compatible_problem
 
     subroutine pack_problem(problem, block_k, block_m, info)
         type(compatible_two_component_problem_t), intent(in) :: problem

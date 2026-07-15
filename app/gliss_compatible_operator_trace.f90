@@ -8,10 +8,13 @@ program gliss_compatible_operator_trace
         compatible_problem_ok, compatible_two_component_problem_t
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
+    use marginality_spectrum, only: marginality_spectrum_ok, &
+        marginality_spectrum_result_t, solve_compatible_marginality_problem
     use radial_cubic_spline, only: build_radial_cubic_spline_grid, &
         evaluate_radial_cubic_spline_field, fit_radial_cubic_spline_field, &
         radial_cubic_spline_field_t, radial_cubic_spline_grid_t, &
         radial_cubic_spline_ok
+    use stable_reduction, only: stable_dot_product
     implicit none
 
     character(len=16), parameter :: field_names(14) = [character(len=16) :: &
@@ -25,12 +28,15 @@ program gliss_compatible_operator_trace
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(compatible_two_component_problem_t) :: problem
     type(compatible_cell_trace_t), allocatable :: traces(:)
+    type(marginality_spectrum_result_t) :: spectrum
     type(radial_cubic_spline_grid_t) :: profile_grid
     type(radial_cubic_spline_field_t) :: profile_spline
     character(len=1024) :: filename
+    character(len=256) :: solver_message
     integer, allocatable :: mode_m(:), mode_n(:), requested_cells(:)
     integer, allocatable :: selected_cells(:)
     real(dp), allocatable :: profile_values(:, :), stored_power(:)
+    real(dp), allocatable :: eigenvector(:)
     real(dp) :: edge_profiles(3), edge_seconds(3), edge_slopes(3), q1_distance
     integer :: allocation_status, arguments, degree, info, n_theta, n_zeta
     integer :: parity, profile_index, q1_index
@@ -81,6 +87,10 @@ program gliss_compatible_operator_trace
         stored_power, parity, degree, n_theta, n_zeta, problem, info, &
         selected_cells, traces)
     if (info /= compatible_problem_ok) call fail("operator assembly", info)
+    call solve_compatible_marginality_problem(problem, .true., spectrum, info, &
+        solver_message, eigenvector)
+    if (info /= marginality_spectrum_ok) &
+        call fail_message("eigensolve", info, solver_message)
     call write_trace(q1_index)
     call write_compatible_operator_geometry(equilibrium, traces, n_theta, &
         n_zeta, info)
@@ -118,7 +128,44 @@ contains
         do trace_index = 1, size(traces)
             call write_cell(trace_index)
         end do
+        call write_eigen_trace
     end subroutine write_trace
+
+    subroutine write_eigen_trace()
+        real(dp), allocatable :: image(:), row_terms(:, :)
+        real(dp) :: closure, kinetic, potential, terms(4)
+        integer :: allocation_status, index, term
+
+        write (*, "(a)") &
+            "EIGEN_NORMALIZATION,compatible_perpendicular_L2"
+        allocate (image(size(eigenvector)), row_terms(size(eigenvector), 6), &
+            stat=allocation_status)
+        if (allocation_status /= 0) call fail("eigen trace allocation", -1)
+        image = matmul(problem%mass, eigenvector)
+        kinetic = stable_dot_product(eigenvector, image)
+        row_terms(:, 1) = eigenvector * image
+        image = matmul(problem%stiffness, eigenvector)
+        potential = stable_dot_product(eigenvector, image)
+        row_terms(:, 2) = eigenvector * image
+        do term = 1, size(terms)
+            image = matmul(problem%stiffness_terms(:, :, term), eigenvector)
+            terms(term) = stable_dot_product(eigenvector, image)
+            row_terms(:, term + 2) = eigenvector * image
+            write (*, "(a,a,',',es24.16e3)") "EIGEN_TERM,", &
+                term_name(term), terms(term)
+        end do
+        closure = abs(potential - sum(terms))
+        write (*, "(a,i0,6(',',es24.16e3))") "EIGEN_SUMMARY,", &
+            spectrum%negative_count, spectrum%lowest_eigenvalue, &
+            spectrum%eigenpair_residual, spectrum%certificate, kinetic, &
+            potential, closure
+        do index = 1, size(eigenvector)
+            write (*, "(a,i0,7(',',es24.16e3))") "EIGEN_ROW,", index, &
+                eigenvector(index), row_terms(index, 1), row_terms(index, 2), &
+                row_terms(index, 3), row_terms(index, 4), row_terms(index, 5), &
+                row_terms(index, 6)
+        end do
+    end subroutine write_eigen_trace
 
     subroutine write_profile(surface)
         integer, intent(in) :: surface
@@ -543,5 +590,15 @@ contains
             // " error ", status
         error stop 1
     end subroutine fail
+
+    subroutine fail_message(operation, status, message)
+        character(len=*), intent(in) :: operation, message
+        integer, intent(in) :: status
+
+        write (error_unit, "(a,i0,2a)") &
+            "gliss_compatible_operator_trace: " // trim(operation) &
+            // " error ", status, ": ", trim(message)
+        error stop 1
+    end subroutine fail_message
 
 end program gliss_compatible_operator_trace
