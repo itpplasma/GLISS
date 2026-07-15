@@ -707,7 +707,7 @@ contains
         do item = 1, count
             read (unit, "(a)", iostat=io_status) line
             if (io_status /= 0) call fail_external_subspace("path list changed")
-            paths(item) = trim(line)
+            call resolve_path_list_item(path, trim(line), paths(item))
             do column = 1, item - 1
                 if (paths(column) == paths(item)) &
                     call fail_external_subspace("path list contains duplicates")
@@ -716,11 +716,35 @@ contains
         close (unit)
     end subroutine read_subspace_paths
 
+    subroutine resolve_path_list_item(list_path, item, resolved)
+        character(len=*), intent(in) :: list_path, item
+        character(len=*), intent(out) :: resolved
+        integer :: slash
+
+        if (item(1:1) == "/") then
+            if (len_trim(item) > len(resolved)) &
+                call fail_external_subspace("resolved path is too long")
+            resolved = trim(item)
+            return
+        end if
+        slash = scan(trim(list_path), "/", back=.true.)
+        if (slash == 0) then
+            if (len_trim(item) > len(resolved)) &
+                call fail_external_subspace("resolved path is too long")
+            resolved = trim(item)
+        else
+            if (slash + len_trim(item) > len(resolved)) &
+                call fail_external_subspace("resolved path is too long")
+            resolved = list_path(:slash) // trim(item)
+        end if
+    end subroutine resolve_path_list_item
+
     subroutine preflight_subspace_paths(path)
         character(len=*), intent(in) :: path
         character(len=1024), allocatable :: paths(:)
         character(len=4096) :: line
-        integer :: io_status, item, unit
+        real(dp) :: value
+        integer :: file_index, io_status, item, point, unit
 
         call read_subspace_paths(path, paths)
         do item = 1, size(paths)
@@ -732,6 +756,24 @@ contains
             if (io_status /= 0 .or. trim(line) /= "index,value") &
                 call fail_external_subspace( &
                 "listed vector does not begin with index,value")
+            point = 0
+            do
+                read (unit, "(a)", iostat=io_status) line
+                if (io_status == iostat_end) exit
+                if (io_status /= 0) &
+                    call fail_external_subspace("cannot read a listed vector")
+                if (len_trim(line) == 0 .or. len_trim(line) == len(line)) &
+                    call fail_external_subspace("listed vector has a malformed row")
+                point = point + 1
+                if (point > 10000000) &
+                    call fail_external_subspace("listed vector is too long")
+                call parse_external_vector_row(line, file_index, value)
+                if (file_index /= point) &
+                    call fail_external_subspace( &
+                    "listed vector indices must be consecutive from one")
+            end do
+            if (point == 0) &
+                call fail_external_subspace("listed vector contains no values")
             close (unit)
         end do
     end subroutine preflight_subspace_paths

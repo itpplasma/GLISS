@@ -665,6 +665,12 @@ if(BUILD_TESTING)
         "gliss_compatible_marginality: subspace solver options require --evaluate-subspace"
         missing.nc 2 8 8 1e-8 1 --subspace-shift=0
         --subspace-iterations=10 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_relative_subspace_vector
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: invalid external subspace: listed vector indices must be consecutive from one"
+        missing.nc 2 8 8 1e-8 1
+        --evaluate-subspace=${CMAKE_CURRENT_SOURCE_DIR}/test/invalid_subspace_paths.txt
+        0,1)
     add_compatible_cli_rejection(compatible_trace_cli_missing
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: missing required arguments")
