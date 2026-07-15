@@ -400,6 +400,12 @@ if(BUILD_TESTING)
     add_test(NAME compatible_problem_assembly_support
         COMMAND test_compatible_problem_assembly_support)
 
+    add_executable(test_compatible_family_point_assembly
+        test/test_compatible_family_point_assembly.f90)
+    target_link_libraries(test_compatible_family_point_assembly PRIVATE gliss)
+    add_test(NAME compatible_family_point_assembly
+        COMMAND test_compatible_family_point_assembly)
+
     function(add_compatible_cli_rejection name target expected)
         add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
             -DPROGRAM=$<TARGET_FILE:${target}>
