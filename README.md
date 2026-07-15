@@ -44,6 +44,18 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+Before a release, audit the committed tree for compiler-generated Fortran
+array temporaries and run the complete test suite under the audited `-O3`
+build:
+
+```sh
+./ci/array_temporary_audit.sh
+```
+
+The script uses a detached temporary worktree and a private `fo` cache, so it
+does not reconfigure the normal build tree.  Set `GLISS_AUDIT_TMPDIR` to place
+the temporary build on a large or fast filesystem.
+
 The Enzyme gradient gate needs matching Flang, `opt`, `llvm-link`, and
 LLVMEnzyme versions:
 
