@@ -43,8 +43,10 @@ contains
 
         info = terpsichore_coefficients_invalid
         if (.not. fixture_selects_noninteracting(fixture)) return
-        if (any(shape(coefficients) /= &
-            [10, fixture%modes, fixture%modes, fixture%intervals])) return
+        if (size(coefficients, 1) /= 10) return
+        if (size(coefficients, 2) /= fixture%modes) return
+        if (size(coefficients, 3) /= fixture%modes) return
+        if (size(coefficients, 4) /= fixture%intervals) return
         coefficients = 0.0_dp
         do interval = 1, fixture%intervals
             call build_interval_coefficients_fast(fixture, interval, &

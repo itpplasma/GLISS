@@ -107,7 +107,8 @@ contains
 
         valid = .false.
         if (trials < 1 .or. intervals < 2 .or. total_unknowns < 1) return
-        if (any(shape(element_to_global) /= [4 * trials, intervals])) return
+        if (size(element_to_global, 1) /= 4 * trials) return
+        if (size(element_to_global, 2) /= intervals) return
         if (any(element_to_global < 0)) return
         if (any(element_to_global > total_unknowns)) return
         if (maxval(element_to_global) /= total_unknowns) return
@@ -352,7 +353,8 @@ contains
         if (.not. valid) return
         valid = allocated(layout%active_rank)
         if (.not. valid) return
-        valid = all(shape(layout%active_rank) == [3, layout%trials])
+        valid = size(layout%active_rank, 1) == 3 &
+            .and. size(layout%active_rank, 2) == layout%trials
     end function layout_activity_is_shaped
 
     pure function layout_metadata_is_consistent(layout) result(valid)

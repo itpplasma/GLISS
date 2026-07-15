@@ -121,8 +121,9 @@ contains
         call newcomb_quadratic_coefficients(profiles, poloidal_mode, &
             toroidal_mode, radius_mid, coeff_xx, coeff_xd, coeff_dd, info)
         if (info /= newcomb_ok) return
-        value_weight = [0.5_dp, 0.5_dp]
-        slope_weight = [-1.0_dp / step, 1.0_dp / step]
+        value_weight = 0.5_dp
+        slope_weight(1) = -1.0_dp / step
+        slope_weight(2) = 1.0_dp / step
         do b = 1, 2
             do a = 1, 2
                 element(a, b) = step * (coeff_xx * value_weight(a) &

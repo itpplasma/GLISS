@@ -176,8 +176,8 @@ contains
         if (complex%l2_dofs /= full_h1 - 1) return
         if (size(complex%l2_knots) /= size(complex%h1_knots) - 2) return
         if (size(complex%h1_basis_index) /= complex%h1_dofs) return
-        if (any(shape(complex%derivative) /= &
-            [complex%l2_dofs, complex%h1_dofs])) return
+        if (size(complex%derivative, 1) /= complex%l2_dofs) return
+        if (size(complex%derivative, 2) /= complex%h1_dofs) return
         if (any(complex%h1_basis_index < 1)) return
         if (any(complex%h1_basis_index > full_h1)) return
         if (.not. all(ieee_is_finite(complex%derivative))) return
