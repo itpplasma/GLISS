@@ -27,10 +27,11 @@ program gliss_compatible_marginality
     real(dp) :: density, floor, kinetic, m0_stored_power, potential, residual
     real(dp) :: term_energy(4)
     integer :: allocation_status, arguments, comma, degree, first_mode, info
-    integer :: inertia_negative_count, mode, negative_count, work_size
+    integer :: bracket_kind, inertia_negative_count, mode, negative_count
+    integer :: work_size
     integer :: n_theta, n_zeta, parity, trial
     integer(int64) :: requested_work_size
-    logical :: bracket_requested, has_eta_powers, has_m0_power
+    logical :: has_eta_powers, has_m0_power
     logical :: has_stored_powers, inertia_only
     logical :: physical_mass
 
@@ -67,7 +68,7 @@ program gliss_compatible_marginality
     first_mode = 7
     inertia_only = .false.
     physical_mass = .false.
-    bracket_requested = .false.
+    bracket_kind = 0
     has_m0_power = .false.
     has_stored_powers = .false.
     has_eta_powers = .false.
@@ -112,13 +113,27 @@ program gliss_compatible_marginality
             eta_power_token = token(len("--eta-stored-powers=") + 1:)
             has_eta_powers = .true.
         else if (index(token, "--negative-bracket=") == 1) then
-            if (bracket_requested) &
+            if (bracket_kind == 1) &
                 call fail_usage("duplicate --negative-bracket")
+            if (bracket_kind /= 0) &
+                call fail_usage("conflicting eigenvalue bracket options")
             if (len_trim(token) == len("--negative-bracket=")) &
                 call fail_usage("--negative-bracket requires lower,upper,tolerance")
             call parse_bracket(token(len("--negative-bracket=") + 1:), &
                 bracket_lower, bracket_upper, bracket_tolerance)
-            bracket_requested = .true.
+            bracket_kind = 1
+        else if (index(token, "--eigenvalue-bracket=") == 1) then
+            if (bracket_kind == 2) &
+                call fail_usage("duplicate --eigenvalue-bracket")
+            if (bracket_kind /= 0) &
+                call fail_usage("conflicting eigenvalue bracket options")
+            if (len_trim(token) == len("--eigenvalue-bracket=")) &
+                call fail_usage( &
+                "--eigenvalue-bracket requires lower,upper,tolerance")
+            call parse_eigenvalue_bracket( &
+                token(len("--eigenvalue-bracket=") + 1:), bracket_lower, &
+                bracket_upper, bracket_tolerance)
+            bracket_kind = 2
         else
             call fail_usage("unknown option " // trim(token))
         end if
@@ -210,9 +225,13 @@ program gliss_compatible_marginality
     write (*, "(i0,5(a,i0),2(a,es24.16),a,i0)") size(equilibrium%s), &
         ",", degree, ",", parity, ",", n_theta, ",", n_zeta, ",", &
         merge(1, 0, physical_mass), ",", density, ",", floor, ",", &
-        merge(1, 0, bracket_requested)
-    if (bracket_requested) then
-        call bracket_negative_eigenvalue
+        merge(1, 0, bracket_kind /= 0)
+    if (bracket_kind /= 0) then
+        if (bracket_kind == 1) then
+            call bracket_negative_eigenvalue
+        else
+            call bracket_eigenvalue
+        end if
         call terminate_process(0_c_int)
     end if
     call shifted_negative_count(floor, inertia_negative_count)
@@ -285,7 +304,8 @@ contains
             "[--m0-stored-power=VALUE] " // &
             "[--stored-powers=P0,P1,...] " // &
             "[--eta-stored-powers=P0,P1,...] " // &
-            "[--negative-bracket=LOWER,UPPER,TOLERANCE] m,n [m,n ...]"
+            "[--negative-bracket=LOWER,UPPER,TOLERANCE] " // &
+            "[--eigenvalue-bracket=LOWER,UPPER,TOLERANCE] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
 
@@ -390,6 +410,39 @@ contains
             call fail_usage("negative bracket tolerance must lie in (0,1)")
     end subroutine parse_bracket
 
+    subroutine parse_eigenvalue_bracket(text, lower, upper, tolerance)
+        character(len=*), intent(in) :: text
+        real(dp), intent(out) :: lower, upper, tolerance
+        integer :: first_comma, second_comma
+
+        first_comma = index(text, ",")
+        if (first_comma <= 1 .or. first_comma == len_trim(text)) &
+            call fail_usage( &
+            "eigenvalue bracket requires lower,upper,tolerance")
+        second_comma = index(text(first_comma + 1:), ",")
+        if (second_comma <= 1) &
+            call fail_usage( &
+            "eigenvalue bracket requires lower,upper,tolerance")
+        second_comma = first_comma + second_comma
+        if (second_comma == len_trim(text)) &
+            call fail_usage( &
+            "eigenvalue bracket requires lower,upper,tolerance")
+        if (index(text(second_comma + 1:), ",") > 0) &
+            call fail_usage( &
+            "eigenvalue bracket requires lower,upper,tolerance")
+        call parse_real(text(:first_comma - 1), &
+            "eigenvalue bracket lower", lower)
+        call parse_real(text(first_comma + 1:second_comma - 1), &
+            "eigenvalue bracket upper", upper)
+        call parse_real(text(second_comma + 1:), &
+            "eigenvalue bracket tolerance", tolerance)
+        if (upper <= lower) &
+            call fail_usage("eigenvalue bracket must obey lower < upper")
+        if (tolerance <= 0.0_dp .or. tolerance >= 1.0_dp) &
+            call fail_usage( &
+            "eigenvalue bracket tolerance must lie in (0,1)")
+    end subroutine parse_eigenvalue_bracket
+
     subroutine shifted_negative_count(shift, count)
         real(dp), intent(in) :: shift
         integer, intent(out) :: count
@@ -402,13 +455,19 @@ contains
     end subroutine shifted_negative_count
 
     subroutine bracket_negative_eigenvalue
+        character(len=192) :: message
         real(dp) :: midpoint
         integer :: iterations, lower_count, midpoint_count, upper_count
 
         call shifted_negative_count(bracket_lower, lower_count)
         call shifted_negative_count(bracket_upper, upper_count)
-        if (lower_count /= upper_count + 1) &
-            call fail_usage("negative bracket must contain exactly one eigenvalue")
+        if (lower_count /= upper_count + 1) then
+            write (message, "(a,i0,a,i0,a,i0,a)") &
+                "negative bracket must contain exactly one eigenvalue (contains ", &
+                lower_count - upper_count, "; lower count ", lower_count, &
+                ", upper count ", upper_count, ")"
+            call fail_usage(trim(message))
+        end if
         iterations = 0
         do while (bracket_upper - bracket_lower > &
                 bracket_tolerance * bracket_lower)
@@ -434,5 +493,47 @@ contains
             iterations, ",", -bracket_upper, ",", -bracket_lower, ",", &
             bracket_tolerance, ",", m0_stored_power
     end subroutine bracket_negative_eigenvalue
+
+    subroutine bracket_eigenvalue
+        character(len=192) :: message
+        real(dp) :: midpoint, scale
+        integer :: iterations, lower_count, midpoint_count, upper_count
+
+        call shifted_negative_count(-bracket_lower, lower_count)
+        call shifted_negative_count(-bracket_upper, upper_count)
+        if (upper_count /= lower_count + 1) then
+            write (message, "(a,i0,a,i0,a,i0,a)") &
+                "eigenvalue bracket must contain exactly one eigenvalue (contains ", &
+                upper_count - lower_count, "; lower count ", lower_count, &
+                ", upper count ", upper_count, ")"
+            call fail_usage(trim(message))
+        end if
+        iterations = 0
+        scale = max(abs(bracket_lower), abs(bracket_upper), tiny(1.0_dp))
+        do while (bracket_upper - bracket_lower > bracket_tolerance * scale)
+            if (iterations >= 80) &
+                call fail_solver("eigenvalue bracket iteration", -1)
+            midpoint = bracket_lower + 0.5_dp * &
+                (bracket_upper - bracket_lower)
+            call shifted_negative_count(-midpoint, midpoint_count)
+            if (midpoint_count == lower_count) then
+                bracket_lower = midpoint
+            else if (midpoint_count == upper_count) then
+                bracket_upper = midpoint
+            else
+                call fail_solver( &
+                    "eigenvalue bracket changed by multiple levels", -1)
+            end if
+            iterations = iterations + 1
+        end do
+        write (*, "(a)") "degree,parity,unknowns,normal_unknowns," // &
+            "eta_unknowns,lower_count,upper_count,iterations," // &
+            "lambda_lower,lambda_upper,relative_tolerance,m0_stored_power"
+        write (*, "(i0,7(a,i0),4(a,es24.16))") degree, ",", parity, ",", &
+            size(stiffness, 1), ",", problem%normal_unknowns, ",", &
+            problem%eta_unknowns, ",", lower_count, ",", upper_count, ",", &
+            iterations, ",", bracket_lower, ",", bracket_upper, ",", &
+            bracket_tolerance, ",", m0_stored_power
+    end subroutine bracket_eigenvalue
 
 end program gliss_compatible_marginality

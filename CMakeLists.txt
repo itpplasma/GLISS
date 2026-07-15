@@ -513,6 +513,28 @@ if(BUILD_TESTING)
         gliss_compatible_marginality
         "gliss_compatible_marginality: negative bracket requires"
         missing.nc 2 8 8 1e-8 1 --negative-bracket=1e-8,1e-6 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_eigen_bracket_order
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenvalue bracket must obey"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=1,1,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_eigen_bracket_shape
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenvalue bracket requires"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=0,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_eigen_bracket
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenvalue bracket lower must be finite"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=nan,1,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_eigen_bracket
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --eigenvalue-bracket"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=0,1,1e-3
+        --eigenvalue-bracket=0,1,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_conflicting_brackets
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: conflicting eigenvalue bracket options"
+        missing.nc 2 8 8 1e-8 1 --negative-bracket=1e-8,1e-6,1e-3
+        --eigenvalue-bracket=0,1,1e-3 0,1)
     add_compatible_cli_rejection(compatible_trace_cli_missing
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: missing required arguments")
