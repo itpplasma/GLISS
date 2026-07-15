@@ -143,10 +143,10 @@ contains
             allocated(fixture%tangential)
         if (.not. valid) return
         total_intervals = fixture%plasma_intervals + fixture%vacuum_intervals
-        valid = all(shape(fixture%normal) == &
-            [fixture%modes, total_intervals + 1]) &
-            .and. all(shape(fixture%tangential) == &
-            [fixture%modes, total_intervals])
+        valid = size(fixture%normal, 1) == fixture%modes &
+            .and. size(fixture%normal, 2) == total_intervals + 1 &
+            .and. size(fixture%tangential, 1) == fixture%modes &
+            .and. size(fixture%tangential, 2) == total_intervals
         if (.not. valid) return
         valid = all(abs(real(fixture%mode_m, dp)) <= maximum_mode_number) &
             .and. all(abs(real(fixture%mode_n, dp)) <= maximum_mode_number)

@@ -19,6 +19,18 @@ module starwall_fourier_coupling
     public :: add_starwall_fourier_stiffness
     public :: build_starwall_fourier_map
 
+    interface
+        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            real(dp), intent(in) :: alpha, beta
+            real(dp), intent(in) :: a(lda, *), b(ldb, *)
+            real(dp), intent(inout) :: c(ldc, *)
+        end subroutine dgemm
+    end interface
+
 contains
 
     subroutine build_starwall_fourier_map(nu, nv, topology, map, info)
@@ -68,12 +80,14 @@ contains
         type(dynamic_family_layout_t), intent(in) :: layout
         real(dp), intent(inout) :: stiffness(:, :)
         integer, intent(out) :: info
-        real(dp), allocatable :: fourier(:, :), map(:, :)
-        integer :: matrix_info
+        real(dp), allocatable :: fourier(:, :), map(:, :), nodal_map(:, :)
+        real(dp) :: symmetric_value
+        integer :: column, matrix_info, nodes, row, trials
 
         info = starwall_fourier_invalid_layout
         if (.not. valid_boundary_layout(layout, topology)) return
-        if (any(shape(stiffness) /= layout%total_unknowns)) return
+        if (size(stiffness, 1) /= layout%total_unknowns &
+            .or. size(stiffness, 2) /= layout%total_unknowns) return
         call validate_symmetric_matrix(stiffness, matrix_info)
         if (matrix_info /= starwall_fourier_ok) then
             info = matrix_info
@@ -81,7 +95,8 @@ contains
         end if
         info = starwall_fourier_invalid_input
         if (.not. grid_size_is_representable(nu, nv)) return
-        if (any(shape(nodal) /= nu * nv)) return
+        nodes = nu * nv
+        if (size(nodal, 1) /= nodes .or. size(nodal, 2) /= nodes) return
         call validate_symmetric_matrix(nodal, matrix_info)
         if (matrix_info /= starwall_fourier_ok) then
             info = matrix_info
@@ -90,8 +105,20 @@ contains
 
         call build_starwall_fourier_map(nu, nv, topology, map, info)
         if (info /= starwall_fourier_ok) return
-        fourier = matmul(transpose(map), matmul(nodal, map))
-        fourier = 0.5_dp * (fourier + transpose(fourier))
+        trials = size(map, 2)
+        allocate (nodal_map(nodes, trials), fourier(trials, trials))
+        call dgemm("N", "N", nodes, trials, nodes, 1.0_dp, nodal, &
+            nodes, map, nodes, 0.0_dp, nodal_map, nodes)
+        call dgemm("T", "N", trials, trials, nodes, 1.0_dp, map, &
+            nodes, nodal_map, nodes, 0.0_dp, fourier, trials)
+        do column = 1, trials
+            do row = 1, column
+                symmetric_value = 0.5_dp &
+                    * (fourier(row, column) + fourier(column, row))
+                fourier(row, column) = symmetric_value
+                fourier(column, row) = symmetric_value
+            end do
+        end do
         if (.not. all(ieee_is_finite(fourier))) then
             info = starwall_fourier_invalid_input
             return
@@ -103,14 +130,21 @@ contains
     pure subroutine validate_symmetric_matrix(matrix, info)
         real(dp), intent(in) :: matrix(:, :)
         integer, intent(out) :: info
-        real(dp) :: scale
+        real(dp) :: scale, symmetry_error
+        integer :: column, row
 
         info = starwall_fourier_invalid_input
         if (size(matrix, 1) /= size(matrix, 2)) return
         if (.not. all(ieee_is_finite(matrix))) return
         scale = max(1.0_dp, maxval(abs(matrix)))
-        if (maxval(abs(matrix - transpose(matrix))) &
-            > 1024.0_dp * epsilon(1.0_dp) * scale) then
+        symmetry_error = 0.0_dp
+        do column = 1, size(matrix, 2)
+            do row = 1, column - 1
+                symmetry_error = max(symmetry_error, &
+                    abs(matrix(row, column) - matrix(column, row)))
+            end do
+        end do
+        if (symmetry_error > 1024.0_dp * epsilon(1.0_dp) * scale) then
             info = starwall_fourier_nonsymmetric
             return
         end if

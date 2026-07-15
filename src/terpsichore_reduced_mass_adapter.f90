@@ -56,12 +56,13 @@ contains
         real(dp), allocatable, intent(out) :: mass(:, :)
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
+        real(dp), allocatable :: absolute_bjac(:)
         real(dp), allocatable :: radial_factor(:, :), radial_weight(:)
         real(dp), allocatable :: normal_normal(:, :), normal_tangent(:, :)
         real(dp), allocatable :: tangent_tangent(:, :), element(:, :)
         integer, allocatable :: element_to_global(:, :), parity(:)
         real(dp) :: normal_value, tangential_value
-        integer :: allocation_status, interval, first, second, modes
+        integer :: allocation_status, interval, first, second, modes, point
 
         info = terpsichore_reduced_adapter_invalid
         if (.not. terpsichore_fixed_fixture_is_valid(fixture)) return
@@ -86,6 +87,7 @@ contains
             return
         end if
         allocate (mass(layout%total_unknowns, layout%total_unknowns), &
+            absolute_bjac(size(fixture%signed_bjac, 1)), &
             normal_normal(modes, modes), normal_tangent(modes, modes), &
             tangent_tangent(modes, modes), element(3 * modes, 3 * modes), &
             stat=allocation_status)
@@ -95,8 +97,11 @@ contains
         end if
         mass = 0.0_dp
         do interval = 1, fixture%intervals
+            do point = 1, size(absolute_bjac)
+                absolute_bjac(point) = abs(fixture%signed_bjac(point, interval))
+            end do
             call terpsichore_pair_averages( &
-                abs(fixture%signed_bjac(:, interval)), &
+                absolute_bjac, &
                 fixture%poloidal_points, fixture%toroidal_points, &
                 fixture%stability_periods, fixture%field_periods, &
                 fixture%mode_m, fixture%mode_n, &

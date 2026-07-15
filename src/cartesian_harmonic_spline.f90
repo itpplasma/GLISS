@@ -249,8 +249,9 @@ contains
         valid = allocated(grid%nodes) .and. size(poloidal_modes) > 0 &
             .and. size(toroidal_modes) > 0
         if (.not. valid) return
-        expected = [size(grid%nodes), size(poloidal_modes), &
-            size(toroidal_modes)]
+        expected(1) = size(grid%nodes)
+        expected(2) = size(poloidal_modes)
+        expected(3) = size(toroidal_modes)
         valid = pair_has_shape(x, expected) .and. pair_has_shape(y, expected) &
             .and. pair_has_shape(z, expected)
     end function position_pairs_are_valid
@@ -262,8 +263,12 @@ contains
 
         valid = allocated(pair%cosine) .and. allocated(pair%sine)
         if (.not. valid) return
-        valid = all(shape(pair%cosine) == expected) &
-            .and. all(shape(pair%sine) == expected) &
+        valid = size(pair%cosine, 1) == expected(1) &
+            .and. size(pair%cosine, 2) == expected(2) &
+            .and. size(pair%cosine, 3) == expected(3) &
+            .and. size(pair%sine, 1) == expected(1) &
+            .and. size(pair%sine, 2) == expected(2) &
+            .and. size(pair%sine, 3) == expected(3) &
             .and. all(ieee_is_finite(pair%cosine)) &
             .and. all(ieee_is_finite(pair%sine))
     end function pair_has_shape

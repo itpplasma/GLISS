@@ -114,10 +114,12 @@ contains
         if (any(shape(tangential_phase) /= shape(normal_phase))) return
         if (size(normal_phase, 2) /= size(signed_bjac, 1)) return
         if (size(normal_phase, 3) /= intervals) return
-        if (any(shape(normal_radial_factor) /= [trials, intervals])) return
+        if (size(normal_radial_factor, 1) /= trials &
+            .or. size(normal_radial_factor, 2) /= intervals) return
         if (size(flux_t_slope) /= intervals) return
         if (size(normalized_radial_weight) /= intervals) return
-        if (any(shape(element_to_global) /= [3 * trials, intervals])) return
+        if (size(element_to_global, 1) /= 3 * trials &
+            .or. size(element_to_global, 2) /= intervals) return
         if (size(mass, 1) /= size(mass, 2) .or. size(mass, 1) < 1) return
         if (any(element_to_global < 0) &
             .or. any(element_to_global > size(mass, 1))) return
