@@ -28,7 +28,8 @@ program gliss_compatible_operator_trace
     type(radial_cubic_spline_grid_t) :: profile_grid
     type(radial_cubic_spline_field_t) :: profile_spline
     character(len=1024) :: filename
-    integer, allocatable :: mode_m(:), mode_n(:), selected_cells(:)
+    integer, allocatable :: mode_m(:), mode_n(:), requested_cells(:)
+    integer, allocatable :: selected_cells(:)
     real(dp), allocatable :: profile_values(:, :), stored_power(:)
     real(dp) :: edge_profiles(3), edge_seconds(3), edge_slopes(3), q1_distance
     integer :: allocation_status, arguments, degree, info, n_theta, n_zeta
@@ -42,7 +43,7 @@ program gliss_compatible_operator_trace
     end interface
 
     call read_arguments(filename, degree, n_theta, n_zeta, parity, mode_m, &
-        mode_n, stored_power)
+        mode_n, stored_power, requested_cells)
     call read_gvec_cas3d_file(trim(filename), equilibrium, info)
     if (info /= reader_ok) call fail("reader", info)
     q1_index = 1
@@ -70,7 +71,12 @@ program gliss_compatible_operator_trace
         1.0_dp, edge_profiles, edge_slopes, edge_seconds, info)
     if (info /= radial_cubic_spline_ok) call fail("edge profiles", info)
     if (edge_profiles(2) == 0.0_dp) call fail("zero edge poloidal flux", -1)
-    call select_cells(size(equilibrium%s), q1_index, selected_cells)
+    if (size(requested_cells) > 0) then
+        call use_requested_cells(size(equilibrium%s), requested_cells, &
+            selected_cells)
+    else
+        call select_cells(size(equilibrium%s), q1_index, selected_cells)
+    end if
     call build_compatible_two_component_problem(equilibrium, mode_m, mode_n, &
         stored_power, parity, degree, n_theta, n_zeta, problem, info, &
         selected_cells, traces)
@@ -387,16 +393,37 @@ contains
         end do
     end subroutine select_cells
 
+    subroutine use_requested_cells(intervals, requested, cells)
+        integer, intent(in) :: intervals, requested(:)
+        integer, allocatable, intent(out) :: cells(:)
+        integer :: allocation_status, index, previous
+
+        if (size(requested) < 1) call fail("empty trace-cell selection", -1)
+        allocate (cells(size(requested)), stat=allocation_status)
+        if (allocation_status /= 0) call fail("cell selection allocation", -1)
+        previous = 0
+        do index = 1, size(requested)
+            if (requested(index) < 1 .or. requested(index) > intervals) &
+                call usage("trace cell lies outside the radial mesh")
+            if (requested(index) <= previous) &
+                call usage("trace cells must be strictly increasing")
+            cells(index) = requested(index)
+            previous = requested(index)
+        end do
+    end subroutine use_requested_cells
+
     subroutine read_arguments(path, local_degree, poloidal_points, &
             toroidal_points, local_parity, poloidal_modes, toroidal_modes, &
-            powers)
+            powers, cells)
         character(len=*), intent(out) :: path
         integer, intent(out) :: local_degree, poloidal_points, toroidal_points
         integer, intent(out) :: local_parity
         integer, allocatable, intent(out) :: poloidal_modes(:), toroidal_modes(:)
         real(dp), allocatable, intent(out) :: powers(:)
+        integer, allocatable, intent(out) :: cells(:)
         character(len=64) :: token
-        integer :: allocation_status, argument, comma, local_info, mode
+        integer :: allocation_status, argument, cell, cell_count, comma
+        integer :: local_info, mode, mode_count
 
         arguments = command_argument_count()
         if (arguments < 6) call usage("missing required arguments")
@@ -411,13 +438,41 @@ contains
             call usage("NTHETA and NZETA must be at least 8")
         if (local_parity < 1 .or. local_parity > 2) &
             call usage("PARITY must be 1 or 2")
-        allocate (poloidal_modes(arguments - 5), &
-            toroidal_modes(arguments - 5), powers(arguments - 5), &
+        cell_count = 0
+        mode_count = 0
+        do argument = 6, arguments
+            call read_argument(argument, "mode or option", token)
+            if (index(token, "--cell=") == 1) then
+                if (len_trim(token) == 7) call usage("trace cell is empty")
+                cell_count = cell_count + 1
+            else if (index(token, "--") == 1) then
+                call usage("unknown option " // trim(token))
+            else
+                mode_count = mode_count + 1
+            end if
+        end do
+        if (mode_count < 1) call usage("at least one mode is required")
+        allocate (poloidal_modes(mode_count), toroidal_modes(mode_count), &
+            powers(mode_count), cells(cell_count), &
             stat=allocation_status)
         if (allocation_status /= 0) call fail("mode allocation", -1)
+        cell = 0
+        mode = 0
         do argument = 6, arguments
-            mode = argument - 5
-            call read_argument(argument, "mode", token)
+            call read_argument(argument, "mode or option", token)
+            if (index(token, "--cell=") == 1) then
+                cell = cell + 1
+                call parse_integer(token(8:), "trace cell", cells(cell), &
+                    local_info)
+                if (cells(cell) < 1) &
+                    call usage("trace cell must be a positive integer")
+                if (cell > 1) then
+                    if (any(cells(:cell - 1) == cells(cell))) &
+                        call usage("duplicate trace cell")
+                end if
+                cycle
+            end if
+            mode = mode + 1
             comma = index(token, ",")
             if (comma <= 1) call usage("modes must be given once as m,n")
             if (comma == len_trim(token)) &
@@ -475,7 +530,8 @@ contains
         write (error_unit, "(a)") "gliss_compatible_operator_trace: " &
             // trim(message)
         write (error_unit, "(a)") "usage: gliss_compatible_operator_trace " &
-            // "EXPORT_FILE DEGREE NTHETA NZETA PARITY m,n [m,n ...]"
+            // "EXPORT_FILE DEGREE NTHETA NZETA PARITY " &
+            // "[--cell=N ...] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine usage
 

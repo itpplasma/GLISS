@@ -419,6 +419,18 @@ if(BUILD_TESTING)
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: modes must be given once as m,n"
         missing.nc 2 8 8 1 broken)
+    add_compatible_cli_rejection(compatible_trace_cli_bad_cell
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: trace cell must be a positive integer"
+        missing.nc 2 8 8 1 --cell=0 1,0)
+    add_compatible_cli_rejection(compatible_trace_cli_duplicate_cell
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: duplicate trace cell"
+        missing.nc 2 8 8 1 --cell=1 --cell=1 1,0)
+    add_compatible_cli_rejection(compatible_trace_cli_unknown_option
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: unknown option --cells=1"
+        missing.nc 2 8 8 1 --cells=1 1,0)
 
     add_executable(test_radial_cubic_spline
         test/test_radial_cubic_spline.f90)
