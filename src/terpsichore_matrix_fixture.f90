@@ -369,8 +369,8 @@ contains
         if (size(fixture%radial_power) /= fixture%modes) return
         if (size(fixture%mode_m) /= fixture%modes &
             .or. size(fixture%mode_n) /= fixture%modes) return
-        if (any(shape(fixture%signed_bjac) /= &
-            [points, fixture%intervals + 1])) return
+        if (.not. has_matrix_shape(fixture%signed_bjac, points, &
+            fixture%intervals + 1)) return
         if (.not. ieee_is_finite(fixture%parity)) return
         if (.not. all(ieee_is_finite(fixture%s))) return
         if (.not. all(ieee_is_finite(fixture%flux_t_slope))) return
@@ -389,7 +389,7 @@ contains
             result(valid)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture
         logical :: valid
-        integer :: cell_shape(2), points, surface_shape(2)
+        integer :: points
         integer :: model_status
         type(terpsichore_model_config_t) :: model
 
@@ -413,24 +413,26 @@ contains
             .or. .not. allocated(fixture%sigma_b)) return
         if (.not. allocated(fixture%parallel_current)) return
         points = fixture%poloidal_points * fixture%toroidal_points
-        surface_shape = [points, fixture%intervals + 1]
-        cell_shape = [points, fixture%intervals]
         if (size(fixture%flux_p_slope) /= fixture%intervals + 1) return
         if (size(fixture%flux_t_curve) /= fixture%intervals + 1 &
             .or. size(fixture%flux_p_curve) /= fixture%intervals + 1) return
         if (size(fixture%current_i) /= fixture%intervals &
             .or. size(fixture%current_j) /= fixture%intervals) return
         if (size(fixture%pressure_slope) /= fixture%intervals) return
-        if (any(shape(fixture%signed_bjac_radial) /= surface_shape)) return
-        if (any(shape(fixture%sigma_b_s) /= surface_shape)) return
-        if (any(shape(fixture%metric_ss_over_jacobian) /= surface_shape)) &
-            return
-        if (any(shape(fixture%metric_st_over_jacobian) /= surface_shape)) &
-            return
-        if (any(shape(fixture%metric_tt_over_jacobian) /= surface_shape)) &
-            return
-        if (any(shape(fixture%sigma_b) /= cell_shape)) return
-        if (any(shape(fixture%parallel_current) /= cell_shape)) return
+        if (.not. has_matrix_shape(fixture%signed_bjac_radial, points, &
+            fixture%intervals + 1)) return
+        if (.not. has_matrix_shape(fixture%sigma_b_s, points, &
+            fixture%intervals + 1)) return
+        if (.not. has_matrix_shape(fixture%metric_ss_over_jacobian, points, &
+            fixture%intervals + 1)) return
+        if (.not. has_matrix_shape(fixture%metric_st_over_jacobian, points, &
+            fixture%intervals + 1)) return
+        if (.not. has_matrix_shape(fixture%metric_tt_over_jacobian, points, &
+            fixture%intervals + 1)) return
+        if (.not. has_matrix_shape(fixture%sigma_b, points, &
+            fixture%intervals)) return
+        if (.not. has_matrix_shape(fixture%parallel_current, points, &
+            fixture%intervals)) return
         if (.not. all(ieee_is_finite(fixture%flux_p_slope))) return
         if (.not. all(ieee_is_finite(fixture%flux_t_curve))) return
         if (.not. all(ieee_is_finite(fixture%flux_p_curve))) return
@@ -451,6 +453,13 @@ contains
             == 0.0_dp)) return
         valid = .true.
     end function terpsichore_potential_fixture_is_valid
+
+    pure logical function has_matrix_shape(values, rows, columns) result(valid)
+        real(dp), intent(in) :: values(:, :)
+        integer, intent(in) :: rows, columns
+
+        valid = size(values, 1) == rows .and. size(values, 2) == columns
+    end function has_matrix_shape
 
     pure function terpsichore_potential_metadata_is_valid(fixture) &
             result(valid)

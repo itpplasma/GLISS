@@ -184,7 +184,7 @@ contains
         end do
     end subroutine build_identity_mass
 
-    pure function mass_norm(vector, mass) result(squared_norm)
+    function mass_norm(vector, mass) result(squared_norm)
         real(dp), intent(in) :: vector(:, :)
         type(block_tridiagonal_t), intent(in) :: mass
         real(dp) :: squared_norm

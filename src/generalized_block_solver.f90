@@ -112,7 +112,7 @@ contains
         info = generalized_ok
     end subroutine iterate_generalized_eigenvalue
 
-    pure function generalized_rayleigh_quotient(stiffness, mass, vector) &
+    function generalized_rayleigh_quotient(stiffness, mass, vector) &
             result(quotient)
         type(block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: vector(:, :)
@@ -122,7 +122,7 @@ contains
             / sum(vector * apply_block_tridiagonal(mass, vector))
     end function generalized_rayleigh_quotient
 
-    pure function generalized_residual(stiffness, mass, vector, eigenvalue) &
+    function generalized_residual(stiffness, mass, vector, eigenvalue) &
             result(residual)
         type(block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: vector(:, :), eigenvalue

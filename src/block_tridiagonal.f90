@@ -20,6 +20,23 @@ module block_tridiagonal
     public :: apply_block_tridiagonal
 
     interface
+        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            real(dp), intent(in) :: alpha, beta
+            real(dp), intent(in) :: a(lda, *), b(ldb, *)
+            real(dp), intent(inout) :: c(ldc, *)
+        end subroutine dgemm
+        subroutine dgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
+            import :: dp
+            character(len=1), intent(in) :: trans
+            integer, intent(in) :: m, n, lda, incx, incy
+            real(dp), intent(in) :: alpha, beta
+            real(dp), intent(in) :: a(lda, *), x(*)
+            real(dp), intent(inout) :: y(*)
+        end subroutine dgemv
         subroutine dsytrf(uplo, n, a, lda, ipiv, work, lwork, info)
             import :: dp
             character(len=1), intent(in) :: uplo
@@ -48,7 +65,7 @@ contains
         type(block_factor_t), intent(out) :: factor
         integer, intent(out) :: info
         real(dp), allocatable :: coupled(:, :), work(:)
-        integer :: k, nb, i, j
+        integer :: column, k, nb, i, j, row
 
         k = size(matrix%diag, 1)
         nb = size(matrix%diag, 3)
@@ -61,12 +78,17 @@ contains
                 factor%schur(j, j, i) = factor%schur(j, j, i) - shift
             end do
             if (i > 1) then
-                coupled = transpose(matrix%off(:, :, i - 1))
+                do column = 1, k
+                    do row = 1, k
+                        coupled(row, column) = matrix%off(column, row, i - 1)
+                    end do
+                end do
                 call dsytrs("U", k, k, factor%schur(:, :, i - 1), k, &
                     factor%pivots(:, i - 1), coupled, k, info)
                 if (info /= 0) return
-                factor%schur(:, :, i) = factor%schur(:, :, i) &
-                    - matmul(matrix%off(:, :, i - 1), coupled)
+                call dgemm("N", "N", k, k, k, -1.0_dp, &
+                    matrix%off(:, :, i - 1), k, coupled, k, 1.0_dp, &
+                    factor%schur(:, :, i), k)
             end if
             call dsytrf("U", k, factor%schur(:, :, i), k, &
                 factor%pivots(:, i), work, size(work), info)
@@ -81,7 +103,7 @@ contains
     subroutine solve_factored(matrix, factor, rhs, info)
         type(block_tridiagonal_t), intent(in) :: matrix
         type(block_factor_t), intent(in) :: factor
-        real(dp), intent(inout) :: rhs(:, :)
+        real(dp), contiguous, intent(inout) :: rhs(:, :)
         integer, intent(out) :: info
         real(dp) :: partial(size(rhs, 1))
         integer :: k, nb, i
@@ -90,17 +112,16 @@ contains
         nb = size(matrix%diag, 3)
         do i = 1, nb
             if (i > 1) then
-                partial = rhs(:, i - 1)
-                rhs(:, i) = rhs(:, i) &
-                    - matmul(matrix%off(:, :, i - 1), partial)
+                call dgemv("N", k, k, -1.0_dp, matrix%off(:, :, i - 1), &
+                    k, rhs(:, i - 1), 1, 1.0_dp, rhs(:, i), 1)
             end if
             call dsytrs("U", k, 1, factor%schur(:, :, i), k, &
                 factor%pivots(:, i), rhs(:, i), k, info)
             if (info /= 0) return
         end do
         do i = nb - 1, 1, -1
-            partial = matmul(transpose(matrix%off(:, :, i)), &
-                rhs(:, i + 1))
+            call dgemv("T", k, k, 1.0_dp, matrix%off(:, :, i), k, &
+                rhs(:, i + 1), 1, 0.0_dp, partial, 1)
             call dsytrs("U", k, 1, factor%schur(:, :, i), k, &
                 factor%pivots(:, i), partial, k, info)
             if (info /= 0) return
@@ -109,23 +130,24 @@ contains
         info = 0
     end subroutine solve_factored
 
-    pure function apply_block_tridiagonal(matrix, vector) result(image)
+    function apply_block_tridiagonal(matrix, vector) result(image)
         type(block_tridiagonal_t), intent(in) :: matrix
-        real(dp), intent(in) :: vector(:, :)
+        real(dp), contiguous, intent(in) :: vector(:, :)
         real(dp) :: image(size(vector, 1), size(vector, 2))
-        integer :: nb, i
+        integer :: k, nb, i
 
+        k = size(matrix%diag, 1)
         nb = size(matrix%diag, 3)
         do i = 1, nb
-            image(:, i) = matmul(matrix%diag(:, :, i), vector(:, i))
+            call dgemv("N", k, k, 1.0_dp, matrix%diag(:, :, i), k, &
+                vector(:, i), 1, 0.0_dp, image(:, i), 1)
             if (i > 1) then
-                image(:, i) = image(:, i) &
-                    + matmul(matrix%off(:, :, i - 1), vector(:, i - 1))
+                call dgemv("N", k, k, 1.0_dp, matrix%off(:, :, i - 1), &
+                    k, vector(:, i - 1), 1, 1.0_dp, image(:, i), 1)
             end if
             if (i < nb) then
-                image(:, i) = image(:, i) &
-                    + matmul(transpose(matrix%off(:, :, i)), &
-                    vector(:, i + 1))
+                call dgemv("T", k, k, 1.0_dp, matrix%off(:, :, i), k, &
+                    vector(:, i + 1), 1, 1.0_dp, image(:, i), 1)
             end if
         end do
     end function apply_block_tridiagonal
