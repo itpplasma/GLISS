@@ -15,12 +15,15 @@ program test_radial_cubic_spline
         0.36_dp, 0.5_dp, 0.79_dp, 0.9_dp, 0.96_dp, 1.0_dp]
     type(radial_cubic_spline_grid_t) :: grid
     type(radial_cubic_spline_t) :: spline
-    real(dp) :: derivative, value
+    real(dp) :: derivative, sample_values(6), value
     integer :: i, info
 
     call build_radial_cubic_spline_grid(nodes, 0.0_dp, 1.0_dp, grid, info)
     call require(info == radial_cubic_spline_ok, "valid grid was rejected")
-    call fit_radial_cubic_spline(grid, polynomial(nodes), spline, info)
+    do i = 1, size(nodes)
+        sample_values(i) = polynomial(nodes(i))
+    end do
+    call fit_radial_cubic_spline(grid, sample_values, spline, info)
     call require(info == radial_cubic_spline_ok, "cubic fit failed")
     do i = 1, size(points)
         call evaluate_radial_cubic_spline(grid, spline, points(i), value, &
@@ -215,7 +218,8 @@ contains
         type(radial_cubic_spline_grid_t) :: local_grid
         type(radial_cubic_spline_t) :: local_spline
         real(dp) :: local_nodes(6), local_values(6), result, slope
-        integer :: status
+        real(dp) :: short_values(5)
+        integer :: index, status
 
         local_nodes = nodes
         local_nodes(3) = local_nodes(2)
@@ -233,8 +237,11 @@ contains
             local_grid, status)
         call require(status == radial_cubic_spline_invalid, &
             "sample outside reconstruction domain was accepted")
-        call fit_radial_cubic_spline(valid_grid, polynomial(nodes(:5)), &
-            local_spline, status)
+        do index = 1, size(short_values)
+            short_values(index) = polynomial(nodes(index))
+        end do
+        call fit_radial_cubic_spline(valid_grid, short_values, local_spline, &
+            status)
         call require(status == radial_cubic_spline_invalid, &
             "wrong value count was accepted")
         local_values = polynomial(nodes)

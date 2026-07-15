@@ -129,7 +129,7 @@ contains
         integer :: id_profiles(profile_count)
         integer :: id_cos(field_count), id_sin(field_count)
         integer :: id_chart(4)
-        real(dp), allocatable :: s_values(:)
+        real(dp), allocatable :: rho_values(:), s_values(:)
         real(dp) :: shift, fraction, poloidal, perturbation
         logical :: shifted
         integer :: ns, i
@@ -146,9 +146,10 @@ contains
         perturbation = 0.0_dp
         if (present(toroidal_perturbation)) perturbation = &
             toroidal_perturbation
-        allocate (s_values(ns))
+        allocate (rho_values(ns), s_values(ns))
         do i = 1, ns
             s_values(i) = (real(i, dp) - 0.5_dp) / real(ns, dp)
+            rho_values(i) = sqrt(s_values(i))
         end do
 
         call require_netcdf(nc_create_netcdf4(filename, ncid))
@@ -160,7 +161,7 @@ contains
         call require_netcdf(nc_put_integer(ncid, id_winding, 1))
         call require_netcdf(nc_put_integer(ncid, id_m, [0, 1]))
         call require_netcdf(nc_put_integer(ncid, id_n, [0, 1, -1]))
-        call require_netcdf(nc_put_real(ncid, id_rho, sqrt(s_values)))
+        call require_netcdf(nc_put_real(ncid, id_rho, rho_values))
         call write_fixture_profiles(ncid, id_profiles, s_values, fraction, &
             poloidal)
         call write_fixture_fields(ncid, id_cos, id_sin, s_values, &
@@ -184,6 +185,7 @@ contains
             :: "g_st", "g_st", "g_sz", "g_sz"]
         character(len=4), parameter :: chart_suffix(4) = [character(len=4) &
             :: "_mnc", "_mns", "_mnc", "_mns"]
+        integer :: dim_one(1), dim_three(3)
         integer :: dim_s, dim_m, dim_n, field, profile
 
         call require_netcdf(nc_def_dimension(ncid, "s", ns, dim_s))
@@ -194,30 +196,36 @@ contains
             id_beta))
         call require_netcdf(nc_def_scalar(ncid, "winding", nc_int64, &
             id_winding))
-        call require_netcdf(nc_def_variable(ncid, "m", nc_int64, [dim_m], &
+        dim_one(1) = dim_m
+        call require_netcdf(nc_def_variable(ncid, "m", nc_int64, dim_one, &
             id_m))
-        call require_netcdf(nc_def_variable(ncid, "n", nc_int64, [dim_n], &
+        dim_one(1) = dim_n
+        call require_netcdf(nc_def_variable(ncid, "n", nc_int64, dim_one, &
             id_n))
+        dim_one(1) = dim_s
         call require_netcdf(nc_def_variable(ncid, "rho", nc_double, &
-            [dim_s], id_rho))
+            dim_one, id_rho))
         do profile = 1, profile_count
             call require_netcdf(nc_def_variable(ncid, &
-                trim(profile_names(profile)), nc_double, [dim_s], &
+                trim(profile_names(profile)), nc_double, dim_one, &
                 id_profiles(profile)))
         end do
+        dim_three(1) = dim_s
+        dim_three(2) = dim_m
+        dim_three(3) = dim_n
         do field = 1, field_count
             call require_netcdf(nc_def_variable(ncid, &
                 trim(field_names(field)) // "_mnc", nc_double, &
-                [dim_s, dim_m, dim_n], id_cos(field)))
+                dim_three, id_cos(field)))
             call require_netcdf(nc_def_variable(ncid, &
                 trim(field_names(field)) // "_mns", nc_double, &
-                [dim_s, dim_m, dim_n], id_sin(field)))
+                dim_three, id_sin(field)))
         end do
         if (shifted) then
             do field = 1, 4
                 call require_netcdf(nc_def_variable(ncid, &
                     trim(chart_names(field)) // chart_suffix(field), &
-                    nc_double, [dim_s, dim_m, dim_n], id_chart(field)))
+                    nc_double, dim_three, id_chart(field)))
             end do
         end if
         call require_netcdf(nc_put_global_text(ncid, &

@@ -26,7 +26,9 @@ contains
             [0.0_dp, 0.17_dp, 0.52_dp, 0.81_dp, 1.0_dp]
         type(radial_feec_complex_t) :: complex
         real(dp), allocatable :: h1(:), h1_derivative(:), l2(:)
-        real(dp), allocatable :: coefficients(:), mapped(:)
+        real(dp), allocatable :: coefficients(:), commuting_derivative(:)
+        real(dp), allocatable :: constant(:)
+        real(dp), allocatable :: derivative_constant(:), mapped(:)
         real(dp) :: coordinate, direct
         integer :: expected_h1, expected_l2, info, sample
 
@@ -40,20 +42,27 @@ contains
             "H1 dimension is wrong")
         call require(complex%l2_dofs == expected_l2, &
             "L2 dimension is wrong")
-        call require(all(shape(complex%derivative) == &
-            [expected_l2, expected_h1]), "derivative map shape is wrong")
+        call require(size(complex%derivative, 1) == expected_l2 &
+            .and. size(complex%derivative, 2) == expected_h1, &
+            "derivative map shape is wrong")
         call require(numerical_rank(complex%derivative) == &
             min(expected_h1, expected_l2), "derivative rank is wrong")
         if (.not. left_trace .and. .not. right_trace) then
-            call require(maxval(abs(matmul(complex%derivative, &
-                [(1.0_dp, sample=1, expected_h1)]))) < 1.0e-13_dp, &
+            allocate (constant(expected_h1), source=1.0_dp)
+            allocate (derivative_constant(expected_l2))
+            call matrix_vector_product(complex%derivative, constant, &
+                derivative_constant)
+            call require(maxval(abs(derivative_constant)) < 1.0e-13_dp, &
                 "constant is not the derivative kernel")
         end if
 
-        allocate (coefficients(expected_h1), mapped(expected_l2))
-        coefficients = [(real(sample * sample - sample, dp) + 0.25_dp, &
-            sample=1, expected_h1)]
-        mapped = matmul(complex%derivative, coefficients)
+        allocate (coefficients(expected_h1), commuting_derivative(expected_h1), &
+            mapped(expected_l2))
+        do sample = 1, expected_h1
+            coefficients(sample) = real(sample * sample - sample, dp) &
+                + 0.25_dp
+        end do
+        call matrix_vector_product(complex%derivative, coefficients, mapped)
         do sample = 0, 20
             coordinate = breaks(1) + (breaks(size(breaks)) - breaks(1)) &
                 * real(sample, dp) / 20.0_dp
@@ -61,8 +70,10 @@ contains
                 h1_derivative, l2, info)
             call require(info == radial_feec_ok, &
                 "complex evaluation failed")
+            call transpose_matrix_vector_product(complex%derivative, l2, &
+                commuting_derivative)
             call require(maxval(abs(h1_derivative &
-                - matmul(transpose(complex%derivative), l2))) &
+                - commuting_derivative)) &
                 < 2.0e-13_dp, "commuting derivative identity failed")
             call require(abs(sum(l2) - 1.0_dp) < 2.0e-14_dp, &
                 "L2 partition of unity failed")
@@ -104,41 +115,56 @@ contains
         real(dp), intent(in) :: breaks(:)
         real(dp), allocatable :: collocation(:, :), h1(:), h1_derivative(:)
         real(dp), allocatable :: l2(:), nodes(:)
-        integer, allocatable :: active(:), indices(:)
+        integer, allocatable :: active(:)
         real(dp) :: coordinate, half_width, midpoint
-        integer :: cell, info, point
+        integer :: active_count, basis, cell, index, info, point
 
-        nodes = local_gauss_nodes(complex%h1_degree)
+        call build_local_gauss_nodes(complex%h1_degree, nodes)
         allocate (collocation(complex%h1_degree, complex%h1_degree))
-        indices = [(point, point=1, complex%l2_dofs)]
         do cell = 1, size(breaks) - 1
             midpoint = 0.5_dp * (breaks(cell) + breaks(cell + 1))
             half_width = 0.5_dp * (breaks(cell + 1) - breaks(cell))
             call evaluate_radial_feec_complex(complex, midpoint, h1, &
                 h1_derivative, l2, info)
             call require(info == radial_feec_ok, "midpoint evaluation failed")
-            active = pack(indices, abs(l2) > 1.0e-14_dp)
-            call require(size(active) == complex%h1_degree, &
+            active_count = 0
+            do index = 1, size(l2)
+                if (abs(l2(index)) > 1.0e-14_dp) &
+                    active_count = active_count + 1
+            end do
+            call require(active_count == complex%h1_degree, &
                 "L2 cell has the wrong number of active basis functions")
-            call require(all(active == [(complex%h1_degree * (cell - 1) &
-                + point, point=1, complex%h1_degree)]), &
-                "L2 basis support crosses a cell boundary")
+            if (allocated(active)) deallocate (active)
+            allocate (active(active_count))
+            active_count = 0
+            do index = 1, size(l2)
+                if (abs(l2(index)) <= 1.0e-14_dp) cycle
+                active_count = active_count + 1
+                active(active_count) = index
+            end do
+            do basis = 1, complex%h1_degree
+                call require(active(basis) &
+                    == complex%h1_degree * (cell - 1) + basis, &
+                    "L2 basis support crosses a cell boundary")
+            end do
             do point = 1, complex%h1_degree
                 coordinate = midpoint + half_width * nodes(point)
                 call evaluate_radial_feec_complex(complex, coordinate, h1, &
                     h1_derivative, l2, info)
                 call require(info == radial_feec_ok, &
                     "Gauss-node evaluation failed")
-                collocation(point, :) = l2(active)
+                do basis = 1, complex%h1_degree
+                    collocation(point, basis) = l2(active(basis))
+                end do
             end do
             call require(numerical_rank(collocation) == complex%h1_degree, &
                 "L2 basis is singular at matched Gauss nodes")
         end do
     end subroutine verify_local_l2_space
 
-    function local_gauss_nodes(degree) result(nodes)
+    subroutine build_local_gauss_nodes(degree, nodes)
         integer, intent(in) :: degree
-        real(dp), allocatable :: nodes(:)
+        real(dp), allocatable, intent(out) :: nodes(:)
 
         allocate (nodes(degree))
         select case (degree)
@@ -153,7 +179,7 @@ contains
             nodes = [-0.8611363115940526_dp, -0.3399810435848563_dp, &
                 0.3399810435848563_dp, 0.8611363115940526_dp]
         end select
-    end function local_gauss_nodes
+    end subroutine build_local_gauss_nodes
 
     subroutine verify_fundamental_theorem(complex, breaks)
         type(radial_feec_complex_t), intent(in) :: complex
@@ -165,10 +191,12 @@ contains
             0.6521451548625461_dp, 0.6521451548625461_dp, &
             0.3478548451374539_dp]
         real(dp), allocatable :: h1(:), h1_derivative(:), l2(:)
-        real(dp), allocatable :: integral(:), left(:), right(:)
+        real(dp), allocatable :: derivative_image(:), integral(:)
+        real(dp), allocatable :: left(:), right(:)
         real(dp) :: coordinate, half_width, midpoint
         integer :: cell, info, point
 
+        allocate (derivative_image(complex%h1_dofs))
         allocate (integral(complex%h1_dofs), source=0.0_dp)
         do cell = 1, size(breaks) - 1
             midpoint = 0.5_dp * (breaks(cell) + breaks(cell + 1))
@@ -179,8 +207,10 @@ contains
                     h1_derivative, l2, info)
                 call require(info == radial_feec_ok, &
                     "quadrature evaluation failed")
+                call transpose_matrix_vector_product(complex%derivative, &
+                    l2, derivative_image)
                 integral = integral + half_width * weights(point) &
-                    * matmul(transpose(complex%derivative), l2)
+                    * derivative_image
             end do
         end do
         call evaluate_radial_feec_complex(complex, breaks(1), left, &
@@ -190,6 +220,33 @@ contains
         call require(maxval(abs(integral - (right - left))) < 2.0e-13_dp, &
             "discrete fundamental theorem failed")
     end subroutine verify_fundamental_theorem
+
+    pure subroutine matrix_vector_product(matrix, vector, image)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp), intent(out) :: image(:)
+        integer :: column, row
+
+        do row = 1, size(matrix, 1)
+            image(row) = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image(row) = image(row) + matrix(row, column) * vector(column)
+            end do
+        end do
+    end subroutine matrix_vector_product
+
+    pure subroutine transpose_matrix_vector_product(matrix, vector, image)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp), intent(out) :: image(:)
+        integer :: column, row
+
+        do column = 1, size(matrix, 2)
+            image(column) = 0.0_dp
+            do row = 1, size(matrix, 1)
+                image(column) = image(column) &
+                    + matrix(row, column) * vector(row)
+            end do
+        end do
+    end subroutine transpose_matrix_vector_product
 
     subroutine verify_traces(complex, left_trace, right_trace)
         type(radial_feec_complex_t), intent(in) :: complex
@@ -219,7 +276,7 @@ contains
     subroutine verify_rejections()
         type(radial_feec_complex_t) :: complex
         real(dp), allocatable :: h1(:), h1_derivative(:), l2(:)
-        real(dp) :: nan
+        real(dp) :: bad_breaks(3), nan
         integer :: info
 
         nan = ieee_value(0.0_dp, ieee_quiet_nan)
@@ -237,7 +294,10 @@ contains
             2, .false., .false., complex, info)
         call require(info == radial_feec_invalid, &
             "repeated break was accepted")
-        call build_radial_feec_complex([0.0_dp, nan, 1.0_dp], 2, .false., &
+        bad_breaks(1) = 0.0_dp
+        bad_breaks(2) = nan
+        bad_breaks(3) = 1.0_dp
+        call build_radial_feec_complex(bad_breaks, 2, .false., &
             .false., complex, info)
         call require(info == radial_feec_invalid, &
             "nonfinite break was accepted")

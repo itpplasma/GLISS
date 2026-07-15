@@ -28,8 +28,9 @@ contains
 
         alfven_squared = magnetic_field(3)**2 / &
             (vacuum_permeability * density)
-        expected = [alfven_squared, alfven_squared, &
-            adiabatic_index * pressure / density]
+        expected(1) = alfven_squared
+        expected(2) = alfven_squared
+        expected(3) = adiabatic_index * pressure / density
         call solve_modes(wave_vector, adiabatic_index, eigenvalues, eigenvectors)
         call require(maxval(abs(eigenvalues - expected)) < 1.0e-11_dp, &
             "parallel Alfven and sound spectrum is wrong")
@@ -105,8 +106,9 @@ contains
         alfven_squared = magnetic_field(3)**2 / &
             (vacuum_permeability * density)
         drive = 2.0_dp * magnetic_field(3)**2 / vacuum_permeability
-        expected = [-alfven_squared, alfven_squared, &
-            adiabatic_index * pressure / density]
+        expected(1) = -alfven_squared
+        expected(2) = alfven_squared
+        expected(3) = adiabatic_index * pressure / density
         call assemble_local_mode(wave_vector, magnetic_field, pressure, density, &
             adiabatic_index, drive, normal, stiffness, mass)
         call solve_three_component_modes(stiffness, mass, eigenvalues, &
@@ -161,8 +163,9 @@ contains
         sum = wave_squared * (alfven_squared + sound_squared)
         discriminant = sqrt(max(0.0_dp, sum**2 - 4.0_dp * wave_squared * &
             parallel_squared * alfven_squared * sound_squared))
-        spectrum = [0.5_dp * (sum - discriminant), &
-            parallel_squared * alfven_squared, 0.5_dp * (sum + discriminant)]
+        spectrum(1) = 0.5_dp * (sum - discriminant)
+        spectrum(2) = parallel_squared * alfven_squared
+        spectrum(3) = 0.5_dp * (sum + discriminant)
     end function ideal_mhd_spectrum
 
     subroutine require(condition, message)

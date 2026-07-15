@@ -14,11 +14,12 @@ program test_terpsichore_reduced_mass
     real(dp), parameter :: normalized_radial_weight = 0.75_dp
     real(dp), parameter :: normal_radial_factor(modes) = &
         [1.0_dp, 0.9_dp, 1.1_dp]
-    real(dp) :: signed_bjac(points), phase(modes, points)
+    real(dp) :: signed_bjac(points), reflected_bjac(points)
+    real(dp) :: phase(modes, points)
     real(dp) :: normal_phase(modes, points), tangential_phase(modes, points)
-    real(dp) :: displacement(3 * modes), energy
+    real(dp) :: displacement(3 * modes), energy, image(3 * modes)
     real(dp), allocatable :: mass(:, :), reflected(:, :)
-    integer :: info
+    integer :: column, info, row
 
     call build_fixture(signed_bjac, phase)
     displacement = [0.2_dp, -0.3_dp, 0.4_dp, -0.1_dp, 0.5_dp, -0.2_dp, &
@@ -37,7 +38,10 @@ program test_terpsichore_reduced_mass
         "reduced mass is not symmetric")
     call require(maxval(abs(mass(1:2 * modes, 2 * modes + 1:))) == 0.0_dp, &
         "reduced mass has a C11 coupling")
-    call assemble_terpsichore_reduced_mass_element(-signed_bjac, &
+    do row = 1, points
+        reflected_bjac(row) = -signed_bjac(row)
+    end do
+    call assemble_terpsichore_reduced_mass_element(reflected_bjac, &
         flux_t_slope, normal_phase, tangential_phase, normal_radial_factor, &
         normalized_radial_weight, reflected, info)
     call require(info == terpsichore_reduced_ok, &
@@ -47,8 +51,14 @@ program test_terpsichore_reduced_mass
     energy = terpsichore_reduced_element_energy(signed_bjac, flux_t_slope, &
         normal_phase, tangential_phase, normal_radial_factor, &
         normalized_radial_weight, displacement)
-    call require(abs(energy - 0.5_dp * dot_product(displacement, &
-        matmul(mass, displacement))) < 2.0e-13_dp * max(1.0_dp, energy), &
+    do row = 1, size(image)
+        image(row) = 0.0_dp
+        do column = 1, size(displacement)
+            image(row) = image(row) + mass(row, column) * displacement(column)
+        end do
+    end do
+    call require(abs(energy - 0.5_dp * dot_product(displacement, image)) &
+        < 2.0e-13_dp * max(1.0_dp, energy), &
         "reduced mass and energy disagree")
     call assemble_terpsichore_reduced_mass_element(signed_bjac, 0.0_dp, &
         normal_phase, tangential_phase, normal_radial_factor, &
@@ -127,10 +137,10 @@ contains
         if (normal_kind == phase_cosine) sign = 1.0_dp
         do second = 1, modes
             do first = 1, modes
-                difference = weighted_cosine(local_bjac, &
-                    local_phase(first, :) - local_phase(second, :))
-                summation = weighted_cosine(local_bjac, &
-                    local_phase(first, :) + local_phase(second, :))
+                difference = weighted_cosine_pair(local_bjac, local_phase, &
+                    first, second, -1.0_dp)
+                summation = weighted_cosine_pair(local_bjac, local_phase, &
+                    first, second, 1.0_dp)
                 c8 = normalized_radial_weight &
                     * (difference + sign * summation)
                 c10 = normalized_radial_weight &
@@ -144,13 +154,22 @@ contains
         end do
     end subroutine source_formula_oracle
 
-    function weighted_cosine(local_bjac, angle) result(average)
-        real(dp), intent(in) :: local_bjac(:), angle(:)
+    function weighted_cosine_pair(local_bjac, local_phase, first, second, &
+            second_sign) result(average)
+        real(dp), intent(in) :: local_bjac(:), local_phase(:, :)
+        integer, intent(in) :: first, second
+        real(dp), intent(in) :: second_sign
         real(dp) :: average
+        integer :: point
 
-        average = sum(abs(local_bjac) * cos(angle)) &
-            / real(size(local_bjac), dp)
-    end function weighted_cosine
+        average = 0.0_dp
+        do point = 1, size(local_bjac)
+            average = average + abs(local_bjac(point)) &
+                * cos(local_phase(first, point) &
+                + second_sign * local_phase(second, point))
+        end do
+        average = average / real(size(local_bjac), dp)
+    end function weighted_cosine_pair
 
     subroutine set_normal_blocks(matrix, first, second, value)
         real(dp), intent(inout) :: matrix(:, :)

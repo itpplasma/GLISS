@@ -46,8 +46,7 @@ contains
 
         allocate (displacement(nu * nv))
         displacement = 1.0_dp
-        energy = 0.5_dp * dot_product(displacement, &
-            matmul(stiffness, displacement))
+        energy = quadratic_energy(stiffness, displacement)
         expected = coaxial_cylinder_energy(fp, length, plasma_radius, &
             wall_radius, 0)
         relative_error = abs(energy / expected - 1.0_dp)
@@ -57,8 +56,7 @@ contains
         harmonic = 2
         call poloidal_cosine(nu, nv, harmonic, displacement, info)
         call require(info == cylinder_gate_ok, "mode construction failed")
-        energy = 0.5_dp * dot_product(displacement, &
-            matmul(stiffness, displacement))
+        energy = quadratic_energy(stiffness, displacement)
         expected = coaxial_cylinder_energy(fp, length, plasma_radius, &
             wall_radius, harmonic)
         relative_error = abs(energy / expected - 1.0_dp)
@@ -87,22 +85,35 @@ contains
         call assemble_starwall_ideal_vacuum(plasma, fp, 0.0_dp, stiffness, &
             response, info, near_wall)
         call require(info == starwall_ok, "near-wall assembly failed")
-        near_energy = 0.5_dp * dot_product(displacement, &
-            matmul(stiffness, displacement))
+        near_energy = quadratic_energy(stiffness, displacement)
         call assemble_starwall_ideal_vacuum(plasma, fp, 0.0_dp, stiffness, &
             response, info, far_wall)
         call require(info == starwall_ok, "far-wall assembly failed")
-        far_energy = 0.5_dp * dot_product(displacement, &
-            matmul(stiffness, displacement))
+        far_energy = quadratic_energy(stiffness, displacement)
         call assemble_starwall_ideal_vacuum(plasma, fp, 0.0_dp, stiffness, &
             response, info)
         call require(info == starwall_ok, "open-vacuum assembly failed")
-        open_energy = 0.5_dp * dot_product(displacement, &
-            matmul(stiffness, displacement))
+        open_energy = quadratic_energy(stiffness, displacement)
         call require(near_energy > far_energy .and. &
             far_energy > open_energy .and. open_energy > 0.0_dp, &
             "conducting-wall ordering is not stabilizing")
     end subroutine test_wall_ordering
+
+    pure function quadratic_energy(matrix, vector) result(energy)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp) :: energy, image
+        integer :: column, row
+
+        energy = 0.0_dp
+        do row = 1, size(matrix, 1)
+            image = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image = image + matrix(row, column) * vector(column)
+            end do
+            energy = energy + vector(row) * image
+        end do
+        energy = 0.5_dp * energy
+    end function quadratic_energy
 
     subroutine test_invalid_surfaces()
         real(dp), allocatable :: plasma(:, :, :), wall(:, :, :)

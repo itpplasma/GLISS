@@ -50,16 +50,45 @@ contains
                 response, status)
         end if
         if (status /= starwall_ok) call fail("vacuum assembly failed")
-        energy = 0.5_dp * dot_product(displacement, &
-            matmul(stiffness, displacement))
+        energy = quadratic_energy(stiffness, displacement)
         analytic = coaxial_cylinder_energy(fp, length, plasma_radius, &
             wall_radius, harmonic)
         if (analytic <= 0.0_dp) call fail("analytic energy failed")
         error = abs(energy / analytic - 1.0_dp)
-        symmetry = maxval(abs(stiffness - transpose(stiffness)))
+        symmetry = symmetry_error(stiffness)
         write (*, "(a,',',a,',',es24.16,',',i0,4(',',es24.16))") name, &
             gate, wall_radius, harmonic, energy, analytic, error, symmetry
     end subroutine report_case
+
+    pure function quadratic_energy(matrix, vector) result(energy)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp) :: energy, image
+        integer :: column, row
+
+        energy = 0.0_dp
+        do row = 1, size(matrix, 1)
+            image = 0.0_dp
+            do column = 1, size(matrix, 2)
+                image = image + matrix(row, column) * vector(column)
+            end do
+            energy = energy + vector(row) * image
+        end do
+        energy = 0.5_dp * energy
+    end function quadratic_energy
+
+    pure function symmetry_error(matrix) result(error)
+        real(dp), intent(in) :: matrix(:, :)
+        real(dp) :: error
+        integer :: column, row
+
+        error = 0.0_dp
+        do column = 1, size(matrix, 2)
+            do row = 1, column - 1
+                error = max(error, abs(matrix(row, column) &
+                    - matrix(column, row)))
+            end do
+        end do
+    end function symmetry_error
 
     subroutine fail(message)
         character(len=*), intent(in) :: message

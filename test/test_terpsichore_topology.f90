@@ -13,6 +13,7 @@ program test_terpsichore_topology
     type(terpsichore_mode_mask_t) :: mask
     type(terpsichore_mode_selection_t) :: selection
     type(trial_space_topology_t) :: topology
+    integer, allocatable :: trial_parity(:)
     integer :: info
 
     config%equilibrium_periods = 3
@@ -49,9 +50,10 @@ program test_terpsichore_topology
         "zero-toroidal modes were remapped")
     call require(all(selection%stored_variable_power == [0.0_dp, 2.0_dp]), &
         "zero-toroidal QN assignment is wrong")
+    allocate (trial_parity(size(selection%poloidal)), &
+        source=selection%parity_class)
     call build_trial_space_topology(selection%poloidal, selection%toroidal, &
-        spread(selection%parity_class, 1, size(selection%poloidal)), &
-        topology, info)
+        trial_parity, topology, info)
     call require(info == trial_topology_ok, &
         "TERPSICHORE parity did not resolve trial activity")
     call require(.not. topology%active(trial_component_normal, 1), &

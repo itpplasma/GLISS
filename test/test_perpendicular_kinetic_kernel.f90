@@ -19,6 +19,7 @@ program test_perpendicular_kinetic_kernel
     real(dp) :: reflected(2, 2)
     real(dp) :: parallel(2), displacement(2), energy, image(2), scale
     real(dp) :: delta, flux_norm_squared
+    integer :: column, row
 
     call perpendicular_kinetic_matrix(signed_sqrtg, bmag, grad_s2, &
         sigma_tilde, density, perpendicular)
@@ -35,10 +36,14 @@ program test_perpendicular_kinetic_kernel
         density, physical)
     flux_norm_squared = flux_t_slope**2 + flux_p_slope**2
     delta = current_i * flux_p_slope - current_j * flux_t_slope
-    parallel = [beta_tilde / bmag, &
-        -delta / (bmag * flux_norm_squared)]
-    expected = physical(1:2, 1:2) &
-        - scale * spread(parallel, 2, 2) * spread(parallel, 1, 2)
+    parallel(1) = beta_tilde / bmag
+    parallel(2) = -delta / (bmag * flux_norm_squared)
+    do column = 1, 2
+        do row = 1, 2
+            expected(row, column) = physical(row, column) &
+                - scale * parallel(row) * parallel(column)
+        end do
+    end do
     call require_close(perpendicular, expected, 2.0e-14_dp, &
         "perpendicular norm does not remove only the parallel square")
 
