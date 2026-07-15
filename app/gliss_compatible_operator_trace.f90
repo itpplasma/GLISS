@@ -40,6 +40,7 @@ program gliss_compatible_operator_trace
     real(dp) :: edge_profiles(3), edge_seconds(3), edge_slopes(3), q1_distance
     integer :: allocation_status, arguments, degree, info, n_theta, n_zeta
     integer :: parity, profile_index, q1_index
+    logical :: trace_eigenpair
 
     interface
         subroutine terminate_process(status) bind(C, name="exit")
@@ -49,7 +50,7 @@ program gliss_compatible_operator_trace
     end interface
 
     call read_arguments(filename, degree, n_theta, n_zeta, parity, mode_m, &
-        mode_n, stored_power, requested_cells)
+        mode_n, stored_power, requested_cells, trace_eigenpair)
     call read_gvec_cas3d_file(trim(filename), equilibrium, info)
     if (info /= reader_ok) call fail("reader", info)
     q1_index = 1
@@ -87,10 +88,12 @@ program gliss_compatible_operator_trace
         stored_power, parity, degree, n_theta, n_zeta, problem, info, &
         selected_cells, traces)
     if (info /= compatible_problem_ok) call fail("operator assembly", info)
-    call solve_compatible_marginality_problem(problem, .true., spectrum, info, &
-        solver_message, eigenvector)
-    if (info /= marginality_spectrum_ok) &
-        call fail_message("eigensolve", info, solver_message)
+    if (trace_eigenpair) then
+        call solve_compatible_marginality_problem(problem, .true., spectrum, &
+            info, solver_message, eigenvector)
+        if (info /= marginality_spectrum_ok) &
+            call fail_message("eigensolve", info, solver_message)
+    end if
     call write_trace(q1_index)
     call write_compatible_operator_geometry(equilibrium, traces, n_theta, &
         n_zeta, info)
@@ -128,7 +131,7 @@ contains
         do trace_index = 1, size(traces)
             call write_cell(trace_index)
         end do
-        call write_eigen_trace
+        if (trace_eigenpair) call write_eigen_trace
     end subroutine write_trace
 
     subroutine write_eigen_trace()
@@ -461,13 +464,14 @@ contains
 
     subroutine read_arguments(path, local_degree, poloidal_points, &
             toroidal_points, local_parity, poloidal_modes, toroidal_modes, &
-            powers, cells)
+            powers, cells, solve_eigenpair)
         character(len=*), intent(out) :: path
         integer, intent(out) :: local_degree, poloidal_points, toroidal_points
         integer, intent(out) :: local_parity
         integer, allocatable, intent(out) :: poloidal_modes(:), toroidal_modes(:)
         real(dp), allocatable, intent(out) :: powers(:)
         integer, allocatable, intent(out) :: cells(:)
+        logical, intent(out) :: solve_eigenpair
         character(len=64) :: token
         integer :: allocation_status, argument, cell, cell_count, comma
         integer :: local_info, mode, mode_count
@@ -487,11 +491,15 @@ contains
             call usage("PARITY must be 1 or 2")
         cell_count = 0
         mode_count = 0
+        solve_eigenpair = .false.
         do argument = 6, arguments
             call read_argument(argument, "mode or option", token)
             if (index(token, "--cell=") == 1) then
                 if (len_trim(token) == 7) call usage("trace cell is empty")
                 cell_count = cell_count + 1
+            else if (trim(token) == "--eigen") then
+                if (solve_eigenpair) call usage("duplicate --eigen option")
+                solve_eigenpair = .true.
             else if (index(token, "--") == 1) then
                 call usage("unknown option " // trim(token))
             else
@@ -507,6 +515,7 @@ contains
         mode = 0
         do argument = 6, arguments
             call read_argument(argument, "mode or option", token)
+            if (trim(token) == "--eigen") cycle
             if (index(token, "--cell=") == 1) then
                 cell = cell + 1
                 call parse_integer(token(8:), "trace cell", cells(cell), &
@@ -578,7 +587,7 @@ contains
             // trim(message)
         write (error_unit, "(a)") "usage: gliss_compatible_operator_trace " &
             // "EXPORT_FILE DEGREE NTHETA NZETA PARITY " &
-            // "[--cell=N ...] m,n [m,n ...]"
+            // "[--cell=N ...] [--eigen] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine usage
 

@@ -437,6 +437,10 @@ if(BUILD_TESTING)
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: unknown option --cells=1"
         missing.nc 2 8 8 1 --cells=1 1,0)
+    add_compatible_cli_rejection(compatible_trace_cli_duplicate_eigen
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: duplicate --eigen option"
+        missing.nc 2 8 8 1 --eigen --eigen 1,0)
 
     add_executable(test_radial_cubic_spline
         test/test_radial_cubic_spline.f90)
