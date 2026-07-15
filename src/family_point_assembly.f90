@@ -172,6 +172,7 @@ contains
         real(dp), intent(out) :: h1_values(:, :), h1_derivatives(:, :)
         real(dp), intent(out) :: l2_values(:, :)
         integer, intent(out) :: info
+        real(dp) :: derivatives(2), values(2)
         integer :: trial
 
         info = -1
@@ -182,9 +183,11 @@ contains
         do trial = 1, size(trial_m)
             call evaluate_normal_basis(radial_space, trial_m(trial), &
                 radial_coordinate, radial_step, 0.5_dp, &
-                h1_values(:, trial), h1_derivatives(:, trial), info, &
+                values, derivatives, info, &
                 normal_stored_power(trial))
             if (info /= radial_space_ok) return
+            h1_values(:, trial) = values
+            h1_derivatives(:, trial) = derivatives
         end do
         l2_values = 1.0_dp
         info = 0

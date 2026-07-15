@@ -84,8 +84,10 @@ contains
             return
         end if
         if (present(stiffness_terms)) then
-            if (any(shape(stiffness_terms) /= [size(stiffness, 1), &
-                size(stiffness, 2), compressible_stiffness_term_count])) then
+            if (size(stiffness_terms, 1) /= size(stiffness, 1) &
+                .or. size(stiffness_terms, 2) /= size(stiffness, 2) &
+                .or. size(stiffness_terms, 3) &
+                /= compressible_stiffness_term_count) then
                 info = -1
                 return
             end if
@@ -113,15 +115,18 @@ contains
         real(dp), intent(out) :: h1_values(:, :), h1_derivatives(:, :)
         real(dp), intent(out) :: l2_values(:, :)
         integer, intent(out) :: info
+        real(dp) :: derivatives(2), values(2)
         integer :: trial
 
         info = -1
         do trial = 1, size(trial_m)
             call evaluate_normal_basis(radial_space, trial_m(trial), &
                 radial_coordinate, radial_step, &
-                radial_space%evaluation_coordinate, h1_values(:, trial), &
-                h1_derivatives(:, trial), info, stored_power(trial))
+                radial_space%evaluation_coordinate, values, derivatives, &
+                info, stored_power(trial))
             if (info /= radial_space_ok) return
+            h1_values(:, trial) = values
+            h1_derivatives(:, trial) = derivatives
         end do
         l2_values = 1.0_dp
         info = 0

@@ -27,7 +27,8 @@ contains
             eigenvalue, eigenvector, reference, reference_potential, &
             reference_kinetic, alfven_normalization, diagnostics, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp), intent(in) :: eigenvalue, eigenvector(:), reference(:)
+        real(dp), intent(in) :: eigenvalue
+        real(dp), contiguous, intent(in) :: eigenvector(:), reference(:)
         real(dp), intent(in) :: reference_potential, reference_kinetic
         real(dp), intent(in) :: alfven_normalization
         type(terpsichore_eigen_diagnostics_t), intent(out) :: diagnostics

@@ -75,7 +75,7 @@ contains
     subroutine add_starwall_fourier_stiffness(nu, nv, nodal, topology, &
             layout, stiffness, info)
         integer, intent(in) :: nu, nv
-        real(dp), intent(in) :: nodal(:, :)
+        real(dp), contiguous, intent(in) :: nodal(:, :)
         type(trial_space_topology_t), intent(in) :: topology
         type(dynamic_family_layout_t), intent(in) :: layout
         real(dp), intent(inout) :: stiffness(:, :)
@@ -200,7 +200,8 @@ contains
         if (size(topology%toroidal) /= trials &
             .or. size(topology%parity) /= trials &
             .or. size(topology%normal_phase) /= trials) return
-        if (any(shape(topology%active) /= [3, trials])) return
+        if (size(topology%active, 1) /= 3 &
+            .or. size(topology%active, 2) /= trials) return
         if (any(topology%poloidal < 0)) return
         if (any(topology%normal_phase /= topology%parity)) return
         do trial = 1, trials

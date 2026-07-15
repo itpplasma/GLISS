@@ -67,6 +67,7 @@ contains
         real(dp), intent(in) :: vector(:)
         type(fixed_boundary_energy_terms_t), intent(out) :: result
         integer, intent(out) :: info
+        real(dp), allocatable :: absolute_permuted(:), absolute_residual(:)
         real(dp), allocatable :: component_image_sum(:), image(:)
         real(dp), allocatable :: permuted(:), potential_image(:)
         real(dp) :: components(fixed_boundary_energy_term_count)
@@ -79,6 +80,7 @@ contains
         if (.not. all(ieee_is_finite(vector))) return
         allocate (permuted(size(vector)), image(size(vector)), &
             potential_image(size(vector)), component_image_sum(size(vector)), &
+            absolute_permuted(size(vector)), absolute_residual(size(vector)), &
             stat=allocation_status)
         if (allocation_status /= 0) then
             info = fixed_boundary_energy_allocation
@@ -113,8 +115,13 @@ contains
             - stable_dot_product(ones, components))
         scale = max(1.0_dp, abs(result%potential_energy), &
             sum(abs(components)))
-        matrix_closure = stable_dot_product(abs(permuted), &
-            abs(potential_image - component_image_sum))
+        do index = 1, size(vector)
+            absolute_permuted(index) = abs(permuted(index))
+            absolute_residual(index) = abs(potential_image(index) &
+                - component_image_sum(index))
+        end do
+        matrix_closure = stable_dot_product(absolute_permuted, &
+            absolute_residual)
         roundoff_tolerance = 128.0_dp * epsilon(1.0_dp) &
             * real(size(vector), dp) * scale
         if (matrix_closure > 64.0_dp * roundoff_tolerance) then
@@ -181,8 +188,9 @@ contains
 
     subroutine quadratic_form(matrix, vector, image, value, info)
         type(variable_block_tridiagonal_t), intent(in) :: matrix
-        real(dp), intent(in) :: vector(:)
-        real(dp), intent(out) :: image(:), value
+        real(dp), contiguous, intent(in) :: vector(:)
+        real(dp), contiguous, intent(out) :: image(:)
+        real(dp), intent(out) :: value
         integer, intent(out) :: info
 
         call apply_variable_block_tridiagonal(matrix, vector, image, info)
@@ -214,11 +222,16 @@ contains
         real(dp) :: values(10)
         logical :: valid
 
-        values = [result%field_line_bending, result%magnetic_shear, &
-            result%magnetic_compression, result%pressure_drive, &
-            result%plasma_compressibility, result%potential_energy, &
-            result%kinetic_energy, result%rayleigh_quotient, &
-            result%closure_error, result%closure_tolerance]
+        values(1) = result%field_line_bending
+        values(2) = result%magnetic_shear
+        values(3) = result%magnetic_compression
+        values(4) = result%pressure_drive
+        values(5) = result%plasma_compressibility
+        values(6) = result%potential_energy
+        values(7) = result%kinetic_energy
+        values(8) = result%rayleigh_quotient
+        values(9) = result%closure_error
+        values(10) = result%closure_tolerance
         valid = all(ieee_is_finite(values))
         if (.not. valid) return
         valid = result%closure_error <= result%closure_tolerance
