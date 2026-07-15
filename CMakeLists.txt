@@ -535,6 +535,40 @@ if(BUILD_TESTING)
         "gliss_compatible_marginality: conflicting eigenvalue bracket options"
         missing.nc 2 8 8 1e-8 1 --negative-bracket=1e-8,1e-6,1e-3
         --eigenvalue-bracket=0,1,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_count_shifts
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --count-shifts requires"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_count_shifts
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --count-shifts"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,1
+        --count-shifts=0,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_empty_count_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: count shifts require nonempty"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_count_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: count shift must be finite"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,nan 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_negative_count_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: count shifts must be nonnegative"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=-1,0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_unsorted_count_shifts
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: count shifts must be strictly increasing"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,1,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_count_bracket_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: conflicting eigenvalue count options"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=0,1,1e-3
+        --count-shifts=0,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_count_inertia_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --count-shifts conflicts with --inertia-only"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,1 --inertia-only 0,1)
     add_compatible_cli_rejection(compatible_trace_cli_missing
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: missing required arguments")

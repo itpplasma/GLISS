@@ -16,9 +16,11 @@ program gliss_compatible_marginality
 
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(compatible_two_component_problem_t) :: problem
-    character(len=1024) :: eta_power_token, filename, stored_power_token, token
+    character(len=1024) :: count_shift_token, eta_power_token, filename
+    character(len=1024) :: stored_power_token, token
     integer, allocatable :: mode_m(:), mode_n(:)
     real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
+    real(dp), allocatable :: count_shifts(:)
     real(dp), allocatable :: eta_stored_power(:), stored_power(:)
     real(dp), allocatable :: stiffness(:, :), mass(:, :)
     real(dp), allocatable :: stiffness_operator(:, :), work(:)
@@ -31,7 +33,7 @@ program gliss_compatible_marginality
     integer :: work_size
     integer :: n_theta, n_zeta, parity, trial
     integer(int64) :: requested_work_size
-    logical :: has_eta_powers, has_m0_power
+    logical :: has_count_shifts, has_eta_powers, has_m0_power
     logical :: has_stored_powers, inertia_only
     logical :: physical_mass
 
@@ -72,6 +74,7 @@ program gliss_compatible_marginality
     has_m0_power = .false.
     has_stored_powers = .false.
     has_eta_powers = .false.
+    has_count_shifts = .false.
     density = 0.0_dp
     m0_stored_power = 0.0_dp
     do while (first_mode <= arguments)
@@ -115,7 +118,7 @@ program gliss_compatible_marginality
         else if (index(token, "--negative-bracket=") == 1) then
             if (bracket_kind == 1) &
                 call fail_usage("duplicate --negative-bracket")
-            if (bracket_kind /= 0) &
+            if (bracket_kind /= 0 .or. has_count_shifts) &
                 call fail_usage("conflicting eigenvalue bracket options")
             if (len_trim(token) == len("--negative-bracket=")) &
                 call fail_usage("--negative-bracket requires lower,upper,tolerance")
@@ -125,7 +128,7 @@ program gliss_compatible_marginality
         else if (index(token, "--eigenvalue-bracket=") == 1) then
             if (bracket_kind == 2) &
                 call fail_usage("duplicate --eigenvalue-bracket")
-            if (bracket_kind /= 0) &
+            if (bracket_kind /= 0 .or. has_count_shifts) &
                 call fail_usage("conflicting eigenvalue bracket options")
             if (len_trim(token) == len("--eigenvalue-bracket=")) &
                 call fail_usage( &
@@ -134,6 +137,15 @@ program gliss_compatible_marginality
                 token(len("--eigenvalue-bracket=") + 1:), bracket_lower, &
                 bracket_upper, bracket_tolerance)
             bracket_kind = 2
+        else if (index(token, "--count-shifts=") == 1) then
+            if (has_count_shifts) call fail_usage("duplicate --count-shifts")
+            if (bracket_kind /= 0) &
+                call fail_usage("conflicting eigenvalue count options")
+            if (len_trim(token) == len("--count-shifts=")) &
+                call fail_usage( &
+                "--count-shifts requires a comma-separated list")
+            count_shift_token = token(len("--count-shifts=") + 1:)
+            has_count_shifts = .true.
         else
             call fail_usage("unknown option " // trim(token))
         end if
@@ -142,6 +154,8 @@ program gliss_compatible_marginality
     if (arguments < first_mode) call fail_usage("at least one mode is required")
     if (has_m0_power .and. has_stored_powers) &
         call fail_usage("--m0-stored-power conflicts with --stored-powers")
+    if (has_count_shifts .and. inertia_only) &
+        call fail_usage("--count-shifts conflicts with --inertia-only")
     allocate (mode_m(arguments - first_mode + 1), &
         mode_n(arguments - first_mode + 1), &
         stored_power(arguments - first_mode + 1), &
@@ -177,6 +191,8 @@ program gliss_compatible_marginality
         "stored powers", stored_power)
     if (has_eta_powers) call parse_real_list(eta_power_token, &
         "eta stored powers", eta_stored_power)
+    if (has_count_shifts) &
+        call parse_count_shift_list(count_shift_token, count_shifts)
     if (has_stored_powers) then
         do mode = 1, size(mode_m)
             if (mode_m(mode) == 0) m0_stored_power = stored_power(mode)
@@ -232,6 +248,10 @@ program gliss_compatible_marginality
         else
             call bracket_eigenvalue
         end if
+        call terminate_process(0_c_int)
+    end if
+    if (has_count_shifts) then
+        call write_shift_counts
         call terminate_process(0_c_int)
     end if
     call shifted_negative_count(floor, inertia_negative_count)
@@ -305,7 +325,8 @@ contains
             "[--stored-powers=P0,P1,...] " // &
             "[--eta-stored-powers=P0,P1,...] " // &
             "[--negative-bracket=LOWER,UPPER,TOLERANCE] " // &
-            "[--eigenvalue-bracket=LOWER,UPPER,TOLERANCE] m,n [m,n ...]"
+            "[--eigenvalue-bracket=LOWER,UPPER,TOLERANCE] " // &
+            "[--count-shifts=S0,S1,...] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
 
@@ -383,6 +404,40 @@ contains
         end do
     end subroutine parse_real_list
 
+    subroutine parse_count_shift_list(text, values)
+        character(len=*), intent(in) :: text
+        real(dp), allocatable, intent(out) :: values(:)
+        integer :: allocation_status, comma, first, item, items, position
+
+        items = 1
+        do position = 1, len_trim(text)
+            if (text(position:position) == ",") items = items + 1
+        end do
+        allocate (values(items), stat=allocation_status)
+        if (allocation_status /= 0) call fail_solver("count shift allocation", -1)
+        first = 1
+        do item = 1, items
+            comma = index(text(first:), ",")
+            if (item < items) then
+                if (comma <= 1) call fail_usage( &
+                    "count shifts require nonempty comma-separated values")
+                call parse_real(text(first:first + comma - 2), &
+                    "count shift", values(item))
+                first = first + comma
+            else
+                if (comma > 0 .or. first > len_trim(text)) call fail_usage( &
+                    "count shifts require nonempty comma-separated values")
+                call parse_real(text(first:), "count shift", values(item))
+            end if
+            if (values(item) < 0.0_dp) &
+                call fail_usage("count shifts must be nonnegative")
+            if (item > 1) then
+                if (values(item) <= values(item - 1)) &
+                    call fail_usage("count shifts must be strictly increasing")
+            end if
+        end do
+    end subroutine parse_count_shift_list
+
     subroutine parse_bracket(text, lower, upper, tolerance)
         character(len=*), intent(in) :: text
         real(dp), intent(out) :: lower, upper, tolerance
@@ -453,6 +508,16 @@ contains
         if (info /= 0) call fail_solver("shifted stiffness inertia", info)
         count = pivot_negative_count(stiffness, pivots)
     end subroutine shifted_negative_count
+
+    subroutine write_shift_counts
+        integer :: count, item
+
+        write (*, "(a)") "shift,eigenvalues_below_shift"
+        do item = 1, size(count_shifts)
+            call shifted_negative_count(-count_shifts(item), count)
+            write (*, "(es24.16,',',i0)") count_shifts(item), count
+        end do
+    end subroutine write_shift_counts
 
     subroutine bracket_negative_eigenvalue
         character(len=192) :: message

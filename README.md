@@ -56,6 +56,27 @@ cmake --build build-enzyme
 ctest --test-dir build-enzyme -L enzyme --output-on-failure
 ```
 
+## Diagnostic spectrum counts
+
+`gliss_compatible_marginality` can count the generalized eigenvalues below
+fixed physical shifts without assigning level numbers to mesh-dependent
+continuum samples.  For example:
+
+```sh
+build/gliss_compatible_marginality equilibrium.nc 4 32 8 1e-8 1 \
+  --physical-density=1e-7 \
+  --count-shifts=0,0.001,0.002,0.005 \
+  0,0 1,0 2,0
+```
+
+The command writes CSV with columns `shift,eigenvalues_below_shift`.  A row at
+shift `s` is the inertia count of eigenvalues satisfying `lambda < s` for the
+assembled generalized pencil.  Shifts must be finite, nonnegative, and
+strictly increasing.  The count mode is mutually exclusive with bracketing
+and `--inertia-only`; malformed or conflicting input exits nonzero before an
+equilibrium is opened.  This interface is intended for deterministic
+cross-grid and cross-code spectral-distribution comparisons.
+
 ## Formulation and provenance
 
 The formulation follows the CAS3D energy-principle programme published by
