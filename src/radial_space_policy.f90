@@ -69,8 +69,10 @@ contains
         if (s < 0.0_dp .or. s > 1.0_dp) return
         if (radial_step <= 0.0_dp) return
         if (local_coordinate < 0.0_dp .or. local_coordinate > 1.0_dp) return
-        hats = [1.0_dp - local_coordinate, local_coordinate]
-        slopes = [-1.0_dp / radial_step, 1.0_dp / radial_step]
+        hats(1) = 1.0_dp - local_coordinate
+        hats(2) = local_coordinate
+        slopes(1) = -1.0_dp / radial_step
+        slopes(2) = 1.0_dp / radial_step
         form = 1.0_dp
         form_slope = 0.0_dp
         if (config%form_policy == form_s_power_edge) then

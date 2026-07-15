@@ -32,8 +32,9 @@ contains
             do i = 1, nu
                 theta = 2.0_dp * pi * real(i - 1, dp) / real(nu, dp)
                 radius = major_radius + minor_radius * cos(theta)
-                surface(:, i, k) = [radius * cos(phi), radius * sin(phi), &
-                    minor_radius * sin(theta)]
+                surface(1, i, k) = radius * cos(phi)
+                surface(2, i, k) = radius * sin(phi)
+                surface(3, i, k) = minor_radius * sin(theta)
             end do
         end do
         info = cylinder_gate_ok
@@ -64,8 +65,10 @@ contains
         real(dp) :: energy, ratio
 
         energy = -1.0_dp
-        if (.not. all(ieee_is_finite([fp, length, plasma_radius, wall_radius]))) &
-            return
+        if (.not. ieee_is_finite(fp)) return
+        if (.not. ieee_is_finite(length)) return
+        if (.not. ieee_is_finite(plasma_radius)) return
+        if (.not. ieee_is_finite(wall_radius)) return
         if (length <= 0.0_dp .or. plasma_radius <= 0.0_dp) return
         if (harmonic < 0 .or. wall_radius < 0.0_dp) return
         if (wall_radius > 0.0_dp .and. wall_radius <= plasma_radius) return

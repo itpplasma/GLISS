@@ -154,7 +154,7 @@ contains
         real(dp) :: sum_cosine, sum_sine
 
         if (field_periods < 1) then
-            products = ieee_value(products, ieee_quiet_nan)
+            products = ieee_value(0.0_dp, ieee_quiet_nan)
             return
         end if
         products = 0.0_dp

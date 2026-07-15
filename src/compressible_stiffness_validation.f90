@@ -21,11 +21,10 @@ contains
         real(dp), intent(in) :: stored_power(:), radial_step
         integer, intent(in) :: field_periods, phase_assembly
         integer, intent(out) :: info
-        integer :: angular_shape(2), trials
+        integer :: trials
 
         info = -1
         trials = size(trial_m)
-        angular_shape = [size(fields, 1), size(fields, 2)]
         if (trials < 1 .or. size(trial_n) /= trials) return
         if (size(trial_parity) /= trials .or. size(stored_power) /= trials) &
             return
@@ -37,11 +36,11 @@ contains
             phase_assembly /= phase_assembly_direct) return
         if (size(fields, 1) < 1 .or. size(fields, 2) < 1) return
         if (size(fields, 3) < 13) return
-        if (any(shape(drive) /= angular_shape)) return
-        if (any(shape(jacobian_radial) /= angular_shape)) return
-        if (any(shape(jacobian_theta) /= angular_shape)) return
-        if (any(shape(jacobian_zeta) /= angular_shape)) return
-        if (any(shape(gamma_pressure) /= angular_shape)) return
+        if (.not. has_angular_shape(drive, fields)) return
+        if (.not. has_angular_shape(jacobian_radial, fields)) return
+        if (.not. has_angular_shape(jacobian_theta, fields)) return
+        if (.not. has_angular_shape(jacobian_zeta, fields)) return
+        if (.not. has_angular_shape(gamma_pressure, fields)) return
         if (.not. all(ieee_is_finite(fields(:, :, 1:13)))) return
         if (.not. all(ieee_is_finite(drive))) return
         if (.not. all(ieee_is_finite(jacobian_radial))) return
@@ -57,5 +56,12 @@ contains
         if (any(fields(:, :, 1)**2 + fields(:, :, 2)**2 <= 0.0_dp)) return
         info = 0
     end subroutine validate_compressible_stiffness_inputs
+
+    pure logical function has_angular_shape(values, fields) result(valid)
+        real(dp), intent(in) :: values(:, :), fields(:, :, :)
+
+        valid = size(values, 1) == size(fields, 1) &
+            .and. size(values, 2) == size(fields, 2)
+    end function has_angular_shape
 
 end module compressible_stiffness_validation

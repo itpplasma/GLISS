@@ -22,8 +22,10 @@ contains
         logical :: valid
         real(dp) :: tolerances(4)
 
-        tolerances = [controls%eigenvalue_relative, controls%residual_relative, &
-            controls%negative_bracket_relative, controls%negative_bracket_floor]
+        tolerances(1) = controls%eigenvalue_relative
+        tolerances(2) = controls%residual_relative
+        tolerances(3) = controls%negative_bracket_relative
+        tolerances(4) = controls%negative_bracket_floor
         valid = all(ieee_is_finite(tolerances))
         if (.not. valid) return
         valid = all(tolerances > 0.0_dp)

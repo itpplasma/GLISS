@@ -178,17 +178,18 @@ contains
         real(dp) :: normal_radial_factor(2)
         real(dp) :: tangential_phase(2, 4), displacement(6)
 
-        signed_bjac = [-1.1_dp - 0.02_dp * active, &
-            -1.2_dp + 0.01_dp * active, -0.9_dp - 0.03_dp * active, &
-            -1.3_dp + 0.04_dp * active]
+        signed_bjac(1) = -1.1_dp - 0.02_dp * active
+        signed_bjac(2) = -1.2_dp + 0.01_dp * active
+        signed_bjac(3) = -0.9_dp - 0.03_dp * active
+        signed_bjac(4) = -1.3_dp + 0.04_dp * active
         normal_phase = reshape([0.2_dp, -0.4_dp, 0.5_dp, 0.1_dp, &
             -0.3_dp, 0.6_dp, 0.4_dp, -0.2_dp], [2, 4]) + 0.01_dp * active
         tangential_phase = reshape([0.7_dp, 0.1_dp, -0.2_dp, 0.8_dp, &
             0.3_dp, -0.5_dp, 0.6_dp, 0.2_dp], [2, 4]) - 0.02_dp * active
         displacement = [0.2_dp, -0.1_dp, 0.4_dp, 0.3_dp, -0.2_dp, 0.5_dp] &
             + 0.03_dp * active
-        normal_radial_factor = [0.9_dp + 0.01_dp * active, &
-            1.1_dp - 0.02_dp * active]
+        normal_radial_factor(1) = 0.9_dp + 0.01_dp * active
+        normal_radial_factor(2) = 1.1_dp - 0.02_dp * active
         energy = terpsichore_reduced_element_energy(signed_bjac, &
             1.3_dp + 0.02_dp * active, normal_phase, tangential_phase, &
             normal_radial_factor, 0.75_dp + 0.01_dp * active, displacement)

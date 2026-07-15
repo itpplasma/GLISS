@@ -112,8 +112,11 @@ contains
             .and. ubound(fixture%s, 1) == fixture%vacuum_intervals
         valid = valid .and. size(fixture%mode_m) == fixture%modes &
             .and. size(fixture%mode_n) == fixture%modes
-        valid = valid .and. all(shape(fixture%coefficient) == &
-            [6, fixture%modes, fixture%modes, fixture%vacuum_intervals])
+        valid = valid .and. size(fixture%coefficient, 1) == 6
+        valid = valid .and. size(fixture%coefficient, 2) == fixture%modes
+        valid = valid .and. size(fixture%coefficient, 3) == fixture%modes
+        valid = valid .and. size(fixture%coefficient, 4) &
+            == fixture%vacuum_intervals
         if (.not. valid) return
         valid = all(abs(real(fixture%mode_m, dp)) <= maximum_mode_number) &
             .and. all(abs(real(fixture%mode_n, dp)) <= maximum_mode_number)

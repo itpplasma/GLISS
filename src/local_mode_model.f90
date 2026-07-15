@@ -23,18 +23,31 @@ contains
         real(dp), intent(out) :: stiffness(3, 3), mass(3, 3)
         real(dp) :: induction(3, 3)
         real(dp) :: parallel_wave_number
-        integer :: i
+        integer :: i, j
 
         parallel_wave_number = dot_product(magnetic_field, wave_vector)
-        induction = parallel_wave_number * identity_matrix()
-        induction = induction - outer_product(magnetic_field, wave_vector)
+        induction = 0.0_dp
+        do i = 1, 3
+            induction(i, i) = parallel_wave_number
+        end do
+        do j = 1, 3
+            do i = 1, 3
+                induction(i, j) = induction(i, j) &
+                    - magnetic_field(i) * wave_vector(j)
+            end do
+        end do
 
         stiffness = matmul(transpose(induction), induction) / &
             vacuum_permeability
-        stiffness = stiffness + adiabatic_index * pressure * &
-            outer_product(wave_vector, wave_vector)
-        stiffness = stiffness - pressure_curvature_drive * &
-            outer_product(normal, normal)
+        do j = 1, 3
+            do i = 1, 3
+                stiffness(i, j) = stiffness(i, j) &
+                    + adiabatic_index * pressure * wave_vector(i) &
+                    * wave_vector(j)
+                stiffness(i, j) = stiffness(i, j) &
+                    - pressure_curvature_drive * normal(i) * normal(j)
+            end do
+        end do
 
         mass = 0.0_dp
         do i = 1, 3
@@ -44,21 +57,22 @@ contains
 
     pure function mode_energy(stiffness, displacement) result(energy)
         real(dp), intent(in) :: stiffness(3, 3), displacement(3)
-        real(dp) :: energy
+        real(dp) :: energy, image(3)
 
-        energy = 0.5_dp * dot_product(displacement, &
-            matmul(stiffness, displacement))
+        image = matmul(stiffness, displacement)
+        energy = 0.5_dp * dot_product(displacement, image)
     end function mode_energy
 
     pure function rayleigh_quotient(stiffness, mass, displacement) &
             result(omega_squared)
         real(dp), intent(in) :: stiffness(3, 3), mass(3, 3)
         real(dp), intent(in) :: displacement(3)
-        real(dp) :: omega_squared
+        real(dp) :: omega_squared, stiffness_image(3), mass_image(3)
 
-        omega_squared = dot_product(displacement, &
-            matmul(stiffness, displacement)) / &
-            dot_product(displacement, matmul(mass, displacement))
+        stiffness_image = matmul(stiffness, displacement)
+        mass_image = matmul(mass, displacement)
+        omega_squared = dot_product(displacement, stiffness_image) &
+            / dot_product(displacement, mass_image)
     end function rayleigh_quotient
 
     pure function benchmark_mode_energy(drive) result(energy) &
@@ -75,27 +89,5 @@ contains
             2.0_dp, 5.0_dp / 3.0_dp, drive, normal, stiffness, mass)
         energy = mode_energy(stiffness, displacement)
     end function benchmark_mode_energy
-
-    pure function outer_product(left, right) result(product)
-        real(dp), intent(in) :: left(3), right(3)
-        real(dp) :: product(3, 3)
-        integer :: i, j
-
-        do j = 1, 3
-            do i = 1, 3
-                product(i, j) = left(i) * right(j)
-            end do
-        end do
-    end function outer_product
-
-    pure function identity_matrix() result(identity)
-        real(dp) :: identity(3, 3)
-        integer :: i
-
-        identity = 0.0_dp
-        do i = 1, 3
-            identity(i, i) = 1.0_dp
-        end do
-    end function identity_matrix
 
 end module local_mode_model
