@@ -98,6 +98,7 @@ add_library(gliss
     src/variable_generalized_solver.f90
     src/variable_spectrum_analysis.f90
     src/dense_spectrum_support.f90
+    src/dense_generalized_inverse_iteration.f90
     src/fixed_boundary_energy.f90
     src/fixed_boundary_eigen_bracket.f90
     src/fixed_boundary_input_validation.f90
@@ -569,6 +570,65 @@ if(BUILD_TESTING)
         gliss_compatible_marginality
         "gliss_compatible_marginality: --count-shifts conflicts with --inertia-only"
         missing.nc 2 8 8 1e-8 1 --count-shifts=0,1 --inertia-only 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_eigenprofile_index
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index requires"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index= 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_eigenprofile_index
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenprofile index must be positive"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_noninteger_eigenprofile_index
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenprofile index must be an integer"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=one 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_eigenprofile
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --eigenprofile-index"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --eigenprofile-index=2 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_points_without_profile
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --profile-points requires --eigenprofile-index"
+        missing.nc 2 8 8 1e-8 1 --profile-points=8 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_profile_points
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: profile points must lie in [8,10000]"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --profile-points=7 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_profile_points
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --profile-points requires an integer"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --profile-points= 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_noninteger_profile_points
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: profile points must be an integer"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --profile-points=many 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_profile_points
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --profile-points"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --profile-points=8 --profile-points=9 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_count_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index conflicts with --count-shifts"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --count-shifts=0,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_missing_bracket
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index requires --eigenvalue-bracket"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_negative_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index conflicts with --negative-bracket"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --negative-bracket=1e-3,1e-2,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_inertia_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index conflicts with --inertia-only"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1 --inertia-only 0,1)
     add_compatible_cli_rejection(compatible_trace_cli_missing
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: missing required arguments")
@@ -697,6 +757,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_generalized_block_solver PRIVATE gliss)
     add_test(NAME generalized_block_solver COMMAND test_generalized_block_solver)
 
+    add_executable(test_dense_generalized_inverse_iteration
+        test/test_dense_generalized_inverse_iteration.f90)
+    target_link_libraries(test_dense_generalized_inverse_iteration PRIVATE gliss)
+    add_test(NAME dense_generalized_inverse_iteration
+        COMMAND test_dense_generalized_inverse_iteration)
+
     add_executable(test_newcomb_limit test/test_newcomb_limit.f90)
     target_link_libraries(test_newcomb_limit PRIVATE gliss)
     add_test(NAME newcomb_limit COMMAND test_newcomb_limit)
@@ -731,6 +797,12 @@ if(BUILD_TESTING)
         test/test_physical_mass_assembly.f90)
     target_link_libraries(test_physical_mass_assembly PRIVATE gliss)
     add_test(NAME physical_mass_assembly COMMAND test_physical_mass_assembly)
+
+    add_executable(test_compatible_vector_evaluation
+        test/test_compatible_vector_evaluation.f90)
+    target_link_libraries(test_compatible_vector_evaluation PRIVATE gliss)
+    add_test(NAME compatible_vector_evaluation
+        COMMAND test_compatible_vector_evaluation)
 
     add_executable(test_compressible_stiffness_assembly
         test/test_compressible_stiffness_assembly.f90)

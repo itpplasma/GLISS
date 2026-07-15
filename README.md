@@ -77,6 +77,39 @@ and `--inertia-only`; malformed or conflicting input exits nonzero before an
 equilibrium is opened.  This interface is intended for deterministic
 cross-grid and cross-code spectral-distribution comparisons.
 
+## Certified diagnostic profiles
+
+The same executable can reconstruct one radial eigenfunction after an inertia
+bracket has isolated it:
+
+```sh
+build/gliss_compatible_marginality equilibrium.nc 4 64 8 1e-10 1 \
+  --physical-density=1 \
+  --stored-powers=0.5,0.5,0 \
+  --eta-stored-powers=0.5,0.5,0 \
+  --eigenvalue-bracket=0.003,0.004,0.005 \
+  --eigenprofile-index=1 --profile-points=201 \
+  0,1 1,1 2,1
+```
+
+The bracket endpoint counts must be `INDEX-1` and `INDEX`; otherwise the
+command fails.  Profile mode automatically refines the eigenvalue interval to
+at most `min(TOLERANCE,1e-10)` relative width.  It then uses deterministic
+shift-invert iteration at the outer-bracket midpoint and emits a profile only
+if the isolated level is the closest eigenvalue and the mass-whitened residual
+proves an eigenspace-angle upper bound no larger than `1e-3`.
+
+The selected-eigenpair CSV row reports the outer and refined brackets, their
+certified midpoint, the independently computed Rayleigh quotient, the raw and
+diagonally equilibrated action-relative residuals, a Frobenius-norm backward
+error, the mass-whitened absolute residual, the eigenspace-angle bound, and the
+reciprocal condition estimate of the equilibrated mass matrix.  These are
+different diagnostics: a low mode of a strongly cancelling energy pencil can
+have a visibly larger action-relative residual while remaining backward stable
+and having a small, explicitly bounded subspace error.  The following rows are
+`normal` and `eta` field values at cell-centred coordinates; no coefficient
+layout is exposed to downstream scripts.
+
 ## Formulation and provenance
 
 The formulation follows the CAS3D energy-principle programme published by

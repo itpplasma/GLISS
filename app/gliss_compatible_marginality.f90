@@ -4,9 +4,12 @@ program gliss_compatible_marginality
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit, int64
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_problem_ok, &
-        compatible_two_component_problem_t
+        compatible_two_component_problem_t, &
+        evaluate_compatible_two_component_vector
     use compatible_problem_assembly_support, only: &
         evaluate_generalized_eigenpair, quadratic_form, sum_tensor
+    use dense_generalized_inverse_iteration, only: dense_inverse_ok, &
+        solve_dense_generalized_near_shift
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use symmetric_pivot_inertia, only: pivot_negative_count
@@ -20,8 +23,11 @@ program gliss_compatible_marginality
     character(len=1024) :: stored_power_token, token
     integer, allocatable :: mode_m(:), mode_n(:)
     real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
+    real(dp), allocatable :: eigenvector(:)
     real(dp), allocatable :: count_shifts(:)
     real(dp), allocatable :: eta_stored_power(:), stored_power(:)
+    real(dp), allocatable :: profile_coordinates(:), profile_eta(:, :)
+    real(dp), allocatable :: profile_normal(:, :)
     real(dp), allocatable :: stiffness(:, :), mass(:, :)
     real(dp), allocatable :: stiffness_operator(:, :), work(:)
     integer, allocatable :: pivots(:)
@@ -30,10 +36,12 @@ program gliss_compatible_marginality
     real(dp) :: term_energy(4)
     integer :: allocation_status, arguments, comma, degree, first_mode, info
     integer :: bracket_kind, inertia_negative_count, mode, negative_count
+    integer :: eigenprofile_index, profile_points
     integer :: work_size
     integer :: n_theta, n_zeta, parity, trial
     integer(int64) :: requested_work_size
-    logical :: has_count_shifts, has_eta_powers, has_m0_power
+    logical :: has_count_shifts, has_eigenprofile, has_eta_powers, has_m0_power
+    logical :: has_profile_points
     logical :: has_stored_powers, inertia_only
     logical :: physical_mass
 
@@ -75,6 +83,10 @@ program gliss_compatible_marginality
     has_stored_powers = .false.
     has_eta_powers = .false.
     has_count_shifts = .false.
+    has_eigenprofile = .false.
+    has_profile_points = .false.
+    eigenprofile_index = 0
+    profile_points = 201
     density = 0.0_dp
     m0_stored_power = 0.0_dp
     do while (first_mode <= arguments)
@@ -146,6 +158,25 @@ program gliss_compatible_marginality
                 "--count-shifts requires a comma-separated list")
             count_shift_token = token(len("--count-shifts=") + 1:)
             has_count_shifts = .true.
+        else if (index(token, "--eigenprofile-index=") == 1) then
+            if (has_eigenprofile) &
+                call fail_usage("duplicate --eigenprofile-index")
+            if (len_trim(token) == len("--eigenprofile-index=")) &
+                call fail_usage("--eigenprofile-index requires an integer")
+            call parse_integer(token(len("--eigenprofile-index=") + 1:), &
+                "eigenprofile index", eigenprofile_index)
+            if (eigenprofile_index < 1) &
+                call fail_usage("eigenprofile index must be positive")
+            has_eigenprofile = .true.
+        else if (index(token, "--profile-points=") == 1) then
+            if (has_profile_points) call fail_usage("duplicate --profile-points")
+            if (len_trim(token) == len("--profile-points=")) &
+                call fail_usage("--profile-points requires an integer")
+            call parse_integer(token(len("--profile-points=") + 1:), &
+                "profile points", profile_points)
+            if (profile_points < 8 .or. profile_points > 10000) &
+                call fail_usage("profile points must lie in [8,10000]")
+            has_profile_points = .true.
         else
             call fail_usage("unknown option " // trim(token))
         end if
@@ -156,6 +187,18 @@ program gliss_compatible_marginality
         call fail_usage("--m0-stored-power conflicts with --stored-powers")
     if (has_count_shifts .and. inertia_only) &
         call fail_usage("--count-shifts conflicts with --inertia-only")
+    if (has_profile_points .and. .not. has_eigenprofile) &
+        call fail_usage("--profile-points requires --eigenprofile-index")
+    if (has_eigenprofile .and. has_count_shifts) &
+        call fail_usage("--eigenprofile-index conflicts with --count-shifts")
+    if (has_eigenprofile .and. inertia_only) &
+        call fail_usage("--eigenprofile-index conflicts with --inertia-only")
+    if (has_eigenprofile .and. bracket_kind == 0) &
+        call fail_usage( &
+        "--eigenprofile-index requires --eigenvalue-bracket")
+    if (has_eigenprofile .and. bracket_kind == 1) &
+        call fail_usage( &
+        "--eigenprofile-index conflicts with --negative-bracket")
     allocate (mode_m(arguments - first_mode + 1), &
         mode_n(arguments - first_mode + 1), &
         stored_power(arguments - first_mode + 1), &
@@ -242,6 +285,10 @@ program gliss_compatible_marginality
         ",", degree, ",", parity, ",", n_theta, ",", n_zeta, ",", &
         merge(1, 0, physical_mass), ",", density, ",", floor, ",", &
         merge(1, 0, bracket_kind /= 0)
+    if (has_eigenprofile) then
+        call write_eigenprofile
+        call terminate_process(0_c_int)
+    end if
     if (bracket_kind /= 0) then
         if (bracket_kind == 1) then
             call bracket_negative_eigenvalue
@@ -326,7 +373,9 @@ contains
             "[--eta-stored-powers=P0,P1,...] " // &
             "[--negative-bracket=LOWER,UPPER,TOLERANCE] " // &
             "[--eigenvalue-bracket=LOWER,UPPER,TOLERANCE] " // &
-            "[--count-shifts=S0,S1,...] m,n [m,n ...]"
+            "[--count-shifts=S0,S1,...] " // &
+            "[--eigenprofile-index=INDEX] [--profile-points=COUNT] " // &
+            "m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
 
@@ -518,6 +567,141 @@ contains
             write (*, "(es24.16,',',i0)") count_shifts(item), count
         end do
     end subroutine write_shift_counts
+
+    subroutine write_eigenprofile
+        real(dp), parameter :: profile_angle_limit = 1.0e-3_dp
+        real(dp) :: action_residual, angle_bound, backward_error
+        real(dp) :: certified_eigenvalue, eigenvalue
+        real(dp) :: equilibrated_action_residual, inverse_shift
+        real(dp) :: mass_reciprocal_condition, neighbor_gap
+        real(dp) :: outer_lower, outer_upper, standard_residual_norm
+        real(dp) :: vector_residual_bound
+        integer :: iterations, lower_count, point, upper_count
+
+        outer_lower = bracket_lower
+        outer_upper = bracket_upper
+        inverse_shift = outer_lower + 0.5_dp * (outer_upper - outer_lower)
+        call refine_eigenprofile_bracket(lower_count, upper_count)
+        call solve_dense_generalized_near_shift(stiffness_operator, &
+            problem%mass, inverse_shift, eigenvalue, eigenvector, &
+            action_residual, equilibrated_action_residual, backward_error, &
+            standard_residual_norm, mass_reciprocal_condition, iterations, &
+            info)
+        if (info /= dense_inverse_ok) then
+            write (error_unit, "(a,es24.16,5(a,es24.16),a,i0)") &
+                "eigenprofile last eigenvalue=", eigenvalue, &
+                " action_residual=", action_residual, &
+                " equilibrated_action_residual=", &
+                equilibrated_action_residual, &
+                " backward_error=", backward_error, &
+                " standard_residual_norm=", standard_residual_norm, &
+                " mass_reciprocal_condition=", mass_reciprocal_condition, &
+                " iterations=", iterations
+            call fail_solver("eigenprofile inverse iteration", info)
+        end if
+        certified_eigenvalue = bracket_lower &
+            + 0.5_dp * (bracket_upper - bracket_lower)
+        vector_residual_bound = standard_residual_norm &
+            + max(abs(eigenvalue - bracket_lower), &
+            abs(eigenvalue - bracket_upper))
+        neighbor_gap = outer_upper - bracket_upper
+        if (eigenprofile_index > 1) neighbor_gap = min(neighbor_gap, &
+            bracket_lower - outer_lower)
+        if (neighbor_gap <= 0.0_dp) &
+            call fail_solver("eigenprofile neighbor separation", -1)
+        angle_bound = vector_residual_bound / neighbor_gap
+        if (.not. ieee_is_finite(angle_bound) &
+            .or. angle_bound > profile_angle_limit) then
+            write (error_unit, "(2(a,es24.16))") &
+                "eigenprofile angle_bound=", angle_bound, &
+                " limit=", profile_angle_limit
+            call fail_solver("eigenprofile forward error", -1)
+        end if
+        call evaluate_generalized_eigenpair(stiffness_operator, problem%mass, &
+            eigenvector, eigenvalue, kinetic, potential, residual, info)
+        if (info /= 0) call fail_solver("eigenprofile diagnostics", info)
+        do info = 1, 4
+            call quadratic_form(problem%stiffness_terms(:, :, info), &
+                eigenvector, term_energy(info), trial)
+            if (trial /= 0) call fail_solver("eigenprofile term energy", trial)
+        end do
+        allocate (profile_coordinates(profile_points), stat=allocation_status)
+        if (allocation_status /= 0) &
+            call fail_solver("eigenprofile coordinate allocation", -1)
+        do point = 1, profile_points
+            profile_coordinates(point) = &
+                (real(point, dp) - 0.5_dp) / real(profile_points, dp)
+        end do
+        call evaluate_compatible_two_component_vector(size(equilibrium%s), &
+            mode_m, mode_n, stored_power, eta_stored_power, parity, degree, &
+            profile_coordinates, eigenvector, profile_normal, profile_eta, &
+            info)
+        if (info /= compatible_problem_ok) &
+            call fail_solver("eigenprofile vector evaluation", info)
+        write (*, "(a)") "selected_eigenpair_index,inverse_shift," // &
+            "outer_lower,outer_upper,lambda_lower,lambda_upper,iterations," // &
+            "certified_eigenvalue,rayleigh_quotient,action_residual," // &
+            "equilibrated_action_residual,backward_error," // &
+            "standard_residual_norm,angle_bound," // &
+            "mass_reciprocal_condition,kinetic,potential,bending,shear," // &
+            "compression,drive"
+        write (*, "(i0,5(a,es24.16),a,i0,14(a,es24.16))") &
+            eigenprofile_index, ",", inverse_shift, ",", outer_lower, ",", &
+            outer_upper, ",", bracket_lower, ",", bracket_upper, ",", &
+            iterations, ",", certified_eigenvalue, ",", eigenvalue, ",", &
+            action_residual, ",", equilibrated_action_residual, ",", &
+            backward_error, ",", standard_residual_norm, ",", angle_bound, &
+            ",", mass_reciprocal_condition, ",", kinetic, ",", potential, &
+            ",", term_energy(1), ",", term_energy(2), ",", term_energy(3), &
+            ",", term_energy(4)
+        write (*, "(a)") "profile_index,s,r,mode_index,m,n,normal,eta"
+        do point = 1, profile_points
+            do mode = 1, size(mode_m)
+                write (*, "(i0,2(a,es24.16),3(a,i0),2(a,es24.16))") &
+                    point, ",", profile_coordinates(point), ",", &
+                    sqrt(profile_coordinates(point)), ",", mode, ",", &
+                    mode_m(mode), ",", mode_n(mode), ",", &
+                    profile_normal(point, mode), ",", profile_eta(point, mode)
+            end do
+        end do
+    end subroutine write_eigenprofile
+
+    subroutine refine_eigenprofile_bracket(lower_count, upper_count)
+        character(len=192) :: message
+        real(dp) :: midpoint, scale, target_tolerance
+        integer, intent(out) :: lower_count, upper_count
+        integer :: iterations, midpoint_count
+
+        call shifted_negative_count(-bracket_lower, lower_count)
+        call shifted_negative_count(-bracket_upper, upper_count)
+        if (lower_count /= eigenprofile_index - 1 &
+            .or. upper_count /= eigenprofile_index) then
+            write (message, "(a,i0,a,i0,a,i0,a,i0,a)") &
+                "eigenprofile bracket counts must be ", &
+                eigenprofile_index - 1, " and ", eigenprofile_index, &
+                " (found ", lower_count, " and ", upper_count, ")"
+            call fail_usage(trim(message))
+        end if
+        iterations = 0
+        scale = max(abs(bracket_lower), abs(bracket_upper), tiny(1.0_dp))
+        target_tolerance = min(bracket_tolerance, 1.0e-10_dp)
+        do while (bracket_upper - bracket_lower > target_tolerance * scale)
+            if (iterations >= 80) &
+                call fail_solver("eigenprofile bracket iteration", -1)
+            midpoint = bracket_lower + 0.5_dp * &
+                (bracket_upper - bracket_lower)
+            call shifted_negative_count(-midpoint, midpoint_count)
+            if (midpoint_count == lower_count) then
+                bracket_lower = midpoint
+            else if (midpoint_count == upper_count) then
+                bracket_upper = midpoint
+            else
+                call fail_solver( &
+                    "eigenprofile bracket changed by multiple levels", -1)
+            end if
+            iterations = iterations + 1
+        end do
+    end subroutine refine_eigenprofile_bracket
 
     subroutine bracket_negative_eigenvalue
         character(len=192) :: message

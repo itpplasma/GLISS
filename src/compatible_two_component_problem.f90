@@ -53,12 +53,131 @@ module compatible_two_component_problem
 
     public :: build_compatible_two_component_problem
     public :: compatible_cell_trace_t
+    public :: evaluate_compatible_two_component_vector
 
     logical, parameter :: accurate_term(4) = [.true., .true., .false., .true.]
     logical, parameter :: constraint_term(4) = &
         [.false., .false., .true., .false.]
 
 contains
+
+    subroutine evaluate_compatible_two_component_vector(intervals, mode_m, &
+            mode_n, stored_power, eta_stored_power, parity_class, degree, &
+            coordinates, vector, normal, eta, info)
+        integer, intent(in) :: intervals, mode_m(:), mode_n(:)
+        real(dp), intent(in) :: stored_power(:), eta_stored_power(:)
+        integer, intent(in) :: parity_class, degree
+        real(dp), intent(in) :: coordinates(:), vector(:)
+        real(dp), allocatable, intent(out) :: normal(:, :), eta(:, :)
+        integer, intent(out) :: info
+        type(radial_feec_complex_t) :: complex
+        type(trial_space_topology_t) :: topology
+        real(dp), allocatable :: breaks(:), derivatives(:, :), dh1(:)
+        real(dp), allocatable :: h1(:), h1_values(:, :), l2(:)
+        real(dp), allocatable :: l2_values(:, :)
+        integer, allocatable :: eta_rank(:), h1_index(:), l2_index(:)
+        integer, allocatable :: normal_rank(:), parity(:)
+        integer :: allocation_status, basis, eta_count, local_info
+        integer :: normal_count, point, trial, vector_index
+
+        info = compatible_problem_invalid
+        if (intervals < 1 .or. size(mode_m) < 1) return
+        if (size(mode_n) /= size(mode_m)) return
+        if (size(stored_power) /= size(mode_m)) return
+        if (size(eta_stored_power) /= size(mode_m)) return
+        if (parity_class < 1 .or. parity_class > 2) return
+        if (degree < 1 .or. degree > 4) return
+        if (size(coordinates) < 1) return
+        do trial = 1, size(mode_m)
+            if (.not. ieee_is_finite(stored_power(trial))) return
+            if (.not. ieee_is_finite(eta_stored_power(trial))) return
+        end do
+        do point = 1, size(coordinates)
+            if (.not. ieee_is_finite(coordinates(point))) return
+            if (coordinates(point) <= 0.0_dp &
+                .or. coordinates(point) > 1.0_dp) return
+        end do
+        do vector_index = 1, size(vector)
+            if (.not. ieee_is_finite(vector(vector_index))) return
+        end do
+        allocate (breaks(intervals + 1), parity(size(mode_m)), &
+            normal_rank(size(mode_m)), eta_rank(size(mode_m)), &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
+        call build_uniform_breaks(intervals, breaks, local_info)
+        if (local_info /= compatible_support_ok) return
+        call build_radial_feec_complex(breaks, degree, .true., .true., &
+            complex, local_info)
+        if (local_info /= radial_feec_ok) return
+        parity = parity_class
+        call build_trial_space_topology(mode_m, mode_n, parity, topology, &
+            local_info)
+        if (local_info /= trial_topology_ok) return
+        call build_component_ranks(topology, normal_rank, eta_rank)
+        normal_count = count(normal_rank > 0)
+        eta_count = count(eta_rank > 0)
+        if (size(vector) /= complex%h1_dofs * normal_count &
+            + complex%l2_dofs * eta_count) return
+        allocate (normal(size(coordinates), size(mode_m)), source=0.0_dp, &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
+        allocate (eta(size(coordinates), size(mode_m)), source=0.0_dp, &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
+        allocate (h1_index(complex%h1_dofs), l2_index(complex%l2_dofs), &
+            h1_values(complex%h1_dofs, size(mode_m)), &
+            derivatives(complex%h1_dofs, size(mode_m)), &
+            l2_values(complex%l2_dofs, size(mode_m)), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
+        do basis = 1, complex%h1_dofs
+            h1_index(basis) = basis
+        end do
+        do basis = 1, complex%l2_dofs
+            l2_index(basis) = basis
+        end do
+        do point = 1, size(coordinates)
+            call evaluate_radial_feec_complex(complex, coordinates(point), &
+                h1, dh1, l2, local_info)
+            if (local_info /= radial_feec_ok) return
+            call apply_stored_power(coordinates(point), stored_power, h1, &
+                dh1, h1_index, h1_values, derivatives, local_info)
+            if (local_info /= compatible_support_ok) return
+            call apply_l2_stored_power(coordinates(point), eta_stored_power, &
+                l2, l2_index, l2_values, local_info)
+            if (local_info /= compatible_support_ok) return
+            do trial = 1, size(mode_m)
+                if (normal_rank(trial) > 0) then
+                    do basis = 1, complex%h1_dofs
+                        vector_index = (basis - 1) * normal_count &
+                            + normal_rank(trial)
+                        normal(point, trial) = normal(point, trial) &
+                            + vector(vector_index) * h1_values(basis, trial)
+                    end do
+                end if
+                if (eta_rank(trial) > 0) then
+                    do basis = 1, complex%l2_dofs
+                        vector_index = complex%h1_dofs * normal_count &
+                            + (basis - 1) * eta_count + eta_rank(trial)
+                        eta(point, trial) = eta(point, trial) &
+                            + vector(vector_index) * l2_values(basis, trial)
+                    end do
+                end if
+            end do
+        end do
+        info = compatible_problem_ok
+    end subroutine evaluate_compatible_two_component_vector
 
     subroutine build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
