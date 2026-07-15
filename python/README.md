@@ -295,6 +295,53 @@ resolution. The result also records the exact mode table, parity, angular
 resolution, radial surface count, Fourier convention, coordinate handedness,
 boundary condition, and normalization warning.
 
+### CAS3D2MN phase envelopes
+
+Use the phase-envelope interface when reproducing a CAS3D2MN mode table. It
+accepts the carrier separately from the ordered envelope table and retains
+the two labeled sidebands contributed by every envelope after `(0, 0)`:
+
+```python
+envelopes = [(0, 0), (0, 1), (1, 0), (0, -1)]
+with gliss.Equilibrium(Path("w7x.nc")) as equilibrium:
+    result = gliss.solve_cas3d_phase_envelope(
+        equilibrium,
+        base_mode=(3, 2),
+        envelope_modes=envelopes,
+        parity_class=1,
+        angular_theta=96,
+        angular_zeta=64,
+    )
+    print(result.labeled_sideband_count, result.lowest_eigenvalue)
+```
+
+The carrier uses the GLISS phase
+`2*pi*(M*theta - N*zeta/N_T)`. Envelope pairs use
+`2*pi*(m*theta - n*zeta)` over one field period. Consequently a paper table
+written with the opposite sign in its toroidal envelope phase must negate
+that envelope `n` before calling GLISS. The envelope sequence must start with
+`(0, 0)` and contain unique nonnegative-`m` pairs.
+
+The returned count is `2*len(envelope_modes)-1`. It counts labels, not unique
+physical Fourier pairs: conjugate envelope cells can produce coincident
+sidebands after canonicalization, especially for a zero-poloidal carrier
+offset. GLISS intentionally retains those labels because the CAS3D2MN
+artificial mass is diagonal in labeled coefficient space. The resulting
+exact null directions are classified in the closed band
+`abs(lambda) <= result.inertia_zero_floor`, currently `1e-8`;
+`negative_count` therefore means `lambda < -1e-8` once a coincident sideband
+is present. This band is a
+numerical classification convention, not physics and not an SI growth-rate
+tolerance. The lowest nonzero W7-X values used in the validation are more
+than four orders of magnitude outside it.
+
+`cas3d_phase_envelope_inertia` is the count-only form. Both functions return
+a frozen `Cas3dPhaseEnvelopeResult` containing the carrier, the exact ordered
+envelope input, labeled sideband count, parity, grids, radial resolution,
+normalization warning, inertia and optional certified lowest pair. The
+ordinary `cas3d_marginality_*` functions continue to require a unique,
+explicit physical-mode table and do not apply this labeled multiplicity.
+
 The roundoff term evaluates the absolute shifted action in the equilibrated
 coordinates. Its vector norms use a scaled compensated sum of squares, so they
 do not overflow for large finite coefficients or underflow for uniformly small

@@ -42,6 +42,33 @@ class Cas3dMarginalityResult:
     fourier_convention: str = "2*pi*(m*theta - n*zeta/N_T)"
 
 
+@dataclass(frozen=True)
+class Cas3dPhaseEnvelopeResult:
+    """Inertia and optional eigenpair for a CAS3D2MN envelope."""
+
+    has_eigenpair: bool
+    field_periods: int
+    base_mode: Tuple[int, int]
+    envelope_modes: Tuple[Tuple[int, int], ...]
+    labeled_sideband_count: int
+    radial_surfaces: int
+    parity_class: int
+    radial_quadrature: str
+    angular_resolution: Tuple[int, int]
+    negative_count: int
+    lowest_eigenvalue: Optional[float]
+    certificate: Optional[float]
+    eigenpair_residual: Optional[float]
+    force_balance_residual: float
+    inertia_zero_floor: float = 1.0e-8
+    normalization: str = "CAS3D2MN artificial L2 norm of labeled coefficients"
+    interpretation: str = "stability and marginality only; not a physical growth rate"
+    boundary_condition: str = "fixed"
+    coordinate_handedness: str = "left-handed"
+    base_fourier_convention: str = "2*pi*(M*theta - N*zeta/N_T)"
+    envelope_fourier_convention: str = "2*pi*(m*theta - n*zeta)"
+
+
 class _Cas3dMarginalityResult(ctypes.Structure):
     _fields_ = [
         ("struct_size", ctypes.c_size_t),
@@ -70,6 +97,32 @@ def _bind(library: Any) -> None:
     function = library.gliss_cas3d_marginality
     function.argtypes = (
         ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.POINTER(_Cas3dMarginalityResult),
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    )
+    function.restype = ctypes.c_int
+
+
+def _bind_phase_envelope(library: Any) -> None:
+    _require_symbols(
+        library,
+        ("gliss_cas3d_phase_envelope",),
+        "CAS3D2MN phase-envelope solver",
+    )
+    function = library.gliss_cas3d_phase_envelope
+    function.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_int32,
+        ctypes.c_int32,
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_int32),
         ctypes.POINTER(ctypes.c_int32),
@@ -207,6 +260,203 @@ def _calculate(
         quadrature,
         resolution,
         solve_eigenpair,
+    )
+
+
+def _mode_pair(value: Any, name: str) -> Tuple[int, int]:
+    if not isinstance(value, (tuple, list)) or len(value) != 2:
+        raise TypeError(f"{name} must be an (m, n) pair")
+    return (
+        mode_integer(value[0], f"{name} poloidal mode"),
+        mode_integer(value[1], f"{name} toroidal mode"),
+    )
+
+
+def _validate_phase_envelope(
+    base_mode: Tuple[int, int],
+    envelope_modes: Sequence[Tuple[int, int]],
+) -> Tuple[Tuple[int, int], Tuple[Tuple[int, int], ...]]:
+    base = _mode_pair(base_mode, "base_mode")
+    if base[0] < 0:
+        raise ValueError("base_mode poloidal mode must be nonnegative")
+    if base[0] == 0 and base[1] < 0:
+        raise ValueError("base_mode axis mode requires nonnegative n")
+    try:
+        entries = tuple(envelope_modes)
+    except TypeError as error:
+        raise TypeError("envelope_modes must be a sequence of (m, n) pairs") from error
+    if not entries:
+        raise ValueError("envelope_modes must not be empty")
+    result = []
+    seen = set()
+    for index, entry in enumerate(entries):
+        pair = _mode_pair(entry, f"envelope_modes[{index}]")
+        if pair[0] < 0:
+            raise ValueError(
+                f"envelope_modes[{index}] poloidal mode must be nonnegative"
+            )
+        if pair in seen:
+            raise ValueError(f"duplicate envelope mode {pair!r}")
+        seen.add(pair)
+        result.append(pair)
+    if result[0] != (0, 0):
+        raise ValueError("envelope_modes must begin with (0, 0)")
+    return base, tuple(result)
+
+
+def _phase_envelope_result(
+    native: _Cas3dMarginalityResult,
+    base_mode: Tuple[int, int],
+    envelope_modes: Tuple[Tuple[int, int], ...],
+    parity_class: int,
+    radial_quadrature: int,
+    angular_resolution: Tuple[int, int],
+    solve_eigenpair: bool,
+) -> Cas3dPhaseEnvelopeResult:
+    sideband_count = 2 * len(envelope_modes) - 1
+    metadata_valid = (
+        native.has_eigenpair == int(solve_eigenpair)
+        and native.field_periods >= 1
+        and native.mode_count == sideband_count
+        and native.radial_surfaces >= 2
+        and native.parity_class == parity_class
+        and native.radial_quadrature == radial_quadrature
+        and (native.angular_theta, native.angular_zeta) == angular_resolution
+        and math.isfinite(native.force_balance_residual)
+        and native.force_balance_residual >= 0.0
+    )
+    eigenpair = (
+        native.lowest_eigenvalue,
+        native.certificate,
+        native.eigenpair_residual,
+    )
+    if solve_eigenpair:
+        pair_valid = (
+            all(math.isfinite(value) for value in eigenpair)
+            and native.certificate >= 0.0
+            and native.eigenpair_residual >= 0.0
+        )
+    else:
+        pair_valid = all(math.isnan(value) for value in eigenpair)
+    if not metadata_valid or not pair_valid:
+        raise GlissInternalError("GLISS returned an invalid CAS3D2MN result")
+    quadrature = {value: name for name, value in _QUADRATURE.items()}
+    return Cas3dPhaseEnvelopeResult(
+        has_eigenpair=solve_eigenpair,
+        field_periods=native.field_periods,
+        base_mode=base_mode,
+        envelope_modes=envelope_modes,
+        labeled_sideband_count=sideband_count,
+        radial_surfaces=native.radial_surfaces,
+        parity_class=native.parity_class,
+        radial_quadrature=quadrature[native.radial_quadrature],
+        angular_resolution=angular_resolution,
+        negative_count=native.negative_count,
+        lowest_eigenvalue=native.lowest_eigenvalue if solve_eigenpair else None,
+        certificate=native.certificate if solve_eigenpair else None,
+        eigenpair_residual=(native.eigenpair_residual if solve_eigenpair else None),
+        force_balance_residual=native.force_balance_residual,
+    )
+
+
+def _calculate_phase_envelope(
+    equilibrium: Equilibrium,
+    base_mode: Tuple[int, int],
+    envelope_modes: Sequence[Tuple[int, int]],
+    parity_class: int,
+    radial_quadrature: str,
+    angular_theta: int,
+    angular_zeta: int,
+    solve_eigenpair: bool,
+) -> Cas3dPhaseEnvelopeResult:
+    if not isinstance(equilibrium, Equilibrium):
+        raise TypeError("equilibrium must be a gliss.Equilibrium")
+    equilibrium._require_open()
+    base, envelopes = _validate_phase_envelope(base_mode, envelope_modes)
+    validated_parity = _parity_class(parity_class)
+    quadrature = _quadrature(radial_quadrature)
+    resolution = (
+        _angular_resolution(angular_theta, "angular_theta"),
+        _angular_resolution(angular_zeta, "angular_zeta"),
+    )
+    _bind_phase_envelope(equilibrium._library)
+    count = len(envelopes)
+    integers = ctypes.c_int32 * count
+    envelope_m = integers(*(mode[0] for mode in envelopes))
+    envelope_n = integers(*(mode[1] for mode in envelopes))
+    native = _Cas3dMarginalityResult(struct_size=ctypes.sizeof(_Cas3dMarginalityResult))
+    error = _error_buffer()
+    status = equilibrium._library.gliss_cas3d_phase_envelope(
+        equilibrium._handle,
+        base[0],
+        base[1],
+        count,
+        envelope_m,
+        envelope_n,
+        validated_parity,
+        quadrature,
+        resolution[0],
+        resolution[1],
+        int(solve_eigenpair),
+        ctypes.byref(native),
+        error,
+        len(error),
+    )
+    _raise_for_status(status, error, "gliss_cas3d_phase_envelope")
+    return _phase_envelope_result(
+        native,
+        base,
+        envelopes,
+        validated_parity,
+        quadrature,
+        resolution,
+        solve_eigenpair,
+    )
+
+
+def cas3d_phase_envelope_inertia(
+    equilibrium: Equilibrium,
+    base_mode: Tuple[int, int],
+    envelope_modes: Sequence[Tuple[int, int]],
+    parity_class: int = 1,
+    radial_quadrature: str = "midpoint",
+    angular_theta: int = 64,
+    angular_zeta: int = 64,
+) -> Cas3dPhaseEnvelopeResult:
+    """Count negative directions in a labeled CAS3D2MN envelope."""
+
+    return _calculate_phase_envelope(
+        equilibrium,
+        base_mode,
+        envelope_modes,
+        parity_class,
+        radial_quadrature,
+        angular_theta,
+        angular_zeta,
+        solve_eigenpair=False,
+    )
+
+
+def solve_cas3d_phase_envelope(
+    equilibrium: Equilibrium,
+    base_mode: Tuple[int, int],
+    envelope_modes: Sequence[Tuple[int, int]],
+    parity_class: int = 1,
+    radial_quadrature: str = "midpoint",
+    angular_theta: int = 64,
+    angular_zeta: int = 64,
+) -> Cas3dPhaseEnvelopeResult:
+    """Return inertia and the lowest pair for a labeled CAS3D2MN envelope."""
+
+    return _calculate_phase_envelope(
+        equilibrium,
+        base_mode,
+        envelope_modes,
+        parity_class,
+        radial_quadrature,
+        angular_theta,
+        angular_zeta,
+        solve_eigenpair=True,
     )
 
 

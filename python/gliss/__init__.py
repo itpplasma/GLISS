@@ -126,8 +126,11 @@ from .axisymmetric import (  # noqa: E402
 )
 from .marginality import (  # noqa: E402
     Cas3dMarginalityResult as Cas3dMarginalityResult,
+    Cas3dPhaseEnvelopeResult as Cas3dPhaseEnvelopeResult,
     cas3d_marginality_inertia as cas3d_marginality_inertia,
+    cas3d_phase_envelope_inertia as cas3d_phase_envelope_inertia,
     solve_cas3d_marginality as solve_cas3d_marginality,
+    solve_cas3d_phase_envelope as solve_cas3d_phase_envelope,
 )
 from .schema import (  # noqa: E402
     RunManifest,
@@ -141,6 +144,7 @@ __all__ = [
     "Equilibrium",
     "AxisymmetricResult",
     "Cas3dMarginalityResult",
+    "Cas3dPhaseEnvelopeResult",
     "EnergyTerms",
     "GlissAllocationError",
     "GlissArgumentError",
@@ -152,6 +156,7 @@ __all__ = [
     "convert_vmec",
     "axisymmetric_inertia",
     "cas3d_marginality_inertia",
+    "cas3d_phase_envelope_inertia",
     "get_include",
     "FullSpectrumResult",
     "FullStabilityResult",
@@ -168,6 +173,7 @@ __all__ = [
     "TerpsichorePseudoplasmaResult",
     "solve_axisymmetric",
     "solve_cas3d_marginality",
+    "solve_cas3d_phase_envelope",
     "solve_terpsichore_fixed_boundary",
     "solve_terpsichore_pseudoplasma",
     "version",

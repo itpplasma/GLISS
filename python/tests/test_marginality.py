@@ -22,6 +22,7 @@ class FakeLibrary:
     def __init__(self):
         self.arguments = None
         self.gliss_cas3d_marginality = FakeFunction(self.solve)
+        self.gliss_cas3d_phase_envelope = FakeFunction(self.solve_envelope)
 
     def solve(
         self,
@@ -61,6 +62,51 @@ class FakeLibrary:
         native.lowest_eigenvalue = -5.3e-4 if solve_eigenpair else np.nan
         native.certificate = 2.0e-10 if solve_eigenpair else np.nan
         native.eigenpair_residual = 4.0e-13 if solve_eigenpair else np.nan
+        native.force_balance_residual = 7.0e-5
+        error.value = b""
+        return 0
+
+    def solve_envelope(
+        self,
+        equilibrium,
+        base_m,
+        base_n,
+        envelope_count,
+        envelope_m,
+        envelope_n,
+        parity_class,
+        radial_quadrature,
+        angular_theta,
+        angular_zeta,
+        solve_eigenpair,
+        result,
+        error,
+        error_capacity,
+    ):
+        self.arguments = (
+            equilibrium.value,
+            (base_m, base_n),
+            tuple(envelope_m),
+            tuple(envelope_n),
+            parity_class,
+            radial_quadrature,
+            angular_theta,
+            angular_zeta,
+            solve_eigenpair,
+        )
+        native = result._obj
+        native.has_eigenpair = solve_eigenpair
+        native.field_periods = 5
+        native.mode_count = 2 * envelope_count - 1
+        native.radial_surfaces = 48
+        native.parity_class = parity_class
+        native.radial_quadrature = radial_quadrature
+        native.angular_theta = angular_theta
+        native.angular_zeta = angular_zeta
+        native.negative_count = 3
+        native.lowest_eigenvalue = -3.8e-4 if solve_eigenpair else np.nan
+        native.certificate = 3.0e-10 if solve_eigenpair else np.nan
+        native.eigenpair_residual = 5.0e-13 if solve_eigenpair else np.nan
         native.force_balance_residual = 7.0e-5
         error.value = b""
         return 0
@@ -112,6 +158,65 @@ def test_solve_cas3d_marginality_labels_artificial_normalization():
     assert result.boundary_condition == "fixed"
     assert result.coordinate_handedness == "left-handed"
     assert result.fourier_convention == "2*pi*(m*theta - n*zeta/N_T)"
+
+
+def test_solve_cas3d_phase_envelope_retains_labeled_sidebands():
+    library = FakeLibrary()
+
+    result = gliss.solve_cas3d_phase_envelope(
+        equilibrium(library),
+        base_mode=(3, 2),
+        envelope_modes=[(0, 0), (1, 0), (0, 1), (0, -1)],
+        parity_class=2,
+        angular_theta=72,
+        angular_zeta=48,
+    )
+
+    assert library.arguments == (
+        23,
+        (3, 2),
+        (0, 1, 0, 0),
+        (0, 0, 1, -1),
+        2,
+        1,
+        72,
+        48,
+        1,
+    )
+    assert result.base_mode == (3, 2)
+    assert result.envelope_modes == ((0, 0), (1, 0), (0, 1), (0, -1))
+    assert result.labeled_sideband_count == 7
+    assert result.inertia_zero_floor == 1.0e-8
+    assert result.negative_count == 3
+    assert result.lowest_eigenvalue == pytest.approx(-3.8e-4)
+    assert "labeled" in result.normalization
+    assert result.base_fourier_convention == "2*pi*(M*theta - N*zeta/N_T)"
+    assert result.envelope_fourier_convention == "2*pi*(m*theta - n*zeta)"
+
+
+@pytest.mark.parametrize(
+    ("keyword", "value", "exception", "match"),
+    [
+        ("base_mode", (-1, 2), ValueError, "nonnegative"),
+        ("base_mode", (0, -1), ValueError, "axis mode"),
+        ("base_mode", (True, 1), TypeError, "integer"),
+        ("envelope_modes", [], ValueError, "must not be empty"),
+        ("envelope_modes", [(1, 0)], ValueError, "begin with"),
+        (
+            "envelope_modes",
+            [(0, 0), (0, 0)],
+            ValueError,
+            "duplicate envelope",
+        ),
+        ("envelope_modes", [(0, 0), (-1, 0)], ValueError, "nonnegative"),
+    ],
+)
+def test_cas3d_phase_envelope_rejects_invalid_input(keyword, value, exception, match):
+    arguments = {"base_mode": (3, 2), "envelope_modes": [(0, 0), (1, 0)]}
+    arguments[keyword] = value
+
+    with pytest.raises(exception, match=match):
+        gliss.cas3d_phase_envelope_inertia(equilibrium(FakeLibrary()), **arguments)
 
 
 @pytest.mark.parametrize(
@@ -187,3 +292,12 @@ def test_cas3d_marginality_propagates_native_error():
 def test_cas3d_marginality_binding_requires_symbol():
     with pytest.raises(OSError, match="gliss_cas3d_marginality"):
         _bind(object())
+
+
+def test_cas3d_phase_envelope_binding_requires_symbol():
+    with pytest.raises(OSError, match="gliss_cas3d_phase_envelope"):
+        gliss.solve_cas3d_phase_envelope(
+            equilibrium(object()),
+            base_mode=(3, 2),
+            envelope_modes=[(0, 0)],
+        )

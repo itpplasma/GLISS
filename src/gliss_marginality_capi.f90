@@ -6,9 +6,10 @@ module gliss_marginality_capi
         status_allocation_error, status_compute_error, &
         status_invalid_argument, status_ok, write_error
     use gliss_c_contexts, only: equilibrium_context_t
-    use two_component_spectrum, only: compute_two_component_spectrum, &
-        two_component_spectrum_compute_error, two_component_spectrum_invalid, &
-        two_component_spectrum_ok, two_component_spectrum_result_t
+    use two_component_spectrum, only: compute_phase_envelope_spectrum, &
+        compute_two_component_spectrum, two_component_spectrum_compute_error, &
+        two_component_spectrum_invalid, two_component_spectrum_ok, &
+        two_component_spectrum_result_t
     implicit none
     private
 
@@ -30,6 +31,7 @@ module gliss_marginality_capi
     end type marginality_result_c
 
     public :: gliss_cas3d_marginality_c
+    public :: gliss_cas3d_phase_envelope_c
 
 contains
 
@@ -97,6 +99,74 @@ contains
                 "marginality solve returned an unknown status")
         end select
     end function gliss_cas3d_marginality_c
+
+    function gliss_cas3d_phase_envelope_c(equilibrium_handle, base_m, &
+            base_n, envelope_count, envelope_m_pointer, envelope_n_pointer, &
+            parity_class, radial_quadrature, angular_theta, angular_zeta, &
+            solve_eigenpair, result_pointer, error_pointer, error_capacity) &
+            bind(c, name="gliss_cas3d_phase_envelope") result(status)
+        type(c_ptr), value, intent(in) :: equilibrium_handle
+        integer(c_int), value, intent(in) :: base_m, base_n
+        integer(c_size_t), value, intent(in) :: envelope_count
+        type(c_ptr), value, intent(in) :: envelope_m_pointer
+        type(c_ptr), value, intent(in) :: envelope_n_pointer
+        integer(c_int), value, intent(in) :: parity_class, radial_quadrature
+        integer(c_int), value, intent(in) :: angular_theta, angular_zeta
+        integer(c_int), value, intent(in) :: solve_eigenpair
+        type(c_ptr), value, intent(in) :: result_pointer, error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+        type(equilibrium_context_t), pointer :: equilibrium
+        type(marginality_result_c), pointer :: result
+        type(two_component_spectrum_result_t) :: native
+        integer, allocatable :: envelope_m(:), envelope_n(:)
+        real(dp), allocatable :: unused_power(:)
+        character(len=128) :: message
+        integer :: info
+
+        status = prepare_call(equilibrium_handle, result_pointer, &
+            error_pointer, error_capacity, equilibrium, result)
+        if (status /= status_ok) return
+        if (solve_eigenpair /= 0_c_int .and. solve_eigenpair /= 1_c_int) then
+            status = status_invalid_argument
+            call write_error(error_pointer, error_capacity, &
+                "solve_eigenpair must be 0 or 1")
+            return
+        end if
+        status = decode_mode_table(envelope_count, envelope_m_pointer, &
+            envelope_n_pointer, envelope_m, envelope_n, unused_power)
+        if (status /= status_ok) then
+            if (status == status_allocation_error) then
+                call write_error(error_pointer, error_capacity, &
+                    "failed to allocate phase-envelope storage")
+            else
+                call write_error(error_pointer, error_capacity, &
+                    "phase-envelope modes must be nonempty int32 arrays")
+            end if
+            return
+        end if
+        call compute_phase_envelope_spectrum(equilibrium%equilibrium, &
+            int(base_m), int(base_n), envelope_m, envelope_n, &
+            int(parity_class), int(radial_quadrature), int(angular_theta), &
+            int(angular_zeta), solve_eigenpair == 1_c_int, native, info, &
+            message)
+        select case (info)
+        case (two_component_spectrum_ok)
+            call fill_result(native, int(angular_theta), int(angular_zeta), &
+                result)
+            status = status_ok
+        case (two_component_spectrum_invalid)
+            status = status_invalid_argument
+            call write_error(error_pointer, error_capacity, trim(message))
+        case (two_component_spectrum_compute_error)
+            status = status_compute_error
+            call write_error(error_pointer, error_capacity, trim(message))
+        case default
+            status = status_compute_error
+            call write_error(error_pointer, error_capacity, &
+                "phase-envelope solve returned an unknown status")
+        end select
+    end function gliss_cas3d_phase_envelope_c
 
     function prepare_call(equilibrium_handle, result_pointer, error_pointer, &
             error_capacity, equilibrium, result) result(status)

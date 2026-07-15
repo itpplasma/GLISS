@@ -15,6 +15,8 @@ int main(void) {
     gliss_cas3d_marginality_result marginality;
     int32_t mode_m[1] = {1};
     int32_t mode_n[1] = {1};
+    int32_t envelope_m[1] = {0};
+    int32_t envelope_n[1] = {0};
     size_t surfaces = 1;
     int32_t schema_version = -1;
     char error[128];
@@ -156,6 +158,20 @@ int main(void) {
             equilibrium, 1, mode_m, mode_n, 1, 1, 8, 8, 1, NULL, error,
             sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT) {
         return 22;
+    }
+    if (gliss_cas3d_phase_envelope(
+            equilibrium, 3, 2, 1, envelope_m, envelope_n, 1, 1, 8, 8, 1,
+            &marginality, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 23;
+    }
+    if (marginality.mode_count != 456 || error[0] == '\0') {
+        return 24;
+    }
+    if (gliss_cas3d_phase_envelope(
+            equilibrium, 3, 2, 1, envelope_m, envelope_n, 1, 1, 8, 8, 1,
+            NULL, error, sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT) {
+        return 25;
     }
     return 0;
 }

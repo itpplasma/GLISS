@@ -54,9 +54,19 @@ program test_gliss_marginality_capi
     integer(c_int), target :: coupled_n(2) = [0, 1]
     integer(c_int), target :: duplicate_m(2) = [1, 1]
     integer(c_int), target :: duplicate_n(2) = [1, 1]
+    integer(c_int), target :: phase_direct_m(3) = [1, 2, 0]
+    integer(c_int), target :: phase_direct_n(3) = [1, 1, 1]
+    integer(c_int), target :: envelope_m(2) = [0, 1]
+    integer(c_int), target :: envelope_n(2) = [0, 0]
+    integer(c_int), target :: collision_m(3) = [0, 0, 0]
+    integer(c_int), target :: collision_n(3) = [0, -1, 1]
+    integer(c_int), target :: bad_envelope_m(1) = [1]
+    integer(c_int), target :: bad_envelope_n(1) = [0]
     character(c_char), target :: error_buffer(256)
     type(c_ptr), target :: base, perturbed
     type(marginality_result_c), target :: general, inertia, shifted
+    type(marginality_result_c), target :: phase_direct, phase_prefix
+    type(marginality_result_c), target :: phase_collision
     type(axisymmetric_result_c), target :: convenience
     integer(c_int) :: status
 
@@ -93,6 +103,22 @@ program test_gliss_marginality_capi
             integer(c_int) :: result
         end function cas3d_marginality
 
+        function cas3d_phase_envelope(equilibrium, base_m, base_n, &
+                envelope_count, poloidal, toroidal, parity_class, &
+                radial_quadrature, angular_theta, angular_zeta, &
+                solve_eigenpair, result_pointer, error, error_capacity) &
+                bind(c, name="gliss_cas3d_phase_envelope") result(result)
+            import c_int, c_ptr, c_size_t
+            type(c_ptr), value :: equilibrium, poloidal, toroidal
+            type(c_ptr), value :: result_pointer, error
+            integer(c_int), value :: base_m, base_n
+            integer(c_size_t), value :: envelope_count, error_capacity
+            integer(c_int), value :: parity_class, radial_quadrature
+            integer(c_int), value :: angular_theta, angular_zeta
+            integer(c_int), value :: solve_eigenpair
+            integer(c_int) :: result
+        end function cas3d_phase_envelope
+
         function axisymmetric_spectrum(equilibrium, toroidal_mode, &
                 poloidal_max, radial_quadrature, solve_eigenpair, &
                 result_pointer, error, error_capacity) bind(c, &
@@ -124,6 +150,32 @@ program test_gliss_marginality_capi
         size(error_buffer, kind=c_size_t))
     call require(status == status_ok, "axisymmetric convenience solve failed")
     call require_same_result(general, convenience)
+
+    phase_direct%struct_size = c_sizeof(phase_direct)
+    status = cas3d_marginality(base, &
+        size(phase_direct_m, kind=c_size_t), c_loc(phase_direct_m), &
+        c_loc(phase_direct_n), 1_c_int, 1_c_int, 64_c_int, 16_c_int, &
+        1_c_int, c_loc(phase_direct), c_loc(error_buffer), &
+        size(error_buffer, kind=c_size_t))
+    call require(status == status_ok, "direct phase-prefix solve failed")
+    phase_prefix%struct_size = c_sizeof(phase_prefix)
+    status = cas3d_phase_envelope(base, 1_c_int, 1_c_int, &
+        size(envelope_m, kind=c_size_t), c_loc(envelope_m), &
+        c_loc(envelope_n), 1_c_int, 1_c_int, 64_c_int, 16_c_int, 1_c_int, &
+        c_loc(phase_prefix), c_loc(error_buffer), &
+        size(error_buffer, kind=c_size_t))
+    call require(status == status_ok, "phase-prefix solve failed")
+    call require_same_marginality(phase_direct, phase_prefix)
+
+    phase_collision%struct_size = c_sizeof(phase_collision)
+    status = cas3d_phase_envelope(base, 1_c_int, 1_c_int, &
+        size(collision_m, kind=c_size_t), c_loc(collision_m), &
+        c_loc(collision_n), 1_c_int, 1_c_int, 64_c_int, 16_c_int, 0_c_int, &
+        c_loc(phase_collision), c_loc(error_buffer), &
+        size(error_buffer, kind=c_size_t))
+    call require(status == status_ok, "colliding phase envelope failed")
+    call require(phase_collision%mode_count == 5_c_size_t, &
+        "colliding phase envelope lost labeled sidebands")
 
     inertia%struct_size = c_sizeof(inertia)
     status = cas3d_marginality(base, size(mode_m, kind=c_size_t), &
@@ -159,6 +211,17 @@ program test_gliss_marginality_capi
         "invalid solve_eigenpair was accepted")
     call require(general%mode_count == 999_c_size_t, &
         "failed solve validation modified the result")
+
+    phase_collision%mode_count = 777_c_size_t
+    status = cas3d_phase_envelope(base, 1_c_int, 1_c_int, &
+        size(bad_envelope_m, kind=c_size_t), c_loc(bad_envelope_m), &
+        c_loc(bad_envelope_n), 1_c_int, 1_c_int, 64_c_int, 16_c_int, &
+        0_c_int, c_loc(phase_collision), c_loc(error_buffer), &
+        size(error_buffer, kind=c_size_t))
+    call require(status == status_invalid_argument, &
+        "phase envelope without origin was accepted")
+    call require(phase_collision%mode_count == 777_c_size_t, &
+        "failed phase-envelope validation modified the result")
 
     status = equilibrium_destroy(c_loc(base), c_loc(error_buffer), &
         size(error_buffer, kind=c_size_t))
@@ -231,6 +294,34 @@ contains
             axisymmetric_result%force_balance_residual, &
             "force residuals differ")
     end subroutine require_same_result
+
+    subroutine require_same_marginality(first, second)
+        type(marginality_result_c), intent(in) :: first, second
+
+        call require(first%has_eigenpair == second%has_eigenpair, &
+            "phase-prefix eigenpair flags differ")
+        call require(first%field_periods == second%field_periods, &
+            "phase-prefix field periods differ")
+        call require(first%mode_count == second%mode_count, &
+            "phase-prefix mode counts differ")
+        call require(first%radial_surfaces == second%radial_surfaces, &
+            "phase-prefix radial counts differ")
+        call require(first%parity_class == second%parity_class, &
+            "phase-prefix parity classes differ")
+        call require(first%radial_quadrature == second%radial_quadrature, &
+            "phase-prefix quadratures differ")
+        call require(first%negative_count == second%negative_count, &
+            "phase-prefix inertia counts differ")
+        call require(first%lowest_eigenvalue == second%lowest_eigenvalue, &
+            "phase-prefix eigenvalues differ")
+        call require(first%certificate == second%certificate, &
+            "phase-prefix certificates differ")
+        call require(first%eigenpair_residual == second%eigenpair_residual, &
+            "phase-prefix residuals differ")
+        call require(first%force_balance_residual == &
+            second%force_balance_residual, &
+            "phase-prefix force-balance residuals differ")
+    end subroutine require_same_marginality
 
     subroutine delete_file(filename)
         character(len=*), intent(in) :: filename

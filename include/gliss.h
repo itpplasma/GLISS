@@ -260,6 +260,31 @@ gliss_status gliss_cas3d_marginality(
     char *error,
     size_t error_capacity);
 
+/* Evaluate the CAS3D2MN phase-envelope representation. base_m and base_n
+ * use the GLISS phase 2*pi*(m*theta - n*zeta/N_T). Envelope modes use
+ * 2*pi*(m*theta - n*zeta) on one field period and must begin with (0,0).
+ * Each later envelope mode expands to two labeled physical sidebands. Labels
+ * are retained when sidebands coincide because CAS3D's artificial norm acts
+ * on the labeled coefficients. The result mode_count is 2*envelope_count-1.
+ * Exact null directions from coincident labels are classified in the closed
+ * band |lambda| <= 1e-8; negative_count then counts lambda < -1e-8.
+ * Other arguments and the result contract match gliss_cas3d_marginality. */
+gliss_status gliss_cas3d_phase_envelope(
+    const gliss_equilibrium *equilibrium,
+    int32_t base_m,
+    int32_t base_n,
+    size_t envelope_count,
+    const int32_t *envelope_m,
+    const int32_t *envelope_n,
+    int32_t parity_class,
+    int32_t radial_quadrature,
+    int32_t angular_theta,
+    int32_t angular_zeta,
+    int32_t solve_eigenpair,
+    gliss_cas3d_marginality_result *result,
+    char *error,
+    size_t error_capacity);
+
 /* A fixed-boundary problem copies and assembles all data it needs, so the
  * equilibrium may be destroyed after successful construction. mode_m and
  * mode_n are mode_count contiguous int32_t values. radial_quadrature must be

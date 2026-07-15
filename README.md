@@ -29,7 +29,9 @@ diagnostics, deterministic full-spectrum run containers, and atomic versioned
 equilibrium export.
 The development API also exposes the shared two-component marginality
 operator through an explicit general 3-D mode table and the axisymmetric
-family used for the pinned Solov'ev comparison with DCON.
+family used for the pinned Solov'ev comparison with DCON. A separate
+CAS3D2MN phase-envelope entry point preserves labeled sideband multiplicity
+while calling the same production assembly and eigensolver.
 Paired TERPSICHORE FORT.23/FORT.24 files from a `MODELK=0` pressureless-
 pseudoplasma run can be solved through the same public Python package, with
 the stored TERPSICHORE mode available for direct diagnostic comparison. This

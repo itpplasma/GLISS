@@ -284,6 +284,21 @@ PROFILES = (
         ),
     ),
     Profile(
+        "cas3d-phase-envelope",
+        "python",
+        _evidence("python/gliss/marginality.py", "def solve_cas3d_phase_envelope"),
+        (
+            ("equilibrium", "gvec-cas3d-v1"),
+            ("basis", "cas3d-p1-p0-p0"),
+            ("topology", "stellarator-parity"),
+            ("physics", "incompressible-two-component"),
+            ("assembly", "midpoint-block"),
+            ("norm", "artificial-marginality"),
+            ("boundary", "fixed-edge"),
+            ("solver", "certified-block-inertia"),
+        ),
+    ),
+    Profile(
         "terpsichore-fixed",
         "python",
         _evidence(
