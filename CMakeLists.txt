@@ -3,8 +3,15 @@ cmake_minimum_required(VERSION 3.22)
 project(gliss VERSION 0.0.1 LANGUAGES C Fortran)
 
 include(CTest)
-set(BLA_VENDOR "Generic" CACHE STRING "BLAS/LAPACK implementation")
-find_package(LAPACK REQUIRED)
+set(BLA_VENDOR "OpenBLAS" CACHE STRING "BLAS/LAPACK implementation")
+find_package(LAPACK QUIET)
+if(NOT LAPACK_FOUND)
+    message(WARNING
+        "${BLA_VENDOR} BLAS/LAPACK was not found; falling back to Generic")
+    set(BLA_VENDOR "Generic")
+    find_package(LAPACK REQUIRED)
+endif()
+message(STATUS "GLISS BLAS/LAPACK vendor: ${BLA_VENDOR}")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NETCDF_C REQUIRED IMPORTED_TARGET netcdf)
 
