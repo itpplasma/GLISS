@@ -251,6 +251,7 @@ contains
         real(dp), allocatable :: residual(:, :), terms(:, :)
         real(dp) :: covariant_scale, current_scale, flux_scale
         real(dp) :: poloidal_field_slope, toroidal_field_slope
+        integer :: column, row
 
         toroidal_field_slope = -flux_toroidal_slope(i)
         poloidal_field_slope = -flux_poloidal_slope(i) / periods
@@ -260,17 +261,20 @@ contains
             maxval(abs(equilibrium%b_zeta_average)), tiny(1.0_dp))
         current_scale = max(maxval(abs(b_theta_slope)), &
             maxval(abs(b_zeta_slope)), tiny(1.0_dp))
+        allocate (residual(size(jacobian, 1), size(jacobian, 2)), &
+            terms(size(jacobian, 1), size(jacobian, 2)))
         result%field_toroidal_flux_slope(i) = &
-            -grid_mean(jacobian * contra_zeta)
+            -grid_product_mean(jacobian, contra_zeta)
         result%field_poloidal_flux_slope(i) = &
-            -periods * grid_mean(jacobian * contra_theta)
+            -periods * grid_product_mean(jacobian, contra_theta)
         result%field_covariant_theta(i) = grid_mean(b_theta)
         result%field_covariant_zeta(i) = grid_mean(b_zeta)
-        result%toroidal_flux_deviation(i) = relative_grid_deviation( &
-            -jacobian * contra_zeta, flux_toroidal_slope(i), flux_scale)
-        result%poloidal_flux_deviation(i) = relative_grid_deviation( &
-            -periods * jacobian * contra_theta, flux_poloidal_slope(i), &
-            flux_scale)
+        result%toroidal_flux_deviation(i) = &
+            relative_product_deviation(jacobian, contra_zeta, -1.0_dp, &
+            flux_toroidal_slope(i), flux_scale)
+        result%poloidal_flux_deviation(i) = &
+            relative_product_deviation(jacobian, contra_theta, -periods, &
+            flux_poloidal_slope(i), flux_scale)
         result%covariant_theta_deviation(i) = relative_grid_deviation( &
             b_theta, equilibrium%b_theta_average(i), covariant_scale)
         result%covariant_zeta_deviation(i) = relative_grid_deviation( &
@@ -279,30 +283,44 @@ contains
             flux_poloidal_slope(i), equilibrium%rotational_transform(i) &
             * flux_toroidal_slope(i), flux_scale)
         result%ampere_theta_deviation(i) = relative_scalar_deviation( &
-            grid_mean(beta_zeta - field_zeta_slope), -b_zeta_slope(i), &
+            grid_difference_mean(beta_zeta, field_zeta_slope), &
+            -b_zeta_slope(i), &
             current_scale)
         result%ampere_zeta_deviation(i) = relative_scalar_deviation( &
-            grid_mean(field_theta_slope - beta_theta), b_theta_slope(i), &
+            grid_difference_mean(field_theta_slope, beta_theta), &
+            b_theta_slope(i), &
             current_scale)
-        residual = mod_b_squared * jacobian &
-            - toroidal_field_slope * equilibrium%b_zeta_average(i) &
-            - poloidal_field_slope * equilibrium%b_theta_average(i)
-        terms = abs(mod_b_squared * jacobian) &
-            + abs(toroidal_field_slope &
-            * equilibrium%b_zeta_average(i)) &
-            + abs(poloidal_field_slope * equilibrium%b_theta_average(i))
+        do column = 1, size(jacobian, 2)
+            do row = 1, size(jacobian, 1)
+                residual(row, column) = mod_b_squared(row, column) &
+                    * jacobian(row, column) - toroidal_field_slope &
+                    * equilibrium%b_zeta_average(i) - poloidal_field_slope &
+                    * equilibrium%b_theta_average(i)
+                terms(row, column) = abs(mod_b_squared(row, column) &
+                    * jacobian(row, column)) + abs(toroidal_field_slope &
+                    * equilibrium%b_zeta_average(i)) &
+                    + abs(poloidal_field_slope &
+                    * equilibrium%b_theta_average(i))
+            end do
+        end do
         result%exported_jacobian_deviation(i) = scaled_grid_residual( &
             residual, terms)
-        residual = mu0 * pressure_slope(i) * jacobian &
-            + toroidal_field_slope * b_zeta_slope(i) &
-            + poloidal_field_slope * b_theta_slope(i) &
-            - toroidal_field_slope * beta_zeta &
-            - poloidal_field_slope * beta_theta
-        terms = abs(mu0 * pressure_slope(i) * jacobian) &
-            + abs(toroidal_field_slope * b_zeta_slope(i)) &
-            + abs(poloidal_field_slope * b_theta_slope(i)) &
-            + abs(toroidal_field_slope * beta_zeta) &
-            + abs(poloidal_field_slope * beta_theta)
+        do column = 1, size(jacobian, 2)
+            do row = 1, size(jacobian, 1)
+                residual(row, column) = mu0 * pressure_slope(i) &
+                    * jacobian(row, column) + toroidal_field_slope &
+                    * b_zeta_slope(i) + poloidal_field_slope &
+                    * b_theta_slope(i) - toroidal_field_slope &
+                    * beta_zeta(row, column) - poloidal_field_slope &
+                    * beta_theta(row, column)
+                terms(row, column) = abs(mu0 * pressure_slope(i) &
+                    * jacobian(row, column)) + abs(toroidal_field_slope &
+                    * b_zeta_slope(i)) + abs(poloidal_field_slope &
+                    * b_theta_slope(i)) + abs(toroidal_field_slope &
+                    * beta_zeta(row, column)) + abs(poloidal_field_slope &
+                    * beta_theta(row, column))
+            end do
+        end do
         result%general_force_balance_deviation(i) = scaled_grid_residual( &
             residual, terms)
     end subroutine summarize_surface
@@ -337,6 +355,51 @@ contains
 
         value = sum(values) / real(size(values), dp)
     end function grid_mean
+
+    pure function grid_product_mean(first, second) result(value)
+        real(dp), intent(in) :: first(:, :), second(:, :)
+        real(dp) :: value
+        integer :: column, row
+
+        value = 0.0_dp
+        do column = 1, size(first, 2)
+            do row = 1, size(first, 1)
+                value = value + first(row, column) * second(row, column)
+            end do
+        end do
+        value = value / real(size(first), dp)
+    end function grid_product_mean
+
+    pure function grid_difference_mean(first, second) result(value)
+        real(dp), intent(in) :: first(:, :), second(:, :)
+        real(dp) :: value
+        integer :: column, row
+
+        value = 0.0_dp
+        do column = 1, size(first, 2)
+            do row = 1, size(first, 1)
+                value = value + first(row, column) - second(row, column)
+            end do
+        end do
+        value = value / real(size(first), dp)
+    end function grid_difference_mean
+
+    pure function relative_product_deviation(first, second, multiplier, &
+            reference, scale) result(value)
+        real(dp), intent(in) :: first(:, :), second(:, :)
+        real(dp), intent(in) :: multiplier, reference, scale
+        real(dp) :: value
+        integer :: column, row
+
+        value = 0.0_dp
+        do column = 1, size(first, 2)
+            do row = 1, size(first, 1)
+                value = max(value, abs(multiplier * first(row, column) &
+                    * second(row, column) - reference))
+            end do
+        end do
+        value = value / scale
+    end function relative_product_deviation
 
     pure subroutine build_angular_grids(n_theta, n_zeta, theta, zeta)
         integer, intent(in) :: n_theta, n_zeta

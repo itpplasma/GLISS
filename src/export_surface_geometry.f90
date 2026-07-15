@@ -89,13 +89,14 @@ contains
         do i = 1, ns
             call load_surface(equilibrium, i, theta, zeta, surface, info)
             if (info /= mercier_ok) return
-            covariant_theta(i) = grid_mean(surface%g_tt * surface%b_theta &
-                + surface%g_tz * surface%b_zeta)
-            covariant_zeta(i) = grid_mean(surface%g_tz * surface%b_theta &
-                + surface%g_zz * surface%b_zeta)
-            flux_slope(i) = grid_mean(surface%jacobian * surface%b_zeta)
-            poloidal_slope(i) = grid_mean(surface%jacobian &
-                * surface%b_theta)
+            covariant_theta(i) = grid_two_product_mean(surface%g_tt, &
+                surface%b_theta, surface%g_tz, surface%b_zeta)
+            covariant_zeta(i) = grid_two_product_mean(surface%g_tz, &
+                surface%b_theta, surface%g_zz, surface%b_zeta)
+            flux_slope(i) = grid_product_mean(surface%jacobian, &
+                surface%b_zeta)
+            poloidal_slope(i) = grid_product_mean(surface%jacobian, &
+                surface%b_theta)
         end do
         call first_derivative_nonuniform(equilibrium%s, &
             equilibrium%pressure, pressure_slope)
@@ -214,10 +215,13 @@ contains
         if (.not. valid) return
         valid = all(ieee_is_finite(theta)) .and. all(ieee_is_finite(zeta))
         if (.not. valid) return
-        expected = [size(theta), size(zeta)]
-        valid = all(shape(jacobian_slope) == expected) &
-            .and. all(shape(drive) == expected) &
-            .and. all(shape(fields) == [expected, 13])
+        expected(1) = size(theta)
+        expected(2) = size(zeta)
+        valid = matrix_has_shape(jacobian_slope, expected) &
+            .and. matrix_has_shape(drive, expected) &
+            .and. size(fields, 1) == expected(1) &
+            .and. size(fields, 2) == expected(2) &
+            .and. size(fields, 3) == 13
         if (.not. valid) return
         valid = allocated(surface%jacobian) .and. allocated(surface%g_tt) &
             .and. allocated(surface%g_tz) .and. allocated(surface%g_zz) &
@@ -225,15 +229,15 @@ contains
             .and. allocated(surface%g_st) .and. allocated(surface%g_sz) &
             .and. allocated(surface%mod_b)
         if (.not. valid) return
-        valid = all(shape(surface%jacobian) == expected) &
-            .and. all(shape(surface%g_tt) == expected) &
-            .and. all(shape(surface%g_tz) == expected) &
-            .and. all(shape(surface%g_zz) == expected) &
-            .and. all(shape(surface%b_theta) == expected) &
-            .and. all(shape(surface%b_zeta) == expected) &
-            .and. all(shape(surface%g_st) == expected) &
-            .and. all(shape(surface%g_sz) == expected) &
-            .and. all(shape(surface%mod_b) == expected)
+        valid = matrix_has_shape(surface%jacobian, expected) &
+            .and. matrix_has_shape(surface%g_tt, expected) &
+            .and. matrix_has_shape(surface%g_tz, expected) &
+            .and. matrix_has_shape(surface%g_zz, expected) &
+            .and. matrix_has_shape(surface%b_theta, expected) &
+            .and. matrix_has_shape(surface%b_zeta, expected) &
+            .and. matrix_has_shape(surface%g_st, expected) &
+            .and. matrix_has_shape(surface%g_sz, expected) &
+            .and. matrix_has_shape(surface%mod_b, expected)
         if (.not. valid) return
         valid = all(ieee_is_finite(jacobian_slope)) &
             .and. all(ieee_is_finite(surface%jacobian)) &
@@ -660,6 +664,46 @@ contains
 
         mean = sum(values) / real(size(values), dp)
     end function grid_mean
+
+    pure function grid_product_mean(first, second) result(mean)
+        real(dp), intent(in) :: first(:, :), second(:, :)
+        real(dp) :: mean
+        integer :: column, row
+
+        mean = 0.0_dp
+        do column = 1, size(first, 2)
+            do row = 1, size(first, 1)
+                mean = mean + first(row, column) * second(row, column)
+            end do
+        end do
+        mean = mean / real(size(first), dp)
+    end function grid_product_mean
+
+    pure function grid_two_product_mean(first_a, first_b, second_a, second_b) &
+            result(mean)
+        real(dp), intent(in) :: first_a(:, :), first_b(:, :)
+        real(dp), intent(in) :: second_a(:, :), second_b(:, :)
+        real(dp) :: mean
+        integer :: column, row
+
+        mean = 0.0_dp
+        do column = 1, size(first_a, 2)
+            do row = 1, size(first_a, 1)
+                mean = mean + first_a(row, column) * first_b(row, column) &
+                    + second_a(row, column) * second_b(row, column)
+            end do
+        end do
+        mean = mean / real(size(first_a), dp)
+    end function grid_two_product_mean
+
+    pure function matrix_has_shape(matrix, expected) result(valid)
+        real(dp), intent(in) :: matrix(:, :)
+        integer, intent(in) :: expected(2)
+        logical :: valid
+
+        valid = size(matrix, 1) == expected(1) &
+            .and. size(matrix, 2) == expected(2)
+    end function matrix_has_shape
 
     pure subroutine build_angular_grids(n_theta, n_zeta, theta, zeta)
         integer, intent(in) :: n_theta, n_zeta
