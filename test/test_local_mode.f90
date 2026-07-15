@@ -123,7 +123,7 @@ contains
         real(dp), intent(in) :: wave_vector(3), gamma_value
         real(dp), intent(out) :: eigenvalues(3), eigenvectors(3, 3)
         real(dp) :: stiffness(3, 3), mass(3, 3), residual(3)
-        integer :: i, info
+        integer :: column, i, info, row
 
         call assemble_local_mode(wave_vector, magnetic_field, pressure, density, &
             gamma_value, 0.0_dp, normal, stiffness, mass)
@@ -133,8 +133,15 @@ contains
             eigenvectors, info)
         call require(info == 0, "stable eigenproblem failed")
         do i = 1, 3
-            residual = matmul(stiffness, eigenvectors(:, i)) - &
-                eigenvalues(i) * matmul(mass, eigenvectors(:, i))
+            do row = 1, 3
+                residual(row) = 0.0_dp
+                do column = 1, 3
+                    residual(row) = residual(row) &
+                        + (stiffness(row, column) &
+                        - eigenvalues(i) * mass(row, column)) &
+                        * eigenvectors(column, i)
+                end do
+            end do
             call require(maxval(abs(residual)) < 1.0e-11_dp, &
                 "eigenpair residual is too large")
         end do

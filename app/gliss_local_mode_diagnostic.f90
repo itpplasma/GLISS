@@ -41,7 +41,7 @@ contains
         real(dp) :: stiffness(3, 3), mass(3, 3)
         real(dp) :: eigenvalues(3), eigenvectors(3, 3)
         real(dp) :: drive, norm, residual(3)
-        integer :: i, info
+        integer :: column, i, info, row
 
         drive = drive_factor * dot_product(magnetic_field, magnetic_field) &
             / vacuum_permeability
@@ -59,8 +59,15 @@ contains
                 write (error_unit, "(a)") "local-mode eigenvector is zero"
                 error stop 1
             end if
-            residual = matmul(stiffness, eigenvectors(:, i)) &
-                - eigenvalues(i) * matmul(mass, eigenvectors(:, i))
+            do row = 1, 3
+                residual(row) = 0.0_dp
+                do column = 1, 3
+                    residual(row) = residual(row) &
+                        + (stiffness(row, column) &
+                        - eigenvalues(i) * mass(row, column)) &
+                        * eigenvectors(column, i)
+                end do
+            end do
             write (*, "(a,',',i0,10(',',es24.16))") trim(name), i, &
                 wave_vector, gamma, drive, eigenvalues(i), &
                 abs(eigenvectors(:, i)) / norm, maxval(abs(residual))
