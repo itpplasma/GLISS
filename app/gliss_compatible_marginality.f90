@@ -11,18 +11,20 @@ program gliss_compatible_marginality
         evaluate_generalized_eigenpair, quadratic_form, &
         quadratic_form_with_absolute_sum, sum_tensor
     use dense_generalized_inverse_iteration, only: dense_inverse_ok, &
-        solve_dense_generalized_near_shift
+        solve_dense_generalized_near_shift, &
+        solve_dense_generalized_subspace_near_shift
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use symmetric_pivot_inertia, only: pivot_negative_count
-    use symmetric_eigensolver, only: solve_symmetric_generalized_allocated, &
-        symmetric_eigensolver_ok
+    use symmetric_eigensolver, only: solve_symmetric_generalized, &
+        solve_symmetric_generalized_allocated, symmetric_eigensolver_ok
     implicit none
 
     type(gvec_cas3d_equilibrium_t) :: equilibrium
     type(compatible_two_component_problem_t) :: problem
     character(len=1024) :: count_shift_token, eta_power_token, filename
     character(len=1024) :: external_vector_file
+    character(len=1024) :: external_subspace_file
     character(len=1024) :: stored_power_token, token
     integer, allocatable :: mode_m(:), mode_n(:)
     real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
@@ -36,21 +38,33 @@ program gliss_compatible_marginality
     integer, allocatable :: pivots(:)
     real(dp) :: bracket_lower, bracket_tolerance, bracket_upper
     real(dp) :: density, floor, kinetic, m0_stored_power, potential, residual
+    real(dp) :: subspace_shift
     real(dp) :: term_energy(4)
     integer :: allocation_status, arguments, comma, degree, first_mode, info
     integer :: bracket_kind, inertia_negative_count, mode, negative_count
     integer :: eigenprofile_index, profile_points
+    integer :: subspace_iterations
     integer :: work_size
     integer :: n_theta, n_zeta, parity, trial
     integer(int64) :: requested_work_size
     logical :: has_count_shifts, has_eigenprofile, has_eta_powers, has_m0_power
     logical :: has_external_vector
+    logical :: has_external_subspace
+    logical :: has_subspace_iterations, has_subspace_shift
     logical :: has_profile_points
     logical :: has_stored_powers, inertia_only
     logical :: minimize_compression, minimize_potential
     logical :: physical_mass
 
     interface
+        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            real(dp), intent(in) :: alpha, beta, a(lda, *), b(ldb, *)
+            real(dp), intent(inout) :: c(ldc, *)
+        end subroutine dgemm
         subroutine terminate_process(status) bind(C, name="exit")
             import c_int
             integer(c_int), value :: status
@@ -101,11 +115,16 @@ program gliss_compatible_marginality
     has_count_shifts = .false.
     has_eigenprofile = .false.
     has_external_vector = .false.
+    has_external_subspace = .false.
+    has_subspace_iterations = .false.
+    has_subspace_shift = .false.
     has_profile_points = .false.
     eigenprofile_index = 0
     profile_points = 201
     density = 0.0_dp
     m0_stored_power = 0.0_dp
+    subspace_iterations = 0
+    subspace_shift = 0.0_dp
     do while (first_mode <= arguments)
         call read_argument(first_mode, "mode", token)
         if (index(token, "--") /= 1) exit
@@ -209,6 +228,31 @@ program gliss_compatible_marginality
                 call fail_usage("--evaluate-vector requires a file")
             external_vector_file = token(len("--evaluate-vector=") + 1:)
             has_external_vector = .true.
+        else if (index(token, "--evaluate-subspace=") == 1) then
+            if (has_external_subspace) &
+                call fail_usage("duplicate --evaluate-subspace")
+            if (len_trim(token) == len("--evaluate-subspace=")) &
+                call fail_usage("--evaluate-subspace requires a path list")
+            external_subspace_file = token(len("--evaluate-subspace=") + 1:)
+            has_external_subspace = .true.
+        else if (index(token, "--subspace-shift=") == 1) then
+            if (has_subspace_shift) &
+                call fail_usage("duplicate --subspace-shift")
+            if (len_trim(token) == len("--subspace-shift=")) &
+                call fail_usage("--subspace-shift requires a value")
+            call parse_real(token(len("--subspace-shift=") + 1:), &
+                "subspace shift", subspace_shift)
+            has_subspace_shift = .true.
+        else if (index(token, "--subspace-iterations=") == 1) then
+            if (has_subspace_iterations) &
+                call fail_usage("duplicate --subspace-iterations")
+            if (len_trim(token) == len("--subspace-iterations=")) &
+                call fail_usage("--subspace-iterations requires an integer")
+            call parse_integer(token(len("--subspace-iterations=") + 1:), &
+                "subspace iterations", subspace_iterations)
+            if (subspace_iterations < 1 .or. subspace_iterations > 1000) &
+                call fail_usage("subspace iterations must lie in [1,1000]")
+            has_subspace_iterations = .true.
         else
             call fail_usage("unknown option " // trim(token))
         end if
@@ -236,12 +280,26 @@ program gliss_compatible_marginality
     if (has_external_vector .and. (has_eigenprofile .or. inertia_only &
         .or. has_count_shifts .or. bracket_kind /= 0)) &
         call fail_usage("--evaluate-vector conflicts with solver options")
-    if (minimize_compression .and. .not. has_external_vector) &
-        call fail_usage("--minimize-compression requires --evaluate-vector")
-    if (minimize_potential .and. .not. has_external_vector) &
-        call fail_usage("--minimize-potential requires --evaluate-vector")
+    if (has_external_subspace .and. (has_external_vector .or. has_eigenprofile &
+        .or. inertia_only .or. has_count_shifts .or. bracket_kind /= 0)) &
+        call fail_usage("--evaluate-subspace conflicts with solver options")
+    if (has_external_subspace .and. has_profile_points) &
+        call fail_usage("--profile-points conflicts with --evaluate-subspace")
+    if (has_subspace_shift .neqv. has_subspace_iterations) &
+        call fail_usage( &
+        "--subspace-shift and --subspace-iterations must be given together")
+    if (has_subspace_shift .and. .not. has_external_subspace) &
+        call fail_usage("subspace solver options require --evaluate-subspace")
+    if (minimize_compression .and. .not. has_external_vector &
+        .and. .not. has_external_subspace) &
+        call fail_usage("eta minimization requires an external vector or subspace")
+    if (minimize_potential .and. .not. has_external_vector &
+        .and. .not. has_external_subspace) &
+        call fail_usage("eta minimization requires an external vector or subspace")
     if (minimize_compression .and. minimize_potential) &
         call fail_usage("eta minimization options conflict")
+    if (has_external_subspace) &
+        call preflight_subspace_paths(trim(external_subspace_file))
     allocate (mode_m(arguments - first_mode + 1), &
         mode_n(arguments - first_mode + 1), &
         stored_power(arguments - first_mode + 1), &
@@ -305,6 +363,10 @@ program gliss_compatible_marginality
     call write_problem_metadata
     if (has_external_vector) then
         call write_external_vector_energy
+        call terminate_process(0_c_int)
+    end if
+    if (has_external_subspace) then
+        call write_external_subspace_energy
         call terminate_process(0_c_int)
     end if
     allocate (stiffness(size(stiffness_operator, 1), &
@@ -400,33 +462,13 @@ contains
     end subroutine write_problem_metadata
 
     subroutine write_external_vector_energy
-        character(len=4096) :: line
         real(dp) :: closure, term_sum
-        integer :: file_index, io_status, point, term, unit
+        integer :: point, term
 
         allocate (eigenvector(size(problem%mass, 1)), stat=allocation_status)
         if (allocation_status /= 0) &
             call fail_solver("external vector allocation", -1)
-        open (newunit=unit, file=trim(external_vector_file), status="old", &
-            action="read", form="formatted", iostat=io_status)
-        if (io_status /= 0) call fail_external_vector("cannot open file")
-        read (unit, "(a)", iostat=io_status) line
-        if (io_status /= 0 .or. trim(line) /= "index,value") &
-            call fail_external_vector("first row must be index,value")
-        do point = 1, size(eigenvector)
-            read (unit, "(a)", iostat=io_status) line
-            if (io_status /= 0) call fail_external_vector( &
-                "file ends before the expected vector size")
-            if (len_trim(line) == len(line)) &
-                call fail_external_vector("input row is too long")
-            call parse_external_vector_row(line, file_index, eigenvector(point))
-            if (file_index /= point) call fail_external_vector( &
-                "indices must be consecutive from one")
-        end do
-        read (unit, "(a)", iostat=io_status) line
-        if (io_status /= iostat_end) call fail_external_vector( &
-            "file contains rows after the expected vector")
-        close (unit)
+        call read_external_vector(trim(external_vector_file), eigenvector)
         if (minimize_compression) call project_minimizing_eta( &
             problem%stiffness_terms(:, :, 3))
         if (minimize_potential) call project_minimizing_eta(stiffness_operator)
@@ -478,6 +520,283 @@ contains
         end do
     end subroutine write_external_vector_energy
 
+    subroutine write_external_subspace_energy
+        character(len=1024), allocatable :: paths(:)
+        real(dp), allocatable :: block_eigenvalues(:), block_residuals(:)
+        real(dp), allocatable :: converged_mass(:, :)
+        real(dp), allocatable :: converged_stiffness(:, :)
+        real(dp), allocatable :: converged_vectors(:, :)
+        real(dp), allocatable :: initial_final_overlap(:, :)
+        real(dp), allocatable :: reduced_mass(:, :), reduced_stiffness(:, :)
+        real(dp), allocatable :: reduced_term(:, :, :), reduced_vectors(:, :)
+        real(dp), allocatable :: ritz_values(:), ritz_vector(:)
+        real(dp), allocatable :: image(:, :), vectors(:, :)
+        real(dp) :: closure, value
+        integer :: block_iterations, column, dimension, first, row, second, term
+
+        call read_subspace_paths(trim(external_subspace_file), paths)
+        dimension = size(paths)
+        allocate (vectors(size(problem%mass, 1), dimension), &
+            reduced_mass(dimension, dimension), &
+            reduced_stiffness(dimension, dimension), &
+            reduced_term(dimension, dimension, 4), &
+            image(size(problem%mass, 1), dimension), &
+            ritz_vector(size(problem%mass, 1)), stat=allocation_status)
+        if (allocation_status /= 0) &
+            call fail_solver("external subspace allocation", -1)
+        do column = 1, dimension
+            call read_external_vector(trim(paths(column)), vectors(:, column))
+        end do
+        if (minimize_compression) call project_minimizing_eta_block( &
+            problem%stiffness_terms(:, :, 3), vectors)
+        if (minimize_potential) call project_minimizing_eta_block( &
+            stiffness_operator, vectors)
+        call contract_subspace(problem%mass, vectors, reduced_mass, image)
+        call contract_subspace(stiffness_operator, vectors, &
+            reduced_stiffness, image)
+        do term = 1, 4
+            call contract_subspace(problem%stiffness_terms(:, :, term), &
+                vectors, reduced_term(:, :, term), image)
+        end do
+        call solve_symmetric_generalized(reduced_stiffness, reduced_mass, &
+            ritz_values, reduced_vectors, info)
+        if (info /= symmetric_eigensolver_ok) &
+            call fail_external_subspace("reduced mass is not positive definite")
+        write (*, "(a)") "subspace_dimension,unknowns,eta_relaxation"
+        write (*, "(i0,a,i0,a,i0)") dimension, ",", size(vectors, 1), ",", &
+            merge(1, merge(2, 0, minimize_potential), minimize_compression)
+        write (*, "(a)") "reduced_matrix,kind,row,column,value"
+        do second = 1, dimension
+            do first = 1, dimension
+                write (*, "(a,2(a,i0),a,es24.16)") "mass", ",", first, &
+                    ",", second, ",", reduced_mass(first, second)
+                write (*, "(a,2(a,i0),a,es24.16)") "stiffness", ",", &
+                    first, ",", second, ",", &
+                    reduced_stiffness(first, second)
+                do term = 1, 4
+                    write (*, "(a,i0,2(a,i0),a,es24.16)") "term", term, &
+                        ",", first, ",", second, ",", &
+                        reduced_term(first, second, term)
+                end do
+            end do
+        end do
+        write (*, "(a)") "ritz_index,eigenvalue,residual,kinetic,potential," // &
+            "bending,shear,compression,drive,energy_closure_absolute"
+        do column = 1, dimension
+            do row = 1, size(ritz_vector)
+                ritz_vector(row) = 0.0_dp
+                do first = 1, dimension
+                    ritz_vector(row) = ritz_vector(row) &
+                        + vectors(row, first) * reduced_vectors(first, column)
+                end do
+            end do
+            call evaluate_generalized_eigenpair(stiffness_operator, &
+                problem%mass, ritz_vector, ritz_values(column), kinetic, &
+                potential, residual, info)
+            if (info /= 0) call fail_solver("subspace Ritz diagnostics", info)
+            closure = potential
+            do term = 1, 4
+                call quadratic_form(problem%stiffness_terms(:, :, term), &
+                    ritz_vector, value, info)
+                if (info /= 0) call fail_solver("subspace Ritz term", info)
+                term_energy(term) = value
+                closure = closure - value
+            end do
+            write (*, "(i0,9(a,es24.16))") column, ",", &
+                ritz_values(column), ",", residual, ",", kinetic, ",", &
+                potential, ",", term_energy(1), ",", term_energy(2), ",", &
+                term_energy(3), ",", term_energy(4), ",", abs(closure)
+        end do
+        if (.not. has_subspace_shift) return
+        call solve_dense_generalized_subspace_near_shift( &
+            stiffness_operator, problem%mass, subspace_shift, vectors, &
+            subspace_iterations, block_eigenvalues, converged_vectors, &
+            block_residuals, block_iterations, info)
+        if (info /= dense_inverse_ok) &
+            call fail_solver("subspace block inverse iteration", info)
+        allocate (converged_mass(dimension, dimension), &
+            converged_stiffness(dimension, dimension), &
+            initial_final_overlap(dimension, dimension), &
+            stat=allocation_status)
+        if (allocation_status /= 0) &
+            call fail_solver("converged subspace allocation", -1)
+        call contract_subspace(problem%mass, converged_vectors, &
+            converged_mass, image)
+        call contract_subspace(stiffness_operator, converged_vectors, &
+            converged_stiffness, image)
+        call contract_cross_subspace(problem%mass, vectors, converged_vectors, &
+            initial_final_overlap, image)
+        write (*, "(a)") &
+            "subspace_solver,shift,iteration_limit,iterations"
+        write (*, "(a,a,es24.16,2(a,i0))") "block_inverse", ",", &
+            subspace_shift, ",", subspace_iterations, ",", block_iterations
+        write (*, "(a)") "converged_matrix,kind,row,column,value"
+        do second = 1, dimension
+            do first = 1, dimension
+                write (*, "(a,2(a,i0),a,es24.16)") "mass", ",", first, &
+                    ",", second, ",", converged_mass(first, second)
+                write (*, "(a,2(a,i0),a,es24.16)") "stiffness", ",", &
+                    first, ",", second, ",", &
+                    converged_stiffness(first, second)
+            end do
+        end do
+        write (*, "(a)") "initial_final_mass_overlap,row,column,value"
+        do second = 1, dimension
+            do first = 1, dimension
+                write (*, "(2(i0,a),es24.16)") first, ",", second, ",", &
+                    initial_final_overlap(first, second)
+            end do
+        end do
+        write (*, "(a)") "converged_ritz_index,eigenvalue," // &
+            "block_residual,diagnostic_residual,kinetic,potential," // &
+            "bending,shear,compression,drive,energy_closure_absolute"
+        do column = 1, dimension
+            call evaluate_generalized_eigenpair(stiffness_operator, &
+                problem%mass, converged_vectors(:, column), &
+                block_eigenvalues(column), kinetic, potential, residual, info)
+            if (info /= 0) &
+                call fail_solver("converged subspace diagnostics", info)
+            closure = potential
+            do term = 1, 4
+                call quadratic_form(problem%stiffness_terms(:, :, term), &
+                    converged_vectors(:, column), value, info)
+                if (info /= 0) &
+                    call fail_solver("converged subspace term", info)
+                term_energy(term) = value
+                closure = closure - value
+            end do
+            write (*, "(i0,10(a,es24.16))") column, ",", &
+                block_eigenvalues(column), ",", block_residuals(column), &
+                ",", residual, ",", kinetic, ",", potential, ",", &
+                term_energy(1), ",", term_energy(2), ",", term_energy(3), &
+                ",", term_energy(4), ",", abs(closure)
+        end do
+    end subroutine write_external_subspace_energy
+
+    subroutine read_subspace_paths(path, paths)
+        character(len=*), intent(in) :: path
+        character(len=1024), allocatable, intent(out) :: paths(:)
+        character(len=1024) :: line
+        integer :: column, count, io_status, item, unit
+
+        open (newunit=unit, file=path, status="old", action="read", &
+            form="formatted", iostat=io_status)
+        if (io_status /= 0) call fail_external_subspace("cannot open path list")
+        read (unit, "(a)", iostat=io_status) line
+        if (io_status /= 0 .or. trim(line) /= "path") &
+            call fail_external_subspace("first path-list row must be path")
+        count = 0
+        do
+            read (unit, "(a)", iostat=io_status) line
+            if (io_status == iostat_end) exit
+            if (io_status /= 0) call fail_external_subspace("cannot read path list")
+            if (len_trim(line) == 0) &
+                call fail_external_subspace("path list contains an empty row")
+            if (len_trim(line) == len(line)) &
+                call fail_external_subspace("path-list row is too long")
+            count = count + 1
+            if (count > 64) &
+                call fail_external_subspace("path list exceeds 64 vectors")
+        end do
+        if (count < 1) call fail_external_subspace("path list contains no vectors")
+        rewind (unit)
+        read (unit, "(a)", iostat=io_status) line
+        allocate (paths(count), stat=allocation_status)
+        if (allocation_status /= 0) &
+            call fail_solver("external subspace path allocation", -1)
+        do item = 1, count
+            read (unit, "(a)", iostat=io_status) line
+            if (io_status /= 0) call fail_external_subspace("path list changed")
+            paths(item) = trim(line)
+            do column = 1, item - 1
+                if (paths(column) == paths(item)) &
+                    call fail_external_subspace("path list contains duplicates")
+            end do
+        end do
+        close (unit)
+    end subroutine read_subspace_paths
+
+    subroutine preflight_subspace_paths(path)
+        character(len=*), intent(in) :: path
+        character(len=1024), allocatable :: paths(:)
+        character(len=4096) :: line
+        integer :: io_status, item, unit
+
+        call read_subspace_paths(path, paths)
+        do item = 1, size(paths)
+            open (newunit=unit, file=trim(paths(item)), status="old", &
+                action="read", form="formatted", iostat=io_status)
+            if (io_status /= 0) &
+                call fail_external_subspace("cannot open a listed vector")
+            read (unit, "(a)", iostat=io_status) line
+            if (io_status /= 0 .or. trim(line) /= "index,value") &
+                call fail_external_subspace( &
+                "listed vector does not begin with index,value")
+            close (unit)
+        end do
+    end subroutine preflight_subspace_paths
+
+    subroutine read_external_vector(path, vector)
+        character(len=*), intent(in) :: path
+        real(dp), intent(out) :: vector(:)
+        character(len=4096) :: line
+        integer :: file_index, io_status, point, unit
+
+        open (newunit=unit, file=path, status="old", action="read", &
+            form="formatted", iostat=io_status)
+        if (io_status /= 0) call fail_external_vector("cannot open file")
+        read (unit, "(a)", iostat=io_status) line
+        if (io_status /= 0 .or. trim(line) /= "index,value") &
+            call fail_external_vector("first row must be index,value")
+        do point = 1, size(vector)
+            read (unit, "(a)", iostat=io_status) line
+            if (io_status /= 0) call fail_external_vector( &
+                "file ends before the expected vector size")
+            if (len_trim(line) == len(line)) &
+                call fail_external_vector("input row is too long")
+            call parse_external_vector_row(line, file_index, vector(point))
+            if (file_index /= point) call fail_external_vector( &
+                "indices must be consecutive from one")
+        end do
+        read (unit, "(a)", iostat=io_status) line
+        if (io_status /= iostat_end) call fail_external_vector( &
+            "file contains rows after the expected vector")
+        close (unit)
+    end subroutine read_external_vector
+
+    subroutine contract_subspace(matrix, vectors, reduced, image)
+        real(dp), contiguous, intent(in) :: matrix(:, :), vectors(:, :)
+        real(dp), contiguous, intent(out) :: reduced(:, :), image(:, :)
+        integer :: first, row, second
+
+        call dgemm("N", "N", size(matrix, 1), size(vectors, 2), &
+            size(matrix, 2), 1.0_dp, matrix, size(matrix, 1), vectors, &
+            size(vectors, 1), 0.0_dp, image, size(image, 1))
+        do second = 1, size(vectors, 2)
+            do first = 1, second
+                reduced(first, second) = 0.0_dp
+                do row = 1, size(vectors, 1)
+                    reduced(first, second) = reduced(first, second) &
+                        + vectors(row, first) * image(row, second)
+                end do
+                reduced(second, first) = reduced(first, second)
+            end do
+        end do
+    end subroutine contract_subspace
+
+    subroutine contract_cross_subspace(matrix, left, right, reduced, image)
+        real(dp), contiguous, intent(in) :: matrix(:, :), left(:, :)
+        real(dp), contiguous, intent(in) :: right(:, :)
+        real(dp), contiguous, intent(out) :: reduced(:, :), image(:, :)
+
+        call dgemm("N", "N", size(matrix, 1), size(right, 2), &
+            size(matrix, 2), 1.0_dp, matrix, size(matrix, 1), right, &
+            size(right, 1), 0.0_dp, image, size(image, 1))
+        call dgemm("T", "N", size(left, 2), size(right, 2), &
+            size(left, 1), 1.0_dp, left, size(left, 1), image, &
+            size(image, 1), 0.0_dp, reduced, size(reduced, 1))
+    end subroutine contract_cross_subspace
+
     subroutine project_minimizing_eta(operator)
         real(dp), intent(in) :: operator(:, :)
         real(dp), allocatable :: eta_matrix(:, :), rhs(:, :), solve_work(:)
@@ -516,6 +835,50 @@ contains
         end do
     end subroutine project_minimizing_eta
 
+    subroutine project_minimizing_eta_block(operator, vectors)
+        real(dp), intent(in) :: operator(:, :)
+        real(dp), intent(inout) :: vectors(:, :)
+        real(dp), allocatable :: eta_matrix(:, :), rhs(:, :), solve_work(:)
+        integer, allocatable :: eta_pivots(:)
+        integer :: column, eta_unknowns, normal_unknowns, row, solve_work_size
+        integer :: vector
+
+        normal_unknowns = problem%normal_unknowns
+        eta_unknowns = problem%eta_unknowns
+        solve_work_size = 64 * eta_unknowns
+        allocate (eta_matrix(eta_unknowns, eta_unknowns), &
+            rhs(eta_unknowns, size(vectors, 2)), eta_pivots(eta_unknowns), &
+            solve_work(solve_work_size), stat=allocation_status)
+        if (allocation_status /= 0) &
+            call fail_solver("eta subspace projection allocation", -1)
+        do column = 1, eta_unknowns
+            do row = 1, eta_unknowns
+                eta_matrix(row, column) = operator( &
+                    normal_unknowns + row, normal_unknowns + column)
+            end do
+        end do
+        rhs = 0.0_dp
+        do vector = 1, size(vectors, 2)
+            do column = 1, normal_unknowns
+                do row = 1, eta_unknowns
+                    rhs(row, vector) = rhs(row, vector) - operator( &
+                        normal_unknowns + row, column) * vectors(column, vector)
+                end do
+            end do
+        end do
+        call dsytrf("U", eta_unknowns, eta_matrix, eta_unknowns, eta_pivots, &
+            solve_work, solve_work_size, info)
+        if (info /= 0) call fail_solver("eta subspace projection factor", info)
+        call dsytrs("U", eta_unknowns, size(vectors, 2), eta_matrix, &
+            eta_unknowns, eta_pivots, rhs, eta_unknowns, info)
+        if (info /= 0) call fail_solver("eta subspace projection solve", info)
+        do vector = 1, size(vectors, 2)
+            do row = 1, eta_unknowns
+                vectors(normal_unknowns + row, vector) = rhs(row, vector)
+            end do
+        end do
+    end subroutine project_minimizing_eta_block
+
     subroutine parse_external_vector_row(line, index_value, value)
         character(len=*), intent(in) :: line
         integer, intent(out) :: index_value
@@ -538,6 +901,14 @@ contains
             "invalid external vector: " // trim(message)
         call terminate_process(2_c_int)
     end subroutine fail_external_vector
+
+    subroutine fail_external_subspace(message)
+        character(len=*), intent(in) :: message
+
+        write (error_unit, "(a)") "gliss_compatible_marginality: " // &
+            "invalid external subspace: " // trim(message)
+        call terminate_process(2_c_int)
+    end subroutine fail_external_subspace
 
     subroutine add_mass_shift(operator, mass_matrix, shift, shifted)
         real(dp), intent(in) :: operator(:, :), mass_matrix(:, :), shift
@@ -567,6 +938,8 @@ contains
             "[--count-shifts=S0,S1,...] " // &
             "[--eigenprofile-index=INDEX] [--profile-points=COUNT] " // &
             "[--evaluate-vector=INDEXED_CSV] " // &
+            "[--evaluate-subspace=PATH_LIST] " // &
+            "[--subspace-shift=VALUE --subspace-iterations=COUNT] " // &
             "[--minimize-compression] [--minimize-potential] " // &
             "m,n [m,n ...]"
         call terminate_process(2_c_int)

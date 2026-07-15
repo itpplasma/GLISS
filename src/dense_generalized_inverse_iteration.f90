@@ -3,6 +3,8 @@ module dense_generalized_inverse_iteration
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t, &
         valid_fixed_boundary_solver_controls
+    use symmetric_eigensolver, only: solve_symmetric_generalized, &
+        symmetric_eigensolver_ok
     implicit none
     private
 
@@ -14,8 +16,17 @@ module dense_generalized_inverse_iteration
     integer, parameter, public :: dense_inverse_no_convergence = -5
 
     public :: solve_dense_generalized_near_shift
+    public :: solve_dense_generalized_subspace_near_shift
 
     interface
+        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            real(dp), intent(in) :: alpha, beta, a(lda, *), b(ldb, *)
+            real(dp), intent(inout) :: c(ldc, *)
+        end subroutine dgemm
         subroutine dpocon(uplo, n, a, lda, anorm, rcond, work, iwork, info)
             import dp
             character(len=1), intent(in) :: uplo
@@ -67,6 +78,14 @@ module dense_generalized_inverse_iteration
             real(dp), intent(inout) :: b(ldb, *)
             integer, intent(out) :: info
         end subroutine dtrtrs
+        subroutine dtrsm(side, uplo, transa, diag, m, n, alpha, a, lda, &
+                b, ldb)
+            import dp
+            character(len=1), intent(in) :: side, uplo, transa, diag
+            integer, intent(in) :: m, n, lda, ldb
+            real(dp), intent(in) :: alpha, a(lda, *)
+            real(dp), intent(inout) :: b(ldb, *)
+        end subroutine dtrsm
     end interface
 
 contains
@@ -271,6 +290,178 @@ contains
             end do
         end subroutine restore_best
     end subroutine solve_dense_generalized_near_shift
+
+    subroutine solve_dense_generalized_subspace_near_shift(stiffness, mass, &
+            shift, initial, iteration_limit, eigenvalues, vectors, residuals, &
+            iterations, info)
+        real(dp), contiguous, intent(in) :: stiffness(:, :), mass(:, :)
+        real(dp), contiguous, intent(in) :: initial(:, :)
+        real(dp), intent(in) :: shift
+        integer, intent(in) :: iteration_limit
+        real(dp), allocatable, intent(out) :: eigenvalues(:), vectors(:, :)
+        real(dp), allocatable, intent(out) :: residuals(:)
+        integer, intent(out) :: iterations, info
+        real(dp), allocatable :: candidate(:, :), coefficients(:, :)
+        real(dp), allocatable :: current(:, :), factor(:, :), image(:, :)
+        real(dp), allocatable :: mass_reduced(:, :), scales(:)
+        real(dp), allocatable :: stiffness_reduced(:, :), work(:)
+        integer, allocatable :: pivots(:)
+        integer :: allocation_status, column, k, lapack_info, n, row
+        integer :: work_size
+        integer(int64) :: requested_work_size
+
+        info = dense_inverse_invalid
+        iterations = 0
+        if (.not. valid_problem(stiffness, mass, shift)) return
+        n = size(stiffness, 1)
+        k = size(initial, 2)
+        if (size(initial, 1) /= n .or. k < 1 .or. k >= n) return
+        if (iteration_limit < 1 .or. iteration_limit > 1000) return
+        if (.not. all(ieee_is_finite(initial))) return
+        requested_work_size = 64_int64 * int(n, int64)
+        if (requested_work_size > int(huge(work_size), int64)) return
+        work_size = int(requested_work_size)
+        allocate (candidate(n, k), current(n, k), factor(n, n), image(n, k), &
+            mass_reduced(k, k), residuals(k), scales(n), &
+            stiffness_reduced(k, k), vectors(n, k), pivots(n), &
+            work(work_size), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = dense_inverse_allocation
+            return
+        end if
+        do row = 1, n
+            if (mass(row, row) <= 0.0_dp) then
+                info = dense_inverse_mass_not_spd
+                return
+            end if
+            scales(row) = 1.0_dp / sqrt(mass(row, row))
+        end do
+        do column = 1, n
+            do row = 1, n
+                factor(row, column) = scales(row) &
+                    * (stiffness(row, column) - shift * mass(row, column)) &
+                    * scales(column)
+            end do
+        end do
+        call dsytrf("U", n, factor, n, pivots, work, work_size, lapack_info)
+        if (lapack_info /= 0) then
+            info = dense_inverse_factorization
+            return
+        end if
+        current = initial
+        call orthonormalize_subspace(current, mass, image, mass_reduced, &
+            lapack_info)
+        if (lapack_info /= 0) then
+            info = dense_inverse_mass_not_spd
+            return
+        end if
+        do iterations = 1, iteration_limit
+            call contract_dense_subspace(mass, current, image, mass_reduced)
+            do column = 1, k
+                do row = 1, n
+                    candidate(row, column) = scales(row) * image(row, column)
+                end do
+            end do
+            call dsytrs("U", n, k, factor, n, pivots, candidate, n, &
+                lapack_info)
+            if (lapack_info /= 0) then
+                info = dense_inverse_factorization
+                return
+            end if
+            do column = 1, k
+                do row = 1, n
+                    candidate(row, column) = scales(row) &
+                        * candidate(row, column)
+                end do
+            end do
+            call orthonormalize_subspace(candidate, mass, image, mass_reduced, &
+                lapack_info)
+            if (lapack_info /= 0) then
+                info = dense_inverse_mass_not_spd
+                return
+            end if
+            call contract_dense_subspace(stiffness, candidate, image, &
+                stiffness_reduced)
+            call contract_dense_subspace(mass, candidate, image, mass_reduced)
+            call solve_symmetric_generalized(stiffness_reduced, mass_reduced, &
+                eigenvalues, coefficients, lapack_info)
+            if (lapack_info /= symmetric_eigensolver_ok) then
+                info = dense_inverse_factorization
+                return
+            end if
+            call dgemm("N", "N", n, k, k, 1.0_dp, candidate, n, &
+                coefficients, k, 0.0_dp, vectors, n)
+            current = vectors
+        end do
+        iterations = iteration_limit
+        call contract_dense_subspace(stiffness, current, image, &
+            stiffness_reduced)
+        call contract_dense_subspace(mass, current, candidate, mass_reduced)
+        call calculate_subspace_residuals(image, candidate, eigenvalues, &
+            residuals)
+        vectors = current
+        info = dense_inverse_ok
+    end subroutine solve_dense_generalized_subspace_near_shift
+
+    subroutine orthonormalize_subspace(vectors, mass, image, gram, info)
+        real(dp), contiguous, intent(inout) :: vectors(:, :)
+        real(dp), contiguous, intent(in) :: mass(:, :)
+        real(dp), contiguous, intent(out) :: image(:, :), gram(:, :)
+        integer, intent(out) :: info
+
+        call contract_dense_subspace(mass, vectors, image, gram)
+        call dpotrf("U", size(gram, 1), gram, size(gram, 1), info)
+        if (info /= 0) return
+        call dtrsm("R", "U", "N", "N", size(vectors, 1), &
+            size(vectors, 2), 1.0_dp, gram, size(gram, 1), vectors, &
+            size(vectors, 1))
+    end subroutine orthonormalize_subspace
+
+    subroutine contract_dense_subspace(matrix, vectors, image, reduced)
+        real(dp), contiguous, intent(in) :: matrix(:, :), vectors(:, :)
+        real(dp), contiguous, intent(out) :: image(:, :), reduced(:, :)
+        integer :: first, row, second
+
+        call dgemm("N", "N", size(matrix, 1), size(vectors, 2), &
+            size(matrix, 2), 1.0_dp, matrix, size(matrix, 1), vectors, &
+            size(vectors, 1), 0.0_dp, image, size(image, 1))
+        do second = 1, size(vectors, 2)
+            do first = 1, second
+                reduced(first, second) = 0.0_dp
+                do row = 1, size(vectors, 1)
+                    reduced(first, second) = reduced(first, second) &
+                        + vectors(row, first) * image(row, second)
+                end do
+                reduced(second, first) = reduced(first, second)
+            end do
+        end do
+    end subroutine contract_dense_subspace
+
+    subroutine calculate_subspace_residuals(stiffness_images, mass_images, &
+            eigenvalues, residuals)
+        real(dp), intent(in) :: stiffness_images(:, :), mass_images(:, :)
+        real(dp), intent(in) :: eigenvalues(:)
+        real(dp), intent(out) :: residuals(:)
+        real(dp) :: difference, difference_norm, mass_norm, stiffness_norm
+        integer :: column, row
+
+        do column = 1, size(eigenvalues)
+            difference_norm = 0.0_dp
+            mass_norm = 0.0_dp
+            stiffness_norm = 0.0_dp
+            do row = 1, size(stiffness_images, 1)
+                difference = stiffness_images(row, column) &
+                    - eigenvalues(column) * mass_images(row, column)
+                difference_norm = difference_norm + difference**2
+                stiffness_norm = stiffness_norm &
+                    + stiffness_images(row, column)**2
+                mass_norm = mass_norm + mass_images(row, column)**2
+            end do
+            residuals(column) = sqrt(difference_norm) / &
+                max(tiny(1.0_dp), sqrt(stiffness_norm) &
+                + abs(eigenvalues(column)) * sqrt(mass_norm))
+        end do
+    end subroutine calculate_subspace_residuals
 
     subroutine normalize_scaled_mass(vector, mass, norm)
         real(dp), intent(inout) :: vector(:)

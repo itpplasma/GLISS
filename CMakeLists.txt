@@ -629,6 +629,42 @@ if(BUILD_TESTING)
         gliss_compatible_marginality
         "gliss_compatible_marginality: --eigenprofile-index conflicts with --inertia-only"
         missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1 --inertia-only 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_subspace_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --subspace-shift requires a value"
+        missing.nc 2 8 8 1e-8 1 --subspace-shift= 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_subspace_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: subspace shift must be finite"
+        missing.nc 2 8 8 1e-8 1 --subspace-shift=nan 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_subspace_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --subspace-shift"
+        missing.nc 2 8 8 1e-8 1 --subspace-shift=0
+        --subspace-shift=0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_subspace_iterations
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: subspace iterations must lie in [1,1000]"
+        missing.nc 2 8 8 1e-8 1 --subspace-iterations=0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_noninteger_subspace_iterations
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: subspace iterations must be an integer"
+        missing.nc 2 8 8 1e-8 1 --subspace-iterations=many 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_subspace_iterations
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --subspace-iterations"
+        missing.nc 2 8 8 1e-8 1 --subspace-iterations=10
+        --subspace-iterations=10 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_incomplete_subspace_solver
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --subspace-shift and --subspace-iterations must be given together"
+        missing.nc 2 8 8 1e-8 1 --evaluate-subspace=missing.txt
+        --subspace-shift=0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_subspace_solver_without_input
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: subspace solver options require --evaluate-subspace"
+        missing.nc 2 8 8 1e-8 1 --subspace-shift=0
+        --subspace-iterations=10 0,1)
     add_compatible_cli_rejection(compatible_trace_cli_missing
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: missing required arguments")
