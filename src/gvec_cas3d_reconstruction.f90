@@ -17,6 +17,18 @@ module gvec_cas3d_reconstruction
     public :: periodic_sixth_order_derivatives
     public :: project_harmonic_grid
 
+    interface
+        pure subroutine zgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            complex(dp), intent(in) :: alpha, beta
+            complex(dp), intent(in) :: a(lda, *), b(ldb, *)
+            complex(dp), intent(inout) :: c(ldc, *)
+        end subroutine zgemm
+    end interface
+
 contains
 
     pure subroutine reconstruct_harmonic_grid(pair, radial_surface, &
@@ -42,7 +54,8 @@ contains
         complex(dp), allocatable :: theta_derivative_phase(:, :)
         complex(dp), allocatable :: zeta_phase(:, :)
         complex(dp), allocatable :: zeta_derivative_phase(:, :)
-        complex(dp), allocatable :: theta_partial(:, :)
+        complex(dp), allocatable :: theta_partial(:, :), work_partial(:, :)
+        complex(dp), allocatable :: complex_grid(:, :)
 
         call validate_inputs(pair, radial_surface, poloidal_modes, &
             toroidal_modes, theta, zeta_period, info)
@@ -52,15 +65,23 @@ contains
         call build_phase_matrices(poloidal_modes, toroidal_modes, theta, &
             zeta_period, theta_phase, theta_derivative_phase, zeta_phase, &
             zeta_derivative_phase)
-        theta_partial = matmul(theta_phase, coefficients)
-        values = real(matmul(theta_partial, zeta_phase), dp)
-        derivative_theta = real(matmul(matmul(theta_derivative_phase, &
-            coefficients), zeta_phase), dp)
-        derivative_zeta_period = real(matmul(theta_partial, &
-            zeta_derivative_phase), dp)
+        allocate (theta_partial(size(theta), size(toroidal_modes)))
+        allocate (work_partial(size(theta), size(toroidal_modes)))
+        allocate (complex_grid(size(theta), size(zeta_period)))
+        call multiply_complex(theta_phase, coefficients, theta_partial)
+        call multiply_complex(theta_partial, zeta_phase, complex_grid)
+        call copy_real_grid(complex_grid, values)
+        call multiply_complex(theta_derivative_phase, coefficients, &
+            work_partial)
+        call multiply_complex(work_partial, zeta_phase, complex_grid)
+        call copy_real_grid(complex_grid, derivative_theta)
+        call multiply_complex(theta_partial, zeta_derivative_phase, &
+            complex_grid)
+        call copy_real_grid(complex_grid, derivative_zeta_period)
         call reconstruct_second_angular_derivatives(coefficients, &
             poloidal_modes, toroidal_modes, theta_phase, &
             theta_derivative_phase, zeta_phase, zeta_derivative_phase, &
+            theta_partial, work_partial, complex_grid, &
             derivative_theta_theta, derivative_theta_zeta_period, &
             derivative_zeta_period_zeta_period)
         info = reconstruction_ok
@@ -69,12 +90,17 @@ contains
     pure subroutine reconstruct_second_angular_derivatives(coefficients, &
             poloidal_modes, toroidal_modes, theta_phase, &
             theta_derivative_phase, zeta_phase, zeta_derivative_phase, &
+            theta_partial, work_partial, complex_grid, &
             derivative_theta_theta, derivative_theta_zeta_period, &
             derivative_zeta_period_zeta_period)
-        complex(dp), intent(in) :: coefficients(:, :), theta_phase(:, :)
-        complex(dp), intent(in) :: theta_derivative_phase(:, :)
-        complex(dp), intent(in) :: zeta_phase(:, :)
-        complex(dp), intent(in) :: zeta_derivative_phase(:, :)
+        complex(dp), contiguous, intent(in) :: coefficients(:, :)
+        complex(dp), contiguous, intent(in) :: theta_phase(:, :)
+        complex(dp), contiguous, intent(in) :: theta_derivative_phase(:, :)
+        complex(dp), contiguous, intent(in) :: zeta_phase(:, :)
+        complex(dp), contiguous, intent(in) :: zeta_derivative_phase(:, :)
+        complex(dp), contiguous, intent(in) :: theta_partial(:, :)
+        complex(dp), contiguous, intent(inout) :: work_partial(:, :)
+        complex(dp), contiguous, intent(inout) :: complex_grid(:, :)
         integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
         real(dp), allocatable, intent(out), optional :: &
             derivative_theta_theta(:, :)
@@ -92,14 +118,17 @@ contains
                     * real(poloidal_modes(mode), dp))**2 &
                     * theta_phase(:, mode)
             end do
-            derivative_theta_theta = real(matmul(matmul(second_phase, &
-                coefficients), zeta_phase), dp)
+            call multiply_complex(second_phase, coefficients, work_partial)
+            call multiply_complex(work_partial, zeta_phase, complex_grid)
+            call copy_real_grid(complex_grid, derivative_theta_theta)
             deallocate (second_phase)
         end if
         if (present(derivative_theta_zeta_period)) then
-            derivative_theta_zeta_period = real(matmul(matmul( &
-                theta_derivative_phase, coefficients), &
-                zeta_derivative_phase), dp)
+            call multiply_complex(theta_derivative_phase, coefficients, &
+                work_partial)
+            call multiply_complex(work_partial, zeta_derivative_phase, &
+                complex_grid)
+            call copy_real_grid(complex_grid, derivative_theta_zeta_period)
         end if
         if (present(derivative_zeta_period_zeta_period)) then
             allocate (second_phase, mold=zeta_phase)
@@ -108,10 +137,35 @@ contains
                     * real(toroidal_modes(mode), dp))**2 &
                     * zeta_phase(mode, :)
             end do
-            derivative_zeta_period_zeta_period = real(matmul(matmul( &
-                theta_phase, coefficients), second_phase), dp)
+            call multiply_complex(theta_partial, second_phase, complex_grid)
+            call copy_real_grid(complex_grid, &
+                derivative_zeta_period_zeta_period)
         end if
     end subroutine reconstruct_second_angular_derivatives
+
+    pure subroutine multiply_complex(left, right, product)
+        complex(dp), contiguous, intent(in) :: left(:, :), right(:, :)
+        complex(dp), contiguous, intent(out) :: product(:, :)
+        complex(dp), parameter :: one = cmplx(1.0_dp, 0.0_dp, dp)
+        complex(dp), parameter :: zero = cmplx(0.0_dp, 0.0_dp, dp)
+
+        call zgemm("N", "N", size(left, 1), size(right, 2), &
+            size(left, 2), one, left, size(left, 1), right, size(right, 1), &
+            zero, product, size(product, 1))
+    end subroutine multiply_complex
+
+    pure subroutine copy_real_grid(source, target)
+        complex(dp), intent(in) :: source(:, :)
+        real(dp), allocatable, intent(out) :: target(:, :)
+        integer :: column, row
+
+        allocate (target(size(source, 1), size(source, 2)))
+        do column = 1, size(source, 2)
+            do row = 1, size(source, 1)
+                target(row, column) = real(source(row, column), dp)
+            end do
+        end do
+    end subroutine copy_real_grid
 
     pure subroutine project_harmonic_grid(values, poloidal_modes, &
             toroidal_modes, theta, zeta_period, cosine, sine)
@@ -199,6 +253,7 @@ contains
         if (any(shape(pair%cosine) /= shape(pair%sine))) return
         if (size(pair%cosine, 2) /= size(poloidal_modes)) return
         if (size(pair%cosine, 3) /= size(toroidal_modes)) return
+        if (size(poloidal_modes) < 1 .or. size(toroidal_modes) < 1) return
         if (size(theta) < 1) return
         if (size(zeta_period) < 1) return
         info = reconstruction_invalid_surface
