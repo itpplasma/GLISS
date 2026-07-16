@@ -369,6 +369,16 @@ contains
                 sparse_stiffness, sparse_mass, status)
             call require(status == variable_block_ok, &
                 "sparse compatible problem reconstruction failed")
+            if (.not. allocated(sparse_stiffness)) then
+                call require(.false., &
+                    "sparse compatible stiffness was not allocated")
+                return
+            end if
+            if (.not. allocated(sparse_mass)) then
+                call require(.false., &
+                    "sparse compatible mass was not allocated")
+                return
+            end if
             expected_h1 = size(equilibrium%s) * degree - 1
             expected_l2 = size(equilibrium%s) * degree
             call require(problem%h1_dofs == expected_h1 &

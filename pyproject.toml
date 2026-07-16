@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "gliss"
-version = "0.0.1"
+version = "0.0.2"
 description = "Python interface to the Global Linear Ideal Stability Solver"
 readme = "python/README.md"
 license = "MIT"

@@ -3,6 +3,7 @@ name: ci
 on:
   push:
     branches: [main]
+    tags: ["v[0-9]*"]
   pull_request:
   workflow_dispatch:
 
@@ -86,9 +87,28 @@ jobs:
         run: |
           python -m venv /tmp/gliss-wheel
           /tmp/gliss-wheel/bin/pip install dist/*.whl
+          /tmp/gliss-wheel/bin/pip check
           cd /tmp
-          /tmp/gliss-wheel/bin/python -c \
-            'import gliss; assert gliss.version() == gliss.__version__ == "0.0.1"'
+          /tmp/gliss-wheel/bin/python - <<'PY'
+          from pathlib import Path
+          import gliss
+
+          assert gliss.version() == gliss.__version__ == "0.0.2"
+          assert (Path(gliss.get_include()) / "gliss.h").is_file()
+          PY
+      - name: Test installed sdist
+        run: |
+          python -m venv /tmp/gliss-sdist
+          /tmp/gliss-sdist/bin/pip install dist/gliss-*.tar.gz
+          /tmp/gliss-sdist/bin/pip check
+          cd /tmp
+          /tmp/gliss-sdist/bin/python - <<'PY'
+          from pathlib import Path
+          import gliss
+
+          assert gliss.version() == gliss.__version__ == "0.0.2"
+          assert (Path(gliss.get_include()) / "gliss.h").is_file()
+          PY
 
   flang:
     runs-on: ubuntu-latest

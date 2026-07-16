@@ -1,9 +1,9 @@
 # gliss
 
 `gliss` is the Python interface to the Global Linear Ideal Stability Solver.
-Version 0.0.1 provides the Mercier stability diagnostic for GVEC/CAS3D NetCDF
-equilibrium exports. Development main for version 0.0.2 also provides reusable
-equilibrium contexts and fixed-boundary stability problems. The Linux wheel
+Version 0.0.2 provides Mercier diagnostics, reusable equilibrium contexts,
+fixed-boundary stability problems, certified spectra and direct symmetric VMEC
+conversion. The Linux wheel
 contains the compiled Fortran library and uses a small, hand-written ISO C
 binding; no `f90wrap` dependency is required.
 
@@ -427,8 +427,7 @@ failures raise `RuntimeError` with the native status code.
 
 ### Reusing an equilibrium
 
-The development API for version 0.0.2 can load an export once and reuse its
-native data:
+Version 0.0.2 can load an export once and reuse its native data:
 
 ```python
 from pathlib import Path
@@ -779,7 +778,7 @@ value = penalty.J()
 ```
 
 `MercierPenalty` is a leaf `Optimizable`. It has no equilibrium degrees of
-freedom and no analytic derivative in version 0.0.1. Update `export_path` after
+freedom and no analytic derivative in version 0.0.2. Update `export_path` after
 an external equilibrium solve before evaluating it again.
 
 ## Native library and ABI

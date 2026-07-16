@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.0.2 - 2026-07-16
+
 - Default clean single-config CMake builds to the optimized Release
   configuration, prefer threaded OpenBLAS, and retain a portable generic
   BLAS/LAPACK fallback.
@@ -49,6 +51,14 @@
 - Expose fixed-boundary and pressureless-pseudoplasma TERPSICHORE FORT.23/24
   compatibility solves through the hand-written C and Python interfaces,
   including inertia, eigenpair, energy, residual, and mode-overlap diagnostics.
+- Convert symmetric standard VMEC equilibria through BOOZ_XFORM with explicit
+  convention, mesh, provenance, corruption and force-balance gates.
+- Assemble production marginality pencils directly into sparse radial blocks
+  with deterministic default OpenMP ownership and no dense global temporary.
+- Reject nonzero-winding equilibrium exports unless their Boozer rotating-frame
+  provenance is explicit and verified.
+- Require array-temporary-free optimized builds and package threaded OpenBLAS
+  in the manylinux wheel.
 
 ## 0.0.1 - 2026-07-13
 

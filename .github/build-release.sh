@@ -6,6 +6,7 @@ cd "$root"
 
 tag=$(git describe --exact-match --match 'v[0-9]*' HEAD)
 version=${tag#v}
+version_regex=${version//./\\.}
 epoch=$(git show -s --format=%ct HEAD)
 image="gliss-manylinux-release:$version"
 tmp=$(mktemp -d)
@@ -15,15 +16,31 @@ if [[ -n $(git status --porcelain) ]]; then
     echo "release build requires a clean worktree" >&2
     exit 1
 fi
-if ! rg -q "^version = \"$version\"$" pyproject.toml; then
-    echo "tag $tag does not match pyproject.toml" >&2
-    exit 1
-fi
+
+require_version() {
+    local file=$1
+    local pattern=$2
+    if ! rg -q "$pattern" "$file"; then
+        echo "tag $tag does not match $file" >&2
+        exit 1
+    fi
+}
+
+require_version pyproject.toml "^version = \"$version_regex\"$"
+require_version fpm.toml "^version = \"$version_regex\"$"
+require_version CMakeLists.txt "^project\\(gliss VERSION $version_regex "
+require_version python/gliss/__init__.py "^__version__ = \"$version_regex\"$"
+require_version src/gliss_capi.f90 \
+    "version_string = \"$version_regex\"$"
+require_version CITATION.cff "^version: $version_regex$"
+
+GLISS_AUDIT_TMPDIR=${GLISS_AUDIT_TMPDIR:-${TMPDIR:-/tmp}} \
+    ./ci/array_temporary_audit.sh
 
 mkdir -p "$tmp/sdist-a" "$tmp/sdist-b" dist
 rm -f dist/*
 for output in "$tmp/sdist-a" "$tmp/sdist-b"; do
-    SOURCE_DATE_EPOCH=$epoch uv tool run --from build pyproject-build \
+    SOURCE_DATE_EPOCH=$epoch uv tool run --from build==1.3.0 pyproject-build \
         --sdist --outdir "$output"
 done
 cmp "$tmp/sdist-a/gliss-$version.tar.gz" \
@@ -56,5 +73,9 @@ wheel_b=$(find "$tmp/wheel-b/repaired" -name '*.whl' -print -quit)
 cmp "$wheel_a" "$wheel_b"
 cp "$wheel_a" dist/
 
-uv tool run --from twine twine check dist/*
-sha256sum dist/*
+uv tool run --from twine==6.2.0 twine check dist/*
+(
+    cd dist
+    LC_ALL=C sha256sum gliss-* | LC_ALL=C sort -k2 > SHA256SUMS
+)
+cat dist/SHA256SUMS

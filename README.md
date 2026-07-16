@@ -6,9 +6,9 @@ surfaces.  It solves the energy-principle eigenvalue problem
 `K x = omega^2 M x` with Fourier harmonics in the angles and spline finite
 elements in the radius, reads equilibria from the
 [GVEC](https://gitlab.mpcdf.mpg.de/gvec-group/gvec) CAS3D export, and is
-built for exact differentiability: assembly kernels carry
-Enzyme-generated derivative actions so that eigenvalues, marginal points,
-and local criteria expose exact gradients to optimization loops.
+built for differentiability: verified assembly kernels carry
+Enzyme-generated derivative actions.  The public equilibrium-parameter to
+spectrum gradient chain and optimization loop remain under construction.
 
 The present code covers the equilibrium interface, fixed-boundary
 two-component and compressible global operators, physical kinetic norm,
@@ -21,13 +21,12 @@ remain under construction.
 ## Python
 
 The Python package is the primary user interface. Install it with
-`python -m pip install gliss`; version 0.0.1 exposes the validated Mercier
-profile and objective through NumPy. Development main also provides reusable
+`python -m pip install gliss`; version 0.0.2 provides reusable
 `Equilibrium` and fixed-boundary `StabilityProblem` contexts with typed,
 certified lowest-eigenpair results, opt-in full spectra with per-pair
 diagnostics, deterministic full-spectrum run containers, and atomic versioned
 equilibrium export.
-The development API also exposes the shared two-component marginality
+The API also exposes the shared two-component marginality
 operator through an explicit general 3-D mode table and the axisymmetric
 family used for the pinned Solov'ev comparison with DCON. A separate
 CAS3D2MN phase-envelope entry point translates the ordered carrier/envelope
