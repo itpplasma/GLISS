@@ -66,11 +66,17 @@ contains
             bind(c, name="gvstab_benchmark_physical_mass_energy")
         real(c_double), intent(in), value :: active
         real(c_double) :: energy
+        real(dp), parameter :: displacement_offset(3) = [0.4_dp, -0.3_dp, &
+            0.2_dp]
+        real(dp), parameter :: displacement_slope(3) = [0.02_dp, 0.01_dp, &
+            -0.03_dp]
         real(dp) :: displacement(3)
+        integer :: i
 
-        displacement(1) = 0.4_dp + 0.02_dp * active
-        displacement(2) = -0.3_dp + 0.01_dp * active
-        displacement(3) = 0.2_dp - 0.03_dp * active
+        do i = 1, 3
+            displacement(i) = displacement_offset(i) &
+                + displacement_slope(i) * active
+        end do
         energy = physical_mass_energy(1.2_dp + 0.05_dp * active, &
             0.7_dp - 0.03_dp * active, 0.8_dp + 0.02_dp * active, &
             0.6_dp - 0.01_dp * active, -1.1_dp + 0.01_dp * active, &
