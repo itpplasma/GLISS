@@ -13,6 +13,7 @@ module gvec_cas3d_netcdf
     integer, parameter, public :: reader_schema_error = 2
     integer, parameter, public :: reader_data_error = 3
     integer, parameter, public :: reader_coordinate_error = 4
+    integer, parameter, public :: reader_position_frame_error = 5
 
     public :: read_dimension
     public :: read_harmonic_component

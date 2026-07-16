@@ -6,7 +6,8 @@ module gliss_capi
         status_invalid_argument, status_internal_error, status_ok, &
         status_read_error, write_error
     use gliss_c_contexts, only: equilibrium_context_t
-    use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
+    use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok, &
+        reader_position_frame_error
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use mercier_diagnostic, only: compute_mercier, mercier_ok, &
         mercier_result_t
@@ -133,8 +134,13 @@ contains
         if (info /= reader_ok) then
             deallocate (context)
             status = status_read_error
-            call write_error(error_pointer, error_capacity, &
-                "failed to read equilibrium export")
+            if (info == reader_position_frame_error) then
+                call write_error(error_pointer, error_capacity, &
+                    "nonzero winding requires a verified Boozer position_frame")
+            else
+                call write_error(error_pointer, error_capacity, &
+                    "failed to read equilibrium export")
+            end if
             return
         end if
         handle = c_loc(context)

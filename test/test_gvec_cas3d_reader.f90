@@ -4,7 +4,7 @@ program test_gvec_cas3d_reader
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, &
         reader_coordinate_error, reader_data_error, reader_ok, &
-        reader_open_error, reader_schema_error
+        reader_open_error, reader_position_frame_error, reader_schema_error
     use gvec_cas3d_types, only: equilibrium_is_axisymmetric, &
         gvec_cas3d_equilibrium_t, radial_grid_full, radial_grid_half
     use netcdf_c_api, only: nc_close_file, nc_create_netcdf4, &
@@ -26,7 +26,8 @@ program test_gvec_cas3d_reader
     character(len=64) :: half_file, full_file, symmetric_file
     character(len=64) :: corrupt_file, nan_file, mode_file, missing_file
     character(len=64) :: schema_file, future_file, incomplete_file
-    character(len=64) :: malformed_file, frame_file, bad_frame_file
+    character(len=64) :: malformed_file, frame_file, missing_frame_file
+    character(len=64) :: bad_frame_file
 
     interface
         function get_process_id() result(process_id) bind(c, name="getpid")
@@ -58,6 +59,8 @@ program test_gvec_cas3d_reader
     write (incomplete_file, '("reader_incomplete_",i0,".nc")') get_process_id()
     write (malformed_file, '("reader_malformed_",i0,".nc")') get_process_id()
     write (frame_file, '("reader_frame_",i0,".nc")') get_process_id()
+    write (missing_frame_file, '("reader_missing_frame_",i0,".nc")') &
+        get_process_id()
     write (bad_frame_file, '("reader_bad_frame_",i0,".nc")') get_process_id()
 
     call create_fixture(half_file, radial_grid_half, .false., .false.)
@@ -122,6 +125,15 @@ program test_gvec_cas3d_reader
     call require(info == reader_ok &
         .and. equilibrium%has_boozer_position_frame, &
         "Boozer position frame was not identified")
+    call create_fixture(missing_frame_file, radial_grid_half, .false., &
+        .false., include_position_frame=.false.)
+    call read_gvec_cas3d_file(missing_frame_file, equilibrium, info)
+    call require(info == reader_position_frame_error, &
+        "nonzero winding without a verified position frame was accepted")
+    call overwrite_winding(missing_frame_file, 0)
+    call read_gvec_cas3d_file(missing_frame_file, equilibrium, info)
+    call require(info == reader_ok, &
+        "zero winding unnecessarily required a position frame")
     call create_fixture(bad_frame_file, radial_grid_half, .false., .false., &
         position_frame="computational zeta")
     call read_gvec_cas3d_file(bad_frame_file, equilibrium, info)
@@ -139,6 +151,7 @@ program test_gvec_cas3d_reader
     call delete_fixture(incomplete_file)
     call delete_fixture(malformed_file)
     call delete_fixture(frame_file)
+    call delete_fixture(missing_frame_file)
     call delete_fixture(bad_frame_file)
     write (*, "(a)") "PASS"
 
@@ -168,30 +181,33 @@ contains
     end subroutine verify_half_fixture
 
     subroutine create_fixture(filename, grid_kind, symmetric, corrupt, &
-            schema_version, position_frame)
+            schema_version, position_frame, include_position_frame)
         character(len=*), intent(in) :: filename
         integer, intent(in) :: grid_kind
         logical, intent(in) :: symmetric, corrupt
         integer, intent(in), optional :: schema_version
         character(len=*), intent(in), optional :: position_frame
+        logical, intent(in), optional :: include_position_frame
         type(fixture_ids_t) :: ids
 
         call define_fixture(filename, grid_kind, symmetric, corrupt, ids, &
-            schema_version, position_frame)
+            schema_version, position_frame, include_position_frame)
         call write_fixture(grid_kind, ids)
         call require_netcdf(nc_close_file(ids%ncid))
     end subroutine create_fixture
 
     subroutine define_fixture(filename, grid_kind, symmetric, corrupt, ids, &
-            schema_version, position_frame)
+            schema_version, position_frame, include_position_frame)
         character(len=*), intent(in) :: filename
         integer, intent(in) :: grid_kind
         logical, intent(in) :: symmetric, corrupt
         type(fixture_ids_t), intent(out) :: ids
         integer, intent(in), optional :: schema_version
         character(len=*), intent(in), optional :: position_frame
+        logical, intent(in), optional :: include_position_frame
         integer :: dimensions(3), dim_s, dim_m, dim_n
         character(len=16) :: version_text
+        logical :: write_position_frame
 
         call require_netcdf(nc_create_netcdf4(filename, ids%ncid))
         call require_netcdf(nc_def_dimension(ids%ncid, "s", ns, dim_s))
@@ -221,8 +237,20 @@ contains
                     "gliss_schema_version", trim(version_text)))
             end if
         end if
-        if (present(position_frame)) call require_netcdf(nc_put_global_text( &
-            ids%ncid, "position_frame", position_frame))
+        write_position_frame = .true.
+        if (present(include_position_frame)) then
+            write_position_frame = include_position_frame
+        end if
+        if (write_position_frame) then
+            if (present(position_frame)) then
+                call require_netcdf(nc_put_global_text(ids%ncid, &
+                    "position_frame", position_frame))
+            else
+                call require_netcdf(nc_put_global_text(ids%ncid, &
+                    "position_frame", &
+                    "xhat,yhat rotated by winding*zeta_B"))
+            end if
+        end if
         call require_netcdf(nc_end_definitions(ids%ncid))
     end subroutine define_fixture
 
@@ -386,6 +414,17 @@ contains
         call require_netcdf(nc_put_integer(ncid, varid, [0, -1, 1]))
         call require_netcdf(nc_close_file(ncid))
     end subroutine overwrite_toroidal_modes
+
+    subroutine overwrite_winding(filename, winding)
+        character(len=*), intent(in) :: filename
+        integer, intent(in) :: winding
+        integer :: ncid, varid
+
+        call require_netcdf(nc_open_write(filename, ncid))
+        call require_netcdf(nc_inquire_variable_id(ncid, "winding", varid))
+        call require_netcdf(nc_put_integer(ncid, varid, winding))
+        call require_netcdf(nc_close_file(ncid))
+    end subroutine overwrite_winding
 
     subroutine delete_fixture(filename)
         character(len=*), intent(in) :: filename

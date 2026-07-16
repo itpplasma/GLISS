@@ -4,7 +4,8 @@ module gvec_cas3d_reader
     use gvec_cas3d_netcdf, only: read_dimension, read_harmonic_component, &
         read_integer_scalar, read_integer_vector, read_optional_real_vector, &
         read_real_scalar, read_real_vector, reader_coordinate_error, &
-        reader_data_error, reader_ok, reader_open_error, reader_schema_error
+        reader_data_error, reader_ok, reader_open_error, &
+        reader_position_frame_error, reader_schema_error
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
         radial_grid_full, radial_grid_half
     use netcdf_c_api, only: nc_close_file, nc_enotatt, nc_get_global_text, &
@@ -19,6 +20,7 @@ module gvec_cas3d_reader
     public :: reader_data_error
     public :: reader_ok
     public :: reader_open_error
+    public :: reader_position_frame_error
     public :: reader_schema_error
 
 contains
@@ -106,6 +108,11 @@ contains
         call read_position_frame(ncid, equilibrium%has_boozer_position_frame, &
             info)
         if (info /= reader_ok) return
+        if (equilibrium%winding /= 0 .and. &
+            .not. equilibrium%has_boozer_position_frame) then
+            info = reader_position_frame_error
+            return
+        end if
         call read_real_scalar(ncid, "beta_avg", equilibrium%beta_average, info)
         if (info /= reader_ok) return
 
