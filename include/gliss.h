@@ -283,6 +283,43 @@ gliss_status gliss_cas3d_phase_envelope(
     char *error,
     size_t error_capacity);
 
+/* Evaluate the same phase-envelope stiffness with Schwab's CAS3D2MN
+ * labeled-envelope coefficient normalization for f_l=1. GLISS assembles the
+ * unique physical-sideband stiffness and pulls it back to labeled envelope
+ * coordinates. Coincident sidebands therefore create exact zero-stiffness
+ * redundant directions while retaining Schwab's positive half-identity mass.
+ * The common coefficient scale is
+ * reference_length^3*delta_s*delta_theta*delta_phi, where delta_s=1/Ns and
+ * the two angular increments are defined by coefficient_theta and
+ * coefficient_zeta. The separate angular_theta and angular_zeta arguments
+ * still control anti-aliased stiffness assembly.
+ * radial_quadrature is 1 for five-point Gauss integration or 2 for the
+ * CAS3D tangent-trapezoid midpoint rule.
+ * This exact compatibility policy requires degree=1, positive coefficient
+ * grid counts, and a finite positive reference_length. Its eigenvalue is a
+ * code-specific Ritz value for comparison with CAS3D2MN, not a physical
+ * growth rate. The inertia is independent of this positive norm. All other
+ * arguments and the failure contract match gliss_cas3d_phase_envelope. */
+gliss_status gliss_cas3d2mn_phase_envelope(
+    const gliss_equilibrium *equilibrium,
+    int32_t base_m,
+    int32_t base_n,
+    size_t envelope_count,
+    const int32_t *envelope_m,
+    const int32_t *envelope_n,
+    int32_t parity_class,
+    int32_t degree,
+    int32_t angular_theta,
+    int32_t angular_zeta,
+    int32_t coefficient_theta,
+    int32_t coefficient_zeta,
+    double reference_length,
+    int32_t radial_quadrature,
+    int32_t solve_eigenpair,
+    gliss_cas3d_marginality_result *result,
+    char *error,
+    size_t error_capacity);
+
 /* A fixed-boundary problem copies and assembles all data it needs, so the
  * equilibrium may be destroyed after successful construction. mode_m and
  * mode_n are mode_count contiguous int32_t values. degree selects the

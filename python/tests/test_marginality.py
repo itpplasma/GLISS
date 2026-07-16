@@ -21,8 +21,12 @@ class FakeFunction:
 class FakeLibrary:
     def __init__(self):
         self.arguments = None
+        self.coefficient_arguments = None
         self.gliss_cas3d_marginality = FakeFunction(self.solve)
         self.gliss_cas3d_phase_envelope = FakeFunction(self.solve_envelope)
+        self.gliss_cas3d2mn_phase_envelope = FakeFunction(
+            self.solve_envelope_coefficient
+        )
 
     def solve(
         self,
@@ -111,6 +115,15 @@ class FakeLibrary:
         error.value = b""
         return 0
 
+    def solve_envelope_coefficient(self, *arguments):
+        self.coefficient_arguments = arguments[10:14]
+        base_arguments = arguments[:10] + arguments[14:]
+        status = self.solve_envelope(*base_arguments)
+        result = base_arguments[-3]._obj
+        if result.has_eigenpair:
+            result.lowest_eigenvalue = -0.371
+        return status
+
 
 def equilibrium(library):
     result = gliss.Equilibrium.__new__(gliss.Equilibrium)
@@ -192,6 +205,106 @@ def test_solve_cas3d_phase_envelope_reports_labeled_input_count():
     assert "physical modes" in result.normalization
     assert result.base_fourier_convention == "2*pi*(M*theta - N*zeta/N_T)"
     assert result.envelope_fourier_convention == "2*pi*(m*theta - n*zeta)"
+
+
+def test_solve_cas3d_phase_envelope_selects_exact_coefficient_norm():
+    library = FakeLibrary()
+    result = gliss.solve_cas3d_phase_envelope(
+        equilibrium(library),
+        base_mode=(3, 2),
+        envelope_modes=[(0, 0), (1, 0)],
+        degree=1,
+        angular_theta=36,
+        angular_zeta=24,
+        normalization="cas3d2mn_coefficient",
+        coefficient_angular_resolution=(36, 24),
+        reference_length=10.0,
+        radial_quadrature="cas3d_midpoint",
+    )
+
+    assert result.lowest_eigenvalue == pytest.approx(-0.371)
+    assert library.coefficient_arguments == (36, 24, 10.0, 2)
+    assert "half identity" in result.normalization
+    assert result.coefficient_angular_resolution == (36, 24)
+    assert result.reference_length == 10.0
+    assert result.radial_quadrature == "cas3d_midpoint"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "exception", "match"),
+    [
+        ({"normalization": "unknown"}, ValueError, "one of"),
+        ({"normalization": None}, TypeError, "string"),
+        (
+            {"normalization": "cas3d2mn_coefficient", "degree": 2},
+            ValueError,
+            "degree=1",
+        ),
+        (
+            {"normalization": "cas3d2mn_coefficient", "degree": 1},
+            TypeError,
+            "must be a pair",
+        ),
+        (
+            {
+                "normalization": "cas3d2mn_coefficient",
+                "degree": 1,
+                "coefficient_angular_resolution": (36, 24),
+            },
+            TypeError,
+            "real number",
+        ),
+        (
+            {
+                "normalization": "cas3d2mn_coefficient",
+                "degree": 1,
+                "coefficient_angular_resolution": (36, 24),
+                "reference_length": float("nan"),
+            },
+            ValueError,
+            "finite and positive",
+        ),
+        (
+            {
+                "normalization": "cas3d2mn_coefficient",
+                "degree": 1,
+                "coefficient_angular_resolution": (36, 24),
+                "reference_length": 1.0e200,
+            },
+            ValueError,
+            "normal binary64 range",
+        ),
+        (
+            {
+                "normalization": "cas3d2mn_coefficient",
+                "degree": 1,
+                "coefficient_angular_resolution": (36, 24),
+                "reference_length": 1.0e-200,
+            },
+            ValueError,
+            "normal binary64 range",
+        ),
+        (
+            {"coefficient_angular_resolution": (36, 24)},
+            ValueError,
+            "requires cas3d2mn",
+        ),
+        (
+            {"radial_quadrature": "cas3d_midpoint"},
+            ValueError,
+            "requires cas3d2mn",
+        ),
+        ({"radial_quadrature": "unknown"}, ValueError, "one of"),
+    ],
+)
+def test_phase_envelope_rejects_invalid_normalization(arguments, exception, match):
+    with pytest.raises(exception, match=match):
+        gliss.solve_cas3d_phase_envelope(
+            equilibrium(FakeLibrary()),
+            base_mode=(3, 2),
+            envelope_modes=[(0, 0)],
+            **arguments,
+        )
 
 
 @pytest.mark.parametrize(

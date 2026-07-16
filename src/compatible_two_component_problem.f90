@@ -37,6 +37,8 @@ module compatible_two_component_problem
     integer, parameter, public :: compatible_problem_invalid = -1
     integer, parameter, public :: compatible_problem_assembly_error = -2
     integer, parameter, public :: compatible_problem_allocation_error = -3
+    integer, parameter, public :: compatible_quadrature_gauss = 1
+    integer, parameter, public :: compatible_quadrature_cas3d_midpoint = 2
 
     type, public :: compatible_two_component_problem_t
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
@@ -48,6 +50,7 @@ module compatible_two_component_problem
         integer :: normal_unknowns = 0
         integer :: eta_unknowns = 0
         logical :: has_physical_mass = .false.
+        integer :: radial_quadrature_policy = 0
     end type compatible_two_component_problem_t
 
     public :: build_compatible_two_component_problem
@@ -56,12 +59,14 @@ module compatible_two_component_problem
     logical, parameter :: accurate_term(4) = [.true., .true., .false., .true.]
     logical, parameter :: constraint_term(4) = &
         [.false., .false., .true., .false.]
+    logical, parameter :: all_terms(4) = [.true., .true., .true., .true.]
 
 contains
 
     subroutine build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
-            problem, info, trace_cells, trace, density_kg_m3)
+            problem, info, trace_cells, trace, density_kg_m3, &
+            radial_quadrature_policy)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
@@ -71,17 +76,22 @@ contains
         integer, optional, intent(in) :: trace_cells(:)
         type(compatible_cell_trace_t), allocatable, optional, intent(out) :: trace(:)
         real(dp), optional, intent(in) :: density_kg_m3
+        integer, optional, intent(in) :: radial_quadrature_policy
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
         real(dp), allocatable :: breaks(:), theta(:), zeta(:)
         integer, allocatable :: eta_rank(:), normal_rank(:), parity(:)
-        integer :: allocation_status, intervals, local_info, unknowns
+        integer :: allocation_status, intervals, local_info, quadrature_policy
+        integer :: unknowns
 
         problem = compatible_two_component_problem_t()
         info = compatible_problem_invalid
+        quadrature_policy = compatible_quadrature_gauss
+        if (present(radial_quadrature_policy)) &
+            quadrature_policy = radial_quadrature_policy
         if (.not. inputs_are_valid(equilibrium, mode_m, mode_n, stored_power, &
-            parity_class, degree, n_theta, n_zeta)) return
+            parity_class, degree, n_theta, n_zeta, quadrature_policy)) return
         if (present(density_kg_m3)) then
             if (.not. ieee_is_finite(density_kg_m3) &
                 .or. density_kg_m3 <= 0.0_dp) return
@@ -147,26 +157,33 @@ contains
         if (present(trace)) then
             call assemble_problem(spline, complex, breaks, theta, zeta, &
                 mode_m, mode_n, parity, stored_power, topology, normal_rank, &
-                eta_rank, problem, info, trace_cells, trace, density_kg_m3)
+                eta_rank, problem, info, trace_cells, trace, density_kg_m3, &
+                quadrature_policy)
         else
             call assemble_problem(spline, complex, breaks, theta, zeta, &
                 mode_m, mode_n, parity, stored_power, topology, normal_rank, &
-                eta_rank, problem, info, density_kg_m3=density_kg_m3)
+                eta_rank, problem, info, quadrature_policy=quadrature_policy, &
+                density_kg_m3=density_kg_m3)
         end if
         if (info /= compatible_problem_ok) return
         call symmetrize_matrix(problem%stiffness)
         call symmetrize_matrix(problem%mass)
         call symmetrize_tensor(problem%stiffness_terms)
         problem%degree = degree
-        problem%quadrature_points = size(accurate_nodes)
+        if (quadrature_policy == compatible_quadrature_gauss) then
+            problem%quadrature_points = size(accurate_nodes)
+        else
+            problem%quadrature_points = 1
+        end if
         problem%h1_dofs = complex%h1_dofs
         problem%l2_dofs = complex%l2_dofs
         problem%has_physical_mass = present(density_kg_m3)
+        problem%radial_quadrature_policy = quadrature_policy
     end subroutine build_compatible_two_component_problem
 
     subroutine assemble_problem(spline, complex, breaks, theta, zeta, mode_m, &
             mode_n, parity, stored_power, topology, normal_rank, eta_rank, &
-            problem, info, trace_cells, trace, density_kg_m3)
+            problem, info, trace_cells, trace, density_kg_m3, quadrature_policy)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: breaks(:), theta(:), zeta(:)
@@ -179,11 +196,15 @@ contains
         integer, optional, intent(in) :: trace_cells(:)
         type(compatible_cell_trace_t), optional, intent(inout) :: trace(:)
         real(dp), optional, intent(in) :: density_kg_m3
+        integer, optional, intent(in) :: quadrature_policy
         real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
         real(dp) :: coordinate, half_width, midpoint, radial_weight
         integer :: cell, point, trace_index, trace_point
+        integer :: policy
 
         info = compatible_problem_assembly_error
+        policy = compatible_quadrature_gauss
+        if (present(quadrature_policy)) policy = quadrature_policy
         call build_constraint_quadrature(complex%h1_degree, &
             constraint_nodes, constraint_weights, info)
         if (info /= compatible_quadrature_ok) return
@@ -193,12 +214,34 @@ contains
                 trace_index = findloc(trace_cells, cell, dim=1)
                 if (trace_index > 0) then
                     trace(trace_index)%cell = cell
-                    allocate (trace(trace_index)%points( &
-                        size(accurate_nodes) + size(constraint_nodes)))
+                    if (policy == compatible_quadrature_gauss) then
+                        allocate (trace(trace_index)%points( &
+                            size(accurate_nodes) + size(constraint_nodes)))
+                    else
+                        allocate (trace(trace_index)%points(1))
+                    end if
                 end if
             end if
             midpoint = 0.5_dp * (breaks(cell) + breaks(cell + 1))
             half_width = 0.5_dp * (breaks(cell + 1) - breaks(cell))
+            if (policy == compatible_quadrature_cas3d_midpoint) then
+                radial_weight = 2.0_dp * half_width
+                if (trace_index > 0) then
+                    call assemble_radial_point(spline, complex, midpoint, &
+                        radial_weight, theta, zeta, mode_m, mode_n, parity, &
+                        stored_power, topology, normal_rank, eta_rank, &
+                        problem, all_terms, .true., &
+                        info, trace(trace_index)%points(1), density_kg_m3)
+                else
+                    call assemble_radial_point(spline, complex, midpoint, &
+                        radial_weight, theta, zeta, mode_m, mode_n, parity, &
+                        stored_power, topology, normal_rank, eta_rank, &
+                        problem, all_terms, .true., &
+                        info, density_kg_m3=density_kg_m3)
+                end if
+                if (info /= compatible_problem_ok) return
+                cycle
+            end if
             do point = 1, size(accurate_nodes)
                 coordinate = midpoint + half_width * accurate_nodes(point)
                 radial_weight = half_width * accurate_weights(point)
@@ -458,11 +501,13 @@ contains
     end subroutine build_component_ranks
 
     function inputs_are_valid(equilibrium, mode_m, mode_n, stored_power, &
-            parity_class, degree, n_theta, n_zeta) result(valid)
+            parity_class, degree, n_theta, n_zeta, quadrature_policy) &
+            result(valid)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
         integer, intent(in) :: parity_class, degree, n_theta, n_zeta
+        integer, intent(in) :: quadrature_policy
         logical :: valid
 
         valid = size(equilibrium%s) >= 4 .and. size(mode_m) >= 1
@@ -482,6 +527,13 @@ contains
         if (.not. valid) return
         valid = degree >= 1 .and. degree <= 4
         if (.not. valid) return
+        valid = quadrature_policy == compatible_quadrature_gauss &
+            .or. quadrature_policy == compatible_quadrature_cas3d_midpoint
+        if (.not. valid) return
+        if (quadrature_policy == compatible_quadrature_cas3d_midpoint) then
+            valid = degree == 1
+            if (.not. valid) return
+        end if
         valid = n_theta >= 8 .and. n_zeta >= 8
     end function inputs_are_valid
 

@@ -10,20 +10,25 @@ program test_marginality_spectrum
 
     type(compatible_two_component_problem_t) :: invalid, problem
     type(marginality_spectrum_result_t) :: result
-    real(dp), allocatable :: vector(:)
+    real(dp), allocatable :: eigenvalues(:), vector(:)
     real(dp) :: mass_image(2)
     character(len=128) :: message
     integer :: info
 
     call build_problem(problem)
     call solve_compatible_marginality_problem(problem, .true., result, info, &
-        message, vector)
+        message, vector, full_eigenvalues=eigenvalues)
     if (info /= marginality_spectrum_ok) &
         write (error_unit, "(a,i0,2a)") "solver status ", info, ": ", &
         trim(message)
     call require(info == marginality_spectrum_ok, &
         "valid compatible problem solve failed")
     call require(size(vector) == 2, "refined eigenvector size differs")
+    call require(size(eigenvalues) == 2, "full eigenvalue count differs")
+    call require(eigenvalues(1) <= eigenvalues(2), &
+        "full eigenvalues are not sorted")
+    call require(abs(eigenvalues(1) - result%lowest_eigenvalue) < 1.0e-13_dp, &
+        "dense and refined lowest eigenvalues differ")
     call require(result%has_eigenpair, "eigenpair solve was not identified")
     call require(result%negative_count == 1, "negative inertia count differs")
     call require(result%lowest_eigenvalue < 0.0_dp, &
@@ -35,13 +40,25 @@ program test_marginality_spectrum
         "exact eigenpair residual is too large")
 
     call solve_compatible_marginality_problem(problem, .false., result, info, &
-        message, vector)
+        message, vector, full_eigenvalues=eigenvalues)
     call require(info == marginality_spectrum_ok, "inertia-only solve failed")
     call require(size(vector) == 0, "inertia-only solve returned a vector")
+    call require(size(eigenvalues) == 0, &
+        "inertia-only solve returned full eigenvalues")
     call require(.not. result%has_eigenpair, &
         "inertia-only solve was identified as an eigenpair")
     call require(result%negative_count == 1, &
         "inertia-only negative count differs")
+    call solve_compatible_marginality_problem(problem, .false., result, info, &
+        message, negative_count_override=2)
+    call require(info == marginality_spectrum_ok, &
+        "validated quotient-inertia override failed")
+    call require(result%negative_count == 2, &
+        "quotient-inertia override was not retained")
+    call solve_compatible_marginality_problem(problem, .false., result, info, &
+        message, negative_count_override=-1)
+    call require(info == marginality_spectrum_invalid, &
+        "negative quotient-inertia override was accepted")
 
     call solve_compatible_marginality_problem(invalid, .true., result, info, &
         message, vector)

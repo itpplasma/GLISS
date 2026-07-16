@@ -5,7 +5,8 @@ program gliss_compatible_operator_trace
         operator_geometry_trace_ok, write_compatible_operator_geometry
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_cell_trace_t, &
-        compatible_problem_ok, compatible_two_component_problem_t
+        compatible_problem_ok, compatible_quadrature_cas3d_midpoint, &
+        compatible_quadrature_gauss, compatible_two_component_problem_t
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use marginality_spectrum, only: marginality_spectrum_ok, &
@@ -36,11 +37,12 @@ program gliss_compatible_operator_trace
     integer, allocatable :: mode_m(:), mode_n(:), requested_cells(:)
     integer, allocatable :: selected_cells(:)
     real(dp), allocatable :: profile_values(:, :), stored_power(:)
-    real(dp), allocatable :: eigenvector(:)
+    real(dp), allocatable :: eigenvalues(:), eigenvector(:)
     real(dp) :: edge_profiles(3), edge_seconds(3), edge_slopes(3), q1_distance
     integer :: allocation_status, arguments, degree, info, n_theta, n_zeta
     integer :: parity, profile_index, q1_index
-    logical :: trace_eigenpair
+    integer :: radial_quadrature_policy
+    logical :: trace_eigenpair, unity_form_function
 
     interface
         subroutine terminate_process(status) bind(C, name="exit")
@@ -50,7 +52,8 @@ program gliss_compatible_operator_trace
     end interface
 
     call read_arguments(filename, degree, n_theta, n_zeta, parity, mode_m, &
-        mode_n, stored_power, requested_cells, trace_eigenpair)
+        mode_n, stored_power, requested_cells, trace_eigenpair, &
+        radial_quadrature_policy, unity_form_function)
     call read_gvec_cas3d_file(trim(filename), equilibrium, info)
     if (info /= reader_ok) call fail("reader", info)
     q1_index = 1
@@ -86,11 +89,12 @@ program gliss_compatible_operator_trace
     end if
     call build_compatible_two_component_problem(equilibrium, mode_m, mode_n, &
         stored_power, parity, degree, n_theta, n_zeta, problem, info, &
-        selected_cells, traces)
+        selected_cells, traces, &
+        radial_quadrature_policy=radial_quadrature_policy)
     if (info /= compatible_problem_ok) call fail("operator assembly", info)
     if (trace_eigenpair) then
         call solve_compatible_marginality_problem(problem, .true., spectrum, &
-            info, solver_message, eigenvector)
+            info, solver_message, eigenvector, full_eigenvalues=eigenvalues)
         if (info /= marginality_spectrum_ok) &
             call fail_message("eigensolve", info, solver_message)
     end if
@@ -110,6 +114,16 @@ contains
             size(equilibrium%s), degree, n_theta, n_zeta, size(mode_m), &
             size(problem%stiffness, 1), problem%normal_unknowns, &
             problem%eta_unknowns, size(traces)
+        if (radial_quadrature_policy == compatible_quadrature_gauss) then
+            write (*, "(a)") "RADIAL_QUADRATURE,gauss5"
+        else
+            write (*, "(a)") "RADIAL_QUADRATURE,cas3d_midpoint"
+        end if
+        if (unity_form_function) then
+            write (*, "(a)") "FORM_FUNCTION,unity"
+        else
+            write (*, "(a)") "FORM_FUNCTION,regular_axis"
+        end if
         do mode = 1, size(mode_m)
             write (*, "(a,i0,3(',',i0),',',es24.16e3)") "MODE,", mode, &
                 mode_m(mode), mode_n(mode), parity, stored_power(mode)
@@ -162,6 +176,10 @@ contains
             spectrum%negative_count, spectrum%lowest_eigenvalue, &
             spectrum%eigenpair_residual, spectrum%certificate, kinetic, &
             potential, closure
+        do index = 1, size(eigenvalues)
+            write (*, "(a,i0,',',es24.16e3)") "EIGENVALUE,", index, &
+                eigenvalues(index)
+        end do
         do index = 1, size(eigenvector)
             write (*, "(a,i0,7(',',es24.16e3))") "EIGEN_ROW,", index, &
                 eigenvector(index), row_terms(index, 1), row_terms(index, 2), &
@@ -464,7 +482,7 @@ contains
 
     subroutine read_arguments(path, local_degree, poloidal_points, &
             toroidal_points, local_parity, poloidal_modes, toroidal_modes, &
-            powers, cells, solve_eigenpair)
+            powers, cells, solve_eigenpair, radial_quadrature, unity_form)
         character(len=*), intent(out) :: path
         integer, intent(out) :: local_degree, poloidal_points, toroidal_points
         integer, intent(out) :: local_parity
@@ -472,9 +490,12 @@ contains
         real(dp), allocatable, intent(out) :: powers(:)
         integer, allocatable, intent(out) :: cells(:)
         logical, intent(out) :: solve_eigenpair
+        integer, intent(out) :: radial_quadrature
+        logical, intent(out) :: unity_form
         character(len=64) :: token
         integer :: allocation_status, argument, cell, cell_count, comma
         integer :: local_info, mode, mode_count
+        logical :: form_seen, quadrature_seen
 
         arguments = command_argument_count()
         if (arguments < 6) call usage("missing required arguments")
@@ -492,6 +513,10 @@ contains
         cell_count = 0
         mode_count = 0
         solve_eigenpair = .false.
+        radial_quadrature = compatible_quadrature_gauss
+        unity_form = .false.
+        form_seen = .false.
+        quadrature_seen = .false.
         do argument = 6, arguments
             call read_argument(argument, "mode or option", token)
             if (index(token, "--cell=") == 1) then
@@ -500,12 +525,24 @@ contains
             else if (trim(token) == "--eigen") then
                 if (solve_eigenpair) call usage("duplicate --eigen option")
                 solve_eigenpair = .true.
+            else if (index(token, "--radial-quadrature=") == 1) then
+                if (quadrature_seen) &
+                    call usage("duplicate --radial-quadrature option")
+                call parse_radial_quadrature(token, radial_quadrature)
+                quadrature_seen = .true.
+            else if (index(token, "--form-function=") == 1) then
+                if (form_seen) call usage("duplicate --form-function option")
+                call parse_form_function(token, unity_form)
+                form_seen = .true.
             else if (index(token, "--") == 1) then
                 call usage("unknown option " // trim(token))
             else
                 mode_count = mode_count + 1
             end if
         end do
+        if (radial_quadrature == compatible_quadrature_cas3d_midpoint &
+            .and. local_degree /= 1) &
+            call usage("cas3d_midpoint radial quadrature requires DEGREE=1")
         if (mode_count < 1) call usage("at least one mode is required")
         allocate (poloidal_modes(mode_count), toroidal_modes(mode_count), &
             powers(mode_count), cells(cell_count), &
@@ -516,6 +553,8 @@ contains
         do argument = 6, arguments
             call read_argument(argument, "mode or option", token)
             if (trim(token) == "--eigen") cycle
+            if (index(token, "--radial-quadrature=") == 1) cycle
+            if (index(token, "--form-function=") == 1) cycle
             if (index(token, "--cell=") == 1) then
                 cell = cell + 1
                 call parse_integer(token(8:), "trace cell", cells(cell), &
@@ -549,10 +588,40 @@ contains
                     call usage("duplicate mode")
             end if
             powers(mode) = 0.0_dp
-            if (poloidal_modes(mode) > 0) powers(mode) = &
+            if (.not. unity_form .and. poloidal_modes(mode) > 0) powers(mode) = &
                 1.0_dp - 0.5_dp * real(poloidal_modes(mode), dp)
         end do
     end subroutine read_arguments
+
+    subroutine parse_radial_quadrature(token, policy)
+        character(len=*), intent(in) :: token
+        integer, intent(out) :: policy
+        character(len=*), parameter :: prefix = "--radial-quadrature="
+
+        select case (token(len(prefix) + 1:))
+        case ("gauss5")
+            policy = compatible_quadrature_gauss
+        case ("cas3d_midpoint")
+            policy = compatible_quadrature_cas3d_midpoint
+        case default
+            call usage("radial quadrature must be gauss5 or cas3d_midpoint")
+        end select
+    end subroutine parse_radial_quadrature
+
+    subroutine parse_form_function(token, unity_form)
+        character(len=*), intent(in) :: token
+        logical, intent(out) :: unity_form
+        character(len=*), parameter :: prefix = "--form-function="
+
+        select case (token(len(prefix) + 1:))
+        case ("regular_axis")
+            unity_form = .false.
+        case ("unity")
+            unity_form = .true.
+        case default
+            call usage("form function must be regular_axis or unity")
+        end select
+    end subroutine parse_form_function
 
     subroutine read_argument(position, name, value)
         integer, intent(in) :: position
@@ -587,7 +656,9 @@ contains
             // trim(message)
         write (error_unit, "(a)") "usage: gliss_compatible_operator_trace " &
             // "EXPORT_FILE DEGREE NTHETA NZETA PARITY " &
-            // "[--cell=N ...] [--eigen] m,n [m,n ...]"
+            // "[--cell=N ...] [--eigen] " &
+            // "[--radial-quadrature=gauss5|cas3d_midpoint] " &
+            // "[--form-function=regular_axis|unity] m,n [m,n ...]"
         call terminate_process(2_c_int)
     end subroutine usage
 

@@ -4,7 +4,14 @@ module marginality_spectrum
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_problem_ok, &
+        compatible_quadrature_cas3d_midpoint, compatible_quadrature_gauss, &
         compatible_two_component_problem_t
+    use cas3d_coefficient_mass, only: &
+        cas3d2mn_envelope_mass_scale
+    use cas3d_phase_envelope_transform, only: &
+        apply_cas3d_phase_envelope_congruence, &
+        build_cas3d_phase_envelope_map, cas3d_phase_envelope_map_t, &
+        cas3d_phase_transform_ok
     use dense_spectrum_support, only: dense_spectrum_ok, &
         refine_dense_eigenpair
     use field_profile_identities, only: compute_field_profile_identities, &
@@ -23,6 +30,12 @@ module marginality_spectrum
     integer, parameter, public :: marginality_spectrum_ok = 0
     integer, parameter, public :: marginality_spectrum_invalid = 1
     integer, parameter, public :: marginality_spectrum_compute_error = 2
+    integer, parameter, public :: marginality_normalization_perpendicular_l2 = 1
+    integer, parameter, public :: marginality_normalization_cas3d2mn = 2
+    integer, parameter, public :: marginality_quadrature_gauss = &
+        compatible_quadrature_gauss
+    integer, parameter, public :: marginality_quadrature_cas3d_midpoint = &
+        compatible_quadrature_cas3d_midpoint
     real(dp), parameter :: zero_floor = 1.0e-12_dp
 
     type, public :: marginality_spectrum_result_t
@@ -33,6 +46,7 @@ module marginality_spectrum
         integer :: parity_class = 0
         integer :: degree = 0
         integer :: negative_count = 0
+        integer :: normalization_policy = 0
         real(dp) :: lowest_eigenvalue = 0.0_dp
         real(dp) :: certificate = 0.0_dp
         real(dp) :: eigenpair_residual = 0.0_dp
@@ -59,12 +73,16 @@ contains
 
         call compute_spectrum(equilibrium, mode_m, mode_n, &
             normal_stored_power, size(mode_m), parity_class, degree, &
-            n_theta, n_zeta, solve_eigenpair, result, info, message)
+            n_theta, n_zeta, solve_eigenpair, &
+            marginality_normalization_perpendicular_l2, n_theta, n_zeta, &
+            1.0_dp, marginality_quadrature_gauss, result, info, message)
     end subroutine compute_marginality_spectrum
 
     subroutine compute_phase_envelope_spectrum(equilibrium, base_m, base_n, &
             envelope_m, envelope_n, parity_class, degree, n_theta, n_zeta, &
-            solve_eigenpair, result, info, message)
+            solve_eigenpair, result, info, message, normalization_policy, &
+            coefficient_n_theta, coefficient_n_zeta, reference_length, &
+            radial_quadrature_policy)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: base_m, base_n
         integer, intent(in) :: envelope_m(:), envelope_n(:)
@@ -73,14 +91,36 @@ contains
         type(marginality_spectrum_result_t), intent(out) :: result
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
+        integer, optional, intent(in) :: normalization_policy
+        integer, optional, intent(in) :: coefficient_n_theta
+        integer, optional, intent(in) :: coefficient_n_zeta
+        real(dp), optional, intent(in) :: reference_length
+        integer, optional, intent(in) :: radial_quadrature_policy
         integer, allocatable :: labeled_m(:), labeled_n(:)
+        integer, allocatable :: labeled_orientation(:)
         integer, allocatable :: mode_m(:), mode_n(:)
         real(dp), allocatable :: stored_power(:)
-        integer :: allocation_status, labeled_count, mode
+        type(cas3d_phase_envelope_map_t) :: coefficient_map
+        integer :: allocation_status, coefficient_theta, coefficient_zeta
+        integer :: labeled_count, mode, policy, quadrature_policy
+        real(dp) :: length_scale
+
+        policy = marginality_normalization_perpendicular_l2
+        if (present(normalization_policy)) policy = normalization_policy
+        coefficient_theta = n_theta
+        if (present(coefficient_n_theta)) &
+            coefficient_theta = coefficient_n_theta
+        coefficient_zeta = n_zeta
+        if (present(coefficient_n_zeta)) coefficient_zeta = coefficient_n_zeta
+        length_scale = 1.0_dp
+        if (present(reference_length)) length_scale = reference_length
+        quadrature_policy = marginality_quadrature_gauss
+        if (present(radial_quadrature_policy)) &
+            quadrature_policy = radial_quadrature_policy
 
         call build_labeled_sidebands(base_m, base_n, &
             equilibrium%field_periods, envelope_m, envelope_n, labeled_m, &
-            labeled_n, info, message)
+            labeled_n, labeled_orientation, info, message)
         if (info /= marginality_spectrum_ok) return
         labeled_count = size(labeled_m)
         call unique_mode_table(labeled_m, labeled_n, mode_m, mode_n, info)
@@ -88,6 +128,16 @@ contains
             message = "phase-envelope mode allocation failed"
             info = marginality_spectrum_compute_error
             return
+        end if
+        if (policy == marginality_normalization_cas3d2mn) then
+            call build_cas3d_phase_envelope_map(labeled_m, labeled_n, &
+                labeled_orientation, mode_m, mode_n, parity_class, &
+                coefficient_map, info)
+            if (info /= cas3d_phase_transform_ok) then
+                message = "CAS3D2MN coefficient transform is invalid"
+                info = marginality_spectrum_compute_error
+                return
+            end if
         end if
         allocate (stored_power(size(mode_m)), stat=allocation_status)
         if (allocation_status /= 0) then
@@ -97,42 +147,101 @@ contains
         end if
         do mode = 1, size(mode_m)
             stored_power(mode) = 0.0_dp
-            if (mode_m(mode) > 0) stored_power(mode) = &
+            if (policy /= marginality_normalization_cas3d2mn &
+                .and. mode_m(mode) > 0) stored_power(mode) = &
                 1.0_dp - 0.5_dp * real(mode_m(mode), dp)
         end do
-        call compute_spectrum(equilibrium, mode_m, mode_n, stored_power, &
-            labeled_count, parity_class, degree, n_theta, n_zeta, &
-            solve_eigenpair, result, info, message)
+        if (policy == marginality_normalization_cas3d2mn) then
+            call compute_spectrum(equilibrium, mode_m, mode_n, stored_power, &
+                labeled_count, parity_class, degree, n_theta, n_zeta, &
+                solve_eigenpair, policy, coefficient_theta, coefficient_zeta, &
+                length_scale, quadrature_policy, result, info, message, &
+                coefficient_map)
+        else
+            call compute_spectrum(equilibrium, mode_m, mode_n, stored_power, &
+                labeled_count, parity_class, degree, n_theta, n_zeta, &
+                solve_eigenpair, policy, coefficient_theta, coefficient_zeta, &
+                length_scale, quadrature_policy, result, info, message)
+        end if
     end subroutine compute_phase_envelope_spectrum
 
     subroutine compute_spectrum(equilibrium, mode_m, mode_n, stored_power, &
             reported_mode_count, parity_class, degree, n_theta, n_zeta, &
-            solve_eigenpair, result, info, message)
+            solve_eigenpair, normalization_policy, coefficient_n_theta, &
+            coefficient_n_zeta, reference_length, radial_quadrature_policy, &
+            result, info, message, coefficient_map)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:), reported_mode_count
         real(dp), intent(in) :: stored_power(:)
         integer, intent(in) :: parity_class, degree, n_theta, n_zeta
         logical, intent(in) :: solve_eigenpair
+        integer, intent(in) :: normalization_policy
+        integer, intent(in) :: coefficient_n_theta, coefficient_n_zeta
+        real(dp), intent(in) :: reference_length
+        integer, intent(in) :: radial_quadrature_policy
         type(marginality_spectrum_result_t), intent(out) :: result
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
+        type(cas3d_phase_envelope_map_t), optional, intent(in) :: coefficient_map
         type(compatible_two_component_problem_t) :: problem
         type(field_profile_identity_result_t) :: identities
+        type(marginality_spectrum_result_t) :: quotient_result
+        real(dp) :: coefficient_scale
+        integer :: quotient_negative_count
 
         result = marginality_spectrum_result_t()
         call validate_inputs(equilibrium, mode_m, mode_n, stored_power, &
-            parity_class, degree, n_theta, n_zeta, info, message)
+            parity_class, degree, n_theta, n_zeta, normalization_policy, &
+            coefficient_n_theta, coefficient_n_zeta, reference_length, &
+            radial_quadrature_policy, info, message)
         if (info /= marginality_spectrum_ok) return
         call build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
-            problem, info)
+            problem, info, &
+            radial_quadrature_policy=radial_quadrature_policy)
         if (info /= compatible_problem_ok) then
             info = marginality_spectrum_compute_error
             message = "compatible FEEC marginality assembly failed"
             return
         end if
-        call solve_compatible_marginality_problem(problem, solve_eigenpair, &
-            result, info, message)
+        if (normalization_policy == marginality_normalization_cas3d2mn) then
+            if (.not. present(coefficient_map)) then
+                info = marginality_spectrum_compute_error
+                message = "CAS3D2MN coefficient map is missing"
+                return
+            end if
+            coefficient_scale = cas3d2mn_envelope_mass_scale( &
+                size(equilibrium%s), coefficient_n_theta, &
+                coefficient_n_zeta, reference_length)
+            call solve_compatible_marginality_problem(problem, .false., &
+                quotient_result, info, message)
+            if (info /= marginality_spectrum_ok) then
+                message = "physical quotient inertia failed before " &
+                    // "CAS3D2MN congruence"
+                return
+            end if
+            quotient_negative_count = quotient_result%negative_count
+            call apply_cas3d_phase_envelope_congruence(coefficient_map, &
+                problem%h1_dofs, problem%l2_dofs, coefficient_scale, &
+                problem%stiffness, problem%stiffness_terms, problem%mass, info)
+            if (info /= cas3d_phase_transform_ok) then
+                info = marginality_spectrum_compute_error
+                message = "CAS3D2MN coefficient congruence failed"
+                return
+            end if
+            problem%normal_unknowns = problem%h1_dofs &
+                * coefficient_map%envelope_mode_count
+            problem%eta_unknowns = problem%l2_dofs &
+                * coefficient_map%envelope_mode_count
+        end if
+        if (normalization_policy == marginality_normalization_cas3d2mn) then
+            call solve_compatible_marginality_problem(problem, &
+                solve_eigenpair, result, info, message, &
+                negative_count_override=quotient_negative_count)
+        else
+            call solve_compatible_marginality_problem(problem, &
+                solve_eigenpair, result, info, message)
+        end if
         if (info /= marginality_spectrum_ok) return
         call compute_field_profile_identities(equilibrium, n_theta, n_zeta, &
             identities, info)
@@ -147,6 +256,7 @@ contains
         result%radial_surfaces = size(equilibrium%s)
         result%parity_class = parity_class
         result%degree = degree
+        result%normalization_policy = normalization_policy
         result%force_balance_residual = &
             maxval(identities%general_force_balance_deviation)
         info = marginality_spectrum_ok
@@ -154,13 +264,16 @@ contains
     end subroutine compute_spectrum
 
     subroutine solve_compatible_marginality_problem(problem, solve_eigenpair, &
-            result, info, message, eigenvector)
+            result, info, message, eigenvector, negative_count_override, &
+            full_eigenvalues)
         type(compatible_two_component_problem_t), intent(in) :: problem
         logical, intent(in) :: solve_eigenpair
         type(marginality_spectrum_result_t), intent(out) :: result
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
         real(dp), allocatable, optional, intent(out) :: eigenvector(:)
+        integer, optional, intent(in) :: negative_count_override
+        real(dp), allocatable, optional, intent(out) :: full_eigenvalues(:)
         type(fixed_boundary_solver_controls_t) :: controls
         type(variable_block_tridiagonal_t) :: block_k, block_m
         real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
@@ -177,12 +290,22 @@ contains
             message = "compatible FEEC matrix packing failed"
             return
         end if
-        call variable_generalized_inertia(block_k, block_m, -zero_floor, &
-            result%negative_count, local_info)
-        if (local_info /= variable_generalized_ok) then
-            info = marginality_spectrum_compute_error
-            message = "zero-shift compatible FEEC inertia failed"
-            return
+        if (present(negative_count_override)) then
+            if (negative_count_override < 0 .or. &
+                negative_count_override > size(problem%stiffness, 1)) then
+                info = marginality_spectrum_invalid
+                message = "negative-count override is invalid"
+                return
+            end if
+            result%negative_count = negative_count_override
+        else
+            call variable_generalized_inertia(block_k, block_m, -zero_floor, &
+                result%negative_count, local_info)
+            if (local_info /= variable_generalized_ok) then
+                info = marginality_spectrum_compute_error
+                message = "zero-shift compatible FEEC inertia failed"
+                return
+            end if
         end if
         result%has_eigenpair = solve_eigenpair
         if (.not. solve_eigenpair) then
@@ -190,6 +313,7 @@ contains
             result%certificate = ieee_value(0.0_dp, ieee_quiet_nan)
             result%eigenpair_residual = ieee_value(0.0_dp, ieee_quiet_nan)
             if (present(eigenvector)) allocate (eigenvector(0))
+            if (present(full_eigenvalues)) allocate (full_eigenvalues(0))
             info = marginality_spectrum_ok
             message = ""
             return
@@ -223,6 +347,8 @@ contains
         result%eigenpair_residual = residual
         result%certificate = residual + resolution
         if (present(eigenvector)) call move_alloc(vector, eigenvector)
+        if (present(full_eigenvalues)) &
+            call move_alloc(eigenvalues, full_eigenvalues)
         info = marginality_spectrum_ok
         message = ""
     end subroutine solve_compatible_marginality_problem
@@ -269,11 +395,17 @@ contains
     end subroutine pack_problem
 
     subroutine validate_inputs(equilibrium, mode_m, mode_n, stored_power, &
-            parity_class, degree, n_theta, n_zeta, info, message)
+            parity_class, degree, n_theta, n_zeta, normalization_policy, &
+            coefficient_n_theta, coefficient_n_zeta, reference_length, &
+            radial_quadrature_policy, info, message)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
         integer, intent(in) :: parity_class, degree, n_theta, n_zeta
+        integer, intent(in) :: normalization_policy
+        integer, intent(in) :: coefficient_n_theta, coefficient_n_zeta
+        real(dp), intent(in) :: reference_length
+        integer, intent(in) :: radial_quadrature_policy
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
 
@@ -284,6 +416,35 @@ contains
             message = "parity class must be 1 or 2"
         else if (degree < 1 .or. degree > 4) then
             message = "FEEC degree must be between 1 and 4"
+        else if (normalization_policy /= &
+                marginality_normalization_perpendicular_l2 .and. &
+                normalization_policy /= marginality_normalization_cas3d2mn) then
+            message = "normalization policy is invalid"
+        else if (normalization_policy == &
+                marginality_normalization_cas3d2mn .and. degree /= 1) then
+            message = "CAS3D2MN coefficient normalization requires FEEC degree 1"
+        else if (normalization_policy == &
+                marginality_normalization_cas3d2mn .and. &
+                (coefficient_n_theta < 1 .or. coefficient_n_zeta < 1)) then
+            message = "CAS3D2MN coefficient grid counts must be positive"
+        else if (normalization_policy == &
+                marginality_normalization_cas3d2mn .and. &
+                (.not. ieee_is_finite(reference_length) .or. &
+                reference_length <= 0.0_dp)) then
+            message = "CAS3D2MN reference length must be finite and positive"
+        else if (normalization_policy == &
+                marginality_normalization_cas3d2mn .and. &
+                cas3d2mn_envelope_mass_scale(size(equilibrium%s), &
+                coefficient_n_theta, coefficient_n_zeta, reference_length) &
+                <= 0.0_dp) then
+            message = "CAS3D2MN coefficient mass scale is not representable"
+        else if (radial_quadrature_policy /= marginality_quadrature_gauss &
+                .and. radial_quadrature_policy /= &
+                marginality_quadrature_cas3d_midpoint) then
+            message = "radial quadrature policy is invalid"
+        else if (radial_quadrature_policy == &
+                marginality_quadrature_cas3d_midpoint .and. degree /= 1) then
+            message = "CAS3D midpoint quadrature requires FEEC degree 1"
         else if (n_theta < 8 .or. n_zeta < 8) then
             message = "angular resolutions must be at least 8"
         else if (equilibrium%field_periods < 1) then
@@ -358,10 +519,11 @@ contains
     end subroutine unique_mode_table
 
     subroutine build_labeled_sidebands(base_m, base_n, field_periods, &
-            envelope_m, envelope_n, mode_m, mode_n, info, message)
+            envelope_m, envelope_n, mode_m, mode_n, orientation, info, message)
         integer, intent(in) :: base_m, base_n, field_periods
         integer, intent(in) :: envelope_m(:), envelope_n(:)
         integer, allocatable, intent(out) :: mode_m(:), mode_n(:)
+        integer, allocatable, intent(out) :: orientation(:)
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
         integer(int64) :: first_m, first_n, second_m, second_n
@@ -390,6 +552,12 @@ contains
             message = "phase-envelope mode allocation failed"
             return
         end if
+        allocate (orientation(size(mode_m)), source=1, stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = marginality_spectrum_compute_error
+            message = "phase-envelope orientation allocation failed"
+            return
+        end if
         mode_m(1) = base_m
         mode_n(1) = base_n
         base_m64 = int(base_m, int64)
@@ -403,6 +571,12 @@ contains
             first_n = base_n64 + delta_n
             second_m = base_m64 - delta_m
             second_n = base_n64 - delta_n
+            if (first_m < 0_int64 .or. &
+                (first_m == 0_int64 .and. first_n < 0_int64)) &
+                orientation(labeled + 1) = -1
+            if (second_m < 0_int64 .or. &
+                (second_m == 0_int64 .and. second_n < 0_int64)) &
+                orientation(labeled + 2) = -1
             call canonicalize_mode(first_m, first_n)
             call canonicalize_mode(second_m, second_n)
             if (.not. mode_fits_default_integer(first_m, first_n)) then

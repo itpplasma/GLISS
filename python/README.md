@@ -318,11 +318,55 @@ that envelope `n` before calling GLISS. The envelope sequence must start with
 `(0, 0)` and contain unique nonnegative-`m` pairs.
 
 The returned count is `2*len(envelope_modes)-1`: it records the input labels,
-not the number of unique physical Fourier pairs. Conjugate envelope cells can
-produce coincident sidebands after canonicalization. GLISS assembles each
-physical sideband once, so duplicated labels do not introduce redundant null
-coefficient directions. `negative_count` uses the common numerical floor
+not the number of unique physical Fourier pairs. In the default
+`normalization="perpendicular_l2"` mode, GLISS canonicalizes coincident
+sidebands and solves only in the unique physical Fourier space. Duplicated
+labels therefore do not create null coefficient directions.
+
+For a literal CAS3D2MN coefficient comparison, request Schwab's labeled
+envelope coordinates explicitly:
+
+```python
+with gliss.Equilibrium(Path("w7x.nc")) as equilibrium:
+    result = gliss.solve_cas3d_phase_envelope(
+        equilibrium,
+        base_mode=(3, 2),
+        envelope_modes=envelopes,
+        parity_class=1,
+        degree=1,
+        angular_theta=96,
+        angular_zeta=64,
+        normalization="cas3d2mn_coefficient",
+        coefficient_angular_resolution=(36, 24),
+        reference_length=10.0,
+        radial_quadrature="cas3d_midpoint",
+    )
+```
+
+This mode assembles every unique physical sideband through the same FEEC
+kernel, then applies the exact sparse envelope-to-sideband congruence for
+`f_l=1`. Its mass is Schwab's positive half identity multiplied by
+`reference_length**3 * delta_s * delta_theta * delta_phi`. The coefficient
+grid defines `delta_theta` and `delta_phi`; it is deliberately separate from
+the finer anti-aliasing grid used for stiffness assembly. `reference_length`
+must be finite, positive, have a cube in the normal binary64 range, and
+reproduce the dimensional scaling of the reference run. Changing it by a
+factor `a` changes the reported coefficient eigenvalue by `a**-3` without
+changing inertia.
+
+Coincident sidebands remain separate labeled coefficients in this mode. They
+therefore introduce exact zero-stiffness directions with positive mass. GLISS
+computes `negative_count` on the unique physical quotient, where those
+redundancies are absent, and solves the labeled pencil for the code-specific
+lowest Ritz value. The count uses the common numerical floor
 `lambda < -result.inertia_zero_floor`, currently `1e-12`.
+
+`radial_quadrature="gauss5"` uses accurate radial integration. The optional
+`"cas3d_midpoint"` policy reproduces the tangent-trapezoid midpoint rule and
+is restricted to `degree=1`. Both coefficient results are compatibility
+observables, not SI frequencies or physical growth rates. A numerical match
+also requires the same equilibrium, profiles, Fourier table, radial grid,
+form function, boundaries, coefficient grid, and reference length.
 
 `cas3d_phase_envelope_inertia` is the count-only form. Both functions return
 a frozen `Cas3dPhaseEnvelopeResult` containing the carrier, the exact ordered

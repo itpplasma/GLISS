@@ -9,6 +9,9 @@ module gliss_marginality_capi
     use marginality_spectrum, only: compute_marginality_spectrum, &
         compute_phase_envelope_spectrum, marginality_spectrum_compute_error, &
         marginality_spectrum_invalid, marginality_spectrum_ok, &
+        marginality_normalization_cas3d2mn, &
+        marginality_normalization_perpendicular_l2, &
+        marginality_quadrature_gauss, &
         marginality_spectrum_result_t
     implicit none
     private
@@ -32,6 +35,7 @@ module gliss_marginality_capi
 
     public :: gliss_cas3d_marginality_c
     public :: gliss_cas3d_phase_envelope_c
+    public :: gliss_cas3d2mn_phase_envelope_c
 
 contains
 
@@ -116,6 +120,70 @@ contains
         type(c_ptr), value, intent(in) :: result_pointer, error_pointer
         integer(c_size_t), value, intent(in) :: error_capacity
         integer(c_int) :: status
+
+        status = phase_envelope_call(equilibrium_handle, base_m, base_n, &
+            envelope_count, envelope_m_pointer, envelope_n_pointer, &
+            parity_class, degree, angular_theta, angular_zeta, &
+            solve_eigenpair, marginality_normalization_perpendicular_l2, &
+            angular_theta, angular_zeta, 1.0_c_double, &
+            marginality_quadrature_gauss, &
+            result_pointer, error_pointer, error_capacity)
+    end function gliss_cas3d_phase_envelope_c
+
+    function gliss_cas3d2mn_phase_envelope_c(equilibrium_handle, base_m, &
+            base_n, envelope_count, envelope_m_pointer, envelope_n_pointer, &
+            parity_class, degree, angular_theta, angular_zeta, &
+            coefficient_theta, coefficient_zeta, reference_length, &
+            radial_quadrature, solve_eigenpair, result_pointer, error_pointer, &
+            error_capacity) &
+            bind(c, name="gliss_cas3d2mn_phase_envelope") result(status)
+        type(c_ptr), value, intent(in) :: equilibrium_handle
+        integer(c_int), value, intent(in) :: base_m, base_n
+        integer(c_size_t), value, intent(in) :: envelope_count
+        type(c_ptr), value, intent(in) :: envelope_m_pointer
+        type(c_ptr), value, intent(in) :: envelope_n_pointer
+        integer(c_int), value, intent(in) :: parity_class, degree
+        integer(c_int), value, intent(in) :: angular_theta, angular_zeta
+        integer(c_int), value, intent(in) :: coefficient_theta
+        integer(c_int), value, intent(in) :: coefficient_zeta
+        real(c_double), value, intent(in) :: reference_length
+        integer(c_int), value, intent(in) :: radial_quadrature
+        integer(c_int), value, intent(in) :: solve_eigenpair
+        type(c_ptr), value, intent(in) :: result_pointer, error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+
+        status = phase_envelope_call(equilibrium_handle, base_m, base_n, &
+            envelope_count, envelope_m_pointer, envelope_n_pointer, &
+            parity_class, degree, angular_theta, angular_zeta, &
+            solve_eigenpair, marginality_normalization_cas3d2mn, &
+            coefficient_theta, coefficient_zeta, reference_length, &
+            int(radial_quadrature), &
+            result_pointer, error_pointer, error_capacity)
+    end function gliss_cas3d2mn_phase_envelope_c
+
+    function phase_envelope_call(equilibrium_handle, base_m, &
+            base_n, envelope_count, envelope_m_pointer, envelope_n_pointer, &
+            parity_class, degree, angular_theta, angular_zeta, &
+            solve_eigenpair, normalization_policy, coefficient_theta, &
+            coefficient_zeta, reference_length, radial_quadrature_policy, &
+            result_pointer, error_pointer, error_capacity) result(status)
+        type(c_ptr), value, intent(in) :: equilibrium_handle
+        integer(c_int), value, intent(in) :: base_m, base_n
+        integer(c_size_t), value, intent(in) :: envelope_count
+        type(c_ptr), value, intent(in) :: envelope_m_pointer
+        type(c_ptr), value, intent(in) :: envelope_n_pointer
+        integer(c_int), value, intent(in) :: parity_class, degree
+        integer(c_int), value, intent(in) :: angular_theta, angular_zeta
+        integer(c_int), value, intent(in) :: solve_eigenpair
+        integer, intent(in) :: normalization_policy
+        integer(c_int), value, intent(in) :: coefficient_theta
+        integer(c_int), value, intent(in) :: coefficient_zeta
+        real(c_double), value, intent(in) :: reference_length
+        integer, intent(in) :: radial_quadrature_policy
+        type(c_ptr), value, intent(in) :: result_pointer, error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
         type(equilibrium_context_t), pointer :: equilibrium
         type(marginality_result_c), pointer :: result
         type(marginality_spectrum_result_t) :: native
@@ -149,7 +217,9 @@ contains
             int(base_m), int(base_n), envelope_m, envelope_n, &
             int(parity_class), int(degree), int(angular_theta), &
             int(angular_zeta), solve_eigenpair == 1_c_int, native, info, &
-            message)
+            message, normalization_policy, int(coefficient_theta), &
+            int(coefficient_zeta), real(reference_length, dp), &
+            radial_quadrature_policy)
         select case (info)
         case (marginality_spectrum_ok)
             call fill_result(native, int(angular_theta), int(angular_zeta), &
@@ -166,7 +236,7 @@ contains
             call write_error(error_pointer, error_capacity, &
                 "phase-envelope solve returned an unknown status")
         end select
-    end function gliss_cas3d_phase_envelope_c
+    end function phase_envelope_call
 
     function prepare_call(equilibrium_handle, result_pointer, error_pointer, &
             error_capacity, equilibrium, result) result(status)

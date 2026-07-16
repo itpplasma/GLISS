@@ -1,5 +1,6 @@
 program test_gliss_marginality_capi
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan, &
+        ieee_quiet_nan, ieee_value
     use, intrinsic :: iso_c_binding, only: c_char, c_double, c_int, c_loc, &
         c_null_ptr, c_ptr, c_size_t, c_sizeof
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
@@ -66,7 +67,8 @@ program test_gliss_marginality_capi
     type(c_ptr), target :: base, perturbed
     type(marginality_result_c), target :: general, inertia, shifted
     type(marginality_result_c), target :: phase_direct, phase_prefix
-    type(marginality_result_c), target :: phase_collision
+    type(marginality_result_c), target :: phase_coefficient, phase_collision
+    type(marginality_result_c), target :: phase_midpoint
     type(axisymmetric_result_c), target :: convenience
     integer(c_int) :: status
 
@@ -119,6 +121,27 @@ program test_gliss_marginality_capi
             integer(c_int) :: result
         end function cas3d_phase_envelope
 
+        function cas3d2mn_phase_envelope(equilibrium, base_m, base_n, &
+                envelope_count, poloidal, toroidal, parity_class, &
+                degree, angular_theta, angular_zeta, coefficient_theta, &
+                coefficient_zeta, reference_length, radial_quadrature, &
+                solve_eigenpair, &
+                result_pointer, error, error_capacity) bind(c, &
+                name="gliss_cas3d2mn_phase_envelope") result(result)
+            import c_double, c_int, c_ptr, c_size_t
+            type(c_ptr), value :: equilibrium, poloidal, toroidal
+            type(c_ptr), value :: result_pointer, error
+            integer(c_int), value :: base_m, base_n
+            integer(c_size_t), value :: envelope_count, error_capacity
+            integer(c_int), value :: parity_class, degree
+            integer(c_int), value :: angular_theta, angular_zeta
+            integer(c_int), value :: coefficient_theta, coefficient_zeta
+            real(c_double), value :: reference_length
+            integer(c_int), value :: radial_quadrature
+            integer(c_int), value :: solve_eigenpair
+            integer(c_int) :: result
+        end function cas3d2mn_phase_envelope
+
         function axisymmetric_spectrum(equilibrium, toroidal_mode, &
                 poloidal_max, degree, solve_eigenpair, &
                 result_pointer, error, error_capacity) bind(c, &
@@ -167,6 +190,58 @@ program test_gliss_marginality_capi
     call require(status == status_ok, "phase-prefix solve failed")
     call require_same_marginality(phase_direct, phase_prefix)
 
+    phase_coefficient%struct_size = c_sizeof(phase_coefficient)
+    status = cas3d2mn_phase_envelope(base, 1_c_int, 1_c_int, &
+        size(envelope_m, kind=c_size_t), c_loc(envelope_m), &
+        c_loc(envelope_n), 1_c_int, 1_c_int, 64_c_int, 32_c_int, 36_c_int, &
+        24_c_int, 1.0_c_double, 1_c_int, 1_c_int, &
+        c_loc(phase_coefficient), c_loc(error_buffer), &
+        size(error_buffer, kind=c_size_t))
+    call require(status == status_ok, "CAS3D2MN coefficient solve failed")
+    call require(phase_coefficient%negative_count == &
+        phase_prefix%negative_count, &
+        "positive coefficient norm changed the negative inertia")
+    call require(ieee_is_finite(phase_coefficient%lowest_eigenvalue), &
+        "CAS3D2MN coefficient eigenvalue is not finite")
+    call require(phase_coefficient%lowest_eigenvalue /= &
+        phase_prefix%lowest_eigenvalue, &
+        "CAS3D2MN coefficient norm did not change the eigenvalue")
+    phase_midpoint%struct_size = c_sizeof(phase_midpoint)
+    status = cas3d2mn_phase_envelope(base, 1_c_int, 1_c_int, &
+        size(envelope_m, kind=c_size_t), c_loc(envelope_m), &
+        c_loc(envelope_n), 1_c_int, 1_c_int, 64_c_int, 32_c_int, 36_c_int, &
+        24_c_int, 1.0_c_double, 2_c_int, 1_c_int, &
+        c_loc(phase_midpoint), c_loc(error_buffer), &
+        size(error_buffer, kind=c_size_t))
+    call require(status == status_ok, "CAS3D midpoint solve failed")
+    call require(ieee_is_finite(phase_midpoint%lowest_eigenvalue), &
+        "CAS3D midpoint eigenvalue is not finite")
+    phase_coefficient%mode_count = 888_c_size_t
+    status = cas3d2mn_phase_envelope(base, 1_c_int, 1_c_int, &
+        size(envelope_m, kind=c_size_t), c_loc(envelope_m), &
+        c_loc(envelope_n), 1_c_int, 2_c_int, 64_c_int, 32_c_int, 36_c_int, &
+        24_c_int, 1.0_c_double, 2_c_int, 1_c_int, &
+        c_loc(phase_coefficient), c_loc(error_buffer), &
+        size(error_buffer, kind=c_size_t))
+    call require(status == status_invalid_argument, &
+        "degree-two CAS3D2MN coefficient norm was accepted")
+    call require(phase_coefficient%mode_count == 888_c_size_t, &
+        "failed coefficient-norm validation modified the result")
+    call reject_coefficient_input(0_c_int, 24_c_int, 1.0_c_double, &
+        1_c_int, "zero coefficient theta count was accepted")
+    call reject_coefficient_input(36_c_int, 0_c_int, 1.0_c_double, &
+        1_c_int, "zero coefficient zeta count was accepted")
+    call reject_coefficient_input(36_c_int, 24_c_int, 0.0_c_double, &
+        1_c_int, "zero reference length was accepted")
+    call reject_coefficient_input(36_c_int, 24_c_int, &
+        ieee_value(0.0_c_double, ieee_quiet_nan), 1_c_int, &
+        "NaN reference length was accepted")
+    call reject_coefficient_input(36_c_int, 24_c_int, &
+        huge(0.0_c_double), 1_c_int, &
+        "overflowing reference length was accepted")
+    call reject_coefficient_input(36_c_int, 24_c_int, 1.0_c_double, &
+        0_c_int, "unknown radial quadrature was accepted")
+
     phase_collision%struct_size = c_sizeof(phase_collision)
     status = cas3d_phase_envelope(base, 1_c_int, 1_c_int, &
         size(collision_m, kind=c_size_t), c_loc(collision_m), &
@@ -176,6 +251,17 @@ program test_gliss_marginality_capi
     call require(status == status_ok, "colliding phase envelope failed")
     call require(phase_collision%mode_count == 5_c_size_t, &
         "colliding phase envelope lost labeled sidebands")
+    phase_collision%mode_count = 777_c_size_t
+    status = cas3d2mn_phase_envelope(base, 1_c_int, 1_c_int, &
+        size(collision_m, kind=c_size_t), c_loc(collision_m), &
+        c_loc(collision_n), 1_c_int, 1_c_int, 64_c_int, 16_c_int, 36_c_int, &
+        24_c_int, 1.0_c_double, 1_c_int, 0_c_int, &
+        c_loc(phase_collision), c_loc(error_buffer), &
+        size(error_buffer, kind=c_size_t))
+    call require(status == status_ok, &
+        "colliding CAS3D2MN labeled coefficient transform failed")
+    call require(phase_collision%mode_count == 5_c_size_t, &
+        "colliding CAS3D2MN transform lost labeled directions")
 
     inertia%struct_size = c_sizeof(inertia)
     status = cas3d_marginality(base, size(mode_m, kind=c_size_t), &
@@ -234,6 +320,25 @@ program test_gliss_marginality_capi
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine reject_coefficient_input(coefficient_theta, coefficient_zeta, &
+            reference_length, radial_quadrature, failure_message)
+        integer(c_int), intent(in) :: coefficient_theta, coefficient_zeta
+        real(c_double), intent(in) :: reference_length
+        integer(c_int), intent(in) :: radial_quadrature
+        character(len=*), intent(in) :: failure_message
+
+        phase_coefficient%mode_count = 889_c_size_t
+        status = cas3d2mn_phase_envelope(base, 1_c_int, 1_c_int, &
+            size(envelope_m, kind=c_size_t), c_loc(envelope_m), &
+            c_loc(envelope_n), 1_c_int, 1_c_int, 64_c_int, 32_c_int, &
+            coefficient_theta, coefficient_zeta, reference_length, &
+            radial_quadrature, 1_c_int, c_loc(phase_coefficient), &
+            c_loc(error_buffer), size(error_buffer, kind=c_size_t))
+        call require(status == status_invalid_argument, failure_message)
+        call require(phase_coefficient%mode_count == 889_c_size_t, &
+            "failed coefficient input modified the result")
+    end subroutine reject_coefficient_input
 
     subroutine load_equilibrium(filename, equilibrium)
         character(len=*), intent(in) :: filename

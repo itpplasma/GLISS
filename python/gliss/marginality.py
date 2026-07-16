@@ -2,6 +2,8 @@
 
 import ctypes
 import math
+import numbers
+import sys
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence, Tuple
 
@@ -13,6 +15,18 @@ from .equilibrium import (
     _error_buffer,
     _raise_for_status,
 )
+
+_PERPENDICULAR_L2 = "perpendicular_l2"
+_CAS3D2MN_COEFFICIENT = "cas3d2mn_coefficient"
+_RADIAL_QUADRATURES = {"gauss5": 1, "cas3d_midpoint": 2}
+_NORMALIZATION_LABELS = {
+    _PERPENDICULAR_L2: "compatible perpendicular L2 norm on physical modes",
+    _CAS3D2MN_COEFFICIENT: (
+        "Schwab CAS3D2MN labeled-envelope coefficient norm: half identity, "
+        "physical-sideband stiffness pullback, f_l=1"
+    ),
+}
+
 
 @dataclass(frozen=True)
 class Cas3dMarginalityResult:
@@ -57,6 +71,9 @@ class Cas3dPhaseEnvelopeResult:
     certificate: Optional[float]
     eigenpair_residual: Optional[float]
     force_balance_residual: float
+    coefficient_angular_resolution: Optional[Tuple[int, int]] = None
+    reference_length: Optional[float] = None
+    radial_quadrature: str = "gauss5"
     inertia_zero_floor: float = 1.0e-12
     normalization: str = "compatible perpendicular L2 norm on physical modes"
     interpretation: str = "stability and marginality only; not a physical growth rate"
@@ -109,14 +126,14 @@ def _bind(library: Any) -> None:
     function.restype = ctypes.c_int
 
 
-def _bind_phase_envelope(library: Any) -> None:
+def _bind_phase_envelope(library: Any, symbol: str) -> None:
     _require_symbols(
         library,
-        ("gliss_cas3d_phase_envelope",),
+        (symbol,),
         "CAS3D2MN phase-envelope solver",
     )
-    function = library.gliss_cas3d_phase_envelope
-    function.argtypes = (
+    function = getattr(library, symbol)
+    argument_types = (
         ctypes.c_void_p,
         ctypes.c_int32,
         ctypes.c_int32,
@@ -127,6 +144,15 @@ def _bind_phase_envelope(library: Any) -> None:
         ctypes.c_int32,
         ctypes.c_int32,
         ctypes.c_int32,
+    )
+    if symbol == "gliss_cas3d2mn_phase_envelope":
+        argument_types += (
+            ctypes.c_int32,
+            ctypes.c_int32,
+            ctypes.c_double,
+            ctypes.c_int32,
+        )
+    function.argtypes = argument_types + (
         ctypes.c_int32,
         ctypes.POINTER(_Cas3dMarginalityResult),
         ctypes.c_void_p,
@@ -154,6 +180,49 @@ def _degree(value: Any) -> int:
     if result < 1 or result > 4:
         raise ValueError("degree must be between 1 and 4")
     return result
+
+
+def _normalization(value: Any) -> str:
+    if not isinstance(value, str):
+        raise TypeError("normalization must be a string")
+    if value not in _NORMALIZATION_LABELS:
+        choices = ", ".join(repr(choice) for choice in _NORMALIZATION_LABELS)
+        raise ValueError(f"normalization must be one of {choices}")
+    return value
+
+
+def _coefficient_resolution(value: Any) -> Tuple[int, int]:
+    if not isinstance(value, (tuple, list)) or len(value) != 2:
+        raise TypeError("coefficient_angular_resolution must be a pair")
+    result = (
+        mode_integer(value[0], "coefficient angular theta"),
+        mode_integer(value[1], "coefficient angular zeta"),
+    )
+    if result[0] < 1 or result[1] < 1:
+        raise ValueError("coefficient angular resolutions must be positive")
+    return result
+
+
+def _reference_length(value: Any) -> float:
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise TypeError("reference_length must be a real number")
+    result = float(value)
+    if not math.isfinite(result) or result <= 0.0:
+        raise ValueError("reference_length must be finite and positive")
+    cube_limit = sys.float_info.max ** (1.0 / 3.0)
+    cube_floor = sys.float_info.min ** (1.0 / 3.0)
+    if result < cube_floor or result > cube_limit:
+        raise ValueError("reference_length cube must remain in the normal binary64 range")
+    return result
+
+
+def _radial_quadrature(value: Any) -> Tuple[str, int]:
+    if not isinstance(value, str):
+        raise TypeError("radial_quadrature must be a string")
+    if value not in _RADIAL_QUADRATURES:
+        choices = ", ".join(repr(choice) for choice in _RADIAL_QUADRATURES)
+        raise ValueError(f"radial_quadrature must be one of {choices}")
+    return value, _RADIAL_QUADRATURES[value]
 
 
 def _result(
@@ -306,6 +375,10 @@ def _phase_envelope_result(
     degree: int,
     angular_resolution: Tuple[int, int],
     solve_eigenpair: bool,
+    normalization: str,
+    coefficient_resolution: Optional[Tuple[int, int]],
+    reference_length: Optional[float],
+    radial_quadrature: str,
 ) -> Cas3dPhaseEnvelopeResult:
     sideband_count = 2 * len(envelope_modes) - 1
     metadata_valid = (
@@ -349,6 +422,10 @@ def _phase_envelope_result(
         certificate=native.certificate if solve_eigenpair else None,
         eigenpair_residual=(native.eigenpair_residual if solve_eigenpair else None),
         force_balance_residual=native.force_balance_residual,
+        normalization=_NORMALIZATION_LABELS[normalization],
+        coefficient_angular_resolution=coefficient_resolution,
+        reference_length=reference_length,
+        radial_quadrature=radial_quadrature,
     )
 
 
@@ -361,6 +438,10 @@ def _calculate_phase_envelope(
     angular_theta: int,
     angular_zeta: int,
     solve_eigenpair: bool,
+    normalization: str,
+    coefficient_angular_resolution: Optional[Tuple[int, int]],
+    reference_length: Optional[float],
+    radial_quadrature: str,
 ) -> Cas3dPhaseEnvelopeResult:
     if not isinstance(equilibrium, Equilibrium):
         raise TypeError("equilibrium must be a gliss.Equilibrium")
@@ -368,18 +449,46 @@ def _calculate_phase_envelope(
     base, envelopes = _validate_phase_envelope(base_mode, envelope_modes)
     validated_parity = _parity_class(parity_class)
     degree = _degree(degree)
+    normalization = _normalization(normalization)
+    quadrature_name, quadrature_policy = _radial_quadrature(radial_quadrature)
+    if normalization == _CAS3D2MN_COEFFICIENT and degree != 1:
+        raise ValueError("cas3d2mn_coefficient normalization requires degree=1")
+    if normalization == _CAS3D2MN_COEFFICIENT:
+        coefficient_resolution = _coefficient_resolution(coefficient_angular_resolution)
+        length_scale = _reference_length(reference_length)
+    else:
+        if coefficient_angular_resolution is not None:
+            raise ValueError(
+                "coefficient_angular_resolution requires cas3d2mn_coefficient "
+                "normalization"
+            )
+        if reference_length is not None:
+            raise ValueError(
+                "reference_length requires cas3d2mn_coefficient normalization"
+            )
+        coefficient_resolution = None
+        length_scale = None
+        if quadrature_name != "gauss5":
+            raise ValueError(
+                "cas3d_midpoint radial quadrature requires "
+                "cas3d2mn_coefficient normalization"
+            )
     resolution = (
         _angular_resolution(angular_theta, "angular_theta"),
         _angular_resolution(angular_zeta, "angular_zeta"),
     )
-    _bind_phase_envelope(equilibrium._library)
+    if normalization == _PERPENDICULAR_L2:
+        symbol = "gliss_cas3d_phase_envelope"
+    else:
+        symbol = "gliss_cas3d2mn_phase_envelope"
+    _bind_phase_envelope(equilibrium._library, symbol)
     count = len(envelopes)
     integers = ctypes.c_int32 * count
     envelope_m = integers(*(mode[0] for mode in envelopes))
     envelope_n = integers(*(mode[1] for mode in envelopes))
     native = _Cas3dMarginalityResult(struct_size=ctypes.sizeof(_Cas3dMarginalityResult))
     error = _error_buffer()
-    status = equilibrium._library.gliss_cas3d_phase_envelope(
+    arguments = [
         equilibrium._handle,
         base[0],
         base[1],
@@ -390,12 +499,19 @@ def _calculate_phase_envelope(
         degree,
         resolution[0],
         resolution[1],
-        int(solve_eigenpair),
-        ctypes.byref(native),
-        error,
-        len(error),
-    )
-    _raise_for_status(status, error, "gliss_cas3d_phase_envelope")
+    ]
+    if coefficient_resolution is not None:
+        arguments.extend(
+            [
+                coefficient_resolution[0],
+                coefficient_resolution[1],
+                length_scale,
+                quadrature_policy,
+            ]
+        )
+    arguments.extend([int(solve_eigenpair), ctypes.byref(native), error, len(error)])
+    status = getattr(equilibrium._library, symbol)(*arguments)
+    _raise_for_status(status, error, symbol)
     return _phase_envelope_result(
         native,
         base,
@@ -404,6 +520,10 @@ def _calculate_phase_envelope(
         degree,
         resolution,
         solve_eigenpair,
+        normalization,
+        coefficient_resolution,
+        length_scale,
+        quadrature_name,
     )
 
 
@@ -415,6 +535,10 @@ def cas3d_phase_envelope_inertia(
     degree: int = 2,
     angular_theta: int = 64,
     angular_zeta: int = 64,
+    normalization: str = _PERPENDICULAR_L2,
+    coefficient_angular_resolution: Optional[Tuple[int, int]] = None,
+    reference_length: Optional[float] = None,
+    radial_quadrature: str = "gauss5",
 ) -> Cas3dPhaseEnvelopeResult:
     """Count negative directions in a CAS3D2MN phase envelope."""
 
@@ -427,6 +551,10 @@ def cas3d_phase_envelope_inertia(
         angular_theta,
         angular_zeta,
         solve_eigenpair=False,
+        normalization=normalization,
+        coefficient_angular_resolution=coefficient_angular_resolution,
+        reference_length=reference_length,
+        radial_quadrature=radial_quadrature,
     )
 
 
@@ -438,6 +566,10 @@ def solve_cas3d_phase_envelope(
     degree: int = 2,
     angular_theta: int = 64,
     angular_zeta: int = 64,
+    normalization: str = _PERPENDICULAR_L2,
+    coefficient_angular_resolution: Optional[Tuple[int, int]] = None,
+    reference_length: Optional[float] = None,
+    radial_quadrature: str = "gauss5",
 ) -> Cas3dPhaseEnvelopeResult:
     """Return inertia and the lowest pair for a CAS3D2MN phase envelope."""
 
@@ -450,6 +582,10 @@ def solve_cas3d_phase_envelope(
         angular_theta,
         angular_zeta,
         solve_eigenpair=True,
+        normalization=normalization,
+        coefficient_angular_resolution=coefficient_angular_resolution,
+        reference_length=reference_length,
+        radial_quadrature=radial_quadrature,
     )
 
 

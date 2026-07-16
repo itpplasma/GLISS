@@ -107,6 +107,8 @@ add_library(gliss
     src/fixed_boundary_eigen_bracket.f90
     src/fixed_boundary_spectrum.f90
     src/newcomb_limit.f90
+    src/cas3d_coefficient_mass.f90
+    src/cas3d_phase_envelope_transform.f90
     src/marginality_spectrum.f90
     src/axisymmetric_spectrum.f90
     src/field_profile_identities.f90
@@ -441,6 +443,18 @@ if(BUILD_TESTING)
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: duplicate --eigen option"
         missing.nc 2 8 8 1 --eigen --eigen 1,0)
+    add_compatible_cli_rejection(compatible_trace_cli_bad_quadrature
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: radial quadrature must be gauss5 or cas3d_midpoint"
+        missing.nc 1 8 8 1 --radial-quadrature=broken 1,0)
+    add_compatible_cli_rejection(compatible_trace_cli_midpoint_degree
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: cas3d_midpoint radial quadrature requires DEGREE=1"
+        missing.nc 2 8 8 1 --radial-quadrature=cas3d_midpoint 1,0)
+    add_compatible_cli_rejection(compatible_trace_cli_bad_form_function
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: form function must be regular_axis or unity"
+        missing.nc 1 8 8 1 --form-function=broken 1,0)
 
     add_executable(test_radial_cubic_spline
         test/test_radial_cubic_spline.f90)
@@ -527,6 +541,17 @@ if(BUILD_TESTING)
         test/test_marginality_spectrum.f90)
     target_link_libraries(test_marginality_spectrum PRIVATE gliss)
     add_test(NAME marginality_spectrum COMMAND test_marginality_spectrum)
+
+    add_executable(test_cas3d_coefficient_mass
+        test/test_cas3d_coefficient_mass.f90)
+    target_link_libraries(test_cas3d_coefficient_mass PRIVATE gliss)
+    add_test(NAME cas3d_coefficient_mass COMMAND test_cas3d_coefficient_mass)
+
+    add_executable(test_cas3d_phase_envelope_transform
+        test/test_cas3d_phase_envelope_transform.f90)
+    target_link_libraries(test_cas3d_phase_envelope_transform PRIVATE gliss)
+    add_test(NAME cas3d_phase_envelope_transform
+        COMMAND test_cas3d_phase_envelope_transform)
 
     add_executable(test_gliss_header cmake/test_gliss_header.c)
     target_include_directories(test_gliss_header PRIVATE include)

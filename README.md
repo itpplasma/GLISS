@@ -31,9 +31,11 @@ The development API also exposes the shared two-component marginality
 operator through an explicit general 3-D mode table and the axisymmetric
 family used for the pinned Solov'ev comparison with DCON. A separate
 CAS3D2MN phase-envelope entry point translates the ordered carrier/envelope
-table, canonicalizes coincident physical Fourier modes, and calls the same
-production assembly and eigensolver. It reports the original label count for
-provenance without introducing redundant coefficient directions.
+table and calls the same production assembly and eigensolver. The default
+physical-L2 norm canonicalizes coincident Fourier modes. The explicit Schwab
+coefficient norm instead pulls that physical operator back to every labeled
+envelope coefficient, retaining the exact redundant zero-stiffness directions
+and evaluating inertia on the physical quotient.
 Paired TERPSICHORE FORT.23/FORT.24 files from a `MODELK=0` pressureless-
 pseudoplasma run can be solved through the same public Python package, with
 the stored TERPSICHORE mode available for direct diagnostic comparison. This

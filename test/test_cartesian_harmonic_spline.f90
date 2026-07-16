@@ -8,7 +8,8 @@ program test_cartesian_harmonic_spline
         fit_cartesian_harmonic_spline
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_problem_invalid, &
-        compatible_problem_ok, compatible_cell_trace_t, &
+        compatible_problem_ok, compatible_quadrature_cas3d_midpoint, &
+        compatible_cell_trace_t, &
         compatible_two_component_problem_t
     use compatible_three_component_problem, only: &
         build_compatible_three_component_problem, &
@@ -344,6 +345,7 @@ contains
         type(compatible_two_component_problem_t) :: problem
         type(compatible_cell_trace_t), allocatable :: traces(:)
         real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
+        real(dp), allocatable :: gauss_constraint(:, :)
         real(dp), allocatable :: reference_mass(:, :), reference_stiffness(:, :)
         real(dp) :: scale
         integer :: degree, expected_h1, expected_l2, status, term
@@ -392,6 +394,50 @@ contains
             .and. all(problem%mass == reference_mass), &
             "operator tracing changed the assembled problem")
         call check_compatible_trace(traces)
+        call build_compatible_two_component_problem(equilibrium, &
+            [0, 1, 2], [0, 0, 0], [0.0_dp, 0.0_dp, 0.0_dp], 1, 1, &
+            16, 16, problem, status)
+        call require(status == compatible_problem_ok, &
+            "degree-one Gauss reference problem failed")
+        gauss_constraint = problem%stiffness_terms(:, :, 3)
+        call build_compatible_two_component_problem(equilibrium, &
+            [0, 1, 2], [0, 0, 0], [0.0_dp, 0.0_dp, 0.0_dp], 1, 1, &
+            16, 16, problem, status, [3], traces, &
+            radial_quadrature_policy=compatible_quadrature_cas3d_midpoint)
+        call require(status == compatible_problem_ok, &
+            "CAS3D midpoint compatible problem failed")
+        call require(problem%quadrature_points == 1 &
+            .and. problem%radial_quadrature_policy &
+            == compatible_quadrature_cas3d_midpoint, &
+            "CAS3D midpoint policy metadata differs")
+        call require(size(traces) == 1, &
+            "CAS3D midpoint trace count differs")
+        call require(size(traces(1)%points) == 1, &
+            "CAS3D midpoint trace did not contain one point")
+        call require(abs(traces(1)%points(1)%coordinate &
+            - 2.5_dp / real(size(equilibrium%s), dp)) &
+            < 4.0_dp * epsilon(1.0_dp), &
+            "CAS3D midpoint coordinate is off by one cell")
+        call require(abs(traces(1)%points(1)%weight &
+            - 1.0_dp / real(size(equilibrium%s), dp)) &
+            < 4.0_dp * epsilon(1.0_dp), &
+            "CAS3D midpoint radial weight differs")
+        call require(all(traces(1)%points(1)%term_mask) &
+            .and. traces(1)%points(1)%assembles_mass, &
+            "CAS3D midpoint did not assemble every term and mass")
+        scale = max(1.0_dp, maxval(abs(problem%stiffness)))
+        call require(maxval(abs(problem%stiffness &
+            - sum(problem%stiffness_terms, dim=3))) &
+            < 3.0e-14_dp * scale, &
+            "CAS3D midpoint energy terms do not close")
+        call require(all(problem%stiffness_terms(:, :, 3) &
+            == gauss_constraint), &
+            "degree-one Gauss and midpoint K3 constraint terms differ")
+        call build_compatible_two_component_problem(equilibrium, [1], [0], &
+            [0.0_dp], 1, 2, 16, 16, problem, status, &
+            radial_quadrature_policy=compatible_quadrature_cas3d_midpoint)
+        call require(status == compatible_problem_invalid, &
+            "degree-two CAS3D midpoint problem was accepted")
         call build_compatible_two_component_problem(equilibrium, [1], [0], &
             [0.0_dp], 1, 0, 16, 16, problem, status)
         call require(status == compatible_problem_invalid, &
