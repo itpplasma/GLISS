@@ -17,6 +17,7 @@ if(NOT LAPACK_FOUND)
     set(BLA_VENDOR "Generic")
     find_package(LAPACK REQUIRED)
 endif()
+find_package(OpenMP REQUIRED COMPONENTS Fortran)
 message(STATUS "GLISS BLAS/LAPACK vendor: ${BLA_VENDOR}")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NETCDF_C REQUIRED IMPORTED_TARGET netcdf)
@@ -97,6 +98,7 @@ add_library(gliss
     src/boundary/starwall_fourier_coupling.f90
     src/vacuum_schur.f90
     src/variable_block_tridiagonal.f90
+    src/compatible_block_storage.f90
     src/variable_generalized_equilibration.f90
     src/stable_reduction.f90
     src/fixed_boundary_solver_controls.f90
@@ -121,6 +123,7 @@ add_library(gliss
     src/symmetric_eigensolver.f90)
 target_link_libraries(gliss PUBLIC
     LAPACK::LAPACK
+    OpenMP::OpenMP_Fortran
     PkgConfig::NETCDF_C)
 set_target_properties(gliss PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules"

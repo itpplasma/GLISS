@@ -48,11 +48,10 @@ output contracts, direct VMEC conversion, and the optional SIMSOPT adapter.
 
 Requires CMake, Ninja, a Fortran compiler, BLAS/LAPACK, PkgConfig, and the
 NetCDF C library. A clean single-config build defaults to the optimized
-`Release` configuration and prefers threaded OpenBLAS. If OpenBLAS is not
-installed, CMake falls back to another available BLAS/LAPACK provider.
-The provider controls its thread count; for example,
-`OPENBLAS_NUM_THREADS=16` uses 16 OpenBLAS threads and
-`OPENBLAS_NUM_THREADS=1` selects deterministic one-thread controls.
+`Release` configuration, enables OpenMP assembly, and prefers threaded
+OpenBLAS. If OpenBLAS is not installed, CMake falls back to another available
+BLAS/LAPACK provider. GLISS does not set a thread count: the OpenMP and BLAS
+runtimes use their default thread counts.
 
 ```sh
 cmake -S . -B build -G Ninja

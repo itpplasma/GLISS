@@ -3,6 +3,7 @@ module compatible_family_point_assembly
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use phase_factor_topology, only: phase_product_coefficients
     use two_component_kernel, only: two_component_components
+    !$  use omp_lib, only: omp_get_num_threads, omp_get_thread_num
     implicit none
     private
 
@@ -61,13 +62,23 @@ contains
         integer, intent(out) :: info
         real(dp), optional, intent(inout) :: terms(:, :, :)
         real(dp) :: weight
-        integer :: j, k
+        integer :: first_column, j, k, last_column, thread, threads
 
         call validate_inputs(fields, drive, trial_m, trial_n, trial_parity, &
             field_periods, h1_values, h1_derivatives, l2_values, full, info, &
             terms)
         if (info /= 0) return
         weight = 1.0_dp / real(size(fields, 1) * size(fields, 2), dp)
+        !$omp parallel default(none) &
+        !$omp shared(fields, drive, trial_m, trial_n, trial_parity, field_periods) &
+        !$omp shared(h1_values, h1_derivatives, l2_values, weight, full, terms) &
+        !$omp private(first_column, last_column, thread, threads, j, k)
+        thread = 0
+        threads = 1
+        !$      thread = omp_get_thread_num()
+        !$      threads = omp_get_num_threads()
+        first_column = 1 + thread * size(full, 2) / threads
+        last_column = (thread + 1) * size(full, 2) / threads
         do k = 1, size(fields, 2)
             do j = 1, size(fields, 1)
                 call accumulate_transformed(fields(j, k, :), drive(j, k), &
@@ -75,9 +86,10 @@ contains
                     h1_derivatives, l2_values, &
                     real(j - 1, dp) / real(size(fields, 1), dp), &
                     real(k - 1, dp) / real(size(fields, 2), dp), weight, &
-                    full, terms)
+                    first_column, last_column, full, terms)
             end do
         end do
+        !$omp end parallel
         info = 0
     end subroutine assemble_compatible_transformed_surface
 
@@ -114,12 +126,14 @@ contains
 
     subroutine accumulate_transformed(fields, drive, trial_m, trial_n, &
             trial_parity, field_periods, h1_values, h1_derivatives, &
-            l2_values, theta, zeta, weight, full, terms)
+            l2_values, theta, zeta, weight, first_column, last_column, full, &
+            terms)
         real(dp), intent(in) :: fields(:), drive, h1_values(:, :)
         real(dp), intent(in) :: h1_derivatives(:, :), l2_values(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods
         real(dp), intent(in) :: theta, zeta, weight
+        integer, intent(in) :: first_column, last_column
         real(dp), intent(inout) :: full(:, :)
         real(dp), optional, intent(inout) :: terms(:, :, :)
         real(dp) :: cosine_rows(4, size(full, 1))
@@ -156,7 +170,8 @@ contains
             end if
         end do
         call transformed_rank_update(cosine_rows, sine_rows, phases, trial_n, &
-            field_periods, drive, weight * abs(fields(7)), full, terms)
+            field_periods, drive, weight * abs(fields(7)), first_column, &
+            last_column, full, terms)
     end subroutine accumulate_transformed
 
     subroutine add_trial_columns(rows, trial, m, toroidal_wave, h1_values, &
@@ -244,9 +259,11 @@ contains
     end subroutine rank_update
 
     subroutine transformed_rank_update(cosine_rows, sine_rows, phases, &
-            trial_n, field_periods, drive, weight, full, terms)
+            trial_n, field_periods, drive, weight, first_column, last_column, &
+            full, terms)
         real(dp), intent(in) :: cosine_rows(:, :), sine_rows(:, :), phases(:)
         integer, intent(in) :: trial_n(:), field_periods
+        integer, intent(in) :: first_column, last_column
         real(dp), intent(in) :: drive, weight
         real(dp), intent(inout) :: full(:, :)
         real(dp), optional, intent(inout) :: terms(:, :, :)
@@ -257,7 +274,7 @@ contains
         trials = size(trial_n)
         cosine = cos(phases)
         sine = sin(phases)
-        do b = 1, size(full, 2)
+        do b = first_column, last_column
             second_trial = modulo(b - 1, trials) + 1
             do a = 1, size(full, 1)
                 first_trial = modulo(a - 1, trials) + 1

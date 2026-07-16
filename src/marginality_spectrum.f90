@@ -16,14 +16,20 @@ module marginality_spectrum
         refine_dense_eigenpair
     use field_profile_identities, only: compute_field_profile_identities, &
         field_profile_identities_ok, field_profile_identity_result_t
+    use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
+        fixed_boundary_bracket_ok
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use symmetric_eigensolver, only: solve_symmetric_generalized_allocated, &
         symmetric_eigensolver_ok
     use variable_block_tridiagonal, only: pack_variable_blocks, &
-        variable_block_ok, variable_block_tridiagonal_t
-    use variable_generalized_solver, only: variable_generalized_inertia, &
+        validate_variable_blocks, variable_block_ok, &
+        variable_block_tridiagonal_t
+    use variable_generalized_solver, only: &
+        iterate_variable_generalized_eigenvalue, variable_generalized_inertia, &
         variable_generalized_ok
+    use variable_spectrum_analysis, only: analyze_variable_spectrum, &
+        variable_spectrum_ok, variable_spectrum_summary_t
     implicit none
     private
 
@@ -198,7 +204,9 @@ contains
         call build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
             problem, info, &
-            radial_quadrature_policy=radial_quadrature_policy)
+            radial_quadrature_policy=radial_quadrature_policy, &
+            sparse_storage=normalization_policy == &
+            marginality_normalization_perpendicular_l2)
         if (info /= compatible_problem_ok) then
             info = marginality_spectrum_compute_error
             message = "compatible FEEC marginality assembly failed"
@@ -285,6 +293,12 @@ contains
         info = marginality_spectrum_invalid
         message = "compatible FEEC problem is invalid"
         if (.not. valid_compatible_problem(problem)) return
+        if (problem%has_sparse_storage) then
+            call solve_sparse_compatible_problem(problem, solve_eigenpair, &
+                result, info, message, eigenvector, &
+                negative_count_override, full_eigenvalues)
+            return
+        end if
         call pack_problem(problem, block_k, block_m, info)
         if (info /= marginality_spectrum_ok) then
             message = "compatible FEEC matrix packing failed"
@@ -353,17 +367,125 @@ contains
         message = ""
     end subroutine solve_compatible_marginality_problem
 
+    subroutine solve_sparse_compatible_problem(problem, solve_eigenpair, &
+            result, info, message, eigenvector, negative_count_override, &
+            full_eigenvalues)
+        type(compatible_two_component_problem_t), intent(in) :: problem
+        logical, intent(in) :: solve_eigenpair
+        type(marginality_spectrum_result_t), intent(out) :: result
+        integer, intent(out) :: info
+        character(len=*), intent(out) :: message
+        real(dp), allocatable, optional, intent(out) :: eigenvector(:)
+        integer, optional, intent(in) :: negative_count_override
+        real(dp), allocatable, optional, intent(out) :: full_eigenvalues(:)
+        type(fixed_boundary_solver_controls_t) :: controls
+        type(variable_spectrum_summary_t) :: summary
+        real(dp), allocatable :: vector(:)
+        real(dp) :: eigenvalue, interval, residual, resolution, shift
+        integer :: local_info, unknowns
+
+        result = marginality_spectrum_result_t()
+        info = marginality_spectrum_compute_error
+        message = "sparse compatible FEEC spectrum analysis failed"
+        unknowns = sum(problem%sparse_stiffness%widths)
+        if (present(negative_count_override)) then
+            if (negative_count_override < 0 &
+                .or. negative_count_override > unknowns) then
+                info = marginality_spectrum_invalid
+                message = "negative-count override is invalid"
+                return
+            end if
+            result%negative_count = negative_count_override
+        end if
+        result%has_eigenpair = solve_eigenpair
+        if (.not. solve_eigenpair) then
+            if (.not. present(negative_count_override)) then
+                call variable_generalized_inertia( &
+                    problem%sparse_stiffness, problem%sparse_mass, &
+                    -zero_floor, result%negative_count, local_info)
+                if (local_info /= variable_generalized_ok) then
+                    message = "zero-shift sparse compatible FEEC inertia failed"
+                    return
+                end if
+            end if
+            result%lowest_eigenvalue = ieee_value(0.0_dp, ieee_quiet_nan)
+            result%certificate = ieee_value(0.0_dp, ieee_quiet_nan)
+            result%eigenpair_residual = ieee_value(0.0_dp, ieee_quiet_nan)
+            if (present(eigenvector)) allocate (eigenvector(0))
+            if (present(full_eigenvalues)) allocate (full_eigenvalues(0))
+            info = marginality_spectrum_ok
+            message = ""
+            return
+        end if
+        call analyze_variable_spectrum(problem%sparse_stiffness, &
+            problem%sparse_mass, zero_floor, summary, local_info)
+        if (local_info /= variable_spectrum_ok) return
+        if (.not. present(negative_count_override)) &
+            result%negative_count = summary%negative_count
+        if (summary%negative_count > 0) then
+            call bracket_lowest_negative(problem%sparse_stiffness, &
+                problem%sparse_mass, zero_floor, shift, interval, local_info, &
+                controls)
+            if (local_info /= fixed_boundary_bracket_ok) then
+                message = "sparse compatible FEEC eigenvalue bracket failed"
+                return
+            end if
+        else if (summary%has_positive) then
+            shift = 0.5_dp * (summary%first_positive_lower &
+                + summary%first_positive_upper)
+            interval = summary%first_positive_upper &
+                - summary%first_positive_lower
+        else
+            message = "sparse compatible FEEC pencil has no resolved eigenvalue"
+            return
+        end if
+        call iterate_variable_generalized_eigenvalue( &
+            problem%sparse_stiffness, problem%sparse_mass, shift, eigenvalue, &
+            vector, residual, resolution, local_info, controls)
+        if (local_info /= variable_generalized_ok) then
+            message = "sparse compatible FEEC inverse iteration failed"
+            return
+        end if
+        result%lowest_eigenvalue = eigenvalue
+        result%eigenpair_residual = residual
+        result%certificate = interval + residual + resolution
+        if (present(eigenvector)) call move_alloc(vector, eigenvector)
+        if (present(full_eigenvalues)) allocate (full_eigenvalues(0))
+        info = marginality_spectrum_ok
+        message = ""
+    end subroutine solve_sparse_compatible_problem
+
     function valid_compatible_problem(problem) result(valid)
         type(compatible_two_component_problem_t), intent(in) :: problem
         logical :: valid
-        integer :: unknowns
+        integer :: local_info, unknowns
 
         valid = .false.
+        unknowns = problem%normal_unknowns + problem%eta_unknowns
+        if (unknowns < 1) return
+        if (problem%has_sparse_storage) then
+            call validate_variable_blocks(problem%sparse_stiffness, local_info)
+            if (local_info /= variable_block_ok) return
+            call validate_variable_blocks(problem%sparse_mass, local_info)
+            if (local_info /= variable_block_ok) return
+            if (size(problem%sparse_stiffness%widths) &
+                /= size(problem%sparse_mass%widths)) return
+            if (any(problem%sparse_stiffness%widths &
+                /= problem%sparse_mass%widths)) return
+            unknowns = sum(problem%sparse_stiffness%widths)
+            if (problem%normal_unknowns + problem%eta_unknowns &
+                /= unknowns) return
+            if (.not. allocated(problem%sparse_block_index)) return
+            if (.not. allocated(problem%sparse_local_index)) return
+            if (size(problem%sparse_block_index) /= unknowns) return
+            if (size(problem%sparse_local_index) /= unknowns) return
+            valid = .true.
+            return
+        end if
         if (.not. allocated(problem%stiffness)) return
         if (.not. allocated(problem%mass)) return
         if (.not. allocated(problem%stiffness_terms)) return
         unknowns = size(problem%stiffness, 1)
-        if (unknowns < 1) return
         if (size(problem%stiffness, 2) /= unknowns) return
         if (size(problem%mass, 1) /= unknowns) return
         if (size(problem%mass, 2) /= unknowns) return

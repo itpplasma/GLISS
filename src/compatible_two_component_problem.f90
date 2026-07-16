@@ -4,6 +4,9 @@ module compatible_two_component_problem
     use compatible_family_point_assembly, only: &
         assemble_compatible_transformed_surface, &
         compatible_two_component_term_count
+    use compatible_block_storage, only: compatible_block_allocation, &
+        compatible_block_ok, initialize_compatible_block_pencil, &
+        scatter_symmetric_compatible_block, symmetrize_compatible_blocks
     use compatible_physical_mass_assembly, only: &
         assemble_compatible_perpendicular_mass_surface
     use compatible_operator_trace_types, only: build_trace_radial_mass, &
@@ -30,6 +33,7 @@ module compatible_two_component_problem
     use trial_space_topology, only: build_trial_space_topology, &
         trial_component_eta, trial_component_normal, trial_space_topology_t, &
         trial_topology_ok
+    use variable_block_tridiagonal, only: variable_block_tridiagonal_t
     implicit none
     private
 
@@ -43,6 +47,8 @@ module compatible_two_component_problem
     type, public :: compatible_two_component_problem_t
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
         real(dp), allocatable :: stiffness_terms(:, :, :)
+        type(variable_block_tridiagonal_t) :: sparse_stiffness, sparse_mass
+        integer, allocatable :: sparse_block_index(:), sparse_local_index(:)
         integer :: degree = 0
         integer :: quadrature_points = 0
         integer :: h1_dofs = 0
@@ -50,6 +56,7 @@ module compatible_two_component_problem
         integer :: normal_unknowns = 0
         integer :: eta_unknowns = 0
         logical :: has_physical_mass = .false.
+        logical :: has_sparse_storage = .false.
         integer :: radial_quadrature_policy = 0
     end type compatible_two_component_problem_t
 
@@ -66,7 +73,7 @@ contains
     subroutine build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
             problem, info, trace_cells, trace, density_kg_m3, &
-            radial_quadrature_policy)
+            radial_quadrature_policy, sparse_storage)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
@@ -77,6 +84,7 @@ contains
         type(compatible_cell_trace_t), allocatable, optional, intent(out) :: trace(:)
         real(dp), optional, intent(in) :: density_kg_m3
         integer, optional, intent(in) :: radial_quadrature_policy
+        logical, optional, intent(in) :: sparse_storage
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
@@ -84,12 +92,15 @@ contains
         integer, allocatable :: eta_rank(:), normal_rank(:), parity(:)
         integer :: allocation_status, intervals, local_info, quadrature_policy
         integer :: unknowns
+        logical :: use_sparse
 
         problem = compatible_two_component_problem_t()
         info = compatible_problem_invalid
         quadrature_policy = compatible_quadrature_gauss
+        use_sparse = .false.
         if (present(radial_quadrature_policy)) &
             quadrature_policy = radial_quadrature_policy
+        if (present(sparse_storage)) use_sparse = sparse_storage
         if (.not. inputs_are_valid(equilibrium, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, quadrature_policy)) return
         if (present(density_kg_m3)) then
@@ -129,24 +140,40 @@ contains
             * count(topology%active(trial_component_eta, :))
         unknowns = problem%normal_unknowns + problem%eta_unknowns
         if (unknowns < 1) return
-        allocate (problem%stiffness(unknowns, unknowns), source=0.0_dp, &
-            stat=allocation_status)
-        if (allocation_status /= 0) then
-            info = compatible_problem_allocation_error
-            return
-        end if
-        allocate (problem%mass(unknowns, unknowns), source=0.0_dp, &
-            stat=allocation_status)
-        if (allocation_status /= 0) then
-            info = compatible_problem_allocation_error
-            return
-        end if
-        allocate (problem%stiffness_terms(unknowns, unknowns, &
-            compatible_two_component_term_count), &
-            source=0.0_dp, stat=allocation_status)
-        if (allocation_status /= 0) then
-            info = compatible_problem_allocation_error
-            return
+        if (use_sparse) then
+            call initialize_compatible_block_pencil(complex%h1_dofs, &
+                complex%l2_dofs, &
+                count(topology%active(trial_component_normal, :)), &
+                count(topology%active(trial_component_eta, :)), degree, &
+                problem%sparse_stiffness, problem%sparse_mass, &
+                problem%sparse_block_index, problem%sparse_local_index, &
+                local_info)
+            if (local_info /= compatible_block_ok) then
+                if (local_info == compatible_block_allocation) &
+                    info = compatible_problem_allocation_error
+                return
+            end if
+            problem%has_sparse_storage = .true.
+        else
+            allocate (problem%stiffness(unknowns, unknowns), source=0.0_dp, &
+                stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = compatible_problem_allocation_error
+                return
+            end if
+            allocate (problem%mass(unknowns, unknowns), source=0.0_dp, &
+                stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = compatible_problem_allocation_error
+                return
+            end if
+            allocate (problem%stiffness_terms(unknowns, unknowns, &
+                compatible_two_component_term_count), &
+                source=0.0_dp, stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = compatible_problem_allocation_error
+                return
+            end if
         end if
         call fit_primitive_equilibrium(equilibrium, spline, local_info)
         if (local_info /= primitive_equilibrium_ok) then
@@ -166,9 +193,14 @@ contains
                 density_kg_m3=density_kg_m3)
         end if
         if (info /= compatible_problem_ok) return
-        call symmetrize_matrix(problem%stiffness)
-        call symmetrize_matrix(problem%mass)
-        call symmetrize_tensor(problem%stiffness_terms)
+        if (problem%has_sparse_storage) then
+            call symmetrize_compatible_blocks(problem%sparse_stiffness)
+            call symmetrize_compatible_blocks(problem%sparse_mass)
+        else
+            call symmetrize_matrix(problem%stiffness)
+            call symmetrize_matrix(problem%mass)
+            call symmetrize_tensor(problem%stiffness_terms)
+        end if
         problem%degree = degree
         if (quadrature_policy == compatible_quadrature_gauss) then
             problem%quadrature_points = size(accurate_nodes)
@@ -280,7 +312,8 @@ contains
                 if (info /= compatible_problem_ok) return
             end do
         end do
-        call sum_tensor(problem%stiffness_terms, problem%stiffness)
+        if (.not. problem%has_sparse_storage) &
+            call sum_tensor(problem%stiffness_terms, problem%stiffness)
         info = compatible_problem_ok
     end subroutine assemble_problem
 
@@ -405,17 +438,44 @@ contains
         end if
         stiffness_scale = weight
         if (present(density_kg_m3)) stiffness_scale = weight / vacuum_permeability
-        do term = 1, compatible_two_component_term_count
-            if (.not. term_mask(term)) cycle
-            call scatter_matrix(map, local_terms(:, :, term), &
-                stiffness_scale, problem%stiffness_terms(:, :, term))
-        end do
+        if (problem%has_sparse_storage) then
+            call sum_selected_terms(local_terms, term_mask, local)
+            call scatter_symmetric_compatible_block(map, local, &
+                stiffness_scale, problem%sparse_block_index, &
+                problem%sparse_local_index, problem%sparse_stiffness, &
+                local_info)
+            if (local_info /= compatible_block_ok) return
+        else
+            do term = 1, compatible_two_component_term_count
+                if (.not. term_mask(term)) cycle
+                call scatter_matrix(map, local_terms(:, :, term), &
+                    stiffness_scale, problem%stiffness_terms(:, :, term))
+            end do
+        end if
         if (assemble_mass) then
             if (present(density_kg_m3)) then
-                call scatter_matrix(map, local_mass, 1.0_dp, problem%mass)
+                if (problem%has_sparse_storage) then
+                    call scatter_symmetric_compatible_block(map, local_mass, &
+                        1.0_dp, problem%sparse_block_index, &
+                        problem%sparse_local_index, problem%sparse_mass, &
+                        local_info)
+                    if (local_info /= compatible_block_ok) return
+                else
+                    call scatter_matrix(map, local_mass, 1.0_dp, problem%mass)
+                end if
             else
-                call add_radial_mass(map, local_h1, local_l2, weight, &
-                    problem%mass)
+                if (problem%has_sparse_storage) then
+                    call build_local_radial_mass(local_h1, local_l2, weight, &
+                        local)
+                    call scatter_symmetric_compatible_block(map, local, &
+                        1.0_dp, problem%sparse_block_index, &
+                        problem%sparse_local_index, problem%sparse_mass, &
+                        local_info)
+                    if (local_info /= compatible_block_ok) return
+                else
+                    call add_radial_mass(map, local_h1, local_l2, weight, &
+                        problem%mass)
+                end if
             end if
         end if
         info = compatible_problem_ok
@@ -484,6 +544,54 @@ contains
             end do
         end do
     end subroutine add_radial_mass
+
+    subroutine build_local_radial_mass(h1, l2, weight, mass)
+        real(dp), intent(in) :: h1(:, :), l2(:, :), weight
+        real(dp), intent(out) :: mass(:, :)
+        real(dp) :: basis(size(mass, 1))
+        integer :: a, b, basis_index, h1_columns, trial, trials
+
+        mass = 0.0_dp
+        trials = size(h1, 2)
+        h1_columns = size(h1, 1) * trials
+        do basis_index = 1, size(h1, 1)
+            do trial = 1, trials
+                basis((basis_index - 1) * trials + trial) = &
+                    h1(basis_index, trial)
+            end do
+        end do
+        do basis_index = 1, size(l2, 1)
+            do trial = 1, trials
+                basis(h1_columns + (basis_index - 1) * trials + trial) = &
+                    l2(basis_index, trial)
+            end do
+        end do
+        do b = 1, size(mass, 2)
+            do a = 1, size(mass, 1)
+                if (modulo(a - 1, trials) /= modulo(b - 1, trials)) cycle
+                if ((a <= h1_columns) .neqv. (b <= h1_columns)) cycle
+                mass(a, b) = weight * basis(a) * basis(b)
+            end do
+        end do
+    end subroutine build_local_radial_mass
+
+    subroutine sum_selected_terms(terms, selected, total)
+        real(dp), intent(in) :: terms(:, :, :)
+        logical, intent(in) :: selected(:)
+        real(dp), intent(out) :: total(:, :)
+        integer :: column, row, term
+
+        total = 0.0_dp
+        do term = 1, size(terms, 3)
+            if (.not. selected(term)) cycle
+            do column = 1, size(total, 2)
+                do row = 1, size(total, 1)
+                    total(row, column) = total(row, column) &
+                        + terms(row, column, term)
+                end do
+            end do
+        end do
+    end subroutine sum_selected_terms
 
     pure subroutine build_component_ranks(topology, normal_rank, eta_rank)
         type(trial_space_topology_t), intent(in) :: topology

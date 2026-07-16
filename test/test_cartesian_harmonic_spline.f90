@@ -29,6 +29,8 @@ program test_cartesian_harmonic_spline
         radial_cubic_spline_grid_t, radial_cubic_spline_ok
     use symmetric_eigensolver, only: solve_symmetric_generalized, &
         symmetric_eigensolver_ok
+    use variable_block_tridiagonal, only: variable_block_ok, &
+        variable_block_to_dense
     implicit none
 
     real(dp), parameter :: nodes(6) = [0.04_dp, 0.17_dp, 0.36_dp, &
@@ -342,11 +344,12 @@ contains
 
     subroutine check_compatible_problem(equilibrium)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
-        type(compatible_two_component_problem_t) :: problem
+        type(compatible_two_component_problem_t) :: problem, sparse_problem
         type(compatible_cell_trace_t), allocatable :: traces(:)
         real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
         real(dp), allocatable :: gauss_constraint(:, :)
         real(dp), allocatable :: reference_mass(:, :), reference_stiffness(:, :)
+        real(dp), allocatable :: sparse_mass(:, :), sparse_stiffness(:, :)
         real(dp) :: scale
         integer :: degree, expected_h1, expected_l2, status, term
 
@@ -356,6 +359,16 @@ contains
                 degree, 16, 16, problem, status)
             call require(status == compatible_problem_ok, &
                 "compatible problem assembly failed")
+            call build_compatible_two_component_problem(equilibrium, &
+                [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, &
+                degree, 16, 16, sparse_problem, status, &
+                sparse_storage=.true.)
+            call require(status == compatible_problem_ok, &
+                "sparse compatible problem assembly failed")
+            call sparse_problem_to_canonical(sparse_problem, &
+                sparse_stiffness, sparse_mass, status)
+            call require(status == variable_block_ok, &
+                "sparse compatible problem reconstruction failed")
             expected_h1 = size(equilibrium%s) * degree - 1
             expected_l2 = size(equilibrium%s) * degree
             call require(problem%h1_dofs == expected_h1 &
@@ -373,6 +386,12 @@ contains
             call require(maxval(abs(problem%stiffness &
                 - sum(problem%stiffness_terms, dim=3))) &
                 < 3.0e-14_dp * scale, "compatible energy terms do not sum")
+            call require(maxval(abs(sparse_stiffness - problem%stiffness)) &
+                < 5.0e-14_dp * scale, &
+                "sparse and dense compatible stiffness differ")
+            call require(maxval(abs(sparse_mass - problem%mass)) &
+                < 5.0e-14_dp * max(1.0_dp, maxval(abs(problem%mass))), &
+                "sparse and dense compatible mass differ")
             do term = 1, size(problem%stiffness_terms, 3)
                 call require(all(problem%stiffness_terms(:, :, term) &
                     == transpose(problem%stiffness_terms(:, :, term))), &
@@ -443,6 +462,42 @@ contains
         call require(status == compatible_problem_invalid, &
             "degree-zero compatible problem was accepted")
     end subroutine check_compatible_problem
+
+    subroutine sparse_problem_to_canonical(problem, stiffness, mass, info)
+        type(compatible_two_component_problem_t), intent(in) :: problem
+        real(dp), allocatable, intent(out) :: stiffness(:, :), mass(:, :)
+        integer, intent(out) :: info
+        real(dp), allocatable :: block_mass(:, :), block_stiffness(:, :)
+        integer, allocatable :: offset(:), position(:)
+        integer :: block, column, row, unknowns
+
+        call variable_block_to_dense(problem%sparse_stiffness, &
+            block_stiffness, info)
+        if (info /= variable_block_ok) return
+        call variable_block_to_dense(problem%sparse_mass, block_mass, info)
+        if (info /= variable_block_ok) return
+        unknowns = size(problem%sparse_block_index)
+        allocate (offset(size(problem%sparse_stiffness%widths)), source=1)
+        do block = 2, size(offset)
+            offset(block) = offset(block - 1) &
+                + problem%sparse_stiffness%widths(block - 1)
+        end do
+        allocate (position(unknowns))
+        do row = 1, unknowns
+            position(row) = offset(problem%sparse_block_index(row)) &
+                + problem%sparse_local_index(row) - 1
+        end do
+        allocate (stiffness(unknowns, unknowns), mass(unknowns, unknowns))
+        do column = 1, unknowns
+            do row = 1, unknowns
+                stiffness(row, column) = &
+                    block_stiffness(position(row), position(column))
+                mass(row, column) = &
+                    block_mass(position(row), position(column))
+            end do
+        end do
+        info = variable_block_ok
+    end subroutine sparse_problem_to_canonical
 
     subroutine check_compatible_trace(traces)
         type(compatible_cell_trace_t), intent(in) :: traces(:)
