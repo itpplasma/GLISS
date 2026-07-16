@@ -7,6 +7,13 @@ conversion. The Linux wheel
 contains the compiled Fortran library and uses a small, hand-written ISO C
 binding; no `f90wrap` dependency is required.
 
+The supported production scope is fixed-boundary FEEC. TERPSICHORE FORT.23/24
+solves are compatibility replays for validation. Selected free-boundary
+operators are not exposed as a production plasma-vacuum solve, and the public
+equilibrium-to-spectrum derivative chain is incomplete. Version 0.0.2 ships a
+manylinux x86-64 wheel and source distribution; macOS wheels and asymmetric or
+precomputed BOOZ_XFORM inputs remain future work.
+
 ## Installation
 
 ```sh

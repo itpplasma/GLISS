@@ -10,13 +10,12 @@ built for differentiability: verified assembly kernels carry
 Enzyme-generated derivative actions.  The public equilibrium-parameter to
 spectrum gradient chain and optimization loop remain under construction.
 
-The present code covers the equilibrium interface, fixed-boundary
-two-component and compressible global operators, physical kinetic norm,
-variable-block eigensolver, inertia certificates, Mercier diagnostics, and
-selected free-boundary operators. Validation includes analytic cylinders,
-Solov'ev marginality and the complete 191-mode QAS3 TERPSICHORE comparison.
-Free-boundary plasma-vacuum parity and the complete cross-code benchmark table
-remain under construction.
+Version 0.0.2 supports production fixed-boundary FEEC spectra and energies,
+Mercier diagnostics, and symmetric GVEC or VMEC equilibrium input. Selected
+free-boundary operators remain research components; they do not form a public
+physical plasma-vacuum API. The TERPSICHORE FORT.23/24 entry points reproduce
+that code's stored discretization for validation and are labeled compatibility
+paths throughout the API and documentation.
 
 ## Python
 
@@ -42,6 +41,11 @@ dense same-basis compatibility path is a validation tool; it is not the
 production physical plasma-vacuum interface.
 See the [Python guide](python/README.md) for examples, conventions, input and
 output contracts, direct VMEC conversion, and the optional SIMSOPT adapter.
+
+Release 0.0.2 provides a manylinux x86-64 wheel and a source distribution.
+macOS wheels, asymmetric or precomputed BOOZ_XFORM input, the production
+free-boundary solve, and the complete equilibrium-to-spectrum derivative chain
+are tracked as future work.
 
 ## Build
 

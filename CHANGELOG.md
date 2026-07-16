@@ -4,6 +4,12 @@
 
 ## 0.0.2 - 2026-07-16
 
+This release supports production fixed-boundary FEEC calculations. The
+TERPSICHORE replay entry points are compatibility tools for validation, not a
+physical plasma-vacuum API. The complete equilibrium-to-spectrum derivative
+chain, asymmetric and precomputed BOOZ_XFORM input, macOS wheels, and
+production free-boundary coupling remain future work.
+
 - Default clean single-config CMake builds to the optimized Release
   configuration, prefer threaded OpenBLAS, and retain a portable generic
   BLAS/LAPACK fallback.
@@ -59,6 +65,7 @@
   provenance is explicit and verified.
 - Require array-temporary-free optimized builds and package threaded OpenBLAS
   in the manylinux wheel.
+- Publish a manylinux x86-64 wheel and source distribution.
 
 ## 0.0.1 - 2026-07-13
 
