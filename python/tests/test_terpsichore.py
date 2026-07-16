@@ -31,6 +31,13 @@ class FakeLibrary:
         result._obj.certificate = 1.9531250000095766e-11
         result._obj.residual = 5.1278099516263922e-15
         result._obj.resolution = 7.5810235738805062e-10
+        result._obj.reference_eigenvalue = -7.38626214e-7
+        result._obj.reference_potential = -3.01081e-5
+        result._obj.computed_potential = -3.01081001e-5
+        result._obj.reference_kinetic = 40.8167
+        result._obj.computed_kinetic = 40.8167
+        result._obj.reference_residual = 3.8e-5
+        result._obj.mode_overlap = 0.99999999
         error.value = b""
         return 0
 
@@ -81,6 +88,13 @@ def test_fixed_boundary_result(monkeypatch, tmp_path):
     assert result.certificate == pytest.approx(1.9531250000095766e-11)
     assert result.residual == pytest.approx(5.1278099516263922e-15)
     assert result.resolution == pytest.approx(7.5810235738805062e-10)
+    assert result.reference_eigenvalue == pytest.approx(-7.38626214e-7)
+    assert result.reference_potential == pytest.approx(-3.01081e-5)
+    assert result.computed_potential == pytest.approx(-3.01081001e-5)
+    assert result.reference_kinetic == pytest.approx(40.8167)
+    assert result.computed_kinetic == pytest.approx(40.8167)
+    assert result.reference_residual == pytest.approx(3.8e-5)
+    assert result.mode_overlap == pytest.approx(0.99999999)
 
 
 def test_fixed_boundary_native_error(monkeypatch, tmp_path):

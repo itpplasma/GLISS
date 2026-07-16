@@ -24,6 +24,13 @@ class TerpsichoreFixedBoundaryResult:
     certificate: float
     residual: float
     resolution: float
+    reference_eigenvalue: float
+    reference_potential: float
+    computed_potential: float
+    reference_kinetic: float
+    computed_kinetic: float
+    reference_residual: float
+    mode_overlap: float
 
 
 @dataclass(frozen=True)
@@ -55,6 +62,13 @@ class _TerpsichoreFixedBoundaryResult(ctypes.Structure):
         ("certificate", ctypes.c_double),
         ("residual", ctypes.c_double),
         ("resolution", ctypes.c_double),
+        ("reference_eigenvalue", ctypes.c_double),
+        ("reference_potential", ctypes.c_double),
+        ("computed_potential", ctypes.c_double),
+        ("reference_kinetic", ctypes.c_double),
+        ("computed_kinetic", ctypes.c_double),
+        ("reference_residual", ctypes.c_double),
+        ("mode_overlap", ctypes.c_double),
     ]
 
 
@@ -136,7 +150,7 @@ def _fixture_path(path: PathLike, label: str = "FORT.23") -> bytes:
 
 
 def _result(native: _TerpsichoreFixedBoundaryResult) -> TerpsichoreFixedBoundaryResult:
-    values = (native.eigenvalue, native.certificate, native.residual, native.resolution)
+    values = tuple(getattr(native, name) for name, _ in native._fields_[3:])
     if (
         native.unknowns < 1
         or native.negative_count < 1
@@ -144,6 +158,11 @@ def _result(native: _TerpsichoreFixedBoundaryResult) -> TerpsichoreFixedBoundary
         or native.certificate < 0.0
         or native.residual < 0.0
         or native.resolution < 0.0
+        or native.reference_kinetic <= 0.0
+        or native.computed_kinetic <= 0.0
+        or native.reference_residual < 0.0
+        or native.mode_overlap < 0.0
+        or native.mode_overlap > 1.0 + 1.0e-12
         or not all(math.isfinite(value) for value in values)
     ):
         raise GlissInternalError("GLISS returned an invalid TERPSICHORE result")
@@ -154,6 +173,13 @@ def _result(native: _TerpsichoreFixedBoundaryResult) -> TerpsichoreFixedBoundary
         certificate=native.certificate,
         residual=native.residual,
         resolution=native.resolution,
+        reference_eigenvalue=native.reference_eigenvalue,
+        reference_potential=native.reference_potential,
+        computed_potential=native.computed_potential,
+        reference_kinetic=native.reference_kinetic,
+        computed_kinetic=native.computed_kinetic,
+        reference_residual=native.reference_residual,
+        mode_overlap=native.mode_overlap,
     )
 
 

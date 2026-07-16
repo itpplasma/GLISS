@@ -83,10 +83,15 @@ contains
         type(terpsichore_fixed_boundary_result_t), intent(in) :: result
 
         write (*, "(a)") "unknowns,negative_count,eigenvalue,certificate," // &
-            "residual,resolution"
-        write (*, '(i0,",",i0,4(",",es24.16))') result%unknowns, &
+            "residual,resolution,reference_eigenvalue,reference_potential," // &
+            "computed_potential,reference_kinetic,computed_kinetic," // &
+            "reference_residual,mode_overlap"
+        write (*, '(i0,",",i0,11(",",es24.16))') result%unknowns, &
             result%negative_count, result%eigenvalue, result%certificate, &
-            result%residual, result%resolution
+            result%residual, result%resolution, result%reference_eigenvalue, &
+            result%reference_potential, result%computed_potential, &
+            result%reference_kinetic, result%computed_kinetic, &
+            result%reference_residual, result%mode_overlap
     end subroutine write_fixed_result
 
     subroutine write_free_result(result)

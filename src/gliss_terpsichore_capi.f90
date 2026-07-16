@@ -18,6 +18,16 @@ module gliss_terpsichore_capi
     implicit none
     private
 
+    type, bind(c) :: terpsichore_fixed_boundary_result_legacy_c
+        integer(c_size_t) :: struct_size
+        integer(c_size_t) :: unknowns
+        integer(c_size_t) :: negative_count
+        real(c_double) :: eigenvalue
+        real(c_double) :: certificate
+        real(c_double) :: residual
+        real(c_double) :: resolution
+    end type terpsichore_fixed_boundary_result_legacy_c
+
     type, bind(c) :: terpsichore_fixed_boundary_result_c
         integer(c_size_t) :: struct_size
         integer(c_size_t) :: unknowns
@@ -26,7 +36,18 @@ module gliss_terpsichore_capi
         real(c_double) :: certificate
         real(c_double) :: residual
         real(c_double) :: resolution
+        real(c_double) :: reference_eigenvalue
+        real(c_double) :: reference_potential
+        real(c_double) :: computed_potential
+        real(c_double) :: reference_kinetic
+        real(c_double) :: computed_kinetic
+        real(c_double) :: reference_residual
+        real(c_double) :: mode_overlap
     end type terpsichore_fixed_boundary_result_c
+
+    type, bind(c) :: result_size_prefix_c
+        integer(c_size_t) :: struct_size
+    end type result_size_prefix_c
 
     type, bind(c) :: terpsichore_pseudoplasma_result_c
         integer(c_size_t) :: struct_size
@@ -58,7 +79,11 @@ contains
         type(c_ptr), value, intent(in) :: error_pointer
         integer(c_size_t), value, intent(in) :: path_length, error_capacity
         integer(c_int) :: status
+        type(terpsichore_fixed_boundary_result_legacy_c), pointer :: legacy_result
         type(terpsichore_fixed_boundary_result_c), pointer :: result
+        type(result_size_prefix_c), pointer :: prefix
+        type(terpsichore_fixed_boundary_result_legacy_c) :: legacy_probe
+        type(terpsichore_fixed_boundary_result_c) :: result_probe
         type(terpsichore_fixed_boundary_result_t) :: native
         character(len=:), allocatable :: filename
         character(len=128) :: message
@@ -73,8 +98,9 @@ contains
                 "TERPSICHORE result pointer is null")
             return
         end if
-        call c_f_pointer(result_pointer, result)
-        if (result%struct_size /= c_sizeof(result)) then
+        call c_f_pointer(result_pointer, prefix)
+        if (prefix%struct_size /= c_sizeof(legacy_probe) .and. &
+            prefix%struct_size /= c_sizeof(result_probe)) then
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
                 "TERPSICHORE result struct_size is incompatible")
@@ -89,7 +115,13 @@ contains
             message)
         select case (info)
         case (terpsichore_fixed_spectrum_ok)
-            call fill_result(native, result)
+            if (prefix%struct_size == c_sizeof(legacy_probe)) then
+                call c_f_pointer(result_pointer, legacy_result)
+                call fill_legacy_result(native, legacy_result)
+            else
+                call c_f_pointer(result_pointer, result)
+                call fill_result(native, result)
+            end if
             status = status_ok
         case (terpsichore_fixed_spectrum_read_error)
             status = status_read_error
@@ -186,7 +218,27 @@ contains
         result%certificate = native%certificate
         result%residual = native%residual
         result%resolution = native%resolution
+        result%reference_eigenvalue = native%reference_eigenvalue
+        result%reference_potential = native%reference_potential
+        result%computed_potential = native%computed_potential
+        result%reference_kinetic = native%reference_kinetic
+        result%computed_kinetic = native%computed_kinetic
+        result%reference_residual = native%reference_residual
+        result%mode_overlap = native%mode_overlap
     end subroutine fill_result
+
+    subroutine fill_legacy_result(native, result)
+        type(terpsichore_fixed_boundary_result_t), intent(in) :: native
+        type(terpsichore_fixed_boundary_result_legacy_c), intent(out) :: result
+
+        result%struct_size = c_sizeof(result)
+        result%unknowns = int(native%unknowns, c_size_t)
+        result%negative_count = int(native%negative_count, c_size_t)
+        result%eigenvalue = native%eigenvalue
+        result%certificate = native%certificate
+        result%residual = native%residual
+        result%resolution = native%resolution
+    end subroutine fill_legacy_result
 
     subroutine fill_pseudoplasma_result(native, result)
         type(terpsichore_pseudoplasma_result_t), intent(in) :: native

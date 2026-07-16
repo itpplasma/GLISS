@@ -1,6 +1,6 @@
 program test_gliss_capi
     use, intrinsic :: iso_c_binding, only: c_associated, c_char, c_double, &
-        c_int, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t
+        c_int, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t, c_sizeof
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: error_unit
     use cylinder_fixture, only: create_cylinder_fixture, fixture_ns
@@ -13,6 +13,16 @@ program test_gliss_capi
     character(len=*), parameter :: fixture = "capi_cylinder.nc"
     character(len=*), parameter :: output_file = "capi_roundtrip.nc"
 
+    type, bind(c) :: terpsichore_fixed_legacy_c
+        integer(c_size_t) :: struct_size
+        integer(c_size_t) :: unknowns
+        integer(c_size_t) :: negative_count
+        real(c_double) :: eigenvalue
+        real(c_double) :: certificate
+        real(c_double) :: residual
+        real(c_double) :: resolution
+    end type terpsichore_fixed_legacy_c
+
     character(c_char), target :: path(len(fixture)), error_buffer(256)
     character(c_char), target :: output_path(len(output_file))
     character(c_char), target :: embedded_nul(3), missing_path(10)
@@ -20,6 +30,7 @@ program test_gliss_capi
     real(c_double), allocatable :: legacy_s(:), legacy_d(:)
     type(c_ptr), target :: context, roundtrip_context
     integer(c_size_t), target :: surfaces, written
+    type(terpsichore_fixed_legacy_c), target :: terpsichore_legacy
     integer(c_int), target :: schema_version
     integer(c_int) :: status, legacy_status, legacy_surfaces
 
@@ -87,6 +98,15 @@ program test_gliss_capi
             integer(c_size_t), value :: error_capacity
             integer(c_int) :: result
         end function mercier_profile_context
+
+        function terpsichore_fixed_boundary(path_pointer, path_length, result, &
+                error_pointer, error_capacity) &
+                bind(c, name="gliss_terpsichore_fixed_boundary") result(status)
+            import c_int, c_ptr, c_size_t
+            type(c_ptr), value :: path_pointer, result, error_pointer
+            integer(c_size_t), value :: path_length, error_capacity
+            integer(c_int) :: status
+        end function terpsichore_fixed_boundary
 
         subroutine mercier_profile_legacy(path_value, path_length, n_theta, &
                 n_zeta, capacity, surfaces, s_values, d_mercier, status) &
@@ -248,6 +268,23 @@ program test_gliss_capi
         "null handle output was not rejected")
 
     call copy_chars("missing.nc", missing_path)
+    terpsichore_legacy%struct_size = c_sizeof(terpsichore_legacy)
+    terpsichore_legacy%unknowns = 17_c_size_t
+    status = terpsichore_fixed_boundary(c_loc(missing_path), &
+        int(size(missing_path), c_size_t), c_loc(terpsichore_legacy), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_read_error, &
+        "legacy TERPSICHORE result size was rejected")
+    call require(terpsichore_legacy%unknowns == 17_c_size_t, &
+        "failed legacy TERPSICHORE call modified the result")
+    terpsichore_legacy%struct_size = c_sizeof(terpsichore_legacy) - 1_c_size_t
+    status = terpsichore_fixed_boundary(c_loc(missing_path), &
+        int(size(missing_path), c_size_t), c_loc(terpsichore_legacy), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument, &
+        "malformed TERPSICHORE result size was accepted")
+    call require(terpsichore_legacy%unknowns == 17_c_size_t, &
+        "invalid-size TERPSICHORE call modified the result")
     status = equilibrium_create(c_loc(missing_path), &
         int(size(missing_path), c_size_t), c_loc(context), &
         c_loc(error_buffer), &

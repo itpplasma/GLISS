@@ -114,7 +114,12 @@ is the lowest negative value of the TERPSICHORE generalized problem
 that format. `negative_count` is the inertia count below zero. `certificate`
 is the final inertia-bracket width. `residual` is the scaled eigenpair backward
 error, and `resolution` estimates roundoff in the quotient. `unknowns` is the
-order of the assembled problem.
+order of the assembled problem. `reference_eigenvalue`, `reference_potential`
+and `reference_kinetic` report the WP/WK quotient and energies stored with the
+TERPSICHORE vector in FORT.23. `computed_potential` and `computed_kinetic`
+re-evaluate that vector with GLISS's assembled matrices. `reference_residual`
+is its scaled backward residual, and `mode_overlap` is its mass-normalized
+overlap with the independently computed lowest mode.
 
 This compatibility path preserves the file's Fourier table, sine parity,
 fixed-edge radial topology, noninteracting stiffness, reduced mass, and native
@@ -822,7 +827,11 @@ requires a new ABI version.
 
 Initialize `gliss_terpsichore_fixed_boundary_result.struct_size` with
 `sizeof` before calling `gliss_terpsichore_fixed_boundary()`. The caller owns
-the result and error buffer. GLISS does not modify the result on failure.
+the result and error buffer. The appended reference fields provide the same
+WP/WK, residual, and overlap diagnostics as the free-boundary compatibility
+call. Binaries compiled against the original shorter result struct remain
+accepted when they pass the old `struct_size`. GLISS does not modify the result
+on failure.
 
 The free-boundary compatibility call follows the same ownership rule:
 initialize `gliss_terpsichore_pseudoplasma_result.struct_size`, supply the

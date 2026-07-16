@@ -5,7 +5,8 @@ module terpsichore_pseudoplasma_spectrum
         compute_terpsichore_eigen_diagnostics, &
         terpsichore_eigen_diagnostics_ok, terpsichore_eigen_diagnostics_t
     use terpsichore_fixed_boundary_spectrum, only: &
-        pack_terpsichore_problem, solve_terpsichore_lowest_negative, &
+        pack_terpsichore_problem, read_terpsichore_reference, &
+        solve_terpsichore_lowest_negative, &
         terpsichore_fixed_spectrum_compute_error, &
         terpsichore_fixed_spectrum_ok, terpsichore_fixed_spectrum_read_error, &
         terpsichore_layouts_match
@@ -24,8 +25,6 @@ module terpsichore_pseudoplasma_spectrum
         assemble_terpsichore_fixture_reduced_mass_free_boundary, &
         terpsichore_reduced_adapter_ok
     use terpsichore_solution_fixture, only: &
-        build_terpsichore_plasma_solution, &
-        read_terpsichore_solution_fixture, terpsichore_solution_ok, &
         terpsichore_solution_fixture_t
     use variable_block_tridiagonal, only: variable_block_tridiagonal_t
     implicit none
@@ -95,7 +94,7 @@ contains
             result%eigenvalue, vector, result%residual, result%resolution, &
             result%certificate, result%negative_count, info, message)
         if (info /= terpsichore_pseudoplasma_spectrum_ok) return
-        call read_reference(matrix_path, vacuum_intervals, fixture, &
+        call read_terpsichore_reference(matrix_path, vacuum_intervals, fixture, &
             stiffness_layout, permutation, solution, reference, info, message)
         if (info /= terpsichore_pseudoplasma_spectrum_ok) return
         call compute_terpsichore_eigen_diagnostics(stiffness_blocks, &
@@ -232,80 +231,5 @@ contains
         info = terpsichore_pseudoplasma_spectrum_ok
         message = ""
     end subroutine read_vacuum
-
-    subroutine read_reference(path, vacuum_intervals, matrix, layout, &
-            permutation, fixture, reference, info, message)
-        character(len=*), intent(in) :: path
-        integer, intent(in) :: vacuum_intervals, permutation(:)
-        type(terpsichore_matrix_fixture_t), intent(in) :: matrix
-        type(dynamic_family_layout_t), intent(in) :: layout
-        type(terpsichore_solution_fixture_t), intent(out) :: fixture
-        real(dp), allocatable, intent(out) :: reference(:)
-        integer, intent(out) :: info
-        character(len=*), intent(out) :: message
-        real(dp), allocatable :: original(:)
-        integer :: allocation_status, close_status, i, read_status, unit
-
-        info = terpsichore_pseudoplasma_spectrum_read_error
-        message = "cannot open TERPSICHORE FORT.23 reference"
-        open (newunit=unit, file=trim(path), status="old", action="read", &
-            access="sequential", form="unformatted", iostat=read_status)
-        if (read_status /= 0) return
-        call read_terpsichore_solution_fixture(unit, vacuum_intervals, fixture, &
-            read_status)
-        close (unit, iostat=close_status)
-        if (read_status /= terpsichore_solution_ok) then
-            message = "invalid TERPSICHORE FORT.23 reference"
-            return
-        end if
-        if (close_status /= 0) then
-            message = "cannot close TERPSICHORE FORT.23 reference"
-            return
-        end if
-        if (.not. solution_modes_match(matrix, fixture)) then
-            message = "TERPSICHORE matrix and solution mode tables differ"
-            return
-        end if
-        call build_terpsichore_plasma_solution(fixture, layout, original, &
-            read_status)
-        if (read_status /= terpsichore_solution_ok) then
-            info = terpsichore_pseudoplasma_spectrum_compute_error
-            message = "TERPSICHORE solution mapping failed"
-            return
-        end if
-        allocate (reference(size(original)), stat=allocation_status)
-        if (allocation_status /= 0) then
-            info = terpsichore_pseudoplasma_spectrum_compute_error
-            message = "TERPSICHORE reference allocation failed"
-            return
-        end if
-        do i = 1, size(original)
-            reference(i) = original(permutation(i))
-        end do
-        info = terpsichore_pseudoplasma_spectrum_ok
-        message = ""
-    end subroutine read_reference
-
-    pure function solution_modes_match(matrix, solution) result(matches)
-        type(terpsichore_matrix_fixture_t), intent(in) :: matrix
-        type(terpsichore_solution_fixture_t), intent(in) :: solution
-        logical :: matches
-
-        matches = matrix%intervals == solution%plasma_intervals
-        if (.not. matches) return
-        matches = matrix%modes == solution%modes
-        if (.not. matches) return
-        matches = allocated(matrix%mode_m)
-        if (.not. matches) return
-        matches = allocated(matrix%mode_n)
-        if (.not. matches) return
-        matches = allocated(solution%mode_m)
-        if (.not. matches) return
-        matches = allocated(solution%mode_n)
-        if (.not. matches) return
-        matches = all(matrix%mode_m == solution%mode_m)
-        if (.not. matches) return
-        matches = all(matrix%mode_n == solution%mode_n)
-    end function solution_modes_match
 
 end module terpsichore_pseudoplasma_spectrum

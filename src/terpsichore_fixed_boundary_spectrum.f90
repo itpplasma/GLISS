@@ -2,6 +2,9 @@ module terpsichore_fixed_boundary_spectrum
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
         dynamic_family_layout_t, dynamic_layout_ok
+    use terpsichore_eigen_diagnostics, only: &
+        compute_terpsichore_eigen_diagnostics, &
+        terpsichore_eigen_diagnostics_ok, terpsichore_eigen_diagnostics_t
     use terpsichore_matrix_fixture, only: &
         read_terpsichore_fixed_boundary_potential_fixture, &
         terpsichore_matrix_fixture_ok, terpsichore_matrix_fixture_t
@@ -11,6 +14,10 @@ module terpsichore_fixed_boundary_spectrum
     use terpsichore_reduced_mass_adapter, only: &
         assemble_terpsichore_fixture_reduced_mass, &
         terpsichore_reduced_adapter_ok
+    use terpsichore_solution_fixture, only: &
+        build_terpsichore_plasma_solution, &
+        read_terpsichore_solution_fixture, terpsichore_solution_ok, &
+        terpsichore_solution_fixture_t
     use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
         variable_block_ok, variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
@@ -30,9 +37,17 @@ module terpsichore_fixed_boundary_spectrum
         real(dp) :: certificate = 0.0_dp
         real(dp) :: residual = 0.0_dp
         real(dp) :: resolution = 0.0_dp
+        real(dp) :: reference_eigenvalue = 0.0_dp
+        real(dp) :: reference_potential = 0.0_dp
+        real(dp) :: computed_potential = 0.0_dp
+        real(dp) :: reference_kinetic = 0.0_dp
+        real(dp) :: computed_kinetic = 0.0_dp
+        real(dp) :: reference_residual = 0.0_dp
+        real(dp) :: mode_overlap = 0.0_dp
     end type terpsichore_fixed_boundary_result_t
 
     public :: pack_terpsichore_problem
+    public :: read_terpsichore_reference
     public :: solve_terpsichore_fixed_boundary_file
     public :: solve_terpsichore_lowest_negative
     public :: terpsichore_layouts_match
@@ -48,7 +63,10 @@ contains
         type(terpsichore_matrix_fixture_t) :: fixture
         type(dynamic_family_layout_t) :: stiffness_layout, mass_layout
         type(variable_block_tridiagonal_t) :: stiffness_blocks, mass_blocks
+        type(terpsichore_eigen_diagnostics_t) :: diagnostics
+        type(terpsichore_solution_fixture_t) :: solution
         real(dp), allocatable :: stiffness(:, :), mass(:, :), vector(:)
+        real(dp), allocatable :: reference(:)
         integer, allocatable :: permutation(:), widths(:)
 
         result = terpsichore_fixed_boundary_result_t()
@@ -64,7 +82,103 @@ contains
         call solve_terpsichore_lowest_negative(stiffness_blocks, mass_blocks, &
             result%eigenvalue, vector, result%residual, result%resolution, &
             result%certificate, result%negative_count, info, message)
+        if (info /= terpsichore_fixed_spectrum_ok) return
+        call read_terpsichore_reference(path, 0, fixture, stiffness_layout, &
+            permutation, solution, reference, info, message)
+        if (info /= terpsichore_fixed_spectrum_ok) return
+        call compute_terpsichore_eigen_diagnostics(stiffness_blocks, mass_blocks, &
+            result%eigenvalue, vector, reference, solution%potential_energy, &
+            solution%kinetic_energy, 1.0_dp, diagnostics, info)
+        if (info /= terpsichore_eigen_diagnostics_ok) then
+            call solve_failure("TERPSICHORE eigen diagnostics failed", info, &
+                message)
+            return
+        end if
+        result%reference_eigenvalue = diagnostics%reference_quotient
+        result%reference_potential = solution%potential_energy
+        result%computed_potential = diagnostics%computed_potential
+        result%reference_kinetic = solution%kinetic_energy
+        result%computed_kinetic = diagnostics%computed_kinetic
+        result%reference_residual = diagnostics%reference_residual
+        result%mode_overlap = diagnostics%mode_overlap
+        info = terpsichore_fixed_spectrum_ok
+        message = ""
     end subroutine solve_terpsichore_fixed_boundary_file
+
+    subroutine read_terpsichore_reference(path, vacuum_intervals, matrix, &
+            layout, permutation, fixture, reference, info, message)
+        character(len=*), intent(in) :: path
+        integer, intent(in) :: vacuum_intervals, permutation(:)
+        type(terpsichore_matrix_fixture_t), intent(in) :: matrix
+        type(dynamic_family_layout_t), intent(in) :: layout
+        type(terpsichore_solution_fixture_t), intent(out) :: fixture
+        real(dp), allocatable, intent(out) :: reference(:)
+        integer, intent(out) :: info
+        character(len=*), intent(out) :: message
+        real(dp), allocatable :: original(:)
+        integer :: allocation_status, close_status, i, read_status, unit
+
+        info = terpsichore_fixed_spectrum_read_error
+        message = "cannot open TERPSICHORE FORT.23 reference"
+        open (newunit=unit, file=trim(path), status="old", action="read", &
+            access="sequential", form="unformatted", iostat=read_status)
+        if (read_status /= 0) return
+        call read_terpsichore_solution_fixture(unit, vacuum_intervals, fixture, &
+            read_status)
+        close (unit, iostat=close_status)
+        if (read_status /= terpsichore_solution_ok) then
+            message = "invalid TERPSICHORE FORT.23 reference"
+            return
+        end if
+        if (close_status /= 0) then
+            message = "cannot close TERPSICHORE FORT.23 reference"
+            return
+        end if
+        if (.not. solution_modes_match(matrix, fixture)) then
+            message = "TERPSICHORE matrix and solution mode tables differ"
+            return
+        end if
+        call build_terpsichore_plasma_solution(fixture, layout, original, &
+            read_status)
+        if (read_status /= terpsichore_solution_ok) then
+            info = terpsichore_fixed_spectrum_compute_error
+            message = "TERPSICHORE solution mapping failed"
+            return
+        end if
+        allocate (reference(size(original)), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = terpsichore_fixed_spectrum_compute_error
+            message = "TERPSICHORE reference allocation failed"
+            return
+        end if
+        do i = 1, size(original)
+            reference(i) = original(permutation(i))
+        end do
+        info = terpsichore_fixed_spectrum_ok
+        message = ""
+    end subroutine read_terpsichore_reference
+
+    pure function solution_modes_match(matrix, solution) result(matches)
+        type(terpsichore_matrix_fixture_t), intent(in) :: matrix
+        type(terpsichore_solution_fixture_t), intent(in) :: solution
+        logical :: matches
+
+        matches = matrix%intervals == solution%plasma_intervals
+        if (.not. matches) return
+        matches = matrix%modes == solution%modes
+        if (.not. matches) return
+        matches = allocated(matrix%mode_m)
+        if (.not. matches) return
+        matches = allocated(matrix%mode_n)
+        if (.not. matches) return
+        matches = allocated(solution%mode_m)
+        if (.not. matches) return
+        matches = allocated(solution%mode_n)
+        if (.not. matches) return
+        matches = all(matrix%mode_m == solution%mode_m)
+        if (.not. matches) return
+        matches = all(matrix%mode_n == solution%mode_n)
+    end function solution_modes_match
 
     subroutine read_fixed_fixture(path, fixture, info, message)
         character(len=*), intent(in) :: path

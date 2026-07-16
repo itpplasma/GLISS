@@ -139,6 +139,13 @@ typedef struct gliss_terpsichore_fixed_boundary_result {
     double certificate;
     double residual;
     double resolution;
+    double reference_eigenvalue;
+    double reference_potential;
+    double computed_potential;
+    double reference_kinetic;
+    double computed_kinetic;
+    double reference_residual;
+    double mode_overlap;
 } gliss_terpsichore_fixed_boundary_result;
 
 typedef struct gliss_terpsichore_pseudoplasma_result {
@@ -197,7 +204,11 @@ typedef struct gliss_cas3d_marginality_result {
  * file produced with IVAC=0 and MODELK=0. Set result->struct_size to
  * sizeof(*result). The file's Fourier table, reduced kinetic normalization,
  * and fixed-boundary radial topology are used without reinterpretation. The
- * result is not modified on failure. */
+ * The reference fields report the stored TERPSICHORE vector's WP/WK quotient,
+ * energies, backward residual, and mass-normalized overlap with the computed
+ * lowest mode. Binaries using the original seven-field result layout remain
+ * supported when they pass that layout's smaller struct_size. The result is
+ * not modified on failure. */
 gliss_status gliss_terpsichore_fixed_boundary(
     const char *path,
     size_t path_length,
