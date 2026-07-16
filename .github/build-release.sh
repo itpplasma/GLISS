@@ -39,6 +39,7 @@ build_wheel() {
         -v "$root/dist:/input:ro" -v "$output/raw:/output" "$image" \
         bash -lc "mkdir /src && tar -xzf /input/gliss-$version.tar.gz \
         --strip-components=1 -C /src && \
+        CMAKE_ARGS=-DGLISS_REQUIRE_OPENBLAS=ON \
         /opt/python/cp39-cp39/bin/python -m pip wheel /src --no-deps \
         --wheel-dir /output"
     docker run --rm -e SOURCE_DATE_EPOCH="$epoch" \

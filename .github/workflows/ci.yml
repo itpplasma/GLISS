@@ -99,14 +99,19 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 22
-          sudo apt-get install -y flang-22
+          sudo apt-get install -y flang-22 libomp-22-dev
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build \
             liblapack-dev libnetcdf-dev pkg-config
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_Fortran_COMPILER=flang-22
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_Fortran_COMPILER=flang-22 \
+            -DOpenMP_Fortran_FLAGS=-fopenmp \
+            -DOpenMP_Fortran_LIB_NAMES=omp \
+            -DOpenMP_omp_LIBRARY=/usr/lib/llvm-22/lib/libomp.so
       - name: Build
         run: cmake --build build
       - name: Test
@@ -127,7 +132,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 22
-          sudo apt-get install -y flang-22 llvm-22-dev libzstd-dev
+          sudo apt-get install -y flang-22 libomp-22-dev llvm-22-dev libzstd-dev
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -153,6 +158,9 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_Fortran_COMPILER=flang-22 \
+            -DOpenMP_Fortran_FLAGS=-fopenmp \
+            -DOpenMP_Fortran_LIB_NAMES=omp \
+            -DOpenMP_omp_LIBRARY=/usr/lib/llvm-22/lib/libomp.so \
             -DGLISS_ENABLE_ENZYME=ON
       - name: Build
         run: cmake --build build

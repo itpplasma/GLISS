@@ -11,6 +11,7 @@ program test_compatible_family_point_assembly
     integer, parameter :: n_theta = 8, n_zeta = 9
     integer, parameter :: trials = 15, h1_count = 2, l2_count = 2
     integer, parameter :: matrix_size = trials * (h1_count + l2_count)
+    real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
     integer, parameter :: mode_m(trials) = [3, 4, 2, 4, 2, 5, 1, 5, 1, &
         6, 0, 6, 0, 3, 3]
     integer, parameter :: mode_n(trials) = [2, 2, 2, 7, -3, 2, 2, 12, &
@@ -44,20 +45,26 @@ contains
             zeta = real(k - 1, dp) / real(size(surface_fields, 2), dp)
             do j = 1, size(surface_fields, 1)
                 theta = real(j - 1, dp) / real(size(surface_fields, 1), dp)
-                surface_fields(j, k, 1) = 1.2_dp + 0.07_dp * cospi(2.0_dp * theta)
-                surface_fields(j, k, 2) = 0.37_dp + 0.03_dp * sinpi(2.0_dp * zeta)
+                surface_fields(j, k, 1) = 1.2_dp + &
+                    0.07_dp * cos(two_pi * theta)
+                surface_fields(j, k, 2) = 0.37_dp + &
+                    0.03_dp * sin(two_pi * zeta)
                 surface_fields(j, k, 3) = -0.11_dp + 0.02_dp * theta
                 surface_fields(j, k, 4) = 0.09_dp - 0.01_dp * zeta
                 surface_fields(j, k, 5) = 0.43_dp + 0.05_dp * theta
                 surface_fields(j, k, 6) = -0.28_dp + 0.04_dp * zeta
-                surface_fields(j, k, 7) = 1.7_dp + 0.08_dp * cospi(2.0_dp * (theta - zeta))
-                surface_fields(j, k, 8) = 2.3_dp + 0.06_dp * sinpi(2.0_dp * theta)
-                surface_fields(j, k, 9) = 0.81_dp + 0.03_dp * cospi(2.0_dp * zeta)
+                surface_fields(j, k, 7) = 1.7_dp + &
+                    0.08_dp * cos(two_pi * (theta - zeta))
+                surface_fields(j, k, 8) = 2.3_dp + &
+                    0.06_dp * sin(two_pi * theta)
+                surface_fields(j, k, 9) = 0.81_dp + &
+                    0.03_dp * cos(two_pi * zeta)
                 surface_fields(j, k, 10) = -0.17_dp + 0.02_dp * theta * zeta
                 surface_fields(j, k, 11) = -0.26_dp + 0.01_dp * theta
                 surface_fields(j, k, 12) = 0.14_dp - 0.02_dp * zeta
                 surface_fields(j, k, 13) = -0.08_dp + 0.01_dp * theta
-                surface_drive(j, k) = 0.21_dp + 0.04_dp * sinpi(2.0_dp * (theta + zeta))
+                surface_drive(j, k) = 0.21_dp + &
+                    0.04_dp * sin(two_pi * (theta + zeta))
             end do
         end do
         do trial = 1, trials

@@ -1,11 +1,25 @@
 module compatible_family_point_assembly
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: iso_c_binding, only: c_int
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use phase_factor_topology, only: phase_product_coefficients
     use two_component_kernel, only: two_component_components
-    !$  use omp_lib, only: omp_get_num_threads, omp_get_thread_num
     implicit none
     private
+
+    interface
+        function openmp_get_num_threads() bind(c, name="omp_get_num_threads") &
+                result(count)
+            import :: c_int
+            integer(c_int) :: count
+        end function openmp_get_num_threads
+
+        function openmp_get_thread_num() bind(c, name="omp_get_thread_num") &
+                result(index)
+            import :: c_int
+            integer(c_int) :: index
+        end function openmp_get_thread_num
+    end interface
 
     real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
     integer, parameter, public :: compatible_two_component_term_count = 4
@@ -75,8 +89,8 @@ contains
         !$omp private(first_column, last_column, thread, threads, j, k)
         thread = 0
         threads = 1
-        !$      thread = omp_get_thread_num()
-        !$      threads = omp_get_num_threads()
+        !$      thread = int(openmp_get_thread_num())
+        !$      threads = int(openmp_get_num_threads())
         first_column = 1 + thread * size(full, 2) / threads
         last_column = (thread + 1) * size(full, 2) / threads
         do k = 1, size(fields, 2)

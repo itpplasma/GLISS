@@ -9,9 +9,19 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 include(CTest)
+option(GLISS_REQUIRE_OPENBLAS
+    "Fail configuration instead of using the generic BLAS fallback" OFF)
 set(BLA_VENDOR "OpenBLAS" CACHE STRING "BLAS/LAPACK implementation")
+if(GLISS_REQUIRE_OPENBLAS AND NOT BLA_VENDOR STREQUAL "OpenBLAS")
+    message(FATAL_ERROR
+        "GLISS_REQUIRE_OPENBLAS requires BLA_VENDOR=OpenBLAS")
+endif()
 find_package(LAPACK QUIET)
 if(NOT LAPACK_FOUND)
+    if(GLISS_REQUIRE_OPENBLAS)
+        message(FATAL_ERROR
+            "OpenBLAS is required for this build but was not found")
+    endif()
     message(WARNING
         "${BLA_VENDOR} BLAS/LAPACK was not found; falling back to Generic")
     set(BLA_VENDOR "Generic")

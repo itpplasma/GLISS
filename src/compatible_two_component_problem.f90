@@ -94,7 +94,6 @@ contains
         integer :: unknowns
         logical :: use_sparse
 
-        problem = compatible_two_component_problem_t()
         info = compatible_problem_invalid
         quadrature_policy = compatible_quadrature_gauss
         use_sparse = .false.

@@ -5,6 +5,7 @@ RUN dnf install -y \
         gcc-gfortran-8.5.0-28.el8_10.alma.1 \
         lapack-devel-3.8.0-9.el8_10 \
         netcdf-devel-4.7.0-3.el8 \
+        openblas-devel-0.3.15-6.el8 \
         pkgconf-pkg-config-1.4.2-1.el8 \
     && dnf clean all
 
