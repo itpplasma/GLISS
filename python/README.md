@@ -539,6 +539,14 @@ Counts must be positive signed 32-bit integers whose product also fits int32.
 These integer discretization choices remain fixed during differentiation. The native constructor rejects mode tables for which
 `2*max(m) + max(abs(equilibrium poloidal modes)) >= angular_theta` or
 `2*max(abs(n)) + max(abs(equilibrium toroidal modes)) >= angular_zeta`.
+Production assembly also requires a single nonzero Jacobian orientation across
+all its radial and angular quadrature points. Either consistent handedness is
+admitted; sampled angular or radial folds are rejected. This is a sampled
+admission check, not a proof of invertibility between quadrature points.
+High-mode axis-regular quotient interpolation can amplify near-axis export
+roundoff; this check rejects resulting sampled folds but does not repair that
+representation or alter exported Fourier coefficients.
+
 This bandwidth admission rule does not bound nonlinear geometry quadrature error;
 check convergence by increasing both counts. Configuration schema v4 stores the
 counts; readers of v1–v3 configurations recover the historical 64 by 64 grid.

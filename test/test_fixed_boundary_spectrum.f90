@@ -2,6 +2,9 @@ program test_fixed_boundary_spectrum
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, &
         ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use compatible_two_component_problem, only: &
+        build_compatible_two_component_problem, compatible_problem_ok, &
+        compatible_two_component_problem_t
     use cylinder_fixture, only: create_cylinder_fixture
     use dense_spectrum_support, only: dense_spectrum_invalid, &
         dense_spectrum_ok, unpermute_dense_vectors
@@ -11,6 +14,10 @@ program test_fixed_boundary_spectrum
         fixed_boundary_full_spectrum_t, fixed_boundary_problem_t, &
         fixed_boundary_rayleigh_gradient, fixed_boundary_spectrum_result_t, &
         solve_fixed_boundary_class, solve_fixed_boundary_full_spectrum
+    use primitive_equilibrium_spline, only: fit_primitive_equilibrium, &
+        primitive_equilibrium_ok, primitive_equilibrium_spline_t
+    use primitive_kernel_geometry, only: evaluate_primitive_kernel_surface, &
+        primitive_kernel_invalid, primitive_kernel_ok
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     implicit none
@@ -81,6 +88,7 @@ program test_fixed_boundary_spectrum
     call require(all(repeated%eigenvector == first%eigenvector), &
         "same-object rebuild changed the eigenvector")
 
+    call check_geometry_orientation()
     call check_angular_convergence()
     call check_material_derivative()
     call check_invalid_inputs(equilibrium)
@@ -90,6 +98,95 @@ program test_fixed_boundary_spectrum
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_geometry_orientation()
+        type(gvec_cas3d_equilibrium_t) :: mapped
+        type(primitive_equilibrium_spline_t) :: spline
+        type(fixed_boundary_problem_t) :: folded_problem
+        type(compatible_two_component_problem_t) :: folded_marginality
+        real(dp), allocatable :: fields(:, :, :), drive(:, :)
+        real(dp) :: theta(16), zeta(8), factor
+        integer :: i, j, status, orientation
+
+        do i = 1, size(theta)
+            theta(i) = real(i - 1, dp) / real(size(theta), dp)
+        end do
+        do i = 1, size(zeta)
+            zeta(i) = real(i - 1, dp) / real(size(zeta), dp)
+        end do
+        ! The analytic torus map has J=-8*pi^2*r*r'*(R+r*cos(theta)).
+        ! r=.5*sqrt(s)*(1-.8*s) is represented exactly: its m=1 quotient
+        ! is linear. Its determinant changes sign at s=5/12, while each
+        ! individual angular surface retains a coherent orientation.
+        mapped = equilibrium
+        do i = 1, size(mapped%s)
+            factor = 1.0_dp - 0.8_dp * mapped%s(i)
+            do j = 1, size(mapped%poloidal_modes)
+                if (mapped%poloidal_modes(j) /= 1) cycle
+                mapped%xhat%cosine(i, j, :) = &
+                    factor * mapped%xhat%cosine(i, j, :)
+                mapped%xhat%sine(i, j, :) = &
+                    factor * mapped%xhat%sine(i, j, :)
+                mapped%yhat%cosine(i, j, :) = &
+                    factor * mapped%yhat%cosine(i, j, :)
+                mapped%yhat%sine(i, j, :) = &
+                    factor * mapped%yhat%sine(i, j, :)
+                mapped%zhat%cosine(i, j, :) = &
+                    factor * mapped%zhat%cosine(i, j, :)
+                mapped%zhat%sine(i, j, :) = &
+                    factor * mapped%zhat%sine(i, j, :)
+            end do
+        end do
+        call fit_primitive_equilibrium(mapped, spline, status)
+        call require(status == primitive_equilibrium_ok, "polynomial map fit failed")
+        orientation = 0
+        call evaluate_primitive_kernel_surface(spline, 0.2_dp, theta, zeta, &
+            fields, drive, status, orientation=orientation)
+        call require(status == primitive_kernel_ok, "negative chart rejected")
+        call require(orientation == -1, "analytic negative determinant differs")
+        call evaluate_primitive_kernel_surface(spline, 0.8_dp, theta, zeta, &
+            fields, drive, status, orientation=orientation)
+        call require(status == primitive_kernel_invalid, "radial fold accepted")
+        orientation = 0
+        call evaluate_primitive_kernel_surface(spline, 0.8_dp, theta, zeta, &
+            fields, drive, status, orientation=orientation)
+        call require(status == primitive_kernel_ok, "positive chart rejected")
+        call require(orientation == 1, "analytic positive determinant differs")
+        call evaluate_primitive_kernel_surface(spline, 0.9_dp, theta, zeta, &
+            fields, drive, status, orientation=orientation)
+        call require(status == primitive_kernel_ok, &
+            "consistent positive chart rejected")
+        call build_fixed_boundary_problem(mapped, 5.0_dp / 3.0_dp, &
+            2.0_dp, 1.0_dp, [1], [1], 1, folded_problem, status, 16, 8)
+        call require(status /= fixed_boundary_ok, "production radial fold accepted")
+        call build_compatible_two_component_problem(mapped, [1], [1], &
+            [0.5_dp], 1, 1, 16, 8, folded_marginality, status)
+        call require(status /= compatible_problem_ok, &
+            "marginality radial fold accepted")
+
+        ! Moving the major radius R=3+2*s adds 2*cos(theta) to r' in J.
+        ! At s=.5 it dominates r', so an angular surface crosses J=0.
+        mapped = equilibrium
+        do i = 1, size(mapped%s)
+            factor = (3.0_dp + 2.0_dp * mapped%s(i)) / 3.0_dp
+            mapped%xhat%cosine(i, 1, :) = factor * mapped%xhat%cosine(i, 1, :)
+            mapped%yhat%sine(i, 1, :) = factor * mapped%yhat%sine(i, 1, :)
+        end do
+        call fit_primitive_equilibrium(mapped, spline, status)
+        call require(status == primitive_equilibrium_ok, "moving-axis fit failed")
+        call evaluate_primitive_kernel_surface(spline, 0.5_dp, theta, zeta, &
+            fields, drive, status)
+        call require(status == primitive_kernel_invalid, "angular fold accepted")
+
+        mapped = equilibrium
+        mapped%zhat%cosine = 0.0_dp
+        mapped%zhat%sine = 0.0_dp
+        call fit_primitive_equilibrium(mapped, spline, status)
+        call require(status == primitive_equilibrium_ok, "degenerate map fit failed")
+        call evaluate_primitive_kernel_surface(spline, 0.5_dp, theta, zeta, &
+            fields, drive, status)
+        call require(status == primitive_kernel_invalid, "zero determinant accepted")
+    end subroutine check_geometry_orientation
 
     subroutine check_material_derivative()
         type(fixed_boundary_problem_t) :: shifted_problem

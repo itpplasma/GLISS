@@ -148,12 +148,13 @@ contains
         integer, intent(out) :: info
         real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
         real(dp) :: coordinate, half_width, midpoint, radial_weight
-        integer :: cell, point
+        integer :: cell, point, orientation
 
         info = compatible_three_component_assembly_error
         call build_constraint_quadrature(complex%h1_degree, &
             constraint_nodes, constraint_weights, info)
         if (info /= compatible_quadrature_ok) return
+        orientation = 0
         do cell = 1, size(breaks) - 1
             midpoint = 0.5_dp * (breaks(cell) + breaks(cell + 1))
             half_width = 0.5_dp * (breaks(cell + 1) - breaks(cell))
@@ -163,7 +164,7 @@ contains
                 call assemble_radial_point(spline, complex, coordinate, &
                     radial_weight, theta, zeta, adiabatic_index, density, &
                     mode_m, mode_n, parity, stored_power, topology, ranks, &
-                    problem, accurate_term, .true., info)
+                    problem, accurate_term, .true., info, orientation)
                 if (info /= compatible_three_component_ok) return
             end do
             do point = 1, size(constraint_nodes)
@@ -172,7 +173,7 @@ contains
                 call assemble_radial_point(spline, complex, coordinate, &
                     radial_weight, theta, zeta, adiabatic_index, density, &
                     mode_m, mode_n, parity, stored_power, topology, ranks, &
-                    problem, constraint_term, .false., info)
+                    problem, constraint_term, .false., info, orientation)
                 if (info /= compatible_three_component_ok) return
             end do
         end do
@@ -261,7 +262,7 @@ contains
     subroutine assemble_radial_point(spline, complex, coordinate, weight, &
             theta, zeta, adiabatic_index, density, mode_m, mode_n, parity, &
             stored_power, topology, ranks, problem, term_mask, assemble_mass, &
-            info)
+            info, orientation)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: coordinate, weight, theta(:), zeta(:)
@@ -273,6 +274,7 @@ contains
         type(compatible_three_component_problem_t), intent(inout) :: problem
         logical, intent(in) :: term_mask(:), assemble_mass
         integer, intent(out) :: info
+        integer, intent(inout) :: orientation
         real(dp), allocatable :: fields(:, :, :), drive(:, :), jacobian_s(:, :)
         real(dp), allocatable :: jacobian_t(:, :), jacobian_z(:, :), gamma_p(:, :)
         real(dp), allocatable :: h1(:), dh1(:), l2(:), local_h1(:, :)
@@ -316,7 +318,7 @@ contains
         if (local_info /= compatible_support_ok) return
         call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
             zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
-            jacobian_z, pressure)
+            jacobian_z, pressure, orientation=orientation)
         if (local_info /= primitive_kernel_ok) return
         if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
             jacobian_t, jacobian_z)) return

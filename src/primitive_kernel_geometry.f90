@@ -20,7 +20,7 @@ contains
 
     subroutine evaluate_primitive_kernel_surface(spline, coordinate, theta, &
             zeta_period, fields, drive, info, jacobian_radial, &
-            jacobian_theta, jacobian_zeta, pressure_pa, geometric_drive)
+            jacobian_theta, jacobian_zeta, pressure_pa, geometric_drive, orientation)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         real(dp), intent(in) :: coordinate, theta(:), zeta_period(:)
         real(dp), allocatable, intent(out) :: fields(:, :, :), drive(:, :)
@@ -30,11 +30,12 @@ contains
         real(dp), allocatable, optional, intent(out) :: jacobian_zeta(:, :)
         real(dp), optional, intent(out) :: pressure_pa
         real(dp), allocatable, optional, intent(out) :: geometric_drive(:, :)
+        integer, optional, intent(inout) :: orientation
         type(primitive_geometry_grid_t) :: geometry
         type(surface_data_t) :: surface
         type(surface_profiles_t) :: profiles
         real(dp) :: pressure, pressure_slope
-        integer :: allocation_status, local_info
+        integer :: allocation_status, local_info, surface_orientation
 
         info = primitive_kernel_invalid
         if (present(pressure_pa)) pressure_pa = 0.0_dp
@@ -42,6 +43,18 @@ contains
             zeta_period, geometry, pressure, pressure_slope, local_info)
         if (local_info /= primitive_equilibrium_ok) return
         if (.not. geometry%has_radial_field_derivatives) return
+        ! A regular chart may have either handedness, but cannot change it.
+        ! Compare signs directly: a product of determinants can overflow.
+        surface_orientation = 1
+        if (geometry%signed_jacobian(1, 1) < 0.0_dp) surface_orientation = -1
+        if (surface_orientation == 1) then
+            if (any(geometry%signed_jacobian <= 0.0_dp)) return
+        else
+            if (any(geometry%signed_jacobian >= 0.0_dp)) return
+        end if
+        if (present(orientation)) then
+            if (orientation /= 0 .and. orientation /= surface_orientation) return
+        end if
         call copy_surface(geometry, surface, allocation_status)
         if (allocation_status /= 0) then
             info = primitive_kernel_allocation_error
@@ -112,6 +125,7 @@ contains
                 return
             end if
         end if
+        if (present(orientation)) orientation = surface_orientation
         info = primitive_kernel_ok
     end subroutine evaluate_primitive_kernel_surface
 

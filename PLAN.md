@@ -55,6 +55,15 @@ of every external solver.
 Related issues: [#13, higher-order FEEC certification](https://github.com/itpplasma/GLISS/issues/13),
 [#10, asymmetric input](https://github.com/itpplasma/GLISS/issues/10).
 
+- [x] Reject reconstructed volume folds: the signed Jacobian must retain either
+  consistent handedness across angular and radial assembly nodes. Independent
+  polynomial-map controls exercise folds, both signs, and zero determinants.
+- [ ] Repair high-mode axis-regular interpolation conditioning. A boundary-valid
+  M36 Solov'ev export produced volume folds through amplification of tiny
+  harmonics by the fitted `s^(-m/2)` quotient. Admission now rejects the failed
+  map; no coefficient clipping or smoothing is used. M24/M28 provide separate
+  controls. Also replace fixed left-handed result metadata with actual chart
+  orientation; current admission allows either consistent handedness.
 - [ ] Complete production analytical coverage and public-API qualification.
   `benchmarks/analytic/run.sh` now runs an exact straight-cylinder case through
   current FEEC surface assembly for degrees 1–4, three meshes and both parities,

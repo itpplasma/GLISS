@@ -230,7 +230,7 @@ contains
         integer, optional, intent(in) :: quadrature_policy
         real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
         real(dp) :: coordinate, half_width, midpoint, radial_weight
-        integer :: cell, point, trace_index, trace_point
+        integer :: cell, point, trace_index, trace_point, orientation
         integer :: policy
 
         info = compatible_problem_assembly_error
@@ -239,6 +239,7 @@ contains
         call build_constraint_quadrature(complex%h1_degree, &
             constraint_nodes, constraint_weights, info)
         if (info /= compatible_quadrature_ok) return
+        orientation = 0
         do cell = 1, size(breaks) - 1
             trace_index = 0
             if (present(trace_cells)) then
@@ -262,13 +263,15 @@ contains
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
                         problem, all_terms, .true., &
-                        info, trace(trace_index)%points(1), density_kg_m3)
+                        info, trace(trace_index)%points(1), density_kg_m3, &
+                        orientation=orientation)
                 else
                     call assemble_radial_point(spline, complex, midpoint, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
                         problem, all_terms, .true., &
-                        info, density_kg_m3=density_kg_m3)
+                        info, density_kg_m3=density_kg_m3, &
+                        orientation=orientation)
                 end if
                 if (info /= compatible_problem_ok) return
                 cycle
@@ -281,13 +284,15 @@ contains
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
                         problem, accurate_term, .true., info, &
-                        trace(trace_index)%points(point), density_kg_m3)
+                        trace(trace_index)%points(point), density_kg_m3, &
+                        orientation=orientation)
                 else
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
                         problem, accurate_term, .true., info, &
-                        density_kg_m3=density_kg_m3)
+                        density_kg_m3=density_kg_m3, &
+                        orientation=orientation)
                 end if
                 if (info /= compatible_problem_ok) return
             end do
@@ -300,13 +305,15 @@ contains
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
                         problem, constraint_term, .false., info, &
-                        trace(trace_index)%points(trace_point), density_kg_m3)
+                        trace(trace_index)%points(trace_point), density_kg_m3, &
+                        orientation=orientation)
                 else
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
                         problem, constraint_term, .false., info, &
-                        density_kg_m3=density_kg_m3)
+                        density_kg_m3=density_kg_m3, &
+                        orientation=orientation)
                 end if
                 if (info /= compatible_problem_ok) return
             end do
@@ -319,7 +326,7 @@ contains
     subroutine assemble_radial_point(spline, complex, coordinate, weight, &
             theta, zeta, mode_m, mode_n, parity, stored_power, topology, &
             normal_rank, eta_rank, problem, term_mask, assemble_mass, info, &
-            point_trace, density_kg_m3)
+            point_trace, density_kg_m3, orientation)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: coordinate, weight, theta(:), zeta(:)
@@ -332,6 +339,7 @@ contains
         integer, intent(out) :: info
         type(compatible_radial_point_trace_t), optional, intent(out) :: point_trace
         real(dp), optional, intent(in) :: density_kg_m3
+        integer, optional, intent(inout) :: orientation
         real(dp), allocatable :: fields(:, :, :), drive(:, :), h1(:), dh1(:)
         real(dp), allocatable :: l2(:), local(:, :), local_dh1(:, :)
         real(dp), allocatable :: local_mass(:, :), local_terms(:, :, :)
@@ -373,7 +381,7 @@ contains
         call replicate_indexed_values(l2, l2_index, local_l2, local_info)
         if (local_info /= compatible_support_ok) return
         call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
-            zeta, fields, drive, local_info)
+            zeta, fields, drive, local_info, orientation=orientation)
         if (local_info /= primitive_kernel_ok) return
         allocate (local(trials * (size(h1_index) + size(l2_index)), &
             trials * (size(h1_index) + size(l2_index))), source=0.0_dp, &
