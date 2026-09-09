@@ -118,8 +118,20 @@ name = "variable_spectrum_analysis"
 main = "test_variable_spectrum_analysis.f90"
 
 [[test]]
+name = "pressure_surface_derivatives"
+main = "test_pressure_surface_derivatives.f90"
+
+[[test]]
 name = "fixed_boundary_spectrum"
 main = "test_fixed_boundary_spectrum.f90"
+
+[[test]]
+name = "fixed_boundary_symmetry"
+main = "test_fixed_boundary_symmetry.f90"
+
+[[test]]
+name = "beta_resonance"
+main = "test_beta_resonance.f90"
 
 [[test]]
 name = "gliss_spectrum_capi"

@@ -123,7 +123,7 @@ Related issues: [#12, MISHKA/CASTOR mode transfer](https://github.com/itpplasma/
 | QAS3 production FEEC | The 191-mode deck supplies a mode mask; ns64-to-ns128 lowest-eigenvalue drift is about 5.53%, with material force-balance residuals | Converge equilibrium and FEEC errors separately before claiming same-physics agreement |
 | W7-X / Nuehrenberg 1996 | The documented coefficient-normalized L10 result is about -0.88701 versus digitized -0.37148 in the report's scaled units | Resolve normalization, radial form functions, reference length, and unavailable deck details; finish quotient-aware L139 scaling under #11 |
 | MISHKA / CASTOR | Branch transfer is unresolved; the CASTOR low-beta stable control currently fails | Transfer compatible invariant subspaces across at least three meshes, distinguish continuum branches, compare mass and decomposed potential energy under #12 |
-| DCON / Solov'ev | A pinned axisymmetric comparison exists | Reproduce it with current unrestricted 3-D assembly and both stable/unstable controls; retain convention and boundary-condition evidence |
+| DCON / Solov'ev | Fresh two-component production runs place the sign change in `(1.05,1.10)`, versus archived DCON `(1.039062,1.039843)`; stable-endpoint disagreement persists at ns64/128/256, angular64/128 and export M24/M28 | Full-volume implicit-surface errors `7.77e-7,5.50e-7,1.73e-7` exceed the frozen `1e-7` bound; qualify interpolation and force balance before attributing the discrepancy to the stability operator |
 | Moderate figure-8 | Research roadmap specifies a common VMEC reference, then GVEC reproduction | Qualify one canonical input, reproduce surfaces and profiles across representations, then compare converged stability and modes |
 
 - [ ] Regenerate each retained comparison at an exact current GLISS commit;
@@ -161,6 +161,12 @@ to that effect in the research
   VMEC/BOOZ preprocessing as differentiable.
 - [ ] Connect geometry/profile JVPs and VJPs to stiffness and physical mass
   assembly, then isolated generalized-eigenvalue sensitivities.
+  The new `pressure_surface_derivatives` module completes the fixed-geometry
+  pressure-sample spline-to-surface fields/drive/`gamma*p` map and its analytic
+  JVP/VJP. Full nodal basis tests on nonuniform nodes, independent production
+  finite-difference plateaus, duality and resonance controls pass. Next connect
+  these tangents to the bilinear surface-assembly product rule and radial
+  scatter; no global pressure or force-balanced design gradient is claimed.
 - [ ] Implement basis-invariant cluster objectives with a declared spectral
   gap and cluster-selection policy. Reject unresolved crossings and changing
   cluster dimensions; an ordered minimum need not be differentiable there.

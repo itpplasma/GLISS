@@ -125,6 +125,7 @@ add_library(gliss
     src/axisymmetric_spectrum.f90
     src/field_profile_identities.f90
     src/export_surface_geometry.f90
+    src/pressure_surface_derivatives.f90
     src/primitive_kernel_geometry.f90
     src/compatible_two_component_problem.f90
     src/compatible_three_component_problem.f90
@@ -230,6 +231,9 @@ add_executable(gliss_compatible_operator_trace
 target_link_libraries(gliss_compatible_operator_trace PRIVATE gliss)
 set_target_properties(gliss_compatible_operator_trace PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+add_executable(gliss_geometry_admission app/gliss_geometry_admission.f90)
+target_link_libraries(gliss_geometry_admission PRIVATE gliss)
 
 add_executable(gliss_axisymmetric app/gliss_axisymmetric.f90)
 target_link_libraries(gliss_axisymmetric PRIVATE gliss)
@@ -642,6 +646,11 @@ if(BUILD_TESTING)
     add_executable(test_fixed_boundary_symmetry test/test_fixed_boundary_symmetry.f90)
     target_link_libraries(test_fixed_boundary_symmetry PRIVATE gliss_test_support)
     add_test(NAME fixed_boundary_symmetry COMMAND test_fixed_boundary_symmetry)
+
+    add_executable(test_pressure_surface_derivatives
+        test/test_pressure_surface_derivatives.f90)
+    target_link_libraries(test_pressure_surface_derivatives PRIVATE gliss)
+    add_test(NAME pressure_surface_derivatives COMMAND test_pressure_surface_derivatives)
 
     add_executable(test_fixed_boundary_spectrum
         test/test_fixed_boundary_spectrum.f90)

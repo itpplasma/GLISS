@@ -1,0 +1,11 @@
+control,q0,export_m,radial_surfaces,degree,mmax,angular_theta,angular_zeta,negative_count
+radial,1.039062,24,64,2,8,64,8,1
+radial,1.039843,24,64,2,8,64,8,1
+radial,1.039062,24,128,2,8,64,8,1
+radial,1.039843,24,128,2,8,64,8,1
+radial,1.039062,24,256,2,8,64,8,1
+radial,1.039843,24,256,2,8,64,8,1
+angular,1.039062,24,64,2,8,128,8,1
+angular,1.039843,24,64,2,8,128,8,1
+export_bandwidth,1.039843,20,64,2,8,64,8,1
+export_bandwidth,1.039843,28,64,2,8,64,8,1
