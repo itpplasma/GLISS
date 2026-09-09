@@ -127,8 +127,13 @@ Tracked by [#9, equilibrium-to-spectrum and clustered-subspace derivatives](http
 Existing public Rayleigh JVP/VJP actions differentiate the displacement vector
 with the assembled matrices held fixed. The eight Enzyme gates exercise local
 kernels and compatibility maps. The SIMSOPT Mercier wrapper is value-only.
-None of these establishes a GVEC-design-variable gradient or a public clustered
-spectral objective. Present-tense claims to that effect in the research
+The public `spectral_parameter_sensitivity` now supplies isolated and cluster
+trace derivatives for density and adiabatic index with the imported equilibrium
+held fixed. Analytical contractions pass independent pencil, basis-rotation,
+duality and production finite-difference plateau checks. Its residual-based
+gap admission is a numerical diagnostic, not a rigorous spectral enclosure.
+None of this establishes a GVEC-design-variable gradient. Present-tense claims
+to that effect in the research
 `docs/sections/differentiation.tex` need correction.
 
 - [ ] Specify parameter ownership, units, constraints, fixed topology, and

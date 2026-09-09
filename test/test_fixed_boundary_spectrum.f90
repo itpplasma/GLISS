@@ -82,6 +82,7 @@ program test_fixed_boundary_spectrum
         "same-object rebuild changed the eigenvector")
 
     call check_angular_convergence()
+    call check_material_derivative()
     call check_invalid_inputs(equilibrium)
     call check_row_permutation()
     call check_density_scaling()
@@ -89,6 +90,47 @@ program test_fixed_boundary_spectrum
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_material_derivative()
+        type(fixed_boundary_problem_t) :: shifted_problem
+        type(fixed_boundary_full_spectrum_t) :: shifted
+        type(fixed_boundary_energy_terms_t) :: terms
+        real(dp), parameter :: gamma = 5.0_dp / 3.0_dp
+        real(dp), parameter :: steps(3) = [1.0e-2_dp, 3.0e-3_dp, 1.0e-3_dp]
+        real(dp) :: gradient, finite_difference, values(2), scale
+        integer :: step, side, status, index
+
+        ! Trace of the complete mass-orthonormal spectrum is independent of
+        ! eigenvector ordering/crossings. Central differences rebuild the
+        ! production pencil; no differentiated code supplies this oracle.
+        gradient = 0.0_dp
+        do index = 1, size(full%eigenvalues)
+            call diagnose_fixed_boundary_energy(problem, 1, &
+                full%eigenvectors(:, index), terms, status)
+            call require(status == fixed_boundary_ok, "derivative energy failed")
+            gradient = gradient + terms%plasma_compressibility &
+                / (gamma * terms%kinetic_energy)
+        end do
+        call require(ieee_is_finite(gradient), "nonfinite gamma gradient")
+        call require(gradient > 0.0_dp, "missing compressibility derivative")
+        do step = 1, size(steps)
+            do side = 1, 2
+                call build_fixed_boundary_problem(equilibrium, &
+                    gamma + real(2 * side - 3, dp) * steps(step), &
+                    2.0_dp, 1.0_dp, [1, 2], [1, 1], 1, shifted_problem, status)
+                call require(status == fixed_boundary_ok, "gamma build failed")
+                call solve_fixed_boundary_full_spectrum(shifted_problem, &
+                    1, shifted, status)
+                call require(status == fixed_boundary_ok, "gamma solve failed")
+                values(side) = sum(shifted%eigenvalues)
+            end do
+            finite_difference = (values(2) - values(1)) / (2.0_dp * steps(step))
+            call require(ieee_is_finite(finite_difference), "nonfinite gamma FD")
+            scale = max(1.0_dp, abs(gradient))
+            call require(abs(finite_difference - gradient) < 1.0e-7_dp * scale, &
+                "production gamma derivative lacks a step plateau")
+        end do
+    end subroutine check_material_derivative
 
     subroutine check_angular_convergence()
         type(fixed_boundary_problem_t) :: refined

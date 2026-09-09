@@ -66,6 +66,24 @@ def check_production_spectrum(gliss, equilibrium_path):
                         rtol=1.0e-10, atol=1.0e-10,
                     )
                 spectra.append(result.classes)
+                if (theta, zeta, density) == (64, 64, 2.0):
+                    full = problem.solve_full_spectrum_class(1)
+                    sensitivity = gliss.spectral_parameter_sensitivity(
+                        problem, 1, 0, len(full.eigenvalues), gap=1.0
+                    )
+                    trace = float(np.sum(full.eigenvalues))
+                    assert np.isfinite(trace)
+                    np.testing.assert_allclose(sensitivity.value, trace, rtol=1e-12)
+                    np.testing.assert_allclose(
+                        sensitivity.jvp([1.0, 0.0]), -trace / density, rtol=1e-10
+                    )
+                    assert np.isfinite(sensitivity.gradient[1])
+                    assert sensitivity.gradient[1] > 0
+                    tangent = np.array([0.3, -0.2])
+                    np.testing.assert_allclose(
+                        1.7 * sensitivity.jvp(tangent),
+                        np.dot(sensitivity.vjp(1.7), tangent), rtol=1e-12,
+                    )
     print("Installed production spectrum: angular convergence and inverse-density "
           "scaling passed", flush=True)
 

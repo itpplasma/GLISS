@@ -139,6 +139,11 @@ from .schema import (  # noqa: E402
 )
 from .full_schema import FullRunManifest, write_full_run_manifest  # noqa: E402
 
+from .parameter_derivatives import (  # noqa: E402
+    ParameterSensitivity,
+    spectral_parameter_sensitivity,
+)
+
 __all__ = [
     "__version__",
     "Equilibrium",
@@ -146,6 +151,8 @@ __all__ = [
     "Cas3dMarginalityResult",
     "Cas3dPhaseEnvelopeResult",
     "EnergyTerms",
+    "ParameterSensitivity",
+    "spectral_parameter_sensitivity",
     "GlissAllocationError",
     "GlissArgumentError",
     "GlissCapacityError",
