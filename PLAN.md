@@ -51,6 +51,63 @@ of every external solver.
 - Verify inverse-density scaling through the production constructor and solve:
   quadrupling density divides `omega^2` by four and preserves negative inertia.
 
+## Priority 0: deep source audit
+
+The next audit must trace the complete production calculation from imported
+equilibrium data to reported spectra and derivatives. Earlier component reviews
+and passing tests provide evidence, but leave gaps in equation derivations,
+interpolation accuracy, global derivative propagation, and benchmark agreement.
+Start from the delivered code at
+[`bc0cf46`](https://github.com/itpplasma/GLISS/commit/bc0cf46bc7eede7ba79829307c820ef7c1e8a877),
+then freeze the exact commit and any worktree patch digest for each review.
+
+- [ ] Build a source inventory covering every production Fortran module, Python
+  wrapper, C ABI entry point, application, benchmark runner, and CI verifier.
+  Record each component's callers, mathematical contract, units, assumptions,
+  independent oracle, derivative coverage, reviewer, and unresolved findings.
+  Mark unread or unverified components explicitly; test counts alone do not
+  establish audit coverage.
+- [ ] Have Astra xhigh lead an independent source review, with bounded parallel
+  workers for geometry, assembly, eigensolvers, derivatives, and interfaces.
+  Workers return findings and reproducible evidence; one controller owns the
+  inventory, integration, PLAN updates, commits, and promotion to main.
+- [ ] Trace reader conventions through half-grid coordinates, Fourier signs,
+  winding, handedness, flux and pressure profiles, axis regularity, and Cartesian
+  reconstruction. Audit the `s^(-m/2)` interpolation conditioning, between-knot
+  geometry and derivatives, force balance, and sampled admission rules first.
+  Use independent analytic maps and profile formulas to isolate input errors
+  before interpreting the DCON discrepancy.
+- [ ] Rederive each retained stiffness and physical-mass term from its cited
+  energy principle. Follow signs, Jacobians, normalization factors, boundary
+  terms, parity coupling, FEEC basis/traces, split quadrature, and radial scatter
+  into the actual production assembly. Check every alternate public path and
+  distinguish compatibility replays from independently assembled operators.
+- [ ] Audit dense and block eigensolvers, equilibration, inertia, singular
+  shifts, nullspaces, residuals, spectral selection, and error certificates.
+  Use exact pencils, high-precision references, reordered and rescaled controls,
+  and ill-conditioned masses. Separate rigorous eigenvalue/gap bounds from
+  backward-error diagnostics, especially for clustered and slow modes.
+- [ ] Trace JVP/VJP actions through every supported parameter path and list each
+  missing link to geometry, profiles, global matrices, eigenspaces, and GVEC
+  force balance. Check constraints, gauges, resonance branches, fixed topology,
+  nonfinite/error paths, and cluster-boundary changes. Require independent
+  directional finite-difference plateaus and full-space transpose duality;
+  preserve differentiability on each declared admissible domain.
+- [ ] Audit Python/C/Fortran ownership, lifetimes, array layout, integer limits,
+  optional arguments, failure outputs, configuration migration, and provenance.
+  Review test oracles and benchmark scripts for shared implementation mistakes,
+  skipped controls, stale solver pins, and claims stronger than their evidence.
+- [ ] Give every finding a minimal reproducer, severity, affected paths,
+  independent expected behavior, and a linked existing or new GitHub issue.
+  Fix confirmed bugs in small reviewed increments; retain unresolved physics
+  discrepancies with explicit acceptance requirements in Priorities 1–3.
+
+Completion requires an accounted-for source inventory, equation-to-code
+evidence, independent review of fixes, regressions that fail before each fix,
+and the applicable compiler, installed-package, derivative, and optimized
+checks. Publish the coverage gaps and remaining findings; a clean audit report
+must not imply that untested physics or an unfinished derivative chain is valid.
+
 ## Priority 1: qualify the production operator
 
 Related issues: [#13, higher-order FEEC certification](https://github.com/itpplasma/GLISS/issues/13),
