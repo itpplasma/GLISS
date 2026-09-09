@@ -334,6 +334,10 @@ if(BUILD_TESTING)
         "the final option must be --count-only"
         missing.nc 1 4 --degree 2 --bad)
 
+    add_executable(test_beta_resonance test/test_beta_resonance.f90)
+    target_link_libraries(test_beta_resonance PRIVATE gliss)
+    add_test(NAME beta_resonance COMMAND test_beta_resonance)
+
     add_executable(test_local_mode test/test_local_mode.f90)
     target_link_libraries(test_local_mode PRIVATE gliss)
     add_test(NAME local_mode COMMAND test_local_mode)
@@ -627,6 +631,10 @@ if(BUILD_TESTING)
     target_link_libraries(test_variable_spectrum_analysis PRIVATE gliss)
     add_test(NAME variable_spectrum_analysis
         COMMAND test_variable_spectrum_analysis)
+
+    add_executable(test_fixed_boundary_symmetry test/test_fixed_boundary_symmetry.f90)
+    target_link_libraries(test_fixed_boundary_symmetry PRIVATE gliss_test_support)
+    add_test(NAME fixed_boundary_symmetry COMMAND test_fixed_boundary_symmetry)
 
     add_executable(test_fixed_boundary_spectrum
         test/test_fixed_boundary_spectrum.f90)

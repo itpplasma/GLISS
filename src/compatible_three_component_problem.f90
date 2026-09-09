@@ -180,6 +180,84 @@ contains
         info = compatible_three_component_ok
     end subroutine assemble_problem
 
+    function surface_preserves_parity(fields, drive, jacobian_s, &
+            jacobian_t, jacobian_z) result(valid)
+        real(dp), intent(in) :: fields(:, :, :), drive(:, :)
+        real(dp), intent(in) :: jacobian_s(:, :), jacobian_t(:, :)
+        real(dp), intent(in) :: jacobian_z(:, :)
+        logical :: valid
+        real(dp) :: natural(13), magnetic, length, jacobian
+        integer :: field
+
+        ! Test the physical operator, after Cartesian/G-frame reconstruction
+        ! and winding conversion. The storage symmetry flag is not evidence.
+        ! In the fixed Fourier classes normal displacement has the opposite
+        ! parity to eta/mu. Flux/profile scalars, J, |B|, grad(s)^2 and the
+        ! current scalar (fields 1:11) are even under (theta,zeta)->(-theta,-zeta).
+        ! sigma and beta (12:13) are odd, making normal/tangential mass and
+        ! stiffness cross terms odd. Radial differentiation preserves parity;
+        ! angular differentiation reverses it. These are admission diagnostics
+        ! at every assembly quadrature point, not differentiable objectives or
+        ! a certificate of angular convergence of nonlinear metric products.
+        valid = .false.
+        ! L=1/|grad s| and B supply dimensional reference scales only for
+        ! floating-point cancellation. Flux scales as B L^2, covariant field
+        ! as B L, current scalar as B^2/L, and drive/pressure as B^2.
+        magnetic = maxval(abs(fields(:, :, 8)))
+        length = 1.0_dp / sqrt(maxval(fields(:, :, 9)))
+        jacobian = maxval(abs(fields(:, :, 7)))
+        natural(1:4) = magnetic * length**2
+        natural(5:6) = magnetic * length
+        natural(7) = jacobian
+        natural(8) = magnetic
+        natural(9) = 1.0_dp / length**2
+        natural(10) = magnetic**2 / length
+        natural(11) = magnetic**2
+        natural(12) = 1.0_dp
+        natural(13) = magnetic * length
+        do field = 1, 13
+            if (.not. grid_has_parity(fields(:, :, field), &
+                merge(1, -1, field <= 11), natural(field))) return
+        end do
+        if (.not. grid_has_parity(drive, 1, magnetic**2)) return
+        if (.not. grid_has_parity(jacobian_s, 1, jacobian)) return
+        if (.not. grid_has_parity(jacobian_t, -1, jacobian)) return
+        if (.not. grid_has_parity(jacobian_z, -1, jacobian)) return
+        valid = .true.
+    end function surface_preserves_parity
+
+    function grid_has_parity(values, sign, natural_scale) result(valid)
+        real(dp), intent(in) :: values(:, :), natural_scale
+        integer, intent(in) :: sign
+        logical :: valid
+        real(dp) :: scale, defect, actual_scale, tolerance
+        integer :: j, k, reflected_j, reflected_k
+
+        ! Relative 1e-8 admission plus a 1024-epsilon rounding allowance
+        ! against a physical scale with the same dimensions. A fixed SI-unit
+        ! floor would change admission under length or magnetic-field scaling.
+        ! The rounding allowance admits identically zero derived quantities
+        ! after floating-point cancellation without hiding a small finite field.
+        valid = .false.
+        if (.not. all(ieee_is_finite(values))) return
+        if (.not. ieee_is_finite(natural_scale)) return
+        if (natural_scale <= 0.0_dp) return
+        actual_scale = maxval(abs(values))
+        scale = max(natural_scale, actual_scale)
+        tolerance = 1.0e-8_dp * (actual_scale / scale) &
+            + 1024.0_dp * epsilon(scale) * (natural_scale / scale)
+        do k = 1, size(values, 2)
+            reflected_k = modulo(1 - k, size(values, 2)) + 1
+            do j = 1, size(values, 1)
+                reflected_j = modulo(1 - j, size(values, 1)) + 1
+                defect = abs(values(j, k) / scale - real(sign, dp) &
+                    * values(reflected_j, reflected_k) / scale)
+                if (defect > tolerance) return
+            end do
+        end do
+        valid = .true.
+    end function grid_has_parity
+
     subroutine assemble_radial_point(spline, complex, coordinate, weight, &
             theta, zeta, adiabatic_index, density, mode_m, mode_n, parity, &
             stored_power, topology, ranks, problem, term_mask, assemble_mass, &
@@ -240,6 +318,8 @@ contains
             zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
             jacobian_z, pressure)
         if (local_info /= primitive_kernel_ok) return
+        if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
+            jacobian_t, jacobian_z)) return
         allocate (gamma_p(size(theta), size(zeta)), &
             source=adiabatic_index * pressure, stat=allocation_status)
         if (allocation_status /= 0) then

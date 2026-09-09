@@ -73,20 +73,21 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
   configuration schema 4 migrates older files. Nonlinear metric convergence
   remains a separate qualification requirement from Fourier admission.
   Freeze mode topology and quadrature during differentiation.
-- [ ] Add a frame-aware physical symmetry admission check before solving separate
+- [x] Add a frame-aware physical symmetry admission check before solving separate
   parity classes. A full-storage export can be physically symmetric even when
   `stellarator_symmetry=False`; rejecting that flag alone is wrong. Conversely,
   genuine asymmetry couples parity classes and is not covered by today's solves.
   Verify symmetric full-storage files and an odd-harmonic cross-parity mass
   oracle. Coupled asymmetric assembly remains #10.
-- [ ] Audit magnetic differential-equation resonances in
-  `src/export_surface_geometry.f90`: the current small-denominator branch zeroes
-  a harmonic without proving that its forcing is solvable. Define a residual
-  and conditioning policy and reject incompatible forcing. Test compatible and
-  incompatible resonances and derivatives on either side of the threshold.
-  The audit's manufactured resonant `(m,n)=(1,1)` forcing returned success with
-  a normalized differential-equation residual of one; kernel finiteness alone
-  does not detect this defect.
+  The admitted operator is sampled at assembly nodes with dimensionally scaled
+  tolerances; this does not certify continuum symmetry or angular convergence.
+- [x] Reject incompatible nonconstant magnetic differential-equation resonances
+  in `src/export_surface_geometry.f90`. The retained mean-projected equation now
+  uses a RHS/projection roundoff bound and rejects unresolved nonzero forcing.
+  Resolved denominators retain their exact inverse and matching flux derivatives.
+  Independent resonance, near-resonance, scaling, finite-difference and injected
+  NaN controls pass. Mercier failures propagate and invalidate legacy outputs.
+  Mean force balance and Fourier truncation remain separate diagnostics.
 
 Completion requires frozen acceptance bounds, independent reference formulas,
 negative controls, and a clean-checkout runner. Do not tune a tolerance to a

@@ -1,6 +1,7 @@
 module mercier_diagnostic
+    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use export_surface_geometry, only: beta_from_positions, &
+    use export_surface_geometry, only: beta_from_positions, beta_mode_denominator, &
         build_angular_grids, build_kernel_geometry, differentiate_pair, &
         grid_mean, load_surface, mercier_invalid_input, mercier_ok, &
         mercier_reconstruction_error, mu0, solve_beta_derivatives, &
@@ -140,7 +141,8 @@ contains
                 covariant_theta_slope(i), covariant_zeta_slope(i), &
                 flux_slope(i), flux_curvature(i), volume_slope(i), &
                 volume_curvature(i), pressure_slope(i), iota_slope(i), &
-                beta_positions, result)
+                beta_positions, result, info)
+            if (info /= mercier_ok) return
         end do
         result%s = equilibrium%s
         info = mercier_ok
@@ -150,7 +152,7 @@ contains
             i, covariant_theta, covariant_zeta, covariant_theta_slope, &
             covariant_zeta_slope, flux_slope, flux_curvature, &
             volume_slope, volume_curvature, pressure_slope, iota_slope, &
-            beta_positions, result)
+            beta_positions, result, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
@@ -163,6 +165,7 @@ contains
         real(dp), intent(in) :: pressure_slope, iota_slope
         type(mercier_result_t), intent(inout) :: result
         real(dp), allocatable :: beta_values(:, :), beta_filtered(:, :)
+        integer, intent(out) :: info
         real(dp) :: pressure_term, toroidal_term, poloidal_term
         real(dp) :: d_pressure_slope_full
         real(dp) :: d_toroidal_flux_slope, d_poloidal_flux_slope
@@ -174,7 +177,8 @@ contains
             covariant_zeta_slope, flux_slope, flux_curvature, &
             volume_slope, volume_curvature, pressure_slope, iota_slope, &
             d_terms, grad, d_pressure_slope_full, beta_values, &
-            d_toroidal_flux_slope, d_poloidal_flux_slope)
+            d_toroidal_flux_slope, d_poloidal_flux_slope, info=info)
+        if (info /= mercier_ok) return
         result%d_shear(i) = d_terms%shear
         result%d_current(i) = d_terms%current
         result%d_well(i) = d_terms%well
@@ -209,7 +213,7 @@ contains
             volume_slope, volume_curvature, pressure_slope, iota_slope, &
             d_terms, grad, d_pressure_slope_full, beta_values, &
             d_toroidal_flux_slope, d_poloidal_flux_slope, &
-            poloidal_flux_slope_override)
+            poloidal_flux_slope_override, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
@@ -223,6 +227,8 @@ contains
         real(dp), intent(out) :: d_pressure_slope_full
         real(dp), allocatable, intent(out) :: beta_values(:, :)
         real(dp), intent(out) :: d_toroidal_flux_slope, d_poloidal_flux_slope
+        integer, intent(out), optional :: info
+        integer :: beta_info
         real(dp), intent(in), optional :: poloidal_flux_slope_override
         real(dp), allocatable :: beta_theta(:, :), beta_zeta(:, :)
         real(dp), allocatable :: mu0_j_dot_b(:, :), grad_psi(:, :)
@@ -235,6 +241,9 @@ contains
         real(dp) :: d_integral_mu0jb_toroidal, d_integral_jbsq_toroidal
         real(dp) :: d_integral_mu0jb_poloidal, d_integral_jbsq_poloidal
 
+        call invalidate_surface_terms(d_terms, grad, d_pressure_slope_full, &
+            d_toroidal_flux_slope, d_poloidal_flux_slope)
+        if (present(info)) info = mercier_invalid_input
         field_periods = real(equilibrium%field_periods, dp)
         n_grid = real(size(surface%jacobian), dp)
         poloidal_flux_slope = grid_product_mean(surface%jacobian, &
@@ -244,7 +253,8 @@ contains
         call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
             poloidal_flux_slope, flux_slope, &
-            beta_values, beta_theta, beta_zeta, beta_harmonics)
+            beta_values, beta_theta, beta_zeta, beta_harmonics, beta_info)
+        if (beta_info /= mercier_ok) return
         mu0_j_dot_b = ((beta_zeta - covariant_zeta_slope) &
             * covariant_theta &
             + (covariant_theta_slope - beta_theta) * covariant_zeta) &
@@ -279,7 +289,13 @@ contains
             + pressure_implicit_gradient(equilibrium, surface, theta, &
             zeta, poloidal_flux_slope, flux_slope, covariant_theta, &
             covariant_zeta, mu0_j_dot_b, psi_slope, field_periods, &
-            n_grid, iota_slope, integral_jb, integral_bsq)
+            n_grid, iota_slope, integral_jb, integral_bsq, beta_info)
+        if (beta_info /= mercier_ok) then
+            call invalidate_surface_terms(d_terms, grad, d_pressure_slope_full, &
+                d_toroidal_flux_slope, d_poloidal_flux_slope)
+            beta_values = ieee_value(0.0_dp, ieee_quiet_nan)
+            return
+        end if
         call flux_beta_integral_derivatives(equilibrium, surface, theta, &
             zeta, beta_harmonics, poloidal_flux_slope, flux_slope, &
             covariant_theta, covariant_zeta, mu0_j_dot_b, grad_psi, &
@@ -293,12 +309,27 @@ contains
             d_integral_mu0jb_toroidal, d_integral_jbsq_toroidal, &
             d_integral_mu0jb_poloidal, d_integral_jbsq_poloidal, &
             d_toroidal_flux_slope, d_poloidal_flux_slope)
+        if (present(info)) info = mercier_ok
     end subroutine mercier_surface_terms
+
+    subroutine invalidate_surface_terms(terms, gradient, pressure, toroidal, poloidal)
+        type(mercier_d_terms_t), intent(out) :: terms
+        type(mercier_gradient_t), intent(out) :: gradient
+        real(dp), intent(out) :: pressure, toroidal, poloidal
+        real(dp) :: invalid
+
+        invalid = ieee_value(0.0_dp, ieee_quiet_nan)
+        terms = mercier_d_terms_t(invalid, invalid, invalid, invalid, invalid)
+        gradient = mercier_gradient_t(invalid, invalid)
+        pressure = invalid
+        toroidal = invalid
+        poloidal = invalid
+    end subroutine invalidate_surface_terms
 
     function pressure_implicit_gradient(equilibrium, surface, theta, zeta, &
             poloidal_flux_slope, toroidal_flux_slope, covariant_theta, &
             covariant_zeta, mu0_j_dot_b, psi_slope, field_periods, &
-            n_grid, iota_slope, integral_jb, integral_bsq) &
+            n_grid, iota_slope, integral_jb, integral_bsq, info) &
             result(contribution)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
@@ -308,6 +339,7 @@ contains
         real(dp), intent(in) :: mu0_j_dot_b(:, :), psi_slope
         real(dp), intent(in) :: field_periods, n_grid, iota_slope
         real(dp), intent(in) :: integral_jb, integral_bsq
+        integer, intent(out) :: info
         real(dp) :: contribution
         real(dp), allocatable :: discard_values(:, :), d_beta_theta(:, :)
         real(dp), allocatable :: d_beta_zeta(:, :), d_mu0_j_dot_b(:, :)
@@ -316,7 +348,9 @@ contains
 
         call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
             0.0_dp, 0.0_dp, 1.0_dp, poloidal_flux_slope, &
-            toroidal_flux_slope, discard_values, d_beta_theta, d_beta_zeta)
+            toroidal_flux_slope, discard_values, d_beta_theta, d_beta_zeta, info=info)
+        contribution = 0.0_dp
+        if (info /= mercier_ok) return
         d_mu0_j_dot_b = (d_beta_zeta * covariant_theta &
             - d_beta_theta * covariant_zeta) / surface%jacobian
         grad_psi = abs(psi_slope) * surface%area_element &
@@ -390,30 +424,30 @@ contains
         real(dp), allocatable, intent(out) :: d_beta_zeta(:, :)
         type(harmonic_pair_t) :: d_pair
         real(dp), allocatable :: discard_values(:, :)
-        real(dp) :: denominator, d_denominator, scale, mode_m, mode_n
+        real(dp) :: denominator, d_denominator, scale, mode_m, mode_n, mode_norm
         integer :: idx_m, idx_n, rec_info
 
         allocate (d_pair%cosine, mold=beta_harmonics%cosine)
         allocate (d_pair%sine, mold=beta_harmonics%sine)
-        scale = abs(toroidal_flux_slope) + abs(poloidal_flux_slope)
+        scale = max(abs(toroidal_flux_slope), abs(poloidal_flux_slope))
         do idx_n = 1, size(equilibrium%toroidal_modes)
             mode_n = real(equilibrium%toroidal_modes(idx_n), dp)
             do idx_m = 1, size(equilibrium%poloidal_modes)
                 mode_m = real(equilibrium%poloidal_modes(idx_m), dp)
-                denominator = two_pi * (mode_m * poloidal_flux_slope &
-                    - mode_n * toroidal_flux_slope)
-                if (abs(denominator) < 1.0e-10_dp * scale) then
+                call beta_mode_denominator(mode_m, mode_n, poloidal_flux_slope, &
+                    toroidal_flux_slope, denominator, mode_norm)
+                if (abs(denominator) <= 4.0_dp * epsilon(1.0_dp) * mode_norm) then
                     d_pair%cosine(1, idx_m, idx_n) = 0.0_dp
                     d_pair%sine(1, idx_m, idx_n) = 0.0_dp
                 else
-                    d_denominator = two_pi * (poloidal_weight * mode_m &
+                    d_denominator = (poloidal_weight * mode_m &
                         - toroidal_weight * mode_n)
                     d_pair%cosine(1, idx_m, idx_n) = &
                         -beta_harmonics%cosine(1, idx_m, idx_n) &
-                        * d_denominator / denominator
+                        * (d_denominator / scale) / denominator
                     d_pair%sine(1, idx_m, idx_n) = &
                         -beta_harmonics%sine(1, idx_m, idx_n) &
-                        * d_denominator / denominator
+                        * (d_denominator / scale) / denominator
                 end if
             end do
         end do
@@ -640,7 +674,7 @@ contains
         real(dp), allocatable, intent(out) :: filtered(:, :)
         type(harmonic_pair_t) :: pair
         real(dp), allocatable :: discard_a(:, :), discard_b(:, :)
-        real(dp) :: denominator, scale
+        real(dp) :: denominator, mode_norm
         integer :: mode_m, mode_n, rec_info
 
         allocate (pair%cosine(1, size(equilibrium%poloidal_modes), &
@@ -650,15 +684,13 @@ contains
         call project_harmonic_grid(values, equilibrium%poloidal_modes, &
             equilibrium%toroidal_modes, theta, zeta, &
             pair%cosine(1, :, :), pair%sine(1, :, :))
-        scale = abs(toroidal_flux_slope) + abs(poloidal_flux_slope)
         do mode_n = 1, size(equilibrium%toroidal_modes)
             do mode_m = 1, size(equilibrium%poloidal_modes)
-                denominator = two_pi * (real( &
-                    equilibrium%poloidal_modes(mode_m), dp) &
-                    * poloidal_flux_slope - real( &
-                    equilibrium%toroidal_modes(mode_n), dp) &
-                    * toroidal_flux_slope)
-                if (abs(denominator) < 1.0e-10_dp * scale) then
+                call beta_mode_denominator( &
+                    real(equilibrium%poloidal_modes(mode_m), dp), &
+                    real(equilibrium%toroidal_modes(mode_n), dp), &
+                    poloidal_flux_slope, toroidal_flux_slope, denominator, mode_norm)
+                if (abs(denominator) <= 4.0_dp * epsilon(1.0_dp) * mode_norm) then
                     pair%cosine(1, mode_m, mode_n) = 0.0_dp
                     pair%sine(1, mode_m, mode_n) = 0.0_dp
                 end if

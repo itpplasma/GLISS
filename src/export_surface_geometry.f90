@@ -1,5 +1,5 @@
 module export_surface_geometry
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use gvec_cas3d_reconstruction, only: project_harmonic_grid, &
         reconstruct_harmonic_grid, reconstruction_ok
@@ -41,6 +41,7 @@ module export_surface_geometry
     public :: grid_mean
     public :: load_surface
     public :: solve_beta_derivatives
+    public :: beta_mode_denominator
     public :: solve_beta_derivatives_modes
     public :: surface_derivatives
     public :: surface_values
@@ -499,7 +500,7 @@ contains
     subroutine solve_beta_derivatives(equilibrium, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
             poloidal_flux_slope, toroidal_flux_slope, beta_values, &
-            beta_theta, beta_zeta, beta_harmonics)
+            beta_theta, beta_zeta, beta_harmonics, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
@@ -510,16 +511,22 @@ contains
         real(dp), allocatable, intent(out) :: beta_theta(:, :)
         real(dp), allocatable, intent(out) :: beta_zeta(:, :)
         type(harmonic_pair_t), intent(out), optional :: beta_harmonics
+        integer, intent(out), optional :: info
         type(harmonic_pair_t) :: beta_pair
 
         call solve_beta_derivatives_modes(equilibrium%poloidal_modes, &
             equilibrium%toroidal_modes, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
             poloidal_flux_slope, toroidal_flux_slope, beta_values, &
-            beta_theta, beta_zeta, beta_pair)
+            beta_theta, beta_zeta, beta_pair, info)
         if (present(beta_harmonics)) beta_harmonics = beta_pair
     end subroutine solve_beta_derivatives
 
+    ! Solve the retained, mean-projected magnetic differential equation.
+    ! Success does not certify its omitted mean (equilibrium force balance),
+    ! nor Fourier truncation error. Nonconstant unresolved harmonics must have
+    ! forcing consistent with RHS/projection roundoff; otherwise input is invalid.
+    ! The valid nonresonant branch uses the exact inverse, without regularization.
     subroutine solve_beta_derivatives_modes(poloidal_modes, toroidal_modes, &
             surface, theta, zeta, covariant_theta_slope, &
             covariant_zeta_slope, pressure_slope, poloidal_flux_slope, &
@@ -540,7 +547,7 @@ contains
         real(dp), allocatable :: rhs(:, :)
         real(dp) :: rhs_cosine(size(poloidal_modes), size(toroidal_modes))
         real(dp) :: rhs_sine(size(poloidal_modes), size(toroidal_modes))
-        real(dp) :: denominator, scale
+        real(dp) :: denominator, scale, mode_scale, rhs_scale, roundoff
         integer :: allocation_status, mode_m, mode_n, rec_info
 
         if (present(info)) info = mercier_invalid_input
@@ -548,41 +555,104 @@ contains
         if (size(theta) < 1 .or. size(zeta) < 1) return
         if (.not. all(ieee_is_finite(theta)) &
             .or. .not. all(ieee_is_finite(zeta))) return
+        allocate (beta_values(size(theta), size(zeta)), &
+            beta_theta(size(theta), size(zeta)), beta_zeta(size(theta), size(zeta)))
+        beta_values = ieee_value(0.0_dp, ieee_quiet_nan)
+        beta_theta = beta_values
+        beta_zeta = beta_values
+        if (.not. ieee_is_finite(covariant_theta_slope)) return
+        if (.not. ieee_is_finite(covariant_zeta_slope)) return
+        if (.not. ieee_is_finite(pressure_slope)) return
+        if (.not. ieee_is_finite(poloidal_flux_slope)) return
+        if (.not. ieee_is_finite(toroidal_flux_slope)) return
+        scale = max(abs(toroidal_flux_slope), abs(poloidal_flux_slope))
+        if (scale == 0.0_dp) return
+        if (.not. allocated(surface%jacobian)) return
+        if (.not. allocated(surface%b_theta)) return
+        if (.not. allocated(surface%b_zeta)) return
+        if (size(surface%jacobian, 1) /= size(theta)) return
+        if (size(surface%jacobian, 2) /= size(zeta)) return
+        if (any(shape(surface%b_theta) /= shape(surface%jacobian))) return
+        if (any(shape(surface%b_zeta) /= shape(surface%jacobian))) return
+        if (.not. all(ieee_is_finite(surface%jacobian))) return
+        if (.not. all(ieee_is_finite(surface%b_theta))) return
+        if (.not. all(ieee_is_finite(surface%b_zeta))) return
         rhs = surface%jacobian * (mu0 * pressure_slope &
             + covariant_zeta_slope * surface%b_zeta &
             + covariant_theta_slope * surface%b_theta)
+        if (.not. all(ieee_is_finite(rhs))) return
+        rhs_scale = maxval(abs(surface%jacobian) * (abs(mu0 * pressure_slope) &
+            + abs(covariant_zeta_slope * surface%b_zeta) &
+            + abs(covariant_theta_slope * surface%b_theta)))
+        if (.not. ieee_is_finite(rhs_scale)) return
+        ! A forward roundoff bound for RHS formation and the direct Fourier sum.
+        ! Residuals concern retained nonconstant harmonics of the mean-free MDE;
+        ! the mean force balance is reported separately by the Mercier diagnostic.
+        roundoff = epsilon(1.0_dp) * (real(size(rhs), dp) + 8.0_dp)
+        if (roundoff >= 1.0_dp) return
+        roundoff = 2.0_dp * roundoff / (1.0_dp - roundoff)
         call project_harmonic_grid(rhs, poloidal_modes, toroidal_modes, theta, &
             zeta, rhs_cosine, rhs_sine)
         allocate (beta_pair%cosine(1, size(rhs_cosine, 1), &
             size(rhs_cosine, 2)), beta_pair%sine(1, size(rhs_sine, 1), &
             size(rhs_sine, 2)), stat=allocation_status)
         if (allocation_status /= 0) return
-        scale = abs(toroidal_flux_slope) + abs(poloidal_flux_slope)
         do mode_n = 1, size(toroidal_modes)
             do mode_m = 1, size(poloidal_modes)
-                denominator = two_pi * (real( &
-                    poloidal_modes(mode_m), dp) &
-                    * poloidal_flux_slope - real( &
-                    toroidal_modes(mode_n), dp) &
-                    * toroidal_flux_slope)
-                if (abs(denominator) < 1.0e-10_dp * scale) then
+                call beta_mode_denominator(real(poloidal_modes(mode_m), dp), &
+                    real(toroidal_modes(mode_n), dp), poloidal_flux_slope, &
+                    toroidal_flux_slope, denominator, mode_scale)
+                if (mode_scale == 0.0_dp) then
+                    if (poloidal_modes(mode_m) /= 0 .or. &
+                        toroidal_modes(mode_n) /= 0) then
+                        if (max(abs(rhs_cosine(mode_m, mode_n)), &
+                            abs(rhs_sine(mode_m, mode_n))) > roundoff * rhs_scale) return
+                    end if
+                    beta_pair%cosine(1, mode_m, mode_n) = 0.0_dp
+                    beta_pair%sine(1, mode_m, mode_n) = 0.0_dp
+                else if (abs(denominator) <= &
+                        4.0_dp * epsilon(1.0_dp) * mode_scale) then
+                    ! Cancellation at arithmetic resolution: accept only compatible
+                    ! forcing, then choose the zero coefficient as the gauge.
+                    if (max(abs(rhs_cosine(mode_m, mode_n)), &
+                        abs(rhs_sine(mode_m, mode_n))) > roundoff * rhs_scale) return
                     beta_pair%cosine(1, mode_m, mode_n) = 0.0_dp
                     beta_pair%sine(1, mode_m, mode_n) = 0.0_dp
                 else
                     beta_pair%sine(1, mode_m, mode_n) = &
-                        rhs_cosine(mode_m, mode_n) / denominator
+                        (rhs_cosine(mode_m, mode_n) / scale) / (two_pi * denominator)
                     beta_pair%cosine(1, mode_m, mode_n) = &
-                        -rhs_sine(mode_m, mode_n) / denominator
+                        -(rhs_sine(mode_m, mode_n) / scale) / (two_pi * denominator)
                 end if
             end do
         end do
+        if (.not. all(ieee_is_finite(beta_pair%cosine))) return
+        if (.not. all(ieee_is_finite(beta_pair%sine))) return
         call reconstruct_harmonic_grid(beta_pair, 1, &
             poloidal_modes, toroidal_modes, theta, zeta, beta_values, &
             beta_theta, beta_zeta, rec_info)
         if (rec_info /= reconstruction_ok) return
+        if (.not. all(ieee_is_finite(beta_values))) return
+        if (.not. all(ieee_is_finite(beta_theta))) return
+        if (.not. all(ieee_is_finite(beta_zeta))) return
         if (present(beta_harmonics)) beta_harmonics = beta_pair
         if (present(info)) info = mercier_ok
     end subroutine solve_beta_derivatives_modes
+
+    pure subroutine beta_mode_denominator(m, n, poloidal, toroidal, value, norm)
+        real(dp), intent(in) :: m, n, poloidal, toroidal
+        real(dp), intent(out) :: value, norm
+        real(dp) :: scale, p, t
+
+        scale = max(abs(poloidal), abs(toroidal))
+        p = poloidal / scale
+        t = toroidal / scale
+        value = m * p - n * t
+        norm = abs(m * p) + abs(n * t)
+        ! Subtract original products when safe to preserve cancellation accuracy.
+        if (scale <= huge(1.0_dp) / (2.0_dp * max(1.0_dp, abs(m), abs(n)))) &
+            value = (m * poloidal - n * toroidal) / scale
+    end subroutine beta_mode_denominator
 
     pure subroutine differentiate_pair(s, pair, slope_pair)
         real(dp), intent(in) :: s(:)
