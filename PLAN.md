@@ -55,10 +55,15 @@ of every external solver.
 Related issues: [#13, higher-order FEEC certification](https://github.com/itpplasma/GLISS/issues/13),
 [#10, asymmetric input](https://github.com/itpplasma/GLISS/issues/10).
 
-- [ ] Port the archived analytical convergence runners to the current production
-  FEEC assembly and public API. The old cylinder/Suydam runners request test
-  executables absent from this release and use an older pin. Rechecking their
-  archived CSV files is not a test of current GLISS.
+- [ ] Complete production analytical coverage and public-API qualification.
+  `benchmarks/analytic/run.sh` now runs an exact straight-cylinder case through
+  current FEEC surface assembly for degrees 1–4, three meshes and both parities,
+  with independent Bessel/dispersion references. Fast modes show second/fourth
+  order for degrees 1/2; higher degrees reach numerical precision limits.
+  The legacy cylinder fixture reconstructs as a double-covered torus in the
+  primitive path and is retained only as an explicitly invalid comparison.
+  The lower-level exact-cylinder runner does not test import or public admission.
+  Newcomb/Suydam and complete public-API analytical coverage remain unfinished.
 - [ ] Cover homogeneous Alfvén and magnetosonic branches, theta-pinch fast and
   slow branches, screw-pinch/Newcomb and Suydam thresholds, and the helical
   cylinder vertical threshold. Require analytical eigenvalues or independently
@@ -68,6 +73,11 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
   meshes, verify commuting derivatives and traces, and test both parity classes.
   Use smooth manufactured solutions for optimal rates and state the separate
   behavior of singular or continuum solutions.
+  The new cylinder slow-cluster diagnostic demonstrates ordering-dependent
+  dense-solver roundoff: 50-digit solves of the same matrices recover the
+  analytical cusp limit while a double-precision triangle/order choice drifts.
+  `benchmarks/analytic/conditioning.py` reproduces this distinction. Small
+  globally scaled residuals do not establish relative slow-mode accuracy.
 - [x] Expose angular resolution through configuration, the C ABI, persistence,
   and Python. Defaults remain 64 by 64; C has an additive v2 constructor and
   configuration schema 4 migrates older files. Nonlinear metric convergence

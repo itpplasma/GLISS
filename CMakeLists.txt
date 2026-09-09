@@ -535,6 +535,13 @@ if(BUILD_TESTING)
     add_test(NAME gvec_cas3d_reconstruction
         COMMAND test_gvec_cas3d_reconstruction)
 
+    add_executable(benchmark_local_limits benchmarks/analytic/local_limits.f90)
+    target_link_libraries(benchmark_local_limits PRIVATE gliss)
+
+    add_executable(benchmark_theta_pinch benchmarks/analytic/exact_cylinder.f90
+        benchmarks/analytic/theta_pinch.f90)
+    target_link_libraries(benchmark_theta_pinch PRIVATE gliss gliss_test_support)
+
     add_library(gliss_test_support test/cylinder_fixture.f90)
     target_link_libraries(gliss_test_support PUBLIC gliss)
 
