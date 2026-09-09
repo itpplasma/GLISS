@@ -155,10 +155,15 @@ Related issue: [#15, executable versioned documentation](https://github.com/itpp
 - [ ] Publish the minimal redistributable fixtures and acceptance manifests
   needed for current production analytical and cross-code gates. Link restricted
   research evidence explicitly and report tests skipped for missing data.
-- [ ] Test an installed wheel with the physics suite, not just import/version
-  smoke checks. Ensure tests cannot accidentally load the checkout library.
+- [x] Test an installed wheel with the physics suite, not just import/version
+  smoke checks. `ci/check_installed.py` enforces bundled-library loading, checks
+  production inverse-density scaling, and runs the portable Python suite from
+  a temporary directory outside the checkout. The cylinder is a synthetic ABI
+  control, not a qualified straight-cylinder analytical benchmark.
 - [ ] Add controlled thread counts, pinned toolchain identities, and derivative
   gate artifacts to CI. Keep performance measurements separate from correctness.
+  CI now fixes BLAS/OpenMP thread counts to one; automatic derivative gates and
+  complete toolchain provenance remain unfinished.
 - [ ] Run bounds/runtime checks and a second compiler, then the optimized
   array-temporary audit before release. Record failures and compiler warnings.
 - [ ] Keep equation-to-source references and benchmark hashes current; distinguish

@@ -534,6 +534,9 @@ if(BUILD_TESTING)
     add_library(gliss_test_support test/cylinder_fixture.f90)
     target_link_libraries(gliss_test_support PUBLIC gliss)
 
+    add_executable(gliss_wheel_fixture ci/write_wheel_fixture.f90)
+    target_link_libraries(gliss_wheel_fixture PRIVATE gliss_test_support)
+
     add_executable(test_gliss_capi test/test_gliss_capi.f90)
     target_link_libraries(test_gliss_capi PRIVATE gliss_c gliss_test_support)
     add_test(NAME gliss_capi COMMAND test_gliss_capi)
