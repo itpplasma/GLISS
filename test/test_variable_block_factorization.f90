@@ -112,9 +112,33 @@ program test_variable_block_factorization
     call require(info == variable_block_invalid, &
         "partial singular factor was accepted for solve")
 
+    call check_scaled_pivot_inertia()
+
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_scaled_pivot_inertia()
+        type(variable_block_tridiagonal_t) :: scaled_blocks
+        type(variable_block_factor_t) :: scaled_factor
+        real(dp), parameter :: scales(3) = [1.0e-200_dp, 1.0_dp, 1.0e200_dp]
+        real(dp) :: matrix(2, 2)
+        integer :: index, status
+
+        ! Eigenvalues are exactly -scale and 3*scale; positive rescaling
+        ! cannot change the number of unstable directions.
+        do index = 1, size(scales)
+            matrix = scales(index) * reshape([1.0_dp, 2.0_dp, &
+                2.0_dp, 1.0_dp], [2, 2])
+            call pack_variable_blocks(matrix, [2], scaled_blocks, status)
+            call require(status == variable_block_ok, "scaled pivot packing failed")
+            call factorize_variable_shifted(scaled_blocks, 0.0_dp, &
+                scaled_factor, status)
+            call require(status == variable_block_ok, "scaled pivot factor failed")
+            call require(scaled_factor%negative_count == 1, &
+                "positive matrix rescaling changed two-by-two pivot inertia")
+        end do
+    end subroutine check_scaled_pivot_inertia
 
     pure subroutine matrix_residual(matrix, vector, rhs, residual)
         real(dp), intent(in) :: matrix(:, :), vector(:), rhs(:)

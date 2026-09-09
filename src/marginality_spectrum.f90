@@ -2,6 +2,7 @@ module marginality_spectrum
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, &
         ieee_quiet_nan, ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
+    use compatible_problem_assembly_support, only: angular_grid_aliases
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_problem_ok, &
         compatible_quadrature_cas3d_midpoint, compatible_quadrature_gauss, &
@@ -740,25 +741,5 @@ contains
             .and. mode_n >= minimum .and. mode_n <= maximum
     end function mode_fits_default_integer
 
-    function angular_grid_aliases(equilibrium, mode_m, mode_n, n_theta, &
-            n_zeta) result(aliases)
-        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
-        integer, intent(in) :: mode_m(:), mode_n(:), n_theta, n_zeta
-        logical :: aliases
-        integer(int64) :: poloidal_bandwidth, toroidal_bandwidth
-
-        aliases = .true.
-        if (.not. allocated(equilibrium%poloidal_modes)) return
-        if (.not. allocated(equilibrium%toroidal_modes)) return
-        if (size(equilibrium%poloidal_modes) < 1) return
-        if (size(equilibrium%toroidal_modes) < 1) return
-        poloidal_bandwidth = 2_int64 * int(maxval(mode_m), int64) &
-            + int(maxval(abs(equilibrium%poloidal_modes)), int64)
-        toroidal_bandwidth = 2_int64 &
-            * maxval(abs(int(mode_n, int64))) &
-            + maxval(abs(int(equilibrium%toroidal_modes, int64)))
-        aliases = poloidal_bandwidth >= int(n_theta, int64) &
-            .or. toroidal_bandwidth >= int(n_zeta, int64)
-    end function angular_grid_aliases
 
 end module marginality_spectrum

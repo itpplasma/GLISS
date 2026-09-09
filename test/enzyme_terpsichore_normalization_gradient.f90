@@ -1,4 +1,5 @@
 program enzyme_terpsichore_normalization_gradient
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_c_binding, only: c_double, c_funloc, c_funptr
     use, intrinsic :: iso_fortran_env, only: error_unit
     use enzyme_terpsichore_normalization_fixture, only: &
@@ -24,6 +25,8 @@ program enzyme_terpsichore_normalization_gradient
     centered = (normalized_terpsichore_reduced_energy(point + step) &
         - normalized_terpsichore_reduced_energy(point - step)) &
         / (2.0_c_double * step)
+    if (.not. ieee_is_finite(gradient)) error stop "nonfinite AD gradient"
+    if (.not. ieee_is_finite(centered)) error stop "nonfinite derivative oracle"
     if (abs(gradient - centered) > 1.0e-8_c_double &
         * max(1.0_c_double, abs(centered))) then
         write (error_unit, "(a,2es24.16)") &

@@ -83,10 +83,30 @@ program test_fixed_boundary_spectrum
 
     call check_invalid_inputs(equilibrium)
     call check_row_permutation()
+    call check_density_scaling()
     call delete_fixture()
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_density_scaling()
+        type(fixed_boundary_problem_t) :: scaled_problem
+        type(fixed_boundary_spectrum_result_t) :: scaled
+        integer :: status
+
+        ! K is independent of density and M is linear in density, so all
+        ! physical omega^2 values scale inversely while inertia is unchanged.
+        call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
+            8.0_dp, 0.25_dp, [1, 2], [1, 1], 1, scaled_problem, status)
+        call require(status == fixed_boundary_ok, "scaled-density build failed")
+        call solve_fixed_boundary_class(scaled_problem, 1, scaled, status)
+        call require(status == fixed_boundary_ok, "scaled-density solve failed")
+        call require(abs(4.0_dp * scaled%lowest_eigenvalue &
+            - first%lowest_eigenvalue) < 1.0e-7_dp, &
+            "physical spectrum violates inverse-density scaling")
+        call require(scaled%negative_count == first%negative_count, &
+            "positive density rescaling changed the instability count")
+    end subroutine check_density_scaling
 
     subroutine check_reference_certificate(result, reference)
         type(fixed_boundary_spectrum_result_t), intent(in) :: result
@@ -311,6 +331,25 @@ contains
             2.0_dp, 1.0_dp, [-1], [1], 1, invalid_problem, status)
         call require(status == fixed_boundary_invalid, &
             "negative poloidal mode was accepted")
+        ! sin(32*theta) vanishes on the 64-point grid, while modes 31 and
+        ! 33 have coincident cosines. Neither table represents its continuum
+        ! Fourier inner product on that grid.
+        call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
+            2.0_dp, 1.0_dp, [32], [0], 1, invalid_problem, status)
+        call require(status == fixed_boundary_invalid, &
+            "poloidal Nyquist mode was accepted")
+        call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
+            2.0_dp, 1.0_dp, [31, 33], [0, 0], 1, invalid_problem, status)
+        call require(status == fixed_boundary_invalid, &
+            "aliased poloidal mode pair was accepted")
+        call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
+            2.0_dp, 1.0_dp, [1], [-32], 1, invalid_problem, status)
+        call require(status == fixed_boundary_invalid, &
+            "negative toroidal Nyquist mode was accepted")
+        call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
+            2.0_dp, 1.0_dp, [1], [32], 1, invalid_problem, status)
+        call require(status == fixed_boundary_invalid, &
+            "positive toroidal Nyquist mode was accepted")
         call solve_fixed_boundary_class(problem, 0, invalid_result, status)
         call require(status == fixed_boundary_invalid, &
             "invalid parity class was accepted")

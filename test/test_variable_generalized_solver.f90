@@ -1,9 +1,12 @@
 program test_variable_generalized_solver
-    use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, &
+        ieee_quiet_nan, ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use dense_spectrum_support, only: certify_dense_spectrum_inertia, &
         certify_dense_spectrum_orthogonality, dense_spectrum_ok, &
         diagnose_dense_spectrum, refine_dense_spectrum
+    use fixed_boundary_eigen_bracket, only: fixed_boundary_bracket_ok, &
+        prepare_positive_eigen_shift
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use stable_reduction, only: stable_norm2
     use symmetric_eigensolver, only: solve_symmetric_generalized, &
@@ -29,6 +32,13 @@ program test_variable_generalized_solver
     real(dp) :: shift
     integer :: count, i, info
 
+    call check_positive_midpoint_shift()
+    call check_exact_diagonal_refinement([1.0_dp, 2.0_dp])
+    call check_exact_diagonal_refinement([-2.0_dp, -1.0_dp, 0.0_dp, &
+        1.0_dp, 2.0_dp])
+    call check_exact_diagonal_refinement([1.0_dp, 1.0_dp, 3.0_dp])
+    call check_exact_diagonal_refinement([2.0_dp, 2.0_dp, 2.0_dp])
+    call check_exact_diagonal_refinement([0.0_dp])
     call build_fixture(dense_k, dense_m)
     call solve_symmetric_generalized(dense_k, dense_m, eigenvalues, &
         eigenvectors, info)
@@ -178,6 +188,102 @@ contains
         call require(info == dense_spectrum_ok, &
             "refined dense inertia certificate failed")
     end subroutine check_indexed_dense_refinement
+
+    subroutine check_positive_midpoint_shift()
+        type(variable_block_tridiagonal_t) :: stiffness, mass
+        real(dp) :: dense_k(2, 2), dense_m(2, 2), eigenvalue, shift
+        real(dp) :: residual, resolution
+        real(dp), allocatable :: vector(:)
+        integer :: info
+
+        dense_k = 0.0_dp
+        dense_m = 0.0_dp
+        dense_k(1, 1) = 1.5_dp
+        dense_k(2, 2) = 3.0_dp
+        dense_m(1, 1) = 1.0_dp
+        dense_m(2, 2) = 1.0_dp
+        call pack_variable_blocks(dense_k, [2], stiffness, info)
+        call require(info == 0, "positive diagonal stiffness packing failed")
+        call pack_variable_blocks(dense_m, [2], mass, info)
+        call require(info == 0, "positive diagonal mass packing failed")
+        ! Inertia brackets the first positive eigenvalue in [1, 2]. Its
+        ! midpoint is exactly the analytical eigenvalue and is singular.
+        call prepare_positive_eigen_shift(stiffness, mass, 1.0_dp, 2.0_dp, &
+            shift, info)
+        call require(info == fixed_boundary_bracket_ok, &
+            "positive eigenvalue shift preparation failed")
+        call iterate_variable_generalized_eigenvalue(stiffness, mass, shift, &
+            eigenvalue, vector, residual, resolution, info)
+        call require(info == variable_generalized_ok, &
+            "positive eigensolve rejected its exact midpoint eigenvalue")
+        call require(ieee_is_finite(eigenvalue) .and. ieee_is_finite(residual), &
+            "positive midpoint eigensolve returned nonfinite diagnostics")
+        call require(abs(eigenvalue - 1.5_dp) < 1.0e-12_dp &
+            .and. residual < 1.0e-12_dp, &
+            "positive midpoint solve disagrees with the analytical eigenpair")
+    end subroutine check_positive_midpoint_shift
+
+    subroutine check_exact_diagonal_refinement(expected)
+        real(dp), intent(in) :: expected(:)
+        type(variable_block_tridiagonal_t) :: stiffness, mass, invalid_mass
+        type(fixed_boundary_solver_controls_t) :: controls
+        real(dp) :: dense_k(size(expected), size(expected))
+        real(dp) :: dense_m(size(expected), size(expected))
+        real(dp) :: vectors(size(expected), size(expected)), values(size(expected))
+        real(dp) :: gram(size(expected), size(expected)), residual(size(expected))
+        integer :: index, info, row, column, entry, block_widths(1)
+
+        dense_k = 0.0_dp
+        dense_m = 0.0_dp
+        vectors = 0.0_dp
+        do index = 1, size(expected)
+            dense_m(index, index) = real(index, dp)
+            dense_k(index, index) = dense_m(index, index) * expected(index)
+            vectors(index, index) = 1.0_dp / sqrt(dense_m(index, index))
+        end do
+        block_widths(1) = size(expected)
+        call pack_variable_blocks(dense_k, block_widths, stiffness, info)
+        call require(info == 0, "exact diagonal stiffness packing failed")
+        call pack_variable_blocks(dense_m, block_widths, mass, info)
+        call require(info == 0, "exact diagonal mass packing failed")
+        values = expected
+        call refine_dense_spectrum(stiffness, mass, controls, values, vectors, info)
+        call require(info == dense_spectrum_ok, &
+            "exact diagonal eigensystem was rejected at a singular probe")
+        call require(all(ieee_is_finite(values)) &
+            .and. all(ieee_is_finite(vectors)), &
+            "exact diagonal refinement returned nonfinite values")
+        call require(maxval(abs(values - expected)) < 1.0e-11_dp, &
+            "exact diagonal refinement changed analytical eigenvalues")
+        do index = 1, size(expected)
+            do row = 1, size(expected)
+                residual(row) = real(row, dp) * (expected(row) - values(index)) &
+                    * vectors(row, index)
+            end do
+            call require(norm2(residual) < 1.0e-10_dp, &
+                "exact diagonal refinement failed the analytical eigenproblem")
+        end do
+        gram = 0.0_dp
+        do column = 1, size(expected)
+            do row = 1, size(expected)
+                do entry = 1, size(expected)
+                    gram(row, column) = gram(row, column) + real(entry, dp) &
+                        * vectors(entry, row) * vectors(entry, column)
+                end do
+            end do
+        end do
+        do index = 1, size(expected)
+            gram(index, index) = gram(index, index) - 1.0_dp
+        end do
+        call require(maxval(abs(gram)) < 1.0e-6_dp, &
+            "repeated diagonal eigenspace lost independent mass-normalized vectors")
+        invalid_mass = mass
+        invalid_mass%diagonal(1)%values(1, 1) = -1.0_dp
+        call refine_dense_spectrum(stiffness, invalid_mass, controls, values, &
+            vectors, info)
+        call require(info /= dense_spectrum_ok, &
+            "singular-probe recovery accepted an indefinite mass")
+    end subroutine check_exact_diagonal_refinement
 
     subroutine build_fixture(stiffness, mass)
         real(dp), intent(out) :: stiffness(:, :), mass(:, :)

@@ -11,7 +11,7 @@ contains
         real(dp), intent(in) :: factored(:, :)
         integer, intent(in) :: pivots(:)
         integer :: count
-        real(dp) :: determinant, trace
+        real(dp) :: determinant, trace, scale, a, b, c
         integer :: j
 
         count = 0
@@ -21,9 +21,19 @@ contains
                 if (factored(j, j) < 0.0_dp) count = count + 1
                 j = j + 1
             else
-                determinant = factored(j, j) * factored(j + 1, j + 1) &
-                    - factored(j, j + 1)**2
-                trace = factored(j, j) + factored(j + 1, j + 1)
+                ! Positive scaling preserves inertia and keeps the determinant
+                ! products finite even for very small or large physical units.
+                scale = max(abs(factored(j, j)), abs(factored(j, j + 1)), &
+                    abs(factored(j + 1, j + 1)))
+                if (scale == 0.0_dp) then
+                    j = j + 2
+                    cycle
+                end if
+                a = factored(j, j) / scale
+                b = factored(j, j + 1) / scale
+                c = factored(j + 1, j + 1) / scale
+                determinant = a * c - b * b
+                trace = a + c
                 if (determinant < 0.0_dp) then
                     count = count + 1
                 else if (trace < 0.0_dp) then

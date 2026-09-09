@@ -1,4 +1,5 @@
 program test_eigen_sensitivity
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use local_mode_model, only: assemble_local_mode, vacuum_permeability
     use symmetric_eigensolver, only: solve_three_component_modes
@@ -15,6 +16,7 @@ program test_eigen_sensitivity
     numerical = (lowest_eigenvalue(drive + step * scale) - &
         lowest_eigenvalue(drive - step * scale)) / (2.0_dp * step * scale)
     analytic = -0.5_dp
+    if (.not. ieee_is_finite(numerical)) error stop "nonfinite eigenvalue sensitivity"
     if (abs(numerical - analytic) > 1.0e-8_dp) then
         write (error_unit, "(a,2es24.16)") &
             "FAIL eigenvalue sensitivity ", numerical, analytic

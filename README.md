@@ -47,6 +47,9 @@ macOS wheels, asymmetric or precomputed BOOZ_XFORM input, the production
 free-boundary solve, and the complete equilibrium-to-spectrum derivative chain
 are tracked as future work.
 
+See [PLAN.md](PLAN.md) for the current audit findings, validation priorities,
+and linked implementation issues.
+
 ## Build
 
 Requires CMake, Ninja, a Fortran compiler, BLAS/LAPACK, PkgConfig, and the

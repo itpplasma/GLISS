@@ -13,7 +13,8 @@ module fixed_boundary_eigen_bracket
     integer, parameter, public :: fixed_boundary_bracket_probe_error = -13
     integer, parameter, public :: fixed_boundary_bracket_refinement_error = -14
 
-    public :: bracket_lowest_negative
+    public :: bracket_lowest_negative, bounded_inertia_probe
+    public :: prepare_positive_eigen_shift
 
 contains
 
@@ -69,6 +70,19 @@ contains
         interval = upper - lower
         info = fixed_boundary_bracket_ok
     end subroutine bracket_lowest_negative
+
+    subroutine prepare_positive_eigen_shift(stiffness, mass, lower, upper, &
+            shift, info)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), intent(in) :: lower, upper
+        real(dp), intent(out) :: shift
+        integer, intent(out) :: info
+        integer :: count
+
+        shift = lower + 0.5_dp * (upper - lower)
+        call bounded_inertia_probe(stiffness, mass, lower, upper, shift, &
+            count, info)
+    end subroutine prepare_positive_eigen_shift
 
     subroutine bounded_inertia_probe(stiffness, mass, lower, upper, probe, &
             count, info)

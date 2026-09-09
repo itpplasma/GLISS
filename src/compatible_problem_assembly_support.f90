@@ -1,6 +1,7 @@
 module compatible_problem_assembly_support
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
+    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     implicit none
     private
 
@@ -8,6 +9,7 @@ module compatible_problem_assembly_support
     integer, parameter, public :: compatible_support_invalid = -1
     integer, parameter, public :: compatible_support_allocation = -2
 
+    public :: angular_grid_aliases
     public :: apply_stored_power
     public :: build_active_indices
     public :: build_uniform_breaks
@@ -23,6 +25,30 @@ module compatible_problem_assembly_support
     public :: symmetrize_tensor
 
 contains
+
+    pure function angular_grid_aliases(equilibrium, mode_m, mode_n, n_theta, &
+            n_zeta) result(aliases)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(in) :: mode_m(:), mode_n(:), n_theta, n_zeta
+        logical :: aliases
+        integer(int64) :: poloidal_bandwidth, toroidal_bandwidth
+
+        ! Conservative bandwidth bound for trial products and exported harmonics.
+        ! Nonlinear geometry coefficients still require resolution convergence.
+        aliases = .true.
+        if (size(mode_m) < 1 .or. size(mode_n) /= size(mode_m)) return
+        if (.not. allocated(equilibrium%poloidal_modes)) return
+        if (.not. allocated(equilibrium%toroidal_modes)) return
+        if (size(equilibrium%poloidal_modes) < 1) return
+        if (size(equilibrium%toroidal_modes) < 1) return
+        poloidal_bandwidth = 2_int64 * int(maxval(mode_m), int64) &
+            + maxval(abs(int(equilibrium%poloidal_modes, int64)))
+        toroidal_bandwidth = 2_int64 &
+            * maxval(abs(int(mode_n, int64))) &
+            + maxval(abs(int(equilibrium%toroidal_modes, int64)))
+        aliases = poloidal_bandwidth >= int(n_theta, int64) &
+            .or. toroidal_bandwidth >= int(n_zeta, int64)
+    end function angular_grid_aliases
 
     subroutine apply_stored_power(coordinate, stored_power, h1, dh1, indices, &
             values, derivatives, info)

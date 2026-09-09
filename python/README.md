@@ -534,7 +534,13 @@ Poloidal mode `m` must be nonnegative; an axis mode with `m=0` also requires
 `density_kg_m3` is a positive SI mass density, and `zero_floor` is a positive
 `omega^2` threshold in `s^-2`. `degree` selects a compatible radial FEEC
 degree from 1 through 4 and defaults to 2. Angular quadrature is currently
-fixed at 64 by 64.
+fixed at 64 by 64. The native constructor rejects mode tables for which
+`2*max(m) + max(abs(equilibrium poloidal modes)) >= 64` or
+`2*max(abs(n)) + max(abs(equilibrium toroidal modes)) >= 64`.
+These conservative bandwidth bounds prevent known Fourier aliasing; they do not
+certify convergence of the nonlinear geometry coefficients. A solver certificate
+applies to the assembled matrices, so radial, angular, and equilibrium-resolution
+convergence remain separate requirements.
 
 The assembled problem uses the physical compressible stiffness and mass,
 transformed one-period Fourier assembly, compatible H1/L2 radial spaces and

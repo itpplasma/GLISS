@@ -1,4 +1,5 @@
 program enzyme_drive_gradient
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_c_binding, only: c_double, c_funloc, c_funptr
     use, intrinsic :: iso_fortran_env, only: error_unit
     use local_mode_model, only: benchmark_mode_energy
@@ -17,6 +18,7 @@ program enzyme_drive_gradient
     real(c_double) :: gradient
 
     gradient = enzyme_autodiff(c_funloc(benchmark_mode_energy), 0.1_c_double)
+    if (.not. ieee_is_finite(gradient)) error stop "nonfinite AD gradient"
     if (abs(gradient + 0.5_c_double) > 1.0e-12_c_double) then
         write (error_unit, "(a,es24.16)") "FAIL drive gradient ", gradient
         error stop 1

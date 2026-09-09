@@ -1,6 +1,7 @@
 module fixed_boundary_spectrum
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use compatible_problem_assembly_support, only: angular_grid_aliases
     use compatible_three_component_problem, only: &
         build_compatible_three_component_problem, &
         compatible_three_component_allocation_error, &
@@ -16,7 +17,7 @@ module fixed_boundary_spectrum
         fixed_boundary_energy_terms_t, pack_fixed_boundary_energy_store, &
         rayleigh_gradient_fixed_boundary_store
     use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
-        fixed_boundary_bracket_ok
+        fixed_boundary_bracket_ok, prepare_positive_eigen_shift
     use fixed_boundary_solver_controls, only: &
         fixed_boundary_solver_controls_t, valid_fixed_boundary_solver_controls
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
@@ -249,6 +250,8 @@ contains
                     .and. mode_n(first) == mode_n(second)) return
             end do
         end do
+        if (angular_grid_aliases(equilibrium, mode_m, mode_n, &
+            fixed_boundary_n_theta, fixed_boundary_n_zeta)) return
         valid = .true.
     end function valid_inputs
 
@@ -478,8 +481,13 @@ contains
                 info = fixed_boundary_ok
                 return
             end if
-            shift = 0.5_dp * (summary%first_positive_lower &
-                + summary%first_positive_upper)
+            call prepare_positive_eigen_shift(class_problem%stiffness, &
+                class_problem%mass, summary%first_positive_lower, &
+                summary%first_positive_upper, shift, info)
+            if (info /= fixed_boundary_bracket_ok) then
+                info = fixed_boundary_solver_error
+                return
+            end if
             result%inertia_interval = summary%first_positive_upper &
                 - summary%first_positive_lower
         else

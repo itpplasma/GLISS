@@ -1,10 +1,15 @@
 program test_compatible_problem_assembly_support
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
-    use compatible_problem_assembly_support, only: apply_stored_power, &
+    use compatible_problem_assembly_support, only: angular_grid_aliases, &
+        apply_stored_power, &
         build_active_indices, build_uniform_breaks, mode_table_is_unique, &
         evaluate_generalized_eigenpair, quadratic_form, &
         replicate_indexed_values, scatter_matrix, sum_tensor, &
         symmetrize_matrix, symmetrize_tensor
+    use compatible_physical_mass_assembly, only: &
+        assemble_compatible_perpendicular_mass_surface
+    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
+    use phase_assembly_policy, only: phase_assembly_transformed
     implicit none
 
     call verify_stored_power_transform()
@@ -13,9 +18,40 @@ program test_compatible_problem_assembly_support
     call verify_matrix_reductions()
     call verify_eigenpair_diagnostics()
     call verify_mode_uniqueness()
+    call verify_angular_resolution()
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine verify_angular_resolution()
+        type(gvec_cas3d_equilibrium_t) :: equilibrium
+        real(dp) :: fields(128, 8, 13), mass(4, 4), h1(1, 2), l2(1, 2)
+        integer :: info
+
+        equilibrium%poloidal_modes = [0]
+        equilibrium%toroidal_modes = [0]
+        call require(angular_grid_aliases(equilibrium, [31, 33], [0, 0], &
+            64, 8), "coincident sampled Fourier modes were admitted")
+        call require(.not. angular_grid_aliases(equilibrium, [31, 33], &
+            [0, 0], 128, 8), "resolved Fourier modes were rejected")
+        fields = 0.0_dp
+        fields(:, :, 1) = 1.0_dp
+        fields(:, :, 7:9) = 1.0_dp
+        mass = 0.0_dp
+        h1 = 1.0_dp
+        l2 = 1.0_dp
+        call assemble_compatible_perpendicular_mass_surface(fields, &
+            1.0_dp, [31, 33], [0, 0], [1, 1], 1, h1, l2, 1.0_dp, &
+            phase_assembly_transformed, mass, info)
+        call require(info == 0, "resolved Fourier mass assembly failed")
+        ! Exact continuum integrals: distinct cosines are orthogonal and
+        ! the mean square of each nonconstant cosine is one half.
+        call require(abs(mass(1, 2)) < 1.0e-13_dp, &
+            "resolved mass violates Fourier orthogonality")
+        call require(abs(mass(1, 1) - 0.5_dp) < 1.0e-13_dp &
+            .and. abs(mass(2, 2) - 0.5_dp) < 1.0e-13_dp, &
+            "resolved mass violates the analytical Fourier norm")
+    end subroutine verify_angular_resolution
 
     subroutine verify_stored_power_transform()
         real(dp), parameter :: h1(2) = [2.0_dp, -3.0_dp]

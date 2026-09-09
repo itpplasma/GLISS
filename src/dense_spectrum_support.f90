@@ -1,6 +1,8 @@
 module dense_spectrum_support
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use fixed_boundary_eigen_bracket, only: bounded_inertia_probe, &
+        fixed_boundary_bracket_ok
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use variable_block_tridiagonal, only: apply_variable_block_tridiagonal, &
         variable_block_ok, variable_block_tridiagonal_t
@@ -199,12 +201,12 @@ contains
                 info = dense_spectrum_invalid
                 return
             end if
-            call variable_generalized_inertia(stiffness, mass, lower, &
+            call directed_indexed_probe(stiffness, mass, lower, -1.0_dp, &
                 lower_count, info)
-            if (info /= variable_generalized_ok) return
-            call variable_generalized_inertia(stiffness, mass, upper, &
+            if (info /= dense_spectrum_ok) return
+            call directed_indexed_probe(stiffness, mass, upper, 1.0_dp, &
                 upper_count, info)
-            if (info /= variable_generalized_ok) return
+            if (info /= dense_spectrum_ok) return
             if (lower_count < target .and. upper_count >= target) exit
             step = 2.0_dp * step
         end do
@@ -217,9 +219,12 @@ contains
             tolerance = controls%eigenvalue_relative &
                 * max(1.0_dp, abs(shift))
             if (upper - lower <= tolerance) exit
-            call variable_generalized_inertia(stiffness, mass, shift, count, &
-                info)
-            if (info /= variable_generalized_ok) return
+            call bounded_inertia_probe(stiffness, mass, lower, upper, &
+                shift, count, info)
+            if (info /= fixed_boundary_bracket_ok) then
+                info = dense_spectrum_invalid
+                return
+            end if
             if (count < target) then
                 lower = shift
             else
@@ -230,8 +235,38 @@ contains
             info = dense_spectrum_invalid
             return
         end if
+        ! The lower endpoint has a successful factorization and fewer than
+        ! target eigenvalues below it. An unprobed midpoint can be singular.
+        shift = lower
         info = dense_spectrum_ok
     end subroutine bracket_indexed_eigenvalue
+
+    subroutine directed_indexed_probe(stiffness, mass, shift, direction, &
+            count, info)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), intent(inout) :: shift
+        real(dp), intent(in) :: direction
+        integer, intent(out) :: count, info
+        real(dp) :: candidate, delta, origin
+        integer :: attempt
+
+        origin = shift
+        delta = 16.0_dp * epsilon(1.0_dp) * max(1.0_dp, abs(origin))
+        do attempt = 0, 15
+            candidate = origin
+            if (attempt > 0) candidate = origin + direction * delta
+            if (.not. ieee_is_finite(candidate)) exit
+            call variable_generalized_inertia(stiffness, mass, candidate, &
+                count, info)
+            if (info == variable_generalized_ok) then
+                shift = candidate
+                info = dense_spectrum_ok
+                return
+            end if
+            if (attempt > 0) delta = 16.0_dp * delta
+        end do
+        info = dense_spectrum_invalid
+    end subroutine directed_indexed_probe
 
     subroutine diagnose_dense_spectrum(stiffness, mass, eigenvalues, &
             eigenvectors, rayleigh_quotients, residuals, resolutions, info)

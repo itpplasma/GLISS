@@ -1,4 +1,5 @@
 program enzyme_helical_cylinder_gradient
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_c_binding, only: c_double, c_funloc, c_funptr
     use, intrinsic :: iso_fortran_env, only: error_unit
     use helical_cylinder_limit, only: benchmark_helical_vertical_margin
@@ -22,6 +23,8 @@ program enzyme_helical_cylinder_gradient
     centered = (benchmark_helical_vertical_margin(0.5_c_double + step) &
         - benchmark_helical_vertical_margin(0.5_c_double - step)) &
         / (2.0_c_double * step)
+    if (.not. ieee_is_finite(gradient)) error stop "nonfinite AD gradient"
+    if (.not. ieee_is_finite(centered)) error stop "nonfinite derivative oracle"
     if (abs(gradient - 5.0_c_double) > 1.0e-12_c_double) then
         write (error_unit, "(a,es24.16)") &
             "FAIL helical-cylinder gradient ", gradient
