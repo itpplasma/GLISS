@@ -1,7 +1,8 @@
 # GLISS verification and development plan
 
 Updated September 9, 2026 after an independent Astra xhigh source and benchmark
-audit. GLISS is a research-grade fixed-boundary ideal-MHD value evaluator.
+audit, parallel fixes, and fresh analytical and Solov'ev runs.
+GLISS is a research-grade fixed-boundary ideal-MHD value evaluator.
 The complete differentiable equilibrium-to-spectrum optimization workflow is
 unfinished. A certificate for a discrete matrix eigenpair does not certify
 equilibrium quality, discretization convergence, or agreement with another code.
@@ -228,7 +229,7 @@ and skipped two optional cases. All eight original and hardened Enzyme gates
 passed with Flang/LLVM 22 and LLVMEnzyme-22. A deliberately injected NaN
 gradient failed the hardened drive gate as required.
 
-The integrated corrections pass all 101 GNU Fortran CTest entries and all 109
+The initial integrated corrections passed all 101 GNU Fortran CTest entries and all 109
 Flang/Enzyme entries, with clean lint and changed-file formatting. An installed
 wheel tested from a separate directory, explicitly loading its bundled native
 library, passes 234 Python tests and skips SIMSOPT and the optional external
@@ -237,6 +238,26 @@ and were excluded from that wheel run; they are structural checks, not physics
 evidence. The source-tree Python run reports 237 passed and the same two skips.
 The integrated GNU Fortran runtime-checking build also passes all stages with
 `-fcheck=all -O1`; an earlier unoptimized runtime-checking snapshot passed too.
+
+The parallel follow-up through
+[`66ab128`](https://github.com/itpplasma/GLISS/commit/66ab128f89a9e40cb7595b5e0208ba16913316d1)
+passes 104 GNU Fortran tests and 112 Flang/LLVM 22 tests, including all eight
+Enzyme gates. The runtime-checking build passes with `-fcheck=all -O1`.
+The installed wheel passes 245 portable Python tests, plus real production
+angular-grid, density-scaling, and material spectral-derivative checks; the
+source suite passes 248. Both Python runs retain the two optional skips above.
+Independent analytical benchmark reruns reproduce the reported spectra and
+convergence rates. The integrated marginality path reproduces count one at
+the DCON stable endpoint and zero at q0=1.1; this preserves the unresolved
+comparison rather than establishing agreement.
+
+The strict optimized audit and GitHub lint initially rejected temporary arrays
+in the new pressure finite-difference test calls. Explicit reusable perturbation
+storage fixes those warnings without changing the oracle. Focused Flang and
+runtime tests pass after that change, and a fresh isolated optimized audit
+passes all 104 tests with array-temporary warnings treated as errors.
+The optional compressible Solov'ev check timed out after ten minutes and
+provides no physical-mass comparison result. No open GitHub issue was closed.
 
 Before committing corrections, run the full `fo` pipeline, the native Python
 suite, focused independent regressions, and the changed Enzyme gates. Freeze
