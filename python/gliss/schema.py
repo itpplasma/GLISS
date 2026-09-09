@@ -30,6 +30,7 @@ from .equilibrium import (
     _file_identity,
     _stable_file_digest,
 )
+from ._stability_input import angular_grid
 from ._stability_input import mode_integer as _mode_integer
 from ._stability_input import real_parameter as _real_parameter
 from ._stability_input import validate_modes as _validate_modes
@@ -51,8 +52,13 @@ class StabilityConfiguration:
     zero_floor: float = 1.0
     degree: int = 2
     solver_tolerances: SolverTolerances = SolverTolerances()
+    angular_theta: int = 64
+    angular_zeta: int = 64
 
     def __post_init__(self) -> None:
+        theta, zeta = angular_grid(self.angular_theta, self.angular_zeta)
+        object.__setattr__(self, "angular_theta", theta)
+        object.__setattr__(self, "angular_zeta", zeta)
         degree = _mode_integer(self.degree, "degree")
         if degree < 1 or degree > 4:
             raise ValueError("degree must be between 1 and 4")
@@ -85,6 +91,8 @@ class StabilityConfiguration:
             self.zero_floor,
             self.degree,
             self.solver_tolerances,
+            self.angular_theta,
+            self.angular_zeta,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -98,6 +106,8 @@ class StabilityConfiguration:
             "density_kg_m3": self.density_kg_m3,
             "zero_floor": self.zero_floor,
             "degree": self.degree,
+            "angular_theta": self.angular_theta,
+            "angular_zeta": self.angular_zeta,
             "solver_tolerances": self.solver_tolerances.to_dict(),
         }
         return document
@@ -117,14 +127,17 @@ class StabilityConfiguration:
         if not isinstance(document, dict):
             raise ValueError("configuration must be an object")
         version = document.get("schema_version")
+        schema(document, _CONFIGURATION_SCHEMA, "configuration", (1, 2, 3, 4))
         if version in (1, 2):
             expected = common | {"radial_quadrature"}
             if version == 2:
                 expected.add("solver_tolerances")
         else:
             expected = common | {"degree", "solver_tolerances"}
+        if version == 4:
+            expected |= {"angular_theta", "angular_zeta"}
         value = fields(document, expected, "configuration")
-        schema(value, _CONFIGURATION_SCHEMA, "configuration", (1, 2, 3))
+        schema(value, _CONFIGURATION_SCHEMA, "configuration", (1, 2, 3, 4))
         if value["boundary_condition"] != "fixed":
             raise ValueError("configuration.boundary_condition must be 'fixed'")
         if version in (1, 2) and value["radial_quadrature"] != "midpoint":
@@ -134,6 +147,8 @@ class StabilityConfiguration:
         try:
             return cls(
                 modes=value["modes"],
+                angular_theta=value.get("angular_theta", 64),
+                angular_zeta=value.get("angular_zeta", 64),
                 adiabatic_index=value["adiabatic_index"],
                 density_kg_m3=value["density_kg_m3"],
                 zero_floor=value["zero_floor"],
@@ -144,7 +159,7 @@ class StabilityConfiguration:
                 ),
                 solver_tolerances=(
                     SolverTolerances.from_dict(value["solver_tolerances"])
-                    if version in (2, 3)
+                    if version in (2, 3, 4)
                     else SolverTolerances.historical_defaults()
                 ),
             )
@@ -258,7 +273,7 @@ class RunManifest:
             "result",
         }
         value = fields(document, expected, "run")
-        run_version = schema(value, _RUN_SCHEMA, "run", (1, 2, 3))
+        run_version = schema(value, _RUN_SCHEMA, "run", (1, 2, 3, 4))
         equilibrium = fields(
             value["equilibrium"],
             {"format", "schema_version", "filename", "size_bytes", "sha256"},
@@ -326,6 +341,10 @@ def _validate_result_configuration(
     configuration: StabilityConfiguration, result: StabilityResult
 ) -> None:
     reference = result.classes[0]
+    if reference.angular_resolution != (
+        configuration.angular_theta, configuration.angular_zeta
+    ):
+        raise ValueError("result angular resolution does not match configuration")
     if reference.modes != configuration.modes:
         raise ValueError("result modes do not match configuration modes")
     names = (

@@ -68,9 +68,11 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
   meshes, verify commuting derivatives and traces, and test both parity classes.
   Use smooth manufactured solutions for optimal rates and state the separate
   behavior of singular or continuum solutions.
-- [ ] Expose angular resolution through configuration, the C ABI, persistence,
-  and Python; converge nonlinear metric products separately from Fourier
-  admission. Freeze mode topology and quadrature during differentiation.
+- [x] Expose angular resolution through configuration, the C ABI, persistence,
+  and Python. Defaults remain 64 by 64; C has an additive v2 constructor and
+  configuration schema 4 migrates older files. Nonlinear metric convergence
+  remains a separate qualification requirement from Fourier admission.
+  Freeze mode topology and quadrature during differentiation.
 - [ ] Add a frame-aware physical symmetry admission check before solving separate
   parity classes. A full-storage export can be physically symmetric even when
   `stellarator_symmetry=False`; rejecting that flag alone is wrong. Conversely,

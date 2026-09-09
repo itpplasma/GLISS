@@ -348,6 +348,23 @@ gliss_status gliss_stability_problem_create(
     char *error,
     size_t error_capacity);
 
+/* Configurable frozen angular grid; positive counts and product must fit int32.
+ * The original constructor retains its 64 by 64 default. */
+gliss_status gliss_stability_problem_create_v2(
+    const gliss_equilibrium *equilibrium,
+    double adiabatic_index,
+    double density_kg_m3,
+    double zero_floor,
+    size_t mode_count,
+    const int32_t *mode_m,
+    const int32_t *mode_n,
+    int32_t degree,
+    int32_t angular_theta,
+    int32_t angular_zeta,
+    gliss_stability_problem **problem,
+    char *error,
+    size_t error_capacity);
+
 gliss_status gliss_stability_problem_destroy(
     gliss_stability_problem **problem,
     char *error,

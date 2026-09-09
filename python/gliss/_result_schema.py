@@ -14,6 +14,7 @@ from ._schema_support import (
     write_json,
 )
 from .equilibrium import PathLike
+from ._stability_input import angular_grid
 from ._stability_input import validate_modes as _validate_modes
 from .stability import SpectrumResult, StabilityResult
 from .solver import SolverTolerances
@@ -107,6 +108,7 @@ def _problem_metadata(value: Mapping[str, Any], context: str, version: int) -> t
         integer(angular[0], f"{context}.angular_resolution[0]", 1),
         integer(angular[1], f"{context}.angular_resolution[1]", 1),
     )
+    angular_grid(*resolution)
     return modes, degree, resolution
 
 
@@ -223,7 +225,7 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
         has_eigenvector=has_vector,
         solver_tolerances=(
             SolverTolerances.from_dict(value["solver_tolerances"])
-            if version in (2, 3)
+            if version in (2, 3, 4)
             else SolverTolerances.historical_defaults()
         ),
     )
@@ -248,7 +250,7 @@ def stability_result_to_dict(result: StabilityResult) -> Dict[str, Any]:
 def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
     """Validate and construct a versioned result document."""
     value = fields(document, {"schema", "schema_version", "classes"}, "result")
-    version = schema(value, RESULT_SCHEMA, "result", (1, 2, 3))
+    version = schema(value, RESULT_SCHEMA, "result", (1, 2, 3, 4))
     classes = value["classes"]
     if not isinstance(classes, list) or len(classes) != 2:
         raise ValueError("result.classes must contain parity classes 1 then 2")

@@ -63,3 +63,13 @@ def validate_modes(
         seen.add(pair)
         result.append(pair)
     return tuple(result)
+
+
+def angular_grid(theta: Any, zeta: Any) -> Tuple[int, int]:
+    theta = mode_integer(theta, "angular_theta")
+    zeta = mode_integer(zeta, "angular_zeta")
+    if min(theta, zeta) < 1:
+        raise ValueError("angular grid counts must be positive")
+    if theta * zeta > _INT32_MAX:
+        raise ValueError("angular grid product must fit a signed 32-bit integer")
+    return theta, zeta

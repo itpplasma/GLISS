@@ -533,10 +533,15 @@ Poloidal mode `m` must be nonnegative; an axis mode with `m=0` also requires
 `n>=0`. Duplicate modes are rejected. `adiabatic_index` is positive,
 `density_kg_m3` is a positive SI mass density, and `zero_floor` is a positive
 `omega^2` threshold in `s^-2`. `degree` selects a compatible radial FEEC
-degree from 1 through 4 and defaults to 2. Angular quadrature is currently
-fixed at 64 by 64. The native constructor rejects mode tables for which
-`2*max(m) + max(abs(equilibrium poloidal modes)) >= 64` or
-`2*max(abs(n)) + max(abs(equilibrium toroidal modes)) >= 64`.
+degree from 1 through 4 and defaults to 2. Angular quadrature defaults to 64 by 64; set `angular_theta` and
+`angular_zeta` on `StabilityProblem` or `StabilityConfiguration` to change it.
+Counts must be positive signed 32-bit integers whose product also fits int32.
+These integer discretization choices remain fixed during differentiation. The native constructor rejects mode tables for which
+`2*max(m) + max(abs(equilibrium poloidal modes)) >= angular_theta` or
+`2*max(abs(n)) + max(abs(equilibrium toroidal modes)) >= angular_zeta`.
+This bandwidth admission rule does not bound nonlinear geometry quadrature error;
+check convergence by increasing both counts. Configuration schema v4 stores the
+counts; readers of v1–v3 configurations recover the historical 64 by 64 grid.
 These conservative bandwidth bounds prevent known Fourier aliasing; they do not
 certify convergence of the nonlinear geometry coefficients. A solver certificate
 applies to the assembled matrices, so radial, angular, and equilibrium-resolution
@@ -711,15 +716,15 @@ manifest = gliss.RunManifest.read("run.json")
 manifest.verify_equilibrium("equilibrium_export.nc")
 ```
 
-Configuration schema `gliss.stability.configuration`, version 3, records the
+Configuration schema `gliss.stability.configuration`, version 4, records the
 fixed boundary, mode pairs, physical scalars, FEEC degree, and solver controls.
-Result schema `gliss.stability.result`, version 3, stores both parity classes with all
+Result schema `gliss.stability.result`, version 4, stores both parity classes with all
 reported conventions, certificate terms and read-only eigenvectors. A round
 trip preserves every binary64 value. Rewriting an unchanged object produces
 the same bytes. This JSON schema stores the certified active pair only. It is
 unchanged by the separate full-spectrum format.
 
-Run schema `gliss.stability.run`, version 3, embeds the configuration and
+Run schema `gliss.stability.run`, version 4, embeds the configuration and
 result. It records the equilibrium export format, base filename, byte count
 and SHA-256, including equilibrium schema 0 or 1. It also records the GLISS
 Python/native versions and ABI, plus the NumPy and Python versions. Absolute
@@ -762,7 +767,7 @@ It is self-contained except for the checksummed NetCDF equilibrium. Use
 `StabilityProblem.write_full_manifest()` to reject an equilibrium file that
 changed after assembly.
 
-Writers always emit schema version 3. Readers also accept versions 1 and 2,
+Writers always emit schema version 4. Readers also accept versions 1, 2 and 3,
 map their `radial_quadrature="midpoint"` field to FEEC degree 1, and recover
 historical solver controls when they are absent. Full-spectrum readers require the
 exact entry set for the declared version, stored without compression or

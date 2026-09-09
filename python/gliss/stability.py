@@ -17,7 +17,7 @@ from .equilibrium import (
     _raise_for_status,
     _stable_file_digest,
 )
-from ._stability_input import mode_integer, real_parameter, validate_modes
+from ._stability_input import angular_grid, mode_integer, real_parameter, validate_modes
 from .solver import (
     SolverTolerances,
     bind_solver_tolerances,
@@ -64,14 +64,14 @@ def _bind(library: Any) -> None:
     _require_symbols(
         library,
         (
-            "gliss_stability_problem_create",
+            "gliss_stability_problem_create_v2",
             "gliss_stability_problem_destroy",
             "gliss_stability_problem_unknown_count",
             "gliss_stability_problem_solve_class",
         ),
         "stability problem",
     )
-    library.gliss_stability_problem_create.argtypes = (
+    library.gliss_stability_problem_create_v2.argtypes = (
         ctypes.c_void_p,
         ctypes.c_double,
         ctypes.c_double,
@@ -80,11 +80,13 @@ def _bind(library: Any) -> None:
         ctypes.POINTER(ctypes.c_int32),
         ctypes.POINTER(ctypes.c_int32),
         ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.c_int32,
         ctypes.POINTER(ctypes.c_void_p),
         ctypes.c_void_p,
         ctypes.c_size_t,
     )
-    library.gliss_stability_problem_create.restype = ctypes.c_int
+    library.gliss_stability_problem_create_v2.restype = ctypes.c_int
     bind_solver_tolerances(library)
     library.gliss_stability_problem_destroy.argtypes = (
         ctypes.POINTER(ctypes.c_void_p),
@@ -213,6 +215,8 @@ class StabilityProblem:
         zero_floor: float = 1.0,
         degree: int = 2,
         solver_tolerances: SolverTolerances = SolverTolerances(),
+        angular_theta: int = 64,
+        angular_zeta: int = 64,
     ):
         if not isinstance(equilibrium, Equilibrium):
             raise TypeError("equilibrium must be a gliss.Equilibrium")
@@ -221,6 +225,9 @@ class StabilityProblem:
         degree = mode_integer(degree, "degree")
         if degree < 1 or degree > 4:
             raise ValueError("degree must be between 1 and 4")
+        self.angular_theta, self.angular_zeta = angular_grid(
+            angular_theta, angular_zeta
+        )
         self.modes = validate_modes(modes)
         self.adiabatic_index = real_parameter(
             adiabatic_index, "adiabatic_index", allow_zero=False
@@ -252,7 +259,7 @@ class StabilityProblem:
         mode_m = integers(*(mode[0] for mode in self.modes))
         mode_n = integers(*(mode[1] for mode in self.modes))
         error = _error_buffer()
-        status = self._library.gliss_stability_problem_create(
+        status = self._library.gliss_stability_problem_create_v2(
             equilibrium._handle,
             self.adiabatic_index,
             self.density_kg_m3,
@@ -261,6 +268,8 @@ class StabilityProblem:
             mode_m,
             mode_n,
             self.degree,
+            self.angular_theta,
+            self.angular_zeta,
             ctypes.byref(self._handle),
             error,
             len(error),
@@ -269,7 +278,7 @@ class StabilityProblem:
             self._library.gliss_stability_problem_destroy(
                 ctypes.byref(self._handle), None, 0
             )
-        _raise_for_status(status, error, "gliss_stability_problem_create")
+        _raise_for_status(status, error, "gliss_stability_problem_create_v2")
         if self._handle.value is None:
             raise GlissInternalError("GLISS returned a null stability problem handle")
 
@@ -325,6 +334,8 @@ class StabilityProblem:
             self.zero_floor,
             self.degree,
             self.solver_tolerances,
+            self.angular_theta,
+            self.angular_zeta,
         )
 
     def write_manifest(self, path: Any, result: StabilityResult) -> "RunManifest":

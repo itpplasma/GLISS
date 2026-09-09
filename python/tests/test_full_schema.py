@@ -87,7 +87,7 @@ def test_full_result_round_trip_is_exact_read_only_and_deterministic(
     with zipfile.ZipFile(first) as archive:
         metadata = json.loads(archive.read("metadata.json"))
         assert metadata["schema"] == "gliss.stability.full-result"
-        assert metadata["schema_version"] == 3
+        assert metadata["schema_version"] == 4
         assert metadata["storage"]["array_order"] == "eigenpair-component"
         assert all(
             item.compress_type == zipfile.ZIP_STORED for item in archive.infolist()
@@ -132,7 +132,7 @@ def test_full_result_schema_three_preserves_solver_tolerances(full_result, tmp_p
 
     with zipfile.ZipFile(path) as archive:
         metadata = json.loads(archive.read("metadata.json"))
-    assert metadata["schema_version"] == 3
+    assert metadata["schema_version"] == 4
     loaded = gliss.FullStabilityResult.read(path)
     assert all(
         item.certified_lowest.solver_tolerances == tolerances

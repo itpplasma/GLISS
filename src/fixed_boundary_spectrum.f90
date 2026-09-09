@@ -59,6 +59,8 @@ module fixed_boundary_spectrum
         logical :: has_chart_metric = .false.
         integer :: field_periods = 0
         integer :: degree = 0
+        integer :: n_theta = fixed_boundary_n_theta
+        integer :: n_zeta = fixed_boundary_n_zeta
         real(dp) :: adiabatic_index = 0.0_dp
         real(dp) :: density_kg_m3 = 0.0_dp
         real(dp) :: zero_floor = 0.0_dp
@@ -111,18 +113,24 @@ module fixed_boundary_spectrum
 contains
 
     subroutine build_fixed_boundary_problem(equilibrium, adiabatic_index, &
-            density_kg_m3, zero_floor, mode_m, mode_n, degree, problem, info)
+            density_kg_m3, zero_floor, mode_m, mode_n, degree, problem, info, &
+            angular_theta, angular_zeta)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3, zero_floor
         integer, intent(in) :: mode_m(:), mode_n(:), degree
         type(fixed_boundary_problem_t), intent(out) :: problem
         integer, intent(out) :: info
+        integer, optional, intent(in) :: angular_theta, angular_zeta
         real(dp), allocatable :: stored_power(:)
         integer :: allocation_status, mode, parity_class
 
         info = fixed_boundary_invalid
+        if (present(angular_theta)) problem%n_theta = angular_theta
+        if (present(angular_zeta)) problem%n_zeta = angular_zeta
+        if (min(problem%n_theta, problem%n_zeta) < 1) return
+        if (problem%n_theta > huge(1) / problem%n_zeta) return
         if (.not. valid_inputs(equilibrium, adiabatic_index, density_kg_m3, &
-            zero_floor, mode_m, mode_n, degree)) return
+            zero_floor, mode_m, mode_n, degree, problem%n_theta, problem%n_zeta)) return
         allocate (stored_power(size(mode_m)), problem%mode_m(size(mode_m)), &
             problem%mode_n(size(mode_n)), stat=allocation_status)
         if (allocation_status /= 0) then
@@ -139,7 +147,7 @@ contains
         do parity_class = 1, 2
             call assemble_class(equilibrium, adiabatic_index, density_kg_m3, &
                 mode_m, mode_n, stored_power, parity_class, degree, &
-                problem%classes(parity_class), info)
+                problem%classes(parity_class), info, problem%n_theta, problem%n_zeta)
             if (info /= fixed_boundary_ok) return
         end do
         problem%has_chart_metric = equilibrium%has_chart_metric
@@ -154,7 +162,7 @@ contains
 
     subroutine assemble_class(equilibrium, adiabatic_index, density_kg_m3, &
             mode_m, mode_n, stored_power, parity_class, degree, &
-            class_problem, info)
+            class_problem, info, n_theta, n_zeta)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity_class, degree
@@ -162,12 +170,13 @@ contains
         type(fixed_boundary_class_problem_t), intent(out) :: class_problem
         integer, intent(out) :: info
         type(compatible_three_component_problem_t) :: compatible
+        integer, intent(in) :: n_theta, n_zeta
         integer :: compatible_info
 
         call build_compatible_three_component_problem(equilibrium, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
-            parity_class, degree, fixed_boundary_n_theta, &
-            fixed_boundary_n_zeta, compatible, compatible_info)
+            parity_class, degree, n_theta, &
+            n_zeta, compatible, compatible_info)
         if (compatible_info /= compatible_three_component_ok) then
             if (compatible_info == compatible_three_component_allocation_error) then
                 info = fixed_boundary_allocation_error
@@ -226,10 +235,11 @@ contains
     end subroutine pack_class_problem
 
     function valid_inputs(equilibrium, adiabatic_index, density_kg_m3, &
-            zero_floor, mode_m, mode_n, degree) result(valid)
+            zero_floor, mode_m, mode_n, degree, n_theta, n_zeta) result(valid)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3, zero_floor
         integer, intent(in) :: mode_m(:), mode_n(:), degree
+        integer, intent(in) :: n_theta, n_zeta
         logical :: valid
         integer :: first, second
 
@@ -251,7 +261,7 @@ contains
             end do
         end do
         if (angular_grid_aliases(equilibrium, mode_m, mode_n, &
-            fixed_boundary_n_theta, fixed_boundary_n_zeta)) return
+            n_theta, n_zeta)) return
         valid = .true.
     end function valid_inputs
 
@@ -353,8 +363,8 @@ contains
         result%mode_count = size(problem%mode_m)
         result%parity_class = parity_class
         result%degree = problem%degree
-        result%angular_theta = fixed_boundary_n_theta
-        result%angular_zeta = fixed_boundary_n_zeta
+        result%angular_theta = problem%n_theta
+        result%angular_zeta = problem%n_zeta
         result%adiabatic_index = problem%adiabatic_index
         result%density_kg_m3 = problem%density_kg_m3
         result%zero_floor = problem%zero_floor

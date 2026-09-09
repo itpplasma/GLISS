@@ -63,7 +63,7 @@ def test_configuration_round_trip_is_deterministic(configuration, tmp_path):
     assert first.read_bytes() == second.read_bytes()
     document = json.loads(first.read_text(encoding="utf-8"))
     assert document["schema"] == "gliss.stability.configuration"
-    assert document["schema_version"] == 3
+    assert document["schema_version"] == 4
     assert document["boundary_condition"] == "fixed"
 
 
@@ -78,14 +78,14 @@ def test_schema_three_round_trip_preserves_solver_tolerances(configuration, resu
     )
     configured = replace(configuration, solver_tolerances=tolerances)
     configured_document = configured.to_dict()
-    assert configured_document["schema_version"] == 3
+    assert configured_document["schema_version"] == 4
     assert gliss.StabilityConfiguration.from_dict(configured_document) == configured
 
     controlled_result = gliss.StabilityResult(
         tuple(replace(item, solver_tolerances=tolerances) for item in result.classes)
     )
     result_document = controlled_result.to_dict()
-    assert result_document["schema_version"] == 3
+    assert result_document["schema_version"] == 4
     loaded = gliss.StabilityResult.read_dict(result_document)
     assert all(item.solver_tolerances == tolerances for item in loaded.classes)
 
@@ -93,6 +93,8 @@ def test_schema_three_round_trip_preserves_solver_tolerances(configuration, resu
 def test_schema_one_reads_historical_solver_tolerances(configuration, result):
     configuration_document = configuration.to_dict()
     configuration_document["schema_version"] = 1
+    configuration_document.pop("angular_theta")
+    configuration_document.pop("angular_zeta")
     configuration_document["radial_quadrature"] = "midpoint"
     configuration_document.pop("degree")
     configuration_document.pop("solver_tolerances")
@@ -119,7 +121,7 @@ def test_schema_one_reads_historical_solver_tolerances(configuration, result):
         (lambda value: value.update(extra=1), "unknown field 'extra'"),
         (lambda value: value.pop("modes"), "missing field 'modes'"),
         (
-            lambda value: value.update(schema_version=4),
+            lambda value: value.update(schema_version=5),
             "schema_version.*expected 1 or 2 or 3",
         ),
         (lambda value: value.update(boundary_condition="free"), "fixed"),
@@ -301,7 +303,7 @@ def test_manifest_rejects_changed_equilibrium(configuration, result, tmp_path):
     path = tmp_path / "run.json"
     document = {
         "schema": "gliss.stability.run",
-        "schema_version": 3,
+        "schema_version": 4,
         "equilibrium": {
             "format": "gvec-cas3d-netcdf",
             "schema_version": 1,
@@ -370,7 +372,7 @@ def test_manifest_reader_accepts_legacy_and_rejects_unknown_equilibrium_schema(
     path = tmp_path / "run.json"
     document = {
         "schema": "gliss.stability.run",
-        "schema_version": 3,
+        "schema_version": 4,
         "equilibrium": {
             "format": "gvec-cas3d-netcdf",
             "schema_version": 0,
@@ -395,3 +397,21 @@ def test_manifest_reader_accepts_legacy_and_rejects_unknown_equilibrium_schema(
     path.write_text(json.dumps(document), encoding="utf-8")
     with pytest.raises(ValueError, match="equilibrium.schema_version.*0 or 1"):
         gliss.RunManifest.read(path)
+
+
+def test_custom_angular_configuration_round_trip(tmp_path):
+    config = gliss.StabilityConfiguration(modes=((1, 0),), angular_theta=128, angular_zeta=96)
+    path = tmp_path / "quadrature.json"
+    config.write(path)
+    loaded = gliss.StabilityConfiguration.read(path)
+    assert loaded == config
+    legacy = config.to_dict()
+    legacy["schema_version"] = 3
+    del legacy["angular_theta"], legacy["angular_zeta"]
+    assert gliss.StabilityConfiguration.from_dict(legacy).angular_theta == 64
+
+
+@pytest.mark.parametrize("theta,zeta", [(0, 64), (-1, 64), (64, 0), (2**31, 1), (65536, 65536), (True, 64), (64.0, 64)])
+def test_invalid_angular_configuration(theta, zeta):
+    with pytest.raises((ValueError, TypeError)):
+        gliss.StabilityConfiguration(modes=((1, 0),), angular_theta=theta, angular_zeta=zeta)

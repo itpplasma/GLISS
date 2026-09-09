@@ -40,7 +40,7 @@ class FakeLibrary:
         self.gliss_equilibrium_schema_version = FakeFunction(self.schema_version)
         self.gliss_equilibrium_write = FakeFunction(self.equilibrium_write)
         self.gliss_mercier_profile_context = FakeFunction(self.mercier_profile)
-        self.gliss_stability_problem_create = FakeFunction(self.problem_create)
+        self.gliss_stability_problem_create_v2 = FakeFunction(self.problem_create)
         self.gliss_stability_problem_set_solver_tolerances = FakeFunction(
             self.problem_set_solver_tolerances
         )
@@ -92,6 +92,8 @@ class FakeLibrary:
         mode_m,
         mode_n,
         degree,
+        angular_theta,
+        angular_zeta,
         handle,
         error,
         error_capacity,
@@ -356,13 +358,13 @@ def test_stability_problem_failed_partial_create_is_cleaned_up(contexts):
     library, equilibrium = contexts
 
     def fail_create(*args):
-        handle = args[8]
-        error = args[9]
+        handle = args[10]
+        error = args[11]
         handle._obj.value = 1234
         error.value = b"assembly failed"
         return 2
 
-    library.gliss_stability_problem_create = FakeFunction(fail_create)
+    library.gliss_stability_problem_create_v2 = FakeFunction(fail_create)
     with pytest.raises(gliss.GlissComputationError, match="assembly failed"):
         StabilityProblem(equilibrium, modes=[(1, 1)])
     assert library.problem_destroys == 1

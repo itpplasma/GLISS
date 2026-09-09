@@ -81,6 +81,7 @@ program test_fixed_boundary_spectrum
     call require(all(repeated%eigenvector == first%eigenvector), &
         "same-object rebuild changed the eigenvector")
 
+    call check_angular_convergence()
     call check_invalid_inputs(equilibrium)
     call check_row_permutation()
     call check_density_scaling()
@@ -88,6 +89,32 @@ program test_fixed_boundary_spectrum
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_angular_convergence()
+        type(fixed_boundary_problem_t) :: refined
+        type(fixed_boundary_energy_terms_t) :: refined_energy
+        type(fixed_boundary_spectrum_result_t) :: refined_result
+        integer :: status
+
+        ! The cylinder is toroidally homogeneous: increasing a resolved
+        ! trapezoidal grid preserves its Fourier inner products exactly.
+        call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
+            2.0_dp, 1.0_dp, [1, 2], [1, 1], 1, refined, status, 128, 96)
+        call require(status == fixed_boundary_ok, "refined grid construction failed")
+        call diagnose_fixed_boundary_energy(refined, 1, first%eigenvector, &
+            refined_energy, status)
+        call require(status == fixed_boundary_ok, "refined energy failed")
+        call diagnose_fixed_boundary_energy(problem, 1, first%eigenvector, &
+            energy, status)
+        call require(status == fixed_boundary_ok, "baseline energy failed")
+        call require(abs(refined_energy%kinetic_energy &
+            - energy%kinetic_energy) < 1.0e-10_dp, &
+            "resolved cylinder Fourier mass changed with angular grid")
+        call solve_fixed_boundary_class(refined, 1, refined_result, status)
+        call require(status == fixed_boundary_ok, "refined solve failed")
+        call require(refined_result%angular_theta == 128, "theta metadata lost")
+        call require(refined_result%angular_zeta == 96, "zeta metadata lost")
+    end subroutine check_angular_convergence
 
     subroutine check_density_scaling()
         type(fixed_boundary_problem_t) :: scaled_problem
@@ -350,6 +377,17 @@ contains
             2.0_dp, 1.0_dp, [1], [32], 1, invalid_problem, status)
         call require(status == fixed_boundary_invalid, &
             "positive toroidal Nyquist mode was accepted")
+        call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
+            2.0_dp, 1.0_dp, [1], [32], 1, invalid_problem, status, 64, 128)
+        call require(status == fixed_boundary_ok, &
+            "resolved toroidal mode was rejected")
+        call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
+            2.0_dp, 1.0_dp, [1], [1], 1, invalid_problem, status, 0, 64)
+        call require(status == fixed_boundary_invalid, "zero angular count accepted")
+        call build_fixed_boundary_problem(local_equilibrium, 1.0_dp, &
+            2.0_dp, 1.0_dp, [1], [1], 1, invalid_problem, status, huge(1), 2)
+        call require(status == fixed_boundary_invalid, &
+            "angular product overflow accepted")
         call solve_fixed_boundary_class(problem, 0, invalid_result, status)
         call require(status == fixed_boundary_invalid, &
             "invalid parity class was accepted")

@@ -41,6 +41,7 @@ module gliss_spectrum_capi
     end type spectrum_summary_c
 
     public :: gliss_stability_problem_create_c
+    public :: gliss_stability_problem_create_v2_c
     public :: gliss_stability_problem_destroy_c
     public :: gliss_stability_problem_unknown_count_c
     public :: gliss_stability_problem_solve_class_c
@@ -58,6 +59,27 @@ contains
         integer(c_size_t), value, intent(in) :: mode_count
         type(c_ptr), value, intent(in) :: mode_m_pointer, mode_n_pointer
         integer(c_int), value, intent(in) :: degree
+        type(c_ptr), value, intent(in) :: handle_pointer, error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+        status = gliss_stability_problem_create_v2_c(equilibrium_handle, &
+            adiabatic_index, density_kg_m3, zero_floor, mode_count, &
+            mode_m_pointer, mode_n_pointer, degree, 64_c_int, 64_c_int, &
+            handle_pointer, error_pointer, error_capacity)
+    end function gliss_stability_problem_create_c
+
+    function gliss_stability_problem_create_v2_c(equilibrium_handle, &
+            adiabatic_index, density_kg_m3, zero_floor, mode_count, &
+            mode_m_pointer, mode_n_pointer, degree, angular_theta, angular_zeta, &
+            handle_pointer, &
+            error_pointer, error_capacity) &
+            bind(c, name="gliss_stability_problem_create_v2") result(status)
+        type(c_ptr), value, intent(in) :: equilibrium_handle
+        real(c_double), value, intent(in) :: adiabatic_index, density_kg_m3
+        real(c_double), value, intent(in) :: zero_floor
+        integer(c_size_t), value, intent(in) :: mode_count
+        type(c_ptr), value, intent(in) :: mode_m_pointer, mode_n_pointer
+        integer(c_int), value, intent(in) :: degree, angular_theta, angular_zeta
         type(c_ptr), value, intent(in) :: handle_pointer, error_pointer
         integer(c_size_t), value, intent(in) :: error_capacity
         integer(c_int) :: status
@@ -97,7 +119,8 @@ contains
         end if
         call build_fixed_boundary_problem(equilibrium%equilibrium, &
             adiabatic_index, density_kg_m3, zero_floor, mode_m, mode_n, &
-            int(degree), context%problem, info)
+            int(degree), context%problem, info, &
+            int(angular_theta), int(angular_zeta))
         if (info /= fixed_boundary_ok) then
             deallocate (context)
             call report_problem_error(info, status, error_pointer, &
@@ -106,7 +129,7 @@ contains
         end if
         handle = c_loc(context)
         status = status_ok
-    end function gliss_stability_problem_create_c
+    end function gliss_stability_problem_create_v2_c
 
     function prepare_output_handle(handle_pointer, error_pointer, &
             error_capacity, handle) result(status)

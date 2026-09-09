@@ -10,7 +10,7 @@ from typing import Any, Dict, Mapping, Optional
 
 from .equilibrium import PathLike
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def document_path(path: PathLike, operation: str) -> Path:
