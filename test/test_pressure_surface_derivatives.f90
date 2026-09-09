@@ -20,6 +20,7 @@ program test_pressure_surface_derivatives
     type(pressure_surface_response_t) :: response, invalid
     real(dp), allocatable :: theta(:), zeta(:), jacobian_slope(:, :)
     real(dp), allocatable :: nodes(:), pressure(:), tangent(:), gradient(:)
+    real(dp), allocatable :: perturbed_pressure(:)
     real(dp), allocatable :: fields(:, :, :), drive(:, :), fcot(:, :, :), dcot(:, :)
     real(dp), allocatable :: plus(:, :, :), minus(:, :, :), dpplus(:, :), dpminus(:, :)
     real(dp) :: gp, gpplus, gpminus, lhs, rhs, gcot, scale, expected, nan
@@ -63,10 +64,10 @@ program test_pressure_surface_derivatives
                 call require(abs(lhs - rhs) < 2.0e-12_dp * max(1.0_dp, abs(lhs)), &
                     "pressure sample JVP/VJP duality failed")
                 do step = 1, size(steps)
-                    call primal(pressure + steps(step) * tangent, chart, &
-                        plus, dpplus, gpplus)
-                    call primal(pressure - steps(step) * tangent, chart, &
-                        minus, dpminus, gpminus)
+                    perturbed_pressure = pressure + steps(step) * tangent
+                    call primal(perturbed_pressure, chart, plus, dpplus, gpplus)
+                    perturbed_pressure = pressure - steps(step) * tangent
+                    call primal(perturbed_pressure, chart, minus, dpminus, gpminus)
                     scale = max(1.0_dp, maxval(abs(fields)))
                     call require(maxval(abs((plus - minus) / (2.0_dp * steps(step)) &
                         - fields)) < 1.0e-8_dp * scale, "field FD plateau failed")
@@ -203,10 +204,10 @@ contains
                 call require(abs(lhs - rhs) < 2.0e-12_dp * max(1.0_dp, abs(lhs)), &
                     "coordinate-basis JVP/VJP duality failed")
                 do local_step = 1, size(steps)
-                    call primal(pressure + steps(local_step) * tangent, chart, &
-                        plus, dpplus, gpplus)
-                    call primal(pressure - steps(local_step) * tangent, chart, &
-                        minus, dpminus, gpminus)
+                    perturbed_pressure = pressure + steps(local_step) * tangent
+                    call primal(perturbed_pressure, chart, plus, dpplus, gpplus)
+                    perturbed_pressure = pressure - steps(local_step) * tangent
+                    call primal(perturbed_pressure, chart, minus, dpminus, gpminus)
                     scale = max(1.0_dp, maxval(abs(fields)))
                     call require(maxval(abs((plus - minus) &
                         / (2.0_dp * steps(local_step)) - fields)) &
