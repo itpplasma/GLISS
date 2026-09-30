@@ -40,11 +40,14 @@ convention agrees: positive is stable.
 | QAS3 variants | ≤ 0.3 % | 1–1.4 % | ≤ 0.2 % | 0.4 % | 0.4 % |
 | li383 | 0.1 % | 18 % | 1.8 % | 3.2 % | 17 % |
 
+These are the medians before #33. After it, li383's minimum D_Mercier moved
+from −7.39 to −0.118 (VMEC +0.022). W7-X and DSHAPE did not change.
+
 Fixed-boundary stability against the current fraction:
 
 | Current | TERPSICHORE λ | TERPSICHORE count | GLISS replay | GLISS independent |
 |---|---|---|---|---|
-| 1.00 | −7.03701e-7 | 5 | −7.0370098e-7, count 5 | 1 before #20, 12 after (#33) |
+| 1.00 | −7.03701e-7 | 5 | −7.0370098e-7, count 5 | unstable, count 1 |
 | 0.75 | −8.7e-8 | 1 | agrees | stable (0) |
 | 0.50 | +5.956134e-7 | 0 | +5.956091e-7, count 0 | stable (0) |
 
@@ -55,11 +58,14 @@ Fixed-boundary stability against the current fraction:
 - Before [#32](https://github.com/itpplasma/GLISS/issues/32) the replay
   raised for stable cases and misreported IVAC > 0 input as a parity error.
 - The independent count at base current rose from 1 to 12 with the widened
-  magnetic-differential-equation table of #20; the near-resonant harmonics
-  it adds are tracked in [#33](https://github.com/itpplasma/GLISS/issues/33).
-- NaN Mercier terms on the zero-current case come from a truncated metric
+  magnetic-differential-equation table of #20 and returned to 1 with the
+  cell-averaged resonant inverse of
+  [#33](https://github.com/itpplasma/GLISS/issues/33), which also removed the
+  QAS3 Mercier spike at ι = 2/3: minimum 0.1441 against VMEC's 0.1435.
+- NaN Mercier terms on the zero-current case came from a truncated metric
   that is not positive definite
-  ([#34](https://github.com/itpplasma/GLISS/issues/34)).
+  ([#34](https://github.com/itpplasma/GLISS/issues/34)). They are now
+  rejected at conversion and in Mercier; M = N = 16 gives a finite profile.
 - GLISS Mercier spikes at rational ι
   ([#33](https://github.com/itpplasma/GLISS/issues/33)).
 - TERPSICHORE's shifted inverse iteration does not converge when the shift

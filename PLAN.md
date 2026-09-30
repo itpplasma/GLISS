@@ -71,26 +71,41 @@ of every external solver.
 - `benchmarks/solovev/public` regenerates the benchmark from public GVEC 1.5.0
   with a patch for five export defects, tracked for upstream reporting in
   [#30](https://github.com/itpplasma/GLISS/issues/30).
-- Open findings with understood root causes:
-  [#18](https://github.com/itpplasma/GLISS/issues/18) inverted Python Mercier
-  sign, [#19](https://github.com/itpplasma/GLISS/issues/19) axis-regular spline
-  roundoff amplification, [#20](https://github.com/itpplasma/GLISS/issues/20)
-  truncated Pfirsch-Schlueter solve,
-  [#21](https://github.com/itpplasma/GLISS/issues/21)
+- Fixed on `claude/zen-babbage-dgxz45`, one commit per issue:
+  [#18](https://github.com/itpplasma/GLISS/issues/18) Python Mercier sign,
+  [#19](https://github.com/itpplasma/GLISS/issues/19) axis-regular spline
+  roundoff, [#20](https://github.com/itpplasma/GLISS/issues/20) truncated
+  Pfirsch-Schlueter solve, [#21](https://github.com/itpplasma/GLISS/issues/21)
   handedness metadata, [#22](https://github.com/itpplasma/GLISS/issues/22) VMEC
   truncation checks, [#23](https://github.com/itpplasma/GLISS/issues/23) block
-  inertia stability, [#24](https://github.com/itpplasma/GLISS/issues/24)
+  inertia reliability, [#24](https://github.com/itpplasma/GLISS/issues/24)
   full-spectrum cost, [#25](https://github.com/itpplasma/GLISS/issues/25) path
   truncation, [#26](https://github.com/itpplasma/GLISS/issues/26) certificate
-  semantics, [#27](https://github.com/itpplasma/GLISS/issues/27) scale-dependent
-  tolerances, [#28](https://github.com/itpplasma/GLISS/issues/28) Python test
-  evidence, [#29](https://github.com/itpplasma/GLISS/issues/29) configuration
-  replay and handle lifetimes.
+  semantics, [#27](https://github.com/itpplasma/GLISS/issues/27) scale-relative
+  tolerances, [#28](https://github.com/itpplasma/GLISS/issues/28) native Python
+  evidence, [#29](https://github.com/itpplasma/GLISS/issues/29) operator
+  revision and handle finalizers,
+  [#32](https://github.com/itpplasma/GLISS/issues/32) TERPSICHORE replay of
+  stable and IVAC>0 files, [#33](https://github.com/itpplasma/GLISS/issues/33)
+  resonant Pfirsch-Schlueter harmonics, and
+  [#34](https://github.com/itpplasma/GLISS/issues/34) nonpositive truncated
+  metric.
+- Upstream trackers stay open until the upstream reports are filed:
+  [#30](https://github.com/itpplasma/GLISS/issues/30) GVEC CAS3D export and
+  [#31](https://github.com/itpplasma/GLISS/issues/31) DCON default tolerances.
+- `benchmarks/qas3` compares STELLOPT VMEC, TERPSICHORE 1.2 and GLISS on the
+  QAS3 family. The TERPSICHORE replay agrees to 1e-8. Open, cause not
+  established: the independent critical current (TERPSICHORE unstable at
+  0.75 of the base current, GLISS stable), D_curr differences of 10-20 % for
+  li383 and QAS below s = 0.4, the `convert_vmec` |B| gate on VMEC 9.0
+  Nyquist spectra, and a `convert_vmec` force-balance residual of 0.1-0.26
+  that does not converge with M, N.
 - Reduced quadrature of the compression terms keeps the scheme non-variational:
   discrete eigenvalues are not upper bounds (p=1 cylinder fast modes fall
-  slightly below the exact values). The parallel-current and drive fields of
-  li383 are not yet convergent in the mode table near rational surfaces; the
-  cause is unresolved.
+  slightly below the exact values). Near a shearless rational surface the
+  cell-averaged Pfirsch-Schlueter inverse (#33) still amplifies the
+  equilibrium's own resonant force-balance error; QAS at M = 12 keeps a
+  D_Mercier dip near iota = 2/3 at s = 0.89 that VMEC does not show.
 
 ## Priority 0: deep source audit
 
