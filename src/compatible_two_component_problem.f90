@@ -12,9 +12,10 @@ module compatible_two_component_problem
     use compatible_operator_trace_types, only: build_trace_radial_mass, &
         compatible_cell_trace_t, compatible_radial_point_trace_t
     use compatible_problem_assembly_support, only: apply_stored_power, &
+        apply_tangential_axis_weight, &
         build_active_indices, build_uniform_breaks, &
         compatible_support_allocation, compatible_support_ok, &
-        mode_table_is_unique, replicate_indexed_values, scale_matrix, &
+        mode_table_is_unique, scale_matrix, &
         scale_tensor, scatter_matrix, sum_tensor, symmetrize_matrix, &
         symmetrize_tensor
     use compatible_radial_quadrature, only: accurate_nodes, &
@@ -378,7 +379,8 @@ contains
         call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
             local_h1, local_dh1, local_info)
         if (local_info /= compatible_support_ok) return
-        call replicate_indexed_values(l2, l2_index, local_l2, local_info)
+        call apply_tangential_axis_weight(coordinate, stored_power, l2, &
+            l2_index, local_l2, local_info)
         if (local_info /= compatible_support_ok) return
         call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
             zeta, fields, drive, local_info, orientation=orientation)

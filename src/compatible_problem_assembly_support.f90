@@ -11,6 +11,7 @@ module compatible_problem_assembly_support
 
     public :: angular_grid_aliases
     public :: apply_stored_power
+    public :: apply_tangential_axis_weight
     public :: build_active_indices
     public :: build_uniform_breaks
     public :: evaluate_generalized_eigenpair
@@ -77,6 +78,36 @@ contains
         if (.not. all(ieee_is_finite(derivatives))) return
         info = compatible_support_ok
     end subroutine apply_stored_power
+
+    ! Regular Cartesian displacement with poloidal number m has
+    ! xi^s ~ s^(|m|/2) and xi^theta ~ s^((|m|-2)/2) at the axis, so the
+    ! tangential eta=FT' xi^theta-FP' xi^zeta carries the same factor
+    ! s^(-stored_power) as the normal component.  An unweighted L2 basis
+    ! cannot represent the s^(-1/2) behaviour for |m|=1: the discrete
+    ! compression then diverges like 1/s and the space is non-conforming.
+    subroutine apply_tangential_axis_weight(coordinate, stored_power, l2, &
+            indices, values, info)
+        real(dp), intent(in) :: coordinate, stored_power(:), l2(:)
+        integer, intent(in) :: indices(:)
+        real(dp), intent(out) :: values(:, :)
+        integer, intent(out) :: info
+        real(dp) :: scale
+        integer :: trial
+
+        info = compatible_support_invalid
+        if (coordinate <= 0.0_dp) return
+        if (size(stored_power) /= size(values, 2)) return
+        call replicate_indexed_values(l2, indices, values, info)
+        if (info /= compatible_support_ok) return
+        info = compatible_support_invalid
+        do trial = 1, size(stored_power)
+            scale = coordinate**(-stored_power(trial))
+            if (.not. ieee_is_finite(scale)) return
+            values(:, trial) = scale * values(:, trial)
+        end do
+        if (.not. all(ieee_is_finite(values))) return
+        info = compatible_support_ok
+    end subroutine apply_tangential_axis_weight
 
     subroutine set_stored_power_column(coordinate, power, scale, h1, dh1, &
             indices, values, derivatives)

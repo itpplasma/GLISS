@@ -7,7 +7,8 @@ module compatible_three_component_problem
     use compatible_physical_mass_assembly, only: &
         assemble_compatible_physical_mass_surface
     use compatible_problem_assembly_support, only: apply_stored_power, &
-        build_active_indices, build_uniform_breaks, &
+        apply_tangential_axis_weight, build_active_indices, &
+        build_uniform_breaks, &
         compatible_support_allocation, compatible_support_ok, &
         mode_table_is_unique, replicate_indexed_values, scatter_matrix, &
         sum_tensor, symmetrize_matrix, symmetrize_tensor
@@ -279,6 +280,7 @@ contains
         real(dp), allocatable :: jacobian_t(:, :), jacobian_z(:, :), gamma_p(:, :)
         real(dp), allocatable :: h1(:), dh1(:), l2(:), local_h1(:, :)
         real(dp), allocatable :: local_dh1(:, :), local_l2(:, :)
+        real(dp), allocatable :: local_eta(:, :)
         real(dp), allocatable :: local_k(:, :), local_m(:, :), local_terms(:, :, :)
         integer, allocatable :: h1_index(:), l2_index(:), map(:)
         real(dp) :: pressure
@@ -306,13 +308,17 @@ contains
         trials = size(mode_m)
         allocate (local_h1(size(h1_index), trials), &
             local_dh1(size(h1_index), trials), &
-            local_l2(size(l2_index), trials), stat=allocation_status)
+            local_l2(size(l2_index), trials), &
+            local_eta(size(l2_index), trials), stat=allocation_status)
         if (allocation_status /= 0) then
             info = compatible_three_component_allocation_error
             return
         end if
         call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
             local_h1, local_dh1, local_info)
+        if (local_info /= compatible_support_ok) return
+        call apply_tangential_axis_weight(coordinate, stored_power, l2, &
+            l2_index, local_eta, local_info)
         if (local_info /= compatible_support_ok) return
         call replicate_indexed_values(l2, l2_index, local_l2, local_info)
         if (local_info /= compatible_support_ok) return
@@ -337,14 +343,14 @@ contains
         call assemble_compatible_compressible_stiffness_surface(fields, &
             drive, jacobian_s, jacobian_t, jacobian_z, gamma_p, mode_m, &
             mode_n, parity, spline%field_periods, local_h1, local_dh1, &
-            local_l2, weight, phase_assembly_transformed, local_k, local_info, &
-            local_terms)
+            local_eta, local_l2, weight, phase_assembly_transformed, local_k, &
+            local_info, local_terms)
         if (local_info /= 0) return
         if (assemble_mass) then
             call assemble_compatible_physical_mass_surface(fields, density, &
                 mode_m, mode_n, parity, spline%field_periods, local_h1, &
-                local_l2, weight, phase_assembly_transformed, local_m, &
-                local_info)
+                local_eta, local_l2, weight, phase_assembly_transformed, &
+                local_m, local_info)
             if (local_info /= 0) return
         end if
         call build_local_map(complex, topology, ranks, h1_index, l2_index, map)

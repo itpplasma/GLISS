@@ -14,7 +14,7 @@ module fixed_boundary_eigen_bracket
     integer, parameter, public :: fixed_boundary_bracket_refinement_error = -14
 
     public :: bracket_lowest_negative, bounded_inertia_probe
-    public :: prepare_positive_eigen_shift
+    public :: bracket_lowest_positive
 
 contains
 
@@ -71,18 +71,50 @@ contains
         info = fixed_boundary_bracket_ok
     end subroutine bracket_lowest_negative
 
-    subroutine prepare_positive_eigen_shift(stiffness, mass, lower, upper, &
-            shift, info)
+    ! Bisect the first-positive inertia bracket with the same stopping rule
+    ! as the negative branch, so the reported interval is a refined
+    ! inertia enclosure rather than the coarse spectrum-summary bracket.
+    subroutine bracket_lowest_positive(stiffness, mass, lower, upper, shift, &
+            interval, info, controls)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: lower, upper
-        real(dp), intent(out) :: shift
+        real(dp), intent(out) :: shift, interval
         integer, intent(out) :: info
-        integer :: count
+        type(fixed_boundary_solver_controls_t), intent(in), optional :: controls
+        type(fixed_boundary_solver_controls_t) :: stopping
+        real(dp) :: below, above, middle
+        integer :: base_count, count, iteration
 
-        shift = lower + 0.5_dp * (upper - lower)
-        call bounded_inertia_probe(stiffness, mass, lower, upper, shift, &
-            count, info)
-    end subroutine prepare_positive_eigen_shift
+        stopping = fixed_boundary_solver_controls_t()
+        if (present(controls)) stopping = controls
+        shift = lower
+        interval = upper - lower
+        below = lower
+        above = upper
+        call bounded_inertia_probe(stiffness, mass, below, above, below, &
+            base_count, info)
+        if (info /= fixed_boundary_bracket_ok) return
+        do iteration = 1, stopping%bracket_iteration_limit
+            middle = 0.5_dp * (below + above)
+            if (above - below <= stopping%negative_bracket_relative &
+                * abs(middle)) exit
+            call bounded_inertia_probe(stiffness, mass, below, above, &
+                middle, count, info)
+            if (info /= fixed_boundary_bracket_ok) return
+            if (count == base_count) then
+                below = middle
+            else
+                above = middle
+            end if
+        end do
+        if (iteration > stopping%bracket_iteration_limit) then
+            info = fixed_boundary_bracket_refinement_error
+            return
+        end if
+        shift = below
+        interval = above - below
+        info = fixed_boundary_bracket_ok
+    end subroutine bracket_lowest_positive
 
     subroutine bounded_inertia_probe(stiffness, mass, lower, upper, probe, &
             count, info)

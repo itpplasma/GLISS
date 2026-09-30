@@ -17,7 +17,7 @@ module fixed_boundary_spectrum
         fixed_boundary_energy_terms_t, pack_fixed_boundary_energy_store, &
         rayleigh_gradient_fixed_boundary_store
     use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
-        fixed_boundary_bracket_ok, prepare_positive_eigen_shift
+        fixed_boundary_bracket_ok, bracket_lowest_positive
     use fixed_boundary_solver_controls, only: &
         fixed_boundary_solver_controls_t, valid_fixed_boundary_solver_controls
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
@@ -491,15 +491,14 @@ contains
                 info = fixed_boundary_ok
                 return
             end if
-            call prepare_positive_eigen_shift(class_problem%stiffness, &
+            call bracket_lowest_positive(class_problem%stiffness, &
                 class_problem%mass, summary%first_positive_lower, &
-                summary%first_positive_upper, shift, info)
+                summary%first_positive_upper, shift, &
+                result%inertia_interval, info, controls)
             if (info /= fixed_boundary_bracket_ok) then
                 info = fixed_boundary_solver_error
                 return
             end if
-            result%inertia_interval = summary%first_positive_upper &
-                - summary%first_positive_lower
         else
             call bracket_lowest_negative(class_problem%stiffness, &
                 class_problem%mass, summary%zero_floor, shift, &

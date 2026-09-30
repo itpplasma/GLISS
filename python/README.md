@@ -571,6 +571,15 @@ normal coefficients, `eta`, then compressional `mu`. The `normal`, `eta` and
 `mu` properties return the corresponding views. If the zero floor contains
 the entire spectrum, `has_eigenvector` is false and the eigenvector is empty.
 
+The coefficients belong to axis-regular radial bases. For poloidal number `m`
+the normal component is `xi^s = s^(|m|/2 - 1) h(s)` for `m > 0` and `s h(s)`
+for `m = 0` in terms of the H1 basis, and `eta` carries the same factor on the
+L2 basis, so a regular `|m| = 1` displacement with `eta ~ s^(-1/2)` lies in
+the discrete space. The `mu` coefficients represent the regular part
+`nu = mu - (FP'/FT') sqrt(g) eta`, which is proportional to
+`sqrt(g) xi^zeta`; the compressional variable itself is
+`mu = nu + (FP'/FT') sqrt(g) eta` at every quadrature point.
+
 The historical stopping controls are explicit and immutable:
 
 ```python

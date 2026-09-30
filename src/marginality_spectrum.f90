@@ -18,6 +18,7 @@ module marginality_spectrum
     use field_profile_identities, only: compute_field_profile_identities, &
         field_profile_identities_ok, field_profile_identity_result_t
     use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
+        bracket_lowest_positive, &
         fixed_boundary_bracket_ok
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
@@ -432,10 +433,14 @@ contains
                 return
             end if
         else if (summary%has_positive) then
-            shift = 0.5_dp * (summary%first_positive_lower &
-                + summary%first_positive_upper)
-            interval = summary%first_positive_upper &
-                - summary%first_positive_lower
+            call bracket_lowest_positive(problem%sparse_stiffness, &
+                problem%sparse_mass, summary%first_positive_lower, &
+                summary%first_positive_upper, shift, interval, local_info, &
+                controls)
+            if (local_info /= fixed_boundary_bracket_ok) then
+                message = "sparse compatible FEEC eigenvalue bracket failed"
+                return
+            end if
         else
             message = "sparse compatible FEEC pencil has no resolved eigenvalue"
             return

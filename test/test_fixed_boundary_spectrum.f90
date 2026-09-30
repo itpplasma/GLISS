@@ -24,7 +24,7 @@ program test_fixed_boundary_spectrum
 
     character(len=*), parameter :: fixture = "fixed_boundary_spectrum.nc"
     real(dp), parameter :: reference_lowest(2) = &
-        [-7.9144227183717817e1_dp, -7.9144227377194269e1_dp]
+        [1.1918434950137493e0_dp, 1.1918434948672756e0_dp]
     real(dp), parameter :: reference_certificate_limit = 1.2e-3_dp
     real(dp), parameter :: reference_relative_limit = 1.0e-8_dp
     type(gvec_cas3d_equilibrium_t) :: equilibrium

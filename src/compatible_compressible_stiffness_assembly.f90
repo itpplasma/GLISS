@@ -26,7 +26,7 @@ contains
     subroutine assemble_compatible_compressible_stiffness_surface(fields, &
             drive, jacobian_radial, jacobian_theta, jacobian_zeta, &
             gamma_pressure, trial_m, trial_n, trial_parity, field_periods, &
-            h1_values, h1_derivatives, l2_values, radial_weight, &
+            h1_values, h1_derivatives, eta_values, l2_values, radial_weight, &
             phase_assembly, stiffness, info, stiffness_terms)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         real(dp), intent(in) :: jacobian_radial(:, :), jacobian_theta(:, :)
@@ -34,7 +34,8 @@ contains
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods, phase_assembly
         real(dp), intent(in) :: h1_values(:, :), h1_derivatives(:, :)
-        real(dp), intent(in) :: l2_values(:, :), radial_weight
+        real(dp), intent(in) :: eta_values(:, :), l2_values(:, :)
+        real(dp), intent(in) :: radial_weight
         real(dp), intent(inout) :: stiffness(:, :)
         integer, intent(out) :: info
         real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
@@ -46,6 +47,9 @@ contains
             field_periods, h1_values, h1_derivatives, l2_values, &
             radial_weight, phase_assembly, stiffness, info, stiffness_terms)
         if (info /= 0) return
+        info = -1
+        if (any(shape(eta_values) /= shape(l2_values))) return
+        if (.not. all(ieee_is_finite(eta_values))) return
         if (phase_assembly == phase_assembly_direct) then
             angular_weight = radial_weight / real(size(fields, 1) &
                 * size(fields, 2) * field_periods, dp)
@@ -56,7 +60,8 @@ contains
                             jacobian_radial(j, k), jacobian_theta(j, k), &
                             jacobian_zeta(j, k), gamma_pressure(j, k), &
                             trial_m, trial_n, trial_parity, field_periods, &
-                            h1_values, h1_derivatives, l2_values, &
+                            h1_values, h1_derivatives, eta_values, &
+                            l2_values, &
                             real(j - 1, dp) / real(size(fields, 1), dp), &
                             real(k - 1, dp) / real(size(fields, 2), dp) &
                             + real(period, dp), angular_weight, stiffness, &
@@ -73,7 +78,7 @@ contains
                         jacobian_radial(j, k), jacobian_theta(j, k), &
                         jacobian_zeta(j, k), gamma_pressure(j, k), trial_m, &
                         trial_n, trial_parity, field_periods, h1_values, &
-                        h1_derivatives, l2_values, &
+                        h1_derivatives, eta_values, l2_values, &
                         real(j - 1, dp) / real(size(fields, 1), dp), &
                         real(k - 1, dp) / real(size(fields, 2), dp), &
                         angular_weight, stiffness, stiffness_terms)
@@ -85,11 +90,11 @@ contains
 
     subroutine accumulate_direct(fields, drive, jacobian_radial, &
             jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
-            parity, field_periods, h1, dh1, l2, theta, zeta, weight, &
+            parity, field_periods, h1, dh1, eta, l2, theta, zeta, weight, &
             stiffness, stiffness_terms)
         real(dp), intent(in) :: fields(:), drive, jacobian_radial
         real(dp), intent(in) :: jacobian_theta, jacobian_zeta, gamma_pressure
-        real(dp), intent(in) :: h1(:, :), dh1(:, :), l2(:, :)
+        real(dp), intent(in) :: h1(:, :), dh1(:, :), eta(:, :), l2(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
         real(dp), intent(in) :: theta, zeta, weight
         real(dp), intent(inout) :: stiffness(:, :)
@@ -101,7 +106,7 @@ contains
 
         call build_response_coefficients(fields, jacobian_radial, &
             jacobian_theta, jacobian_zeta, trial_m, trial_n, parity, &
-            field_periods, h1, dh1, l2, coefficients)
+            field_periods, h1, dh1, eta, l2, coefficients)
         trials = size(trial_m)
         do column = 1, size(stiffness, 1)
             trial = modulo(column - 1, trials) + 1
@@ -119,11 +124,11 @@ contains
 
     subroutine accumulate_transformed(fields, drive, jacobian_radial, &
             jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
-            parity, field_periods, h1, dh1, l2, theta, zeta, weight, &
+            parity, field_periods, h1, dh1, eta, l2, theta, zeta, weight, &
             stiffness, stiffness_terms)
         real(dp), intent(in) :: fields(:), drive, jacobian_radial
         real(dp), intent(in) :: jacobian_theta, jacobian_zeta, gamma_pressure
-        real(dp), intent(in) :: h1(:, :), dh1(:, :), l2(:, :)
+        real(dp), intent(in) :: h1(:, :), dh1(:, :), eta(:, :), l2(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
         real(dp), intent(in) :: theta, zeta, weight
         real(dp), intent(inout) :: stiffness(:, :)
@@ -134,7 +139,7 @@ contains
 
         call build_response_coefficients(fields, jacobian_radial, &
             jacobian_theta, jacobian_zeta, trial_m, trial_n, parity, &
-            field_periods, h1, dh1, l2, coefficients)
+            field_periods, h1, dh1, eta, l2, coefficients)
         do trial = 1, size(trial_m)
             phase = two_pi * (real(trial_m(trial), dp) * theta &
                 - real(trial_n(trial), dp) * zeta &
@@ -149,9 +154,10 @@ contains
 
     pure subroutine build_response_coefficients(fields, jacobian_radial, &
             jacobian_theta, jacobian_zeta, trial_m, trial_n, parity, &
-            field_periods, h1, dh1, l2, responses)
+            field_periods, h1, dh1, eta, l2, responses)
         real(dp), intent(in) :: fields(:), jacobian_radial, jacobian_theta
-        real(dp), intent(in) :: jacobian_zeta, h1(:, :), dh1(:, :), l2(:, :)
+        real(dp), intent(in) :: jacobian_zeta, h1(:, :), dh1(:, :)
+        real(dp), intent(in) :: eta(:, :), l2(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
         real(dp), contiguous, intent(out) :: responses(:, :, :)
         real(dp) :: basis(9, 2)
@@ -185,7 +191,7 @@ contains
         do basis_index = 1, size(l2, 1)
             do trial = 1, trials
                 call build_tangential_basis(trial_m(trial), trial_n(trial), &
-                    parity(trial), field_periods, l2(basis_index, trial), &
+                    parity(trial), field_periods, eta(basis_index, trial), &
                     .true., basis)
                 column = size(h1, 1) * trials &
                     + (basis_index - 1) * trials + trial
@@ -281,9 +287,14 @@ contains
                 basis(xi_theta, kind), basis(xi_zeta, kind), &
                 basis(eta_theta, kind), basis(eta_zeta, kind))
             responses(4, kind) = basis(xi_value, kind)
+            ! The third unknown is nu=mu-(FP'/FT') sqrtg eta, proportional
+            ! to sqrtg xi^zeta and regular at the axis; mu itself inherits
+            ! the singular s^(-1/2) part of eta for |m|=1.
             responses(5, kind) = compressible_divergence_value(fields(1), &
                 fields(2), fields(7), sqrtg_xi_radial, sqrtg_eta_theta, &
-                sqrtg_eta_zeta, basis(mu_theta, kind), basis(mu_zeta, kind))
+                sqrtg_eta_zeta, basis(mu_theta, kind) &
+                + fields(2) / fields(1) * sqrtg_eta_theta, &
+                basis(mu_zeta, kind) + fields(2) / fields(1) * sqrtg_eta_zeta)
         end do
     end subroutine build_energy_responses
 

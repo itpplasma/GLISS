@@ -6,7 +6,7 @@ program test_variable_generalized_solver
         certify_dense_spectrum_orthogonality, dense_spectrum_ok, &
         diagnose_dense_spectrum, refine_dense_spectrum
     use fixed_boundary_eigen_bracket, only: fixed_boundary_bracket_ok, &
-        prepare_positive_eigen_shift
+        bracket_lowest_positive
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use stable_reduction, only: stable_norm2
     use symmetric_eigensolver, only: solve_symmetric_generalized, &
@@ -192,7 +192,7 @@ contains
     subroutine check_positive_midpoint_shift()
         type(variable_block_tridiagonal_t) :: stiffness, mass
         real(dp) :: dense_k(2, 2), dense_m(2, 2), eigenvalue, shift
-        real(dp) :: residual, resolution
+        real(dp) :: residual, resolution, interval
         real(dp), allocatable :: vector(:)
         integer :: info
 
@@ -208,10 +208,13 @@ contains
         call require(info == 0, "positive diagonal mass packing failed")
         ! Inertia brackets the first positive eigenvalue in [1, 2]. Its
         ! midpoint is exactly the analytical eigenvalue and is singular.
-        call prepare_positive_eigen_shift(stiffness, mass, 1.0_dp, 2.0_dp, &
-            shift, info)
+        call bracket_lowest_positive(stiffness, mass, 1.0_dp, 2.0_dp, &
+            shift, interval, info)
         call require(info == fixed_boundary_bracket_ok, &
-            "positive eigenvalue shift preparation failed")
+            "positive eigenvalue bracket refinement failed")
+        call require(shift <= 1.5_dp .and. shift + interval >= 1.5_dp &
+            .and. interval < 1.0e-6_dp, &
+            "positive inertia bracket does not enclose the eigenvalue")
         call iterate_variable_generalized_eigenvalue(stiffness, mass, shift, &
             eigenvalue, vector, residual, resolution, info)
         call require(info == variable_generalized_ok, &

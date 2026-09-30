@@ -13,7 +13,7 @@ program test_gliss_spectrum_capi
     integer(c_int), parameter :: status_invalid_argument = 4
     character(len=*), parameter :: fixture = "spectrum_capi_cylinder.nc"
     real(c_double), parameter :: expected_lowest = &
-        -7.9144227183717817e1_c_double
+        1.1918434950137493e0_c_double
     real(c_double), parameter :: reference_certificate_limit = 1.2e-3_c_double
     real(c_double), parameter :: reference_relative_limit = 1.0e-8_c_double
 
@@ -73,6 +73,7 @@ program test_gliss_spectrum_capi
     type(c_ptr), target :: equilibrium, problem, rejected
     integer(c_size_t), target :: unknowns, written
     integer(c_size_t), target :: eigenvalues_written, eigenvectors_written
+    integer(c_size_t) :: active
     type(spectrum_summary_c), target :: summary
     type(energy_terms_c), target :: energy
     type(solver_tolerances_c), target :: tolerances
@@ -309,7 +310,7 @@ program test_gliss_spectrum_capi
         "summary eta size is wrong")
     call require(summary%mu_unknowns == 66_c_size_t, &
         "summary mu size is wrong")
-    call require(summary%negative_count == 1_c_size_t, &
+    call require(summary%negative_count == 0_c_size_t, &
         "negative inertia count is wrong")
     call require(summary%floor_count == 12_c_size_t, &
         "floor count is wrong")
@@ -465,9 +466,13 @@ program test_gliss_spectrum_capi
         <= summary%certificate + 1.0e-12_c_double &
         * abs(summary%lowest_eigenvalue), &
         "full-spectrum C API disagrees with certified active eigenvalue")
-    call require(abs(dot_product(eigenvectors(:unknowns), eigenvector)) &
-        / sqrt(dot_product(eigenvectors(:unknowns), eigenvectors(:unknowns)) &
-        * dot_product(eigenvector, eigenvector)) &
+    active = merge(1_c_size_t, summary%floor_count + 1_c_size_t, &
+        summary%negative_count > 0_c_size_t)
+    call require(abs(dot_product(eigenvectors((active - 1) * unknowns + 1: &
+        active * unknowns), eigenvector)) &
+        / sqrt(dot_product(eigenvectors((active - 1) * unknowns + 1: &
+        active * unknowns), eigenvectors((active - 1) * unknowns + 1: &
+        active * unknowns)) * dot_product(eigenvector, eigenvector)) &
         > 1.0_c_double - 1.0e-10_c_double, &
         "full-spectrum C API component order is wrong")
 

@@ -204,3 +204,7 @@ main = "test_field_profile_identities.f90"
 [[test]]
 name = "gvec_cas3d_integrals"
 main = "test_gvec_cas3d_integrals.f90"
+
+[[test]]
+name = "axis_regular_displacement"
+main = "test_axis_regular_displacement.f90"

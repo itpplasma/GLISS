@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Make the |m|=1 compatible FEEC trial space conforming at the magnetic axis:
+  the tangential eta basis carries the regular-displacement axis factor of the
+  normal component, and the third compressible unknown is the regular
+  `nu = mu - (FP'/FT') sqrt(g) eta`. This removes a spurious unstable mode
+  whose eigenvalue scaled with the radial mesh width; the Solov'ev n=1
+  stability boundary now agrees with DCON. Eigenvalues and eigenvector
+  coefficients of all |m|>=1 families change (#16).
+- Refine positive-spectrum inertia brackets by bisection before inverse
+  iteration; the previous midpoint shift could return a non-lowest eigenvalue
+  with a certificate as wide as the coarse bracket (#17).
+- Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
+  patch) and small toroidal and exact-displacement regression tests.
+
 ## 0.0.2 - 2026-07-16
 
 This release supports production fixed-boundary FEEC calculations. The

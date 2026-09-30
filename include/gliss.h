@@ -389,7 +389,9 @@ gliss_status gliss_stability_problem_unknown_count(
 
 /* Set summary->struct_size to sizeof(*summary) before calling. eigenvector is
  * caller-owned and uses the documented dynamic component order: fixed-edge
- * normal unknowns, then eta, then mu. It is normalized by x^T M x = 1. On a
+ * normal unknowns, then eta, then mu. The mu block holds the regular part
+ * nu = mu - (FP'/FT') sqrt(g) eta; see the Python guide for the axis-regular
+ * radial bases. It is normalized by x^T M x = 1. On a
  * capacity error, written reports the required count and eigenvector is not
  * modified. If has_eigenvector is zero, written is zero and eigenvector may be
  * NULL. */

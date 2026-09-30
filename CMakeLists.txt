@@ -477,6 +477,19 @@ if(BUILD_TESTING)
         "gliss_compatible_operator_trace: form function must be regular_axis or unity"
         missing.nc 1 8 8 1 --form-function=broken 1,0)
 
+    add_executable(test_axis_regular_displacement
+        test/test_axis_regular_displacement.f90)
+    target_link_libraries(test_axis_regular_displacement PRIVATE gliss)
+    add_test(NAME axis_regular_displacement
+        COMMAND test_axis_regular_displacement)
+
+    add_executable(test_solovev_axis_regularity
+        test/test_solovev_axis_regularity.f90)
+    target_link_libraries(test_solovev_axis_regularity PRIVATE gliss)
+    add_test(NAME solovev_axis_regularity
+        COMMAND test_solovev_axis_regularity
+            ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
+
     add_executable(test_radial_cubic_spline
         test/test_radial_cubic_spline.f90)
     target_link_libraries(test_radial_cubic_spline PRIVATE gliss)

@@ -19,12 +19,13 @@ contains
 
     subroutine assemble_compatible_physical_mass_surface(fields, &
             density_kg_m3, trial_m, trial_n, trial_parity, field_periods, &
-            h1_values, l2_values, radial_weight, phase_assembly, mass, info)
+            h1_values, eta_values, l2_values, radial_weight, phase_assembly, &
+            mass, info)
         real(dp), intent(in) :: fields(:, :, :), density_kg_m3
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods, phase_assembly
-        real(dp), intent(in) :: h1_values(:, :), l2_values(:, :)
-        real(dp), intent(in) :: radial_weight
+        real(dp), intent(in) :: h1_values(:, :), eta_values(:, :)
+        real(dp), intent(in) :: l2_values(:, :), radial_weight
         real(dp), intent(inout) :: mass(:, :)
         integer, intent(out) :: info
         real(dp) :: angular_weight
@@ -34,6 +35,9 @@ contains
             trial_parity, field_periods, h1_values, l2_values, &
             radial_weight, phase_assembly, 2, mass, info)
         if (info /= 0) return
+        info = -1
+        if (any(shape(eta_values) /= shape(l2_values))) return
+        if (.not. all(ieee_is_finite(eta_values))) return
         if (phase_assembly == phase_assembly_direct) then
             angular_weight = radial_weight / real(size(fields, 1) &
                 * size(fields, 2) * field_periods, dp)
@@ -42,7 +46,7 @@ contains
                     do j = 1, size(fields, 1)
                         call accumulate_direct(fields, j, k, density_kg_m3, &
                             trial_m, trial_n, trial_parity, &
-                            field_periods, h1_values, l2_values, &
+                            field_periods, h1_values, eta_values, l2_values, &
                             real(j - 1, dp) / real(size(fields, 1), dp), &
                             real(k - 1, dp) / real(size(fields, 2), dp) &
                             + real(period, dp), angular_weight, mass)
@@ -56,7 +60,7 @@ contains
                 do j = 1, size(fields, 1)
                     call accumulate_transformed(fields, j, k, density_kg_m3, &
                         trial_m, trial_n, trial_parity, &
-                        field_periods, h1_values, l2_values, &
+                        field_periods, h1_values, eta_values, l2_values, &
                         real(j - 1, dp) / real(size(fields, 1), dp), &
                         real(k - 1, dp) / real(size(fields, 2), dp), &
                         angular_weight, mass)
@@ -204,8 +208,9 @@ contains
     end subroutine perpendicular_point_mass
 
     subroutine accumulate_direct(fields, j, k, density, trial_m, trial_n, &
-            parity, field_periods, h1, l2, theta, zeta, weight, mass)
+            parity, field_periods, h1, eta, l2, theta, zeta, weight, mass)
         real(dp), intent(in) :: fields(:, :, :), density, h1(:, :), l2(:, :)
+        real(dp), intent(in) :: eta(:, :)
         integer, intent(in) :: j, k
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
         real(dp), intent(in) :: theta, zeta, weight
@@ -215,7 +220,7 @@ contains
         real(dp) :: phase, cosine, sine
         integer :: column, trial, trials
 
-        call build_basis_coefficients(parity, h1, l2, coefficients)
+        call build_basis_coefficients(parity, h1, eta, l2, coefficients)
         call point_mass_matrix(fields, j, k, density, point_mass)
         trials = size(trial_m)
         do column = 1, size(mass, 1)
@@ -232,8 +237,10 @@ contains
     end subroutine accumulate_direct
 
     subroutine accumulate_transformed(fields, j, k, density, trial_m, &
-            trial_n, parity, field_periods, h1, l2, theta, zeta, weight, mass)
+            trial_n, parity, field_periods, h1, eta, l2, theta, zeta, weight, &
+            mass)
         real(dp), intent(in) :: fields(:, :, :), density, h1(:, :), l2(:, :)
+        real(dp), intent(in) :: eta(:, :)
         integer, intent(in) :: j, k
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
         real(dp), intent(in) :: theta, zeta, weight
@@ -242,7 +249,7 @@ contains
         real(dp) :: cosine(size(trial_m)), sine(size(trial_m)), phase
         integer :: trial
 
-        call build_basis_coefficients(parity, h1, l2, coefficients)
+        call build_basis_coefficients(parity, h1, eta, l2, coefficients)
         call point_mass_matrix(fields, j, k, density, point_mass)
         do trial = 1, size(trial_m)
             phase = two_pi * (real(trial_m(trial), dp) * theta &
@@ -255,9 +262,10 @@ contains
             trial_n, field_periods, weight, mass)
     end subroutine accumulate_transformed
 
-    pure subroutine build_basis_coefficients(parity, h1, l2, coefficients)
+    pure subroutine build_basis_coefficients(parity, h1, eta, l2, &
+            coefficients)
         integer, intent(in) :: parity(:)
-        real(dp), intent(in) :: h1(:, :), l2(:, :)
+        real(dp), intent(in) :: h1(:, :), eta(:, :), l2(:, :)
         real(dp), intent(out) :: coefficients(:, :, :)
         integer :: basis, column, kind, trial, trials
 
@@ -278,7 +286,7 @@ contains
                 end if
                 column = size(h1, 1) * trials &
                     + (basis - 1) * trials + trial
-                coefficients(2, kind, column) = l2(basis, trial)
+                coefficients(2, kind, column) = eta(basis, trial)
                 column = (size(h1, 1) + size(l2, 1)) * trials &
                     + (basis - 1) * trials + trial
                 coefficients(3, kind, column) = l2(basis, trial)
@@ -295,7 +303,20 @@ contains
             fields(j, k, 5), fields(j, k, 6), fields(j, k, 7), &
             fields(j, k, 8), fields(j, k, 9), fields(j, k, 12), &
             fields(j, k, 13), density, mass)
+        call apply_parallel_unknown(fields(j, k, 2) / fields(j, k, 1) &
+            * fields(j, k, 7), mass)
     end subroutine point_mass_matrix
+
+    ! The third unknown is nu=mu-c eta with c=(FP'/FT') sqrtg, which is
+    ! proportional to sqrtg xi^zeta and regular at the axis.  The kinetic
+    ! form in (xi^s, eta, nu) is T^T M T with mu=nu+c eta.
+    pure subroutine apply_parallel_unknown(c, mass)
+        real(dp), intent(in) :: c
+        real(dp), intent(inout) :: mass(3, 3)
+
+        mass(:, 2) = mass(:, 2) + c * mass(:, 3)
+        mass(2, :) = mass(2, :) + c * mass(3, :)
+    end subroutine apply_parallel_unknown
 
     subroutine rank_update(basis, point_mass, weight, mass)
         real(dp), intent(in) :: basis(:, :), point_mass(:, :), weight

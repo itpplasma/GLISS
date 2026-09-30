@@ -39,7 +39,17 @@ p=1 fast errors show approximately second-order radial convergence and p=2
 approximately fourth order; higher-degree errors reach floating-point limits
 before reliable rates can be inferred from all three meshes. The CSV records
 measured rates separately; no new acceptance tolerance is fitted to these
-runs. The narrow slow continuum is ill-conditioned in the full dense spectrum:
+runs. Since the tangential component carries the same axis factor as the
+normal component (for m=3, eta = s^(1/2) times the L2 basis), the fast-branch
+errors are 3-14 times smaller than with the earlier unweighted eta, and the
+p=1/p=2 rates of the first branch are unchanged. Individual p=1 fast values
+now lie slightly below the exact values: the reduced constraint quadrature of
+the compression terms makes the scheme non-variational, so discrete eigenvalues
+are not upper bounds. The second p=1 branch changes error sign between 8 and
+16 intervals, so its pairwise rates (4.3, 1.3) are not asymptotic.
+The numbers below in this and the next section were measured before that
+change and are retained as historical diagnostics.
+The narrow slow continuum is ill-conditioned in the full dense spectrum:
 at p=4, 32 intervals, its minimum drifts about 2.2×10⁻⁴ relative below the cusp.
 Small normalized residuals or mass orthogonality defects alone cannot prove
 accuracy of these small eigenvalues in a pencil with a large spectral range.
