@@ -5,7 +5,7 @@ module mercier_diagnostic
         build_angular_grids, build_kernel_geometry, differentiate_pair, &
         grid_mean, load_surface, mercier_invalid_input, mercier_ok, &
         magnetic_differential_modes, mercier_reconstruction_error, mu0, &
-        solve_beta_derivatives, &
+        resonance_half_width, solve_beta_derivatives, surface_iota_spread, &
         surface_data_t, surface_derivatives, surface_profiles_t, &
         surface_values, two_pi
     use gvec_cas3d_reconstruction, only: project_harmonic_grid, &
@@ -73,6 +73,7 @@ contains
         real(dp), allocatable :: covariant_zeta_slope(:)
         real(dp), allocatable :: pressure_slope(:), iota_slope(:)
         real(dp), allocatable :: flux_curvature(:), volume_curvature(:)
+        real(dp), allocatable :: poloidal_slope(:)
         real(dp) :: poloidal_flux_slope
         integer :: ns, i
 
@@ -91,6 +92,7 @@ contains
         allocate (volume_slope(ns), covariant_theta_slope(ns))
         allocate (covariant_zeta_slope(ns), pressure_slope(ns))
         allocate (iota_slope(ns), flux_curvature(ns), volume_curvature(ns))
+        allocate (poloidal_slope(ns))
 
         do i = 1, ns
             call load_surface(equilibrium, i, theta, zeta, surface, info)
@@ -103,6 +105,7 @@ contains
                 surface%b_zeta)
             poloidal_flux_slope = grid_product_mean(surface%jacobian, &
                 surface%b_theta)
+            poloidal_slope(i) = poloidal_flux_slope
             volume_slope(i) = grid_absolute_mean(surface%jacobian) &
                 * real(equilibrium%field_periods, dp)
             result%iota_deviation(i) = abs(real(equilibrium%field_periods, &
@@ -142,7 +145,8 @@ contains
                 covariant_theta_slope(i), covariant_zeta_slope(i), &
                 flux_slope(i), flux_curvature(i), volume_slope(i), &
                 volume_curvature(i), pressure_slope(i), iota_slope(i), &
-                beta_positions, result, info)
+                beta_positions, result, info, &
+                surface_iota_spread(poloidal_slope / flux_slope, i))
             if (info /= mercier_ok) return
         end do
         result%s = equilibrium%s
@@ -153,7 +157,7 @@ contains
             i, covariant_theta, covariant_zeta, covariant_theta_slope, &
             covariant_zeta_slope, flux_slope, flux_curvature, &
             volume_slope, volume_curvature, pressure_slope, iota_slope, &
-            beta_positions, result, info)
+            beta_positions, result, info, iota_spread)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
@@ -167,6 +171,7 @@ contains
         type(mercier_result_t), intent(inout) :: result
         real(dp), allocatable :: beta_values(:, :), beta_filtered(:, :)
         integer, intent(out) :: info
+        real(dp), intent(in) :: iota_spread
         real(dp) :: pressure_term, toroidal_term, poloidal_term
         real(dp) :: d_pressure_slope_full
         real(dp) :: d_toroidal_flux_slope, d_poloidal_flux_slope
@@ -178,7 +183,8 @@ contains
             covariant_zeta_slope, flux_slope, flux_curvature, &
             volume_slope, volume_curvature, pressure_slope, iota_slope, &
             d_terms, grad, d_pressure_slope_full, beta_values, &
-            d_toroidal_flux_slope, d_poloidal_flux_slope, info=info)
+            d_toroidal_flux_slope, d_poloidal_flux_slope, info=info, &
+            iota_spread=iota_spread)
         if (info /= mercier_ok) return
         result%d_shear(i) = d_terms%shear
         result%d_current(i) = d_terms%current
@@ -214,7 +220,7 @@ contains
             volume_slope, volume_curvature, pressure_slope, iota_slope, &
             d_terms, grad, d_pressure_slope_full, beta_values, &
             d_toroidal_flux_slope, d_poloidal_flux_slope, &
-            poloidal_flux_slope_override, info)
+            poloidal_flux_slope_override, info, iota_spread)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
@@ -231,6 +237,8 @@ contains
         integer, intent(out), optional :: info
         integer :: beta_info
         real(dp), intent(in), optional :: poloidal_flux_slope_override
+        real(dp), intent(in), optional :: iota_spread
+        real(dp) :: spread
         real(dp), allocatable :: beta_theta(:, :), beta_zeta(:, :)
         real(dp), allocatable :: mu0_j_dot_b(:, :), grad_psi(:, :)
         real(dp), allocatable :: b_squared(:, :)
@@ -251,10 +259,15 @@ contains
             surface%b_theta)
         if (present(poloidal_flux_slope_override)) &
             poloidal_flux_slope = poloidal_flux_slope_override
+        ! Near-resonant harmonics use the cell-averaged inverse; a zero cell
+        ! keeps the exact inverse.
+        spread = 0.0_dp
+        if (present(iota_spread)) spread = iota_spread
         call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
             poloidal_flux_slope, flux_slope, &
-            beta_values, beta_theta, beta_zeta, beta_harmonics, beta_info)
+            beta_values, beta_theta, beta_zeta, beta_harmonics, beta_info, &
+            spread)
         if (beta_info /= mercier_ok) return
         mu0_j_dot_b = ((beta_zeta - covariant_zeta_slope) &
             * covariant_theta &
@@ -290,7 +303,8 @@ contains
             + pressure_implicit_gradient(equilibrium, surface, theta, &
             zeta, poloidal_flux_slope, flux_slope, covariant_theta, &
             covariant_zeta, mu0_j_dot_b, psi_slope, field_periods, &
-            n_grid, iota_slope, integral_jb, integral_bsq, beta_info)
+            n_grid, iota_slope, integral_jb, integral_bsq, beta_info, &
+            spread)
         if (beta_info /= mercier_ok) then
             call invalidate_surface_terms(d_terms, grad, d_pressure_slope_full, &
                 d_toroidal_flux_slope, d_poloidal_flux_slope)
@@ -302,7 +316,7 @@ contains
             covariant_theta, covariant_zeta, mu0_j_dot_b, grad_psi, &
             b_squared, field_periods, n_grid, d_integral_mu0jb_toroidal, &
             d_integral_jbsq_toroidal, d_integral_mu0jb_poloidal, &
-            d_integral_jbsq_poloidal)
+            d_integral_jbsq_poloidal, spread)
         call mercier_flux_slope_gradients(iota_slope, pressure_slope, &
             psi_slope, covariant_zeta, flux_slope, current_slope_ratio, &
             volume_curvature, d2v_dpsi2, integral_xi, integral_inverse, &
@@ -330,7 +344,8 @@ contains
     function pressure_implicit_gradient(equilibrium, surface, theta, zeta, &
             poloidal_flux_slope, toroidal_flux_slope, covariant_theta, &
             covariant_zeta, mu0_j_dot_b, psi_slope, field_periods, &
-            n_grid, iota_slope, integral_jb, integral_bsq, info) &
+            n_grid, iota_slope, integral_jb, integral_bsq, info, &
+            iota_spread) &
             result(contribution)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
@@ -341,6 +356,7 @@ contains
         real(dp), intent(in) :: field_periods, n_grid, iota_slope
         real(dp), intent(in) :: integral_jb, integral_bsq
         integer, intent(out) :: info
+        real(dp), intent(in) :: iota_spread
         real(dp) :: contribution
         real(dp), allocatable :: discard_values(:, :), d_beta_theta(:, :)
         real(dp), allocatable :: d_beta_zeta(:, :), d_mu0_j_dot_b(:, :)
@@ -349,7 +365,8 @@ contains
 
         call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
             0.0_dp, 0.0_dp, 1.0_dp, poloidal_flux_slope, &
-            toroidal_flux_slope, discard_values, d_beta_theta, d_beta_zeta, info=info)
+            toroidal_flux_slope, discard_values, d_beta_theta, d_beta_zeta, &
+            info=info, iota_spread=iota_spread)
         contribution = 0.0_dp
         if (info /= mercier_ok) return
         d_mu0_j_dot_b = (d_beta_zeta * covariant_theta &
@@ -374,7 +391,7 @@ contains
             covariant_theta, covariant_zeta, mu0_j_dot_b, grad_psi, &
             b_squared, field_periods, n_grid, d_integral_mu0jb_toroidal, &
             d_integral_jbsq_toroidal, d_integral_mu0jb_poloidal, &
-            d_integral_jbsq_poloidal)
+            d_integral_jbsq_poloidal, iota_spread)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
@@ -387,17 +404,18 @@ contains
         real(dp), intent(out) :: d_integral_jbsq_toroidal
         real(dp), intent(out) :: d_integral_mu0jb_poloidal
         real(dp), intent(out) :: d_integral_jbsq_poloidal
+        real(dp), intent(in) :: iota_spread
         real(dp), allocatable :: d_beta_theta(:, :), d_beta_zeta(:, :)
         real(dp), allocatable :: d_mu0_toroidal(:, :), d_mu0_poloidal(:, :)
 
         call beta_flux_slope_derivative(equilibrium, beta_harmonics, &
             poloidal_flux_slope, toroidal_flux_slope, 0.0_dp, 1.0_dp, &
-            theta, zeta, d_beta_theta, d_beta_zeta)
+            theta, zeta, d_beta_theta, d_beta_zeta, iota_spread)
         d_mu0_toroidal = (d_beta_zeta * covariant_theta &
             - d_beta_theta * covariant_zeta) / surface%jacobian
         call beta_flux_slope_derivative(equilibrium, beta_harmonics, &
             poloidal_flux_slope, toroidal_flux_slope, 1.0_dp, 0.0_dp, &
-            theta, zeta, d_beta_theta, d_beta_zeta)
+            theta, zeta, d_beta_theta, d_beta_zeta, iota_spread)
         d_mu0_poloidal = (d_beta_zeta * covariant_theta &
             - d_beta_theta * covariant_zeta) / surface%jacobian
 
@@ -415,7 +433,8 @@ contains
 
     subroutine beta_flux_slope_derivative(equilibrium, beta_harmonics, &
             poloidal_flux_slope, toroidal_flux_slope, poloidal_weight, &
-            toroidal_weight, theta, zeta, d_beta_theta, d_beta_zeta)
+            toroidal_weight, theta, zeta, d_beta_theta, d_beta_zeta, &
+            iota_spread)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(harmonic_pair_t), intent(in) :: beta_harmonics
         real(dp), intent(in) :: poloidal_flux_slope, toroidal_flux_slope
@@ -423,10 +442,12 @@ contains
         real(dp), intent(in) :: theta(:), zeta(:)
         real(dp), allocatable, intent(out) :: d_beta_theta(:, :)
         real(dp), allocatable, intent(out) :: d_beta_zeta(:, :)
+        real(dp), intent(in) :: iota_spread
         type(harmonic_pair_t) :: d_pair
         real(dp), allocatable :: discard_values(:, :)
         integer, allocatable :: poloidal(:), toroidal(:)
         real(dp) :: denominator, d_denominator, scale, mode_m, mode_n, mode_norm
+        real(dp) :: width, factor
         integer :: idx_m, idx_n, rec_info
 
         call magnetic_differential_modes(equilibrium%poloidal_modes, &
@@ -441,18 +462,24 @@ contains
                 mode_m = real(poloidal(idx_m), dp)
                 call beta_mode_denominator(mode_m, mode_n, poloidal_flux_slope, &
                     toroidal_flux_slope, denominator, mode_norm)
+                width = resonance_half_width(poloidal(idx_m), &
+                    toroidal_flux_slope / scale, iota_spread)
                 if (abs(denominator) <= 4.0_dp * epsilon(1.0_dp) * mode_norm) then
                     d_pair%cosine(1, idx_m, idx_n) = 0.0_dp
                     d_pair%sine(1, idx_m, idx_n) = 0.0_dp
                 else
+                    ! beta = F D / (D^2 + w^2) with the cell width w fixed,
+                    ! so d beta / d D = beta (w^2 - D^2) / (D (D^2 + w^2)).
                     d_denominator = (poloidal_weight * mode_m &
                         - toroidal_weight * mode_n)
+                    factor = (width**2 - denominator**2) &
+                        / (denominator * (denominator**2 + width**2))
                     d_pair%cosine(1, idx_m, idx_n) = &
-                        -beta_harmonics%cosine(1, idx_m, idx_n) &
-                        * (d_denominator / scale) / denominator
+                        beta_harmonics%cosine(1, idx_m, idx_n) &
+                        * (d_denominator / scale) * factor
                     d_pair%sine(1, idx_m, idx_n) = &
-                        -beta_harmonics%sine(1, idx_m, idx_n) &
-                        * (d_denominator / scale) / denominator
+                        beta_harmonics%sine(1, idx_m, idx_n) &
+                        * (d_denominator / scale) * factor
                 end if
             end do
         end do

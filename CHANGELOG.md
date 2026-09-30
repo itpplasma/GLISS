@@ -42,6 +42,13 @@
   message instead of a misread parity, and PROVENANCE pins the fork revision
   that writes the FORT.24 schema the reader accepts (#32). Add the public
   QAS3 benchmark (`benchmarks/qas3`: STELLOPT VMEC, TERPSICHORE 1.2, GLISS).
+- Solve the Pfirsch-Schlueter magnetic differential equation with the
+  cell-averaged inverse D/(D^2 + w^2), where w is half the variation of
+  m chi'/Phi' over the radial data cell, in the Mercier diagnostic and the
+  FEEC drive. The exact inverse amplified residual resonant forcing near
+  rational iota into Mercier spikes (QAS3 D_Mercier -6.9 at iota = 2/3 now
+  0.144 against VMEC 0.1435) and spurious negative directions. Nonresonant
+  results change by O((w/D)^2) (#33).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 

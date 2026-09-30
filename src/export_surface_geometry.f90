@@ -31,6 +31,9 @@ module export_surface_geometry
         real(dp) :: covariant_theta, covariant_zeta
         real(dp) :: covariant_theta_slope, covariant_zeta_slope
         real(dp) :: pressure_slope
+        ! Spread of chi'/Phi' over the radial data cell containing the
+        ! surface; zero selects the exact magnetic-differential inverse.
+        real(dp) :: iota_spread = 0.0_dp
     end type surface_profiles_t
 
     public :: build_angular_grids
@@ -42,6 +45,8 @@ module export_surface_geometry
     public :: load_surface
     public :: solve_beta_derivatives
     public :: beta_mode_denominator
+    public :: resonance_half_width
+    public :: surface_iota_spread
     public :: solve_beta_derivatives_modes
     public :: magnetic_differential_modes
     public :: surface_derivatives
@@ -118,7 +123,8 @@ contains
                 poloidal_slope(i), flux_curvature(i), &
                 poloidal_curvature(i), covariant_theta(i), &
                 covariant_zeta(i), covariant_theta_slope(i), &
-                covariant_zeta_slope(i), pressure_slope(i))
+                covariant_zeta_slope(i), pressure_slope(i), &
+                surface_iota_spread(poloidal_slope / flux_slope, i))
             call fill_surface_fields(equilibrium, surface, profiles, &
                 jacobian_slope, i, theta, zeta, fields(:, :, :, i), &
                 drive(:, :, i), info)
@@ -306,7 +312,8 @@ contains
             surface, theta, zeta, profiles%covariant_theta_slope, &
             profiles%covariant_zeta_slope, profiles%pressure_slope, &
             profiles%poloidal_slope, profiles%flux_slope, beta_values, &
-            beta_theta, beta_zeta, info=info)
+            beta_theta, beta_zeta, info=info, &
+            iota_spread=profiles%iota_spread)
         if (info /= mercier_ok) return
         fields(:, :, 1) = profiles%flux_slope
         fields(:, :, 2) = profiles%poloidal_slope
@@ -501,7 +508,7 @@ contains
     subroutine solve_beta_derivatives(equilibrium, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
             poloidal_flux_slope, toroidal_flux_slope, beta_values, &
-            beta_theta, beta_zeta, beta_harmonics, info)
+            beta_theta, beta_zeta, beta_harmonics, info, iota_spread)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
@@ -513,13 +520,14 @@ contains
         real(dp), allocatable, intent(out) :: beta_zeta(:, :)
         type(harmonic_pair_t), intent(out), optional :: beta_harmonics
         integer, intent(out), optional :: info
+        real(dp), intent(in), optional :: iota_spread
         type(harmonic_pair_t) :: beta_pair
 
         call solve_beta_derivatives_modes(equilibrium%poloidal_modes, &
             equilibrium%toroidal_modes, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
             poloidal_flux_slope, toroidal_flux_slope, beta_values, &
-            beta_theta, beta_zeta, beta_pair, info)
+            beta_theta, beta_zeta, beta_pair, info, iota_spread)
         if (present(beta_harmonics)) beta_harmonics = beta_pair
     end subroutine solve_beta_derivatives
 
@@ -527,7 +535,11 @@ contains
     ! Success does not certify its omitted mean (equilibrium force balance),
     ! nor Fourier truncation error. Nonconstant unresolved harmonics must have
     ! forcing consistent with RHS/projection roundoff; otherwise input is invalid.
-    ! The valid nonresonant branch uses the exact inverse, without regularization.
+    ! Without iota_spread the valid nonresonant branch uses the exact inverse.
+    ! With the spread of chi'/Phi' over the radial data cell, every harmonic
+    ! uses the cell average D/(D^2 + w^2) of the principal value of 1/D; the
+    ! exact inverse would amplify residual resonant forcing (truncation and
+    ! force-balance error of the equilibrium) by 1/(m iota - n).
     ! The forcing sqrt(g) (mu0 p' + G' B^zeta + I' B^theta) reduces to
     ! mu0 p' sqrt(g) plus flux constants, whose bandwidth is that of the
     ! Jacobian, about three times the position bandwidth.  The equation is
@@ -561,7 +573,7 @@ contains
             surface, theta, zeta, covariant_theta_slope, &
             covariant_zeta_slope, pressure_slope, poloidal_flux_slope, &
             toroidal_flux_slope, beta_values, beta_theta, beta_zeta, &
-            beta_harmonics, info)
+            beta_harmonics, info, iota_spread)
         integer, intent(in) :: position_poloidal_modes(:)
         integer, intent(in) :: position_toroidal_modes(:)
         type(surface_data_t), intent(in) :: surface
@@ -574,11 +586,13 @@ contains
         real(dp), allocatable, intent(out) :: beta_zeta(:, :)
         type(harmonic_pair_t), intent(out), optional :: beta_harmonics
         integer, intent(out), optional :: info
+        real(dp), intent(in), optional :: iota_spread
         type(harmonic_pair_t) :: beta_pair
         real(dp), allocatable :: rhs(:, :)
         real(dp), allocatable :: rhs_cosine(:, :), rhs_sine(:, :)
         integer, allocatable :: poloidal_modes(:), toroidal_modes(:)
         real(dp) :: denominator, scale, mode_scale, rhs_scale, roundoff
+        real(dp) :: width, response
         integer :: allocation_status, mode_m, mode_n, rec_info
 
         if (present(info)) info = mercier_invalid_input
@@ -639,6 +653,8 @@ contains
                 call beta_mode_denominator(real(poloidal_modes(mode_m), dp), &
                     real(toroidal_modes(mode_n), dp), poloidal_flux_slope, &
                     toroidal_flux_slope, denominator, mode_scale)
+                width = resonance_half_width(poloidal_modes(mode_m), &
+                    toroidal_flux_slope / scale, iota_spread)
                 if (mode_scale == 0.0_dp) then
                     if (poloidal_modes(mode_m) /= 0 .or. &
                         toroidal_modes(mode_n) /= 0) then
@@ -647,6 +663,15 @@ contains
                     end if
                     beta_pair%cosine(1, mode_m, mode_n) = 0.0_dp
                     beta_pair%sine(1, mode_m, mode_n) = 0.0_dp
+                else if (width > 0.0_dp) then
+                    ! Resolution-consistent inverse: the cell average of the
+                    ! principal value of 1/D, whose zero may lie anywhere in
+                    ! the radial cell, rather than the exact inverse.
+                    response = denominator / (denominator**2 + width**2)
+                    beta_pair%sine(1, mode_m, mode_n) = &
+                        (rhs_cosine(mode_m, mode_n) / scale) * response / two_pi
+                    beta_pair%cosine(1, mode_m, mode_n) = &
+                        -(rhs_sine(mode_m, mode_n) / scale) * response / two_pi
                 else if (abs(denominator) <= &
                         4.0_dp * epsilon(1.0_dp) * mode_scale) then
                     ! Cancellation at arithmetic resolution: accept only compatible
@@ -675,6 +700,34 @@ contains
         if (present(beta_harmonics)) beta_harmonics = beta_pair
         if (present(info)) info = mercier_ok
     end subroutine solve_beta_derivatives_modes
+
+    pure function surface_iota_spread(iota, i) result(spread)
+        ! Variation of chi'/Phi' over the cell of data surface i, bounded by
+        ! the midpoints to its neighbours.
+        real(dp), intent(in) :: iota(:)
+        integer, intent(in) :: i
+        real(dp) :: spread, lower, upper
+
+        lower = 0.5_dp * (iota(i) + iota(max(i - 1, 1)))
+        upper = 0.5_dp * (iota(i) + iota(min(i + 1, size(iota))))
+        spread = max(lower, iota(i), upper) - min(lower, iota(i), upper)
+    end function surface_iota_spread
+
+    pure function resonance_half_width(m, toroidal, spread) result(width)
+        ! Half the variation of the normalized denominator
+        ! (m chi' - n Phi')/scale = m (chi'/Phi') Phi'/scale - n Phi'/scale
+        ! over the radial data cell: the resonance m chi'/Phi' = n may lie
+        ! anywhere in the cell, including a shearless extremum of chi'/Phi'.
+        integer, intent(in) :: m
+        real(dp), intent(in) :: toroidal
+        real(dp), intent(in), optional :: spread
+        real(dp) :: width
+
+        width = 0.0_dp
+        if (.not. present(spread)) return
+        if (.not. ieee_is_finite(spread) .or. spread <= 0.0_dp) return
+        width = 0.5_dp * abs(real(m, dp) * toroidal) * spread
+    end function resonance_half_width
 
     pure subroutine beta_mode_denominator(m, n, poloidal, toroidal, value, norm)
         real(dp), intent(in) :: m, n, poloidal, toroidal

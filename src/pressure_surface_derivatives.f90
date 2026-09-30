@@ -156,7 +156,8 @@ contains
         ! primal whose pressure tangent violates a resonant compatibility rule.
         call solve_beta_derivatives_modes(m, n, surface, theta, zeta, &
             0.0_dp, 0.0_dp, 1.0_dp, profiles%poloidal_slope, &
-            profiles%flux_slope, beta, beta_theta, beta_zeta, info=status)
+            profiles%flux_slope, beta, beta_theta, beta_zeta, info=status, &
+            iota_spread=profiles%iota_spread)
         if (status /= mercier_ok) return
         fields_slope = 0.0_dp
         fields_slope(:, :, 10) = (beta_zeta * fields(:, :, 6) &

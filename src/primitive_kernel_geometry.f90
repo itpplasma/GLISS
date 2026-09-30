@@ -9,6 +9,8 @@ module primitive_kernel_geometry
         fit_primitive_equilibrium, primitive_equilibrium_ok, &
         primitive_equilibrium_spline_t
     use primitive_geometry_grid, only: primitive_geometry_grid_t
+    use radial_cubic_spline, only: evaluate_radial_cubic_spline_field, &
+        radial_cubic_spline_ok
     implicit none
     private
 
@@ -65,6 +67,7 @@ contains
         end if
         call compute_profiles(geometry, pressure_slope, profiles, local_info)
         if (local_info /= primitive_kernel_ok) return
+        profiles%iota_spread = cell_iota_spread(spline, coordinate)
         allocate (fields(size(theta), size(zeta_period), 13), &
             drive(size(theta), size(zeta_period)), stat=allocation_status)
         if (allocation_status /= 0) then
@@ -174,7 +177,7 @@ contains
             profiles%covariant_theta_slope, &
             profiles%covariant_zeta_slope, profiles%pressure_slope, &
             profiles%poloidal_slope, profiles%flux_slope, beta, beta_theta, &
-            beta_zeta, info=info)
+            beta_zeta, info=info, iota_spread=profiles%iota_spread)
         if (info /= mercier_ok) return
         grad_s2 = (surface%g_tt * surface%g_zz - surface%g_tz**2) &
             / surface%jacobian**2
@@ -292,6 +295,33 @@ contains
     ! signed Jacobian is positive (right-handed), -1 when negative.  The
     ! sign must agree on interior sample surfaces; assembly separately
     ! rejects any sign change at its own quadrature nodes.
+    function cell_iota_spread(spline, coordinate) result(spread)
+        ! Variation of chi'/Phi' over the equilibrium data interval that
+        ! contains coordinate, from the flux-profile spline.
+        type(primitive_equilibrium_spline_t), intent(in) :: spline
+        real(dp), intent(in) :: coordinate
+        real(dp) :: spread
+        real(dp) :: points(3), ratio(3), values(3), slopes(3), seconds(3)
+        integer :: k, j, status
+
+        spread = 0.0_dp
+        associate (nodes => spline%radial_grid%nodes)
+            if (size(nodes) < 2) return
+            do k = 1, size(nodes) - 2
+                if (coordinate < nodes(k + 1)) exit
+            end do
+            points = [nodes(k), coordinate, nodes(k + 1)]
+        end associate
+        do j = 1, 3
+            call evaluate_radial_cubic_spline_field(spline%radial_grid, &
+                spline%profiles, points(j), values, slopes, seconds, status)
+            if (status /= radial_cubic_spline_ok .or. slopes(1) == 0.0_dp) &
+                return
+            ratio(j) = slopes(2) / slopes(1)
+        end do
+        if (all(ieee_is_finite(ratio))) spread = maxval(ratio) - minval(ratio)
+    end function cell_iota_spread
+
     subroutine primitive_chart_orientation(equilibrium, orientation, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(out) :: orientation, info

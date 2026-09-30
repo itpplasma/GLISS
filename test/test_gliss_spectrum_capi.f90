@@ -16,7 +16,7 @@ program test_gliss_spectrum_capi
     ! oracle; physical agreement is checked in test_solovev_axis_regularity
     ! and test_axis_regular_displacement.
     real(c_double), parameter :: expected_lowest = &
-        1.1918434950137493e0_c_double
+        1.1918438137928291e0_c_double
     real(c_double), parameter :: reference_certificate_limit = 1.2e-3_c_double
     real(c_double), parameter :: reference_relative_limit = 1.0e-8_c_double
 
