@@ -368,9 +368,19 @@ def _force_balance_residual(
     # magnetic differential equation GLISS solves for B_s; the pointwise
     # closure uses the metric B_s = g_st B^theta + g_sz B^zeta, which VMEC
     # stellarator equilibria satisfy only to a few percent in Boozer angles
-    # although the average closes to 1e-6.
+    # although the average closes to 1e-6. Every term vanishes for a
+    # current-free vacuum field, where a residual relative to the terms only
+    # compares profile noise with itself; the average is therefore also
+    # measured against 1e-3 of the magnetic scale |Phi' B_zeta| + |chi' B_theta|,
+    # so a force-free field must keep its net-current profiles constant to
+    # 1e-5 per unit s while finite-beta files keep the relative criterion.
+    magnetic = np.abs(toroidal_field * profiles["B_zeta_avg"][:, None, None])
+    magnetic = magnetic + np.abs(poloidal_field * profiles["B_theta_avg"][:, None, None])
+    scale = np.mean(terms[selected], axis=(1, 2)) + 1.0e-3 * np.mean(
+        magnetic[selected] * np.ones_like(terms[selected]), axis=(1, 2)
+    )
     average = np.abs(np.mean(residual[selected], axis=(1, 2))) / np.maximum(
-        np.mean(terms[selected], axis=(1, 2)), tiny
+        scale, tiny
     )
     pointwise = np.max(np.abs(residual[selected]), axis=(1, 2)) / np.maximum(
         np.max(terms[selected], axis=(1, 2)), tiny

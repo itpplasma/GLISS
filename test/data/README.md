@@ -9,8 +9,7 @@
   The same equilibrium stored with both parities (`stellarator_symmetry =
   "False"`); the coupled parity operator must reproduce the symmetric classes.
 - `qa_lowres.nc`: `gliss.convert_vmec(wout, "qa_lowres.nc", poloidal_max=4,
-  toroidal_max=3, radial_surfaces=7, force_balance_policy="warn")` with
+  toroidal_max=3, radial_surfaces=7)` with
   booz-xform 0.1.0 of `tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc`
   from simsopt `9e027eac` (SHA-256 `333ab8ce...e112e771`). A vacuum
-  quasi-axisymmetric field, nfp = 2; `warn` because its relative
-  force-balance residual has no pressure scale.
+  quasi-axisymmetric field, nfp = 2.

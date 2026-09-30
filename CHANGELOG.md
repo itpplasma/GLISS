@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `convert_vmec` measures the averaged radial force balance of a force-free
+  (vacuum) field against 1e-3 of the magnetic scale `|Phi' B_zeta| +
+  |chi' B_theta|` in addition to the individual terms. Every term vanishes
+  without pressure and current, so the purely relative residual compared
+  profile noise with itself and rejected converged vacuum equilibria such as
+  the Landreman-Paul QA reference; finite-beta files keep the relative
+  criterion.
 - Solve equilibria without stellarator symmetry with a coupled parity
   operator (#10 part C). Every mode enters with both Fourier parities as one
   problem, parity class 0. A fixed-boundary problem couples when the

@@ -389,6 +389,41 @@ def test_force_balance_gate_uses_the_flux_surface_average():
     assert average > 1.0e-1
 
 
+def test_force_balance_gate_measures_force_free_fields_against_the_field():
+    # A current-free vacuum field has p' = I' = G' = 0, so every term of the
+    # averaged balance vanishes and profile noise divided by itself is O(1).
+    # The gate measures it against 1e-3 of the magnetic scale |Phi' G|.
+    ns = 12
+    s = np.linspace(0.06, 0.88, ns)
+    theta = np.linspace(0.0, 2.0 * np.pi, 16, endpoint=False)
+    zeta = np.linspace(0.0, 2.0 * np.pi, 4, endpoint=False)
+    uniform = (np.full((ns, 1, 1), 1.0), np.zeros((ns, 1, 1)))
+    empty = (np.zeros((ns, 1, 1)), np.zeros((ns, 1, 1)))
+    harmonics = {
+        "Jac": uniform,
+        "B_contra_t": uniform,
+        "B_contra_z": uniform,
+        "g_st": empty,
+        "g_sz": empty,
+    }
+    g_zeta = 200.0
+    for noise, passes in ((1.0e-6, True), (1.0e-2, False)):
+        profiles = {
+            "p": np.zeros(ns),
+            "Phi": 0.8 * s,
+            "chi": 0.3 * s,
+            "B_theta_avg": np.zeros(ns),
+            "B_zeta_avg": g_zeta * (1.0 + noise * s),
+            "iota": np.full(ns, 0.375),
+        }
+        average, _ = _vmec_geometry._force_balance_residual(
+            harmonics, profiles, s, theta, zeta, 1
+        )
+        # G'/G = noise, the only nonzero term: residual / (term + 1e-3 |Phi' G|).
+        assert average == pytest.approx(noise / (noise + 1.0e-3), rel=1.0e-3)
+        assert (average <= 1.0e-2) == passes
+
+
 def _stub_dependencies(monkeypatch, transform):
     monkeypatch.setattr(
         vmec,
