@@ -34,6 +34,9 @@ module compatible_three_component_problem
     integer, parameter, public :: compatible_three_component_invalid = -1
     integer, parameter, public :: compatible_three_component_assembly_error = -2
     integer, parameter, public :: compatible_three_component_allocation_error = -3
+    ! The equilibrium breaks the (theta,zeta)->(-theta,-zeta) symmetry that
+    ! decouples the two parity classes; their operator does not apply.
+    integer, parameter, public :: compatible_three_component_asymmetric = -4
 
     type, public :: compatible_three_component_problem_t
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
@@ -327,7 +330,10 @@ contains
             jacobian_z, pressure, orientation=orientation)
         if (local_info /= primitive_kernel_ok) return
         if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
-            jacobian_t, jacobian_z)) return
+            jacobian_t, jacobian_z)) then
+            info = compatible_three_component_asymmetric
+            return
+        end if
         allocate (gamma_p(size(theta), size(zeta)), &
             source=adiabatic_index * pressure, stat=allocation_status)
         if (allocation_status /= 0) then

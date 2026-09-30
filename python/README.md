@@ -11,8 +11,9 @@ The supported production scope is fixed-boundary FEEC. TERPSICHORE FORT.23/24
 solves are compatibility replays for validation. Selected free-boundary
 operators are not exposed as a production plasma-vacuum solve, and the public
 equilibrium-to-spectrum derivative chain is incomplete. Version 0.0.2 ships a
-manylinux x86-64 wheel and source distribution; macOS wheels and asymmetric or
-precomputed BOOZ_XFORM inputs remain future work.
+manylinux x86-64 wheel and source distribution. macOS wheels and the coupled
+operator for asymmetric equilibria remain future work; asymmetric and
+precomputed BOOZ_XFORM inputs convert.
 
 ## Installation
 
@@ -66,10 +67,28 @@ VMEC angles map as `theta=-theta_B/(2*pi)` and
 rotating frame with `winding=-1`; reconstructing the frame gives the physical
 cylindrical angle `zeta_B-nu` without reflecting the Cartesian `y` coordinate.
 
-The importer currently accepts fixed-boundary, stellarator-symmetric VMEC
-files with `signgs=-1` and a successful `ier_flag`. It rejects asymmetric and
-reversed-field-pinch files instead of applying the symmetric GLISS operator to
-an incompatible chart. Mode limits are integers from 0 through 64. GLISS
+The importer accepts fixed-boundary VMEC files with `signgs=-1` and a
+successful `ier_flag`, and rejects reversed-field-pinch files. A symmetric file
+stores the populated parity of each field (15 harmonic variables). An
+asymmetric (`lasym`) file stores both parities (30 variables) and
+`stellarator_symmetry="False"`; GLISS reads it and computes Mercier profiles,
+but the fixed-boundary operator, whose two parity classes decouple only under
+stellarator symmetry, refuses it with `GlissArgumentError`. Every export
+records `vmec_signgs` and, for the precomputed path, `booz_xform_source`.
+
+A precomputed BOOZ_XFORM file converts without re-running the transform;
+`mboz`, `nboz` and the surface list are taken from the file, which must be a
+centered uniform subset of the VMEC half grid. A `boozmn` file does not store
+the volume-averaged beta, so pass it or the parent `wout`:
+
+```python
+converted = gliss.convert_boozer(
+    Path("boozmn_W7X.nc"), Path("W7X_gliss.nc"), wout_path=Path("wout_W7X.nc")
+)
+```
+
+For the same transform, `convert_boozer` and `convert_vmec` write identical
+harmonic and profile data. Mode limits are integers from 0 through 64. GLISS
 rebuilds the Jacobian, metric and field from the truncated position harmonics
 alone, so the conversion measures that reconstruction against the untruncated
 Boozer geometry and records it as `conversion_residual_truncated_jacobian`.

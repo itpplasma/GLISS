@@ -33,12 +33,15 @@ class _Transform:
     def run(self):
         self.ran = True
 
+    def read_boozmn(self, path):
+        self.boozmn = path
+
 
 class _BoozModule:
     Booz_xform = _Transform
 
 
-def _geometry(m_max=2, n_max=1, force_balance=0.0):
+def _geometry(m_max=2, n_max=1, force_balance=0.0, symmetric=True):
     shape = (5, m_max + 1, 2 * n_max + 1)
     harmonics = {}
     for name in _EVEN_FIELDS | _ODD_FIELDS:
@@ -56,6 +59,7 @@ def _geometry(m_max=2, n_max=1, force_balance=0.0):
         profiles,
         harmonics,
         {"toroidal_flux": 0.0, "force_balance": force_balance},
+        symmetric,
     )
 
 
@@ -152,7 +156,7 @@ def test_convert_vmec_force_balance_policy_is_explicit(
     source.write_bytes(b"input")
     destination = tmp_path / "converted.nc"
     monkeypatch.setattr(vmec, "_dependencies", lambda: (_BoozModule, netcdf_file))
-    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: 0.02)
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: (0.02, True))
     monkeypatch.setattr(
         vmec, "convert_geometry", lambda *args: _geometry(force_balance=0.2)
     )
@@ -183,7 +187,7 @@ def test_convert_vmec_is_atomic_and_writes_reader_schema(tmp_path, monkeypatch):
         "_dependencies",
         lambda: (type("Module", (), {"Booz_xform": lambda: transform}), netcdf_file),
     )
-    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: 0.02)
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: (0.02, True))
     monkeypatch.setattr(vmec, "convert_geometry", lambda *args: _geometry())
 
     result = vmec.convert_vmec(
@@ -216,6 +220,10 @@ def test_convert_vmec_is_atomic_and_writes_reader_schema(tmp_path, monkeypatch):
         assert file.variables["Jac_mnc"].data.shape == (5, 3, 3)
         assert "Jac_mns" not in file.variables
         assert file.variables["g_st_mns"].data.shape == (5, 3, 3)
+        assert int(file.vmec_signgs) == -1
+        assert file.booz_xform_source == b""
+        harmonics = [name for name in file.variables if name[-4:] in ("_mnc", "_mns")]
+        assert len(harmonics) == 15
 
 
 @pytest.mark.parametrize(("available", "radial_surfaces"), [(15, 6), (30, 5)])
@@ -232,7 +240,7 @@ def test_convert_vmec_rejects_noncentered_radial_subsampling(
         "_dependencies",
         lambda: (type("Module", (), {"Booz_xform": lambda: transform}), netcdf_file),
     )
-    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: 0.02)
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: (0.02, True))
 
     with pytest.raises(ValueError, match="radial_surfaces"):
         vmec.convert_vmec(source, destination, radial_surfaces=radial_surfaces)
@@ -246,7 +254,7 @@ def test_convert_vmec_removes_partial_output_after_write_failure(tmp_path, monke
     source.write_bytes(b"input")
     destination = tmp_path / "converted.nc"
     monkeypatch.setattr(vmec, "_dependencies", lambda: (_BoozModule, netcdf_file))
-    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: 0.02)
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: (0.02, True))
     monkeypatch.setattr(vmec, "convert_geometry", lambda *args: _geometry())
 
     def fail(*args):
@@ -266,7 +274,7 @@ def test_convert_vmec_rejects_inaccurate_position_truncation(tmp_path, monkeypat
     geometry = _geometry()
     geometry.residuals["truncated_jacobian"] = 0.2
     monkeypatch.setattr(vmec, "_dependencies", lambda: (_BoozModule, netcdf_file))
-    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: 0.02)
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: (0.02, True))
     monkeypatch.setattr(vmec, "convert_geometry", lambda *args: geometry)
     with pytest.raises(ValueError, match="increase poloidal_max"):
         vmec.convert_vmec(source, tmp_path / "out.nc", poloidal_max=2, toroidal_max=1)
@@ -379,3 +387,81 @@ def test_force_balance_gate_uses_the_flux_surface_average():
         harmonics, profiles, s, theta, zeta, 1
     )
     assert average > 1.0e-1
+
+
+def _stub_dependencies(monkeypatch, transform):
+    monkeypatch.setattr(
+        vmec,
+        "_dependencies",
+        lambda: (type("Module", (), {"Booz_xform": lambda: transform}), netcdf_file),
+    )
+
+
+def test_convert_vmec_writes_both_parities_when_asymmetric(tmp_path, monkeypatch):
+    source = tmp_path / "wout.nc"
+    source.write_bytes(b"input")
+    destination = tmp_path / "asym.nc"
+    transform = _Transform()
+    transform.asym = True
+    _stub_dependencies(monkeypatch, transform)
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: (0.02, False))
+    monkeypatch.setattr(
+        vmec, "convert_geometry", lambda *args: _geometry(symmetric=args[-1])
+    )
+
+    vmec.convert_vmec(source, destination, poloidal_max=2, toroidal_max=1)
+
+    with netcdf_file(destination, "r", mmap=False) as file:
+        assert file.stellarator_symmetry == b"False"
+        harmonics = [name for name in file.variables if name[-4:] in ("_mnc", "_mns")]
+        assert len(harmonics) == 30
+        assert "Jac_mns" in file.variables and "g_st_mnc" in file.variables
+
+
+def test_convert_vmec_rejects_symmetry_mismatch(tmp_path, monkeypatch):
+    source = tmp_path / "wout.nc"
+    source.write_bytes(b"input")
+    transform = _Transform()
+    transform.asym = True
+    _stub_dependencies(monkeypatch, transform)
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: (0.02, True))
+    with pytest.raises(ValueError, match="disagree on stellarator symmetry"):
+        vmec.convert_vmec(source, tmp_path / "out.nc")
+    assert not (tmp_path / "out.nc").exists()
+
+
+def test_convert_boozer_reads_the_file_without_rerunning(tmp_path, monkeypatch):
+    source = tmp_path / "boozmn.nc"
+    source.write_bytes(b"input")
+    destination = tmp_path / "converted.nc"
+    transform = _Transform()
+    _stub_dependencies(monkeypatch, transform)
+    monkeypatch.setattr(vmec, "convert_geometry", lambda *args: _geometry())
+
+    vmec.convert_boozer(
+        source, destination, beta_average=0.03, poloidal_max=2, toroidal_max=1
+    )
+
+    assert transform.boozmn == str(source)
+    assert not transform.ran
+    with netcdf_file(destination, "r", mmap=False) as file:
+        assert file.creator == b"gliss.convert_boozer"
+        assert file.booz_xform_source == b"boozmn.nc"
+        assert float(file.variables["beta_avg"].data) == 0.03
+
+
+@pytest.mark.parametrize(
+    ("options", "error", "match"),
+    [
+        ({}, ValueError, "exactly one of beta_average and wout_path"),
+        ({"beta_average": 0.02, "wout_path": "w.nc"}, ValueError, "exactly one"),
+        ({"beta_average": True}, TypeError, "beta_average must be a real"),
+        ({"beta_average": float("nan")}, ValueError, "finite and nonnegative"),
+    ],
+)
+def test_convert_boozer_requires_beta(tmp_path, monkeypatch, options, error, match):
+    source = tmp_path / "boozmn.nc"
+    source.write_bytes(b"input")
+    _stub_dependencies(monkeypatch, _Transform())
+    with pytest.raises(error, match=match):
+        vmec.convert_boozer(source, tmp_path / "out.nc", **options)

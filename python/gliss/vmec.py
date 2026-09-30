@@ -5,7 +5,7 @@ import os
 import tempfile
 import warnings
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 
@@ -17,6 +17,8 @@ from ._vmec_geometry import (
 )
 
 PathLike = Union[str, os.PathLike]
+# The only VMEC Jacobian sign GLISS accepts; recorded in every export.
+_VMEC_SIGNGS = -1
 
 
 def _path(value: PathLike, name: str, must_exist: bool) -> Path:
@@ -86,7 +88,8 @@ def _scalar_alias(file: Any, *names: str) -> float:
     raise ValueError(f"VMEC wout file is missing {' or '.join(names)}")
 
 
-def _metadata(path: Path, netcdf_file: Any) -> float:
+def _metadata(path: Path, netcdf_file: Any) -> Tuple[float, bool]:
+    """Return the volume-averaged beta and the stellarator symmetry flag."""
     try:
         file = netcdf_file(path, "r", mmap=False)
     except (OSError, TypeError, ValueError) as error:
@@ -94,13 +97,12 @@ def _metadata(path: Path, netcdf_file: Any) -> float:
     with file:
         if int(_scalar(file, "ier_flag")) != 0:
             raise ValueError("VMEC wout reports a failed equilibrium solve")
-        if int(_scalar_alias(file, "lasym__logical__", "lasym")) != 0:
-            raise ValueError("GLISS does not yet support asymmetric VMEC equilibria")
+        symmetric = int(_scalar_alias(file, "lasym__logical__", "lasym")) == 0
         if int(_scalar_alias(file, "lrfp__logical__", "lrfp")) != 0:
             raise ValueError("GLISS does not support reversed-field-pinch VMEC output")
         if int(_scalar(file, "signgs")) != -1:
             raise ValueError("GLISS requires the standard VMEC signgs=-1 convention")
-        return _scalar_alias(file, "betatotal", "betatot")
+        return _scalar_alias(file, "betatotal", "betatot"), symmetric
 
 
 def _select_surfaces(transform: Any, radial_surfaces: Optional[int]) -> None:
@@ -130,6 +132,8 @@ def _write(
     transform_resolution: tuple[int, int] = (0, 0),
     radial_resolution: tuple[int, int] = (0, 0),
     booz_xform_version: str = "unknown",
+    creator: str = "gliss.convert_vmec",
+    boozmn_source: str = "",
 ) -> None:
     n_modes = np.concatenate((np.arange(n_max + 1), np.arange(-n_max, 0)))
     with netcdf_file(path, "w", version=2) as file:
@@ -138,9 +142,12 @@ def _write(
         file.createDimension("n", n_modes.size)
         file.gliss_schema = b"gvec-cas3d-export"
         file.gliss_schema_version = b"1"
-        file.stellarator_symmetry = b"True"
+        symmetric = converted.stellarator_symmetric
+        file.stellarator_symmetry = b"True" if symmetric else b"False"
         file.position_frame = _POSITION_FRAME.encode("ascii")
-        file.creator = b"gliss.convert_vmec"
+        file.creator = creator.encode("ascii")
+        file.vmec_signgs = np.int32(_VMEC_SIGNGS)
+        file.booz_xform_source = boozmn_source.encode("utf-8")
         file.vmec_source = source_name.encode("utf-8")
         file.booz_xform_mboz = transform_resolution[0]
         file.booz_xform_nboz = transform_resolution[1]
@@ -166,47 +173,30 @@ def _write(
             variable = file.createVariable(name, "d", ("s",))
             variable[:] = values
         for name, (cosine, sine) in converted.harmonics.items():
-            suffix, values = ("mnc", cosine) if name in _EVEN_FIELDS else ("mns", sine)
-            variable = file.createVariable(f"{name}_{suffix}", "d", ("s", "m", "n"))
-            variable[:] = values
+            # A symmetric export keeps only the populated parity of each field;
+            # an asymmetric one stores both, as the GLISS reader requires.
+            if symmetric:
+                parts = [("mnc", cosine) if name in _EVEN_FIELDS else ("mns", sine)]
+            else:
+                parts = [("mnc", cosine), ("mns", sine)]
+            for suffix, values in parts:
+                variable = file.createVariable(
+                    f"{name}_{suffix}", "d", ("s", "m", "n")
+                )
+                variable[:] = values
 
 
-def convert_vmec(
-    input_path: PathLike,
-    output_path: PathLike,
-    *,
-    poloidal_max: int = 7,
-    toroidal_max: int = 7,
-    transform_factor: int = 4,
-    radial_surfaces: Optional[int] = None,
-    force_balance_policy: str = "error",
-    truncation_tolerance: float = 0.05,
-    overwrite: bool = False,
-) -> Path:
-    """Convert a stellarator-symmetric VMEC ``wout`` file for GLISS.
-
-    The result uses the left-handed, one-field-period Boozer convention of
-    pyGVEC's CAS3D exporter. ``radial_surfaces`` optionally selects an exact
-    centered uniform subset of the VMEC half grid. A failed flux-surface
-    averaged radial force balance (relative residual above 1e-2), the
-    solvability condition of the Pfirsch-Schlueter equation GLISS solves,
-    rejects the conversion by default; the pointwise closure with the metric
-    B_s is reported as ``force_balance_pointwise`` only. The explicit
-    ``force_balance_policy="warn"`` option retains the diagnostic export for
-    convergence studies. GLISS rebuilds the geometry from the truncated
-    ``xhat, yhat, zhat`` harmonics only; the conversion therefore rejects a
-    maximum relative Jacobian error of that truncated reconstruction above
-    ``truncation_tolerance``, which usually calls for larger ``poloidal_max``
-    and ``toroidal_max``. Existing outputs are preserved unless
-    ``overwrite=True``.
-    """
-    source_path = _path(input_path, "input_path", True)
-    destination = _path(output_path, "output_path", False)
+def _check_options(
+    source_path: Path,
+    destination: Path,
+    poloidal_max: int,
+    toroidal_max: int,
+    force_balance_policy: str,
+    truncation_tolerance: float,
+    overwrite: bool,
+) -> Tuple[int, int, str, float]:
     poloidal_max = _integer(poloidal_max, "poloidal_max", 0, 64)
     toroidal_max = _integer(toroidal_max, "toroidal_max", 0, 64)
-    transform_factor = _integer(transform_factor, "transform_factor", 2, 16)
-    if radial_surfaces is not None:
-        radial_surfaces = _integer(radial_surfaces, "radial_surfaces", 5, 1_000_000)
     force_balance_policy = _force_balance_policy(force_balance_policy)
     if isinstance(truncation_tolerance, bool) or not isinstance(
         truncation_tolerance, (int, float)
@@ -225,24 +215,33 @@ def convert_vmec(
         raise ValueError("input_path and output_path must name different files")
     if not destination.exists() and source_path.resolve() == destination.resolve():
         raise ValueError("input_path and output_path must name different files")
-    booz_xform, netcdf_file = _dependencies()
-    beta_average = _metadata(source_path, netcdf_file)
-    transform = booz_xform.Booz_xform()
-    transform.verbose = 0
-    try:
-        transform.read_wout(os.fspath(source_path), True)
-    except Exception as error:
-        raise RuntimeError(f"cannot load VMEC equilibrium {source_path}") from error
-    _select_surfaces(transform, radial_surfaces)
-    try:
-        transform.mboz = transform_factor * (poloidal_max + 1)
-        transform.nboz = transform_factor * (toroidal_max + 1)
-        transform.run()
-    except Exception as error:
-        raise RuntimeError(f"Boozer transformation failed for {source_path}") from error
-    if bool(transform.asym):
-        raise ValueError("booz_xform reported asymmetric geometry")
-    converted = convert_geometry(transform, beta_average, poloidal_max, toroidal_max)
+    return poloidal_max, toroidal_max, force_balance_policy, truncation_tolerance
+
+
+def _convert_transform(
+    transform: Any,
+    booz_xform: Any,
+    netcdf_file: Any,
+    destination: Path,
+    beta_average: float,
+    stellarator_symmetric: bool,
+    poloidal_max: int,
+    toroidal_max: int,
+    force_balance_policy: str,
+    truncation_tolerance: float,
+    source_name: str,
+    creator: str,
+    boozmn_source: str = "",
+) -> Path:
+    """Check and atomically write a transform that has Boozer spectra."""
+    if bool(transform.asym) == stellarator_symmetric:
+        raise ValueError(
+            "the Boozer transform and the VMEC equilibrium disagree on "
+            "stellarator symmetry"
+        )
+    converted = convert_geometry(
+        transform, beta_average, poloidal_max, toroidal_max, stellarator_symmetric
+    )
     truncation = converted.residuals.get("truncated_jacobian", 0.0)
     if truncation > truncation_tolerance:
         raise ValueError(
@@ -267,7 +266,7 @@ def convert_vmec(
         )
         if force_balance_policy == "error":
             raise ValueError(message)
-        warnings.warn(message, RuntimeWarning, stacklevel=2)
+        warnings.warn(message, RuntimeWarning, stacklevel=3)
     descriptor, temporary_name = tempfile.mkstemp(
         dir=destination.parent, prefix=f".{destination.name}.", suffix=".tmp"
     )
@@ -282,10 +281,12 @@ def convert_vmec(
             poloidal_max,
             toroidal_max,
             netcdf_file,
-            source_path.name,
+            source_name,
             (int(transform.mboz), int(transform.nboz)),
             (int(transform.ns_in), int(converted.s.size)),
             getattr(booz_xform, "__version__", "unknown"),
+            creator,
+            boozmn_source,
         )
         os.replace(temporary, destination)
     finally:
@@ -293,4 +294,156 @@ def convert_vmec(
     return destination
 
 
-__all__ = ["convert_vmec"]
+def convert_vmec(
+    input_path: PathLike,
+    output_path: PathLike,
+    *,
+    poloidal_max: int = 7,
+    toroidal_max: int = 7,
+    transform_factor: int = 4,
+    radial_surfaces: Optional[int] = None,
+    force_balance_policy: str = "error",
+    truncation_tolerance: float = 0.05,
+    overwrite: bool = False,
+) -> Path:
+    """Convert a VMEC ``wout`` file for GLISS.
+
+    The result uses the left-handed, one-field-period Boozer convention of
+    pyGVEC's CAS3D exporter. A stellarator-symmetric file stores the
+    populated parity of each field; an asymmetric (``lasym``) file stores
+    both parities and ``stellarator_symmetry="False"``, which GLISS reads
+    but its parity-class operators refuse. ``radial_surfaces`` optionally
+    selects an exact centered uniform subset of the VMEC half grid. A failed
+    flux-surface averaged radial force balance (relative residual above
+    1e-2), the solvability condition of the Pfirsch-Schlueter equation GLISS
+    solves, rejects the conversion by default; the pointwise closure with the
+    metric B_s is reported as ``force_balance_pointwise`` only. The explicit
+    ``force_balance_policy="warn"`` option retains the diagnostic export for
+    convergence studies. GLISS rebuilds the geometry from the truncated
+    ``xhat, yhat, zhat`` harmonics only; the conversion therefore rejects a
+    maximum relative Jacobian error of that truncated reconstruction above
+    ``truncation_tolerance``, which usually calls for larger ``poloidal_max``
+    and ``toroidal_max``. Existing outputs are preserved unless
+    ``overwrite=True``.
+    """
+    source_path = _path(input_path, "input_path", True)
+    destination = _path(output_path, "output_path", False)
+    transform_factor = _integer(transform_factor, "transform_factor", 2, 16)
+    if radial_surfaces is not None:
+        radial_surfaces = _integer(radial_surfaces, "radial_surfaces", 5, 1_000_000)
+    options = _check_options(
+        source_path,
+        destination,
+        poloidal_max,
+        toroidal_max,
+        force_balance_policy,
+        truncation_tolerance,
+        overwrite,
+    )
+    poloidal_max, toroidal_max = options[0], options[1]
+    booz_xform, netcdf_file = _dependencies()
+    beta_average, symmetric = _metadata(source_path, netcdf_file)
+    transform = booz_xform.Booz_xform()
+    transform.verbose = 0
+    try:
+        transform.read_wout(os.fspath(source_path), True)
+    except Exception as error:
+        raise RuntimeError(f"cannot load VMEC equilibrium {source_path}") from error
+    _select_surfaces(transform, radial_surfaces)
+    try:
+        transform.mboz = transform_factor * (poloidal_max + 1)
+        transform.nboz = transform_factor * (toroidal_max + 1)
+        transform.run()
+    except Exception as error:
+        raise RuntimeError(f"Boozer transformation failed for {source_path}") from error
+    return _convert_transform(
+        transform,
+        booz_xform,
+        netcdf_file,
+        destination,
+        beta_average,
+        symmetric,
+        poloidal_max,
+        toroidal_max,
+        options[2],
+        options[3],
+        source_path.name,
+        "gliss.convert_vmec",
+    )
+
+
+def convert_boozer(
+    input_path: PathLike,
+    output_path: PathLike,
+    *,
+    beta_average: Optional[float] = None,
+    wout_path: Optional[PathLike] = None,
+    poloidal_max: int = 7,
+    toroidal_max: int = 7,
+    force_balance_policy: str = "error",
+    truncation_tolerance: float = 0.05,
+    overwrite: bool = False,
+) -> Path:
+    """Convert a precomputed BOOZ_XFORM ``boozmn`` file for GLISS.
+
+    The Boozer transform is not re-run: ``mboz``, ``nboz`` and the surface
+    list are those of the file, which must be a centered uniform subset of
+    the VMEC half grid. A ``boozmn`` file does not store the volume-averaged
+    beta; pass it as ``beta_average`` or give the parent ``wout_path``,
+    whose metadata (solve status, signgs, symmetry and beta) is then also
+    checked. The same geometric and force-balance gates as
+    :func:`convert_vmec` apply, and both entry points produce identical
+    exports for the same transform.
+    """
+    source_path = _path(input_path, "input_path", True)
+    destination = _path(output_path, "output_path", False)
+    options = _check_options(
+        source_path,
+        destination,
+        poloidal_max,
+        toroidal_max,
+        force_balance_policy,
+        truncation_tolerance,
+        overwrite,
+    )
+    poloidal_max, toroidal_max = options[0], options[1]
+    if (beta_average is None) == (wout_path is None):
+        raise ValueError("give exactly one of beta_average and wout_path")
+    booz_xform, netcdf_file = _dependencies()
+    symmetric = None
+    if wout_path is not None:
+        beta_average, symmetric = _metadata(
+            _path(wout_path, "wout_path", True), netcdf_file
+        )
+    elif isinstance(beta_average, bool) or not isinstance(
+        beta_average, (int, float)
+    ):
+        raise TypeError("beta_average must be a real number")
+    elif not np.isfinite(beta_average) or beta_average < 0.0:
+        raise ValueError("beta_average must be finite and nonnegative")
+    transform = booz_xform.Booz_xform()
+    transform.verbose = 0
+    try:
+        transform.read_boozmn(os.fspath(source_path))
+    except Exception as error:
+        raise RuntimeError(f"cannot load BOOZ_XFORM file {source_path}") from error
+    if symmetric is None:
+        symmetric = not bool(transform.asym)
+    return _convert_transform(
+        transform,
+        booz_xform,
+        netcdf_file,
+        destination,
+        float(beta_average),
+        symmetric,
+        poloidal_max,
+        toroidal_max,
+        options[2],
+        options[3],
+        "" if wout_path is None else _path(wout_path, "wout_path", True).name,
+        "gliss.convert_boozer",
+        source_path.name,
+    )
+
+
+__all__ = ["convert_boozer", "convert_vmec"]

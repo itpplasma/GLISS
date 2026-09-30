@@ -30,6 +30,7 @@ class ConvertedGeometry:
     profiles: Dict[str, np.ndarray]
     harmonics: Dict[str, Tuple[np.ndarray, np.ndarray]]
     residuals: Dict[str, float]
+    stellarator_symmetric: bool = True
 
 
 def _position_frame(
@@ -189,6 +190,20 @@ def _project(
 def _relative_max(actual: np.ndarray, expected: np.ndarray) -> float:
     scale = max(float(np.max(np.abs(expected))), np.finfo(np.float64).tiny)
     return float(np.max(np.abs(actual - expected)) / scale)
+
+
+def _boozer_current(
+    source: Any, name: str, indices: np.ndarray, surfaces: int
+) -> np.ndarray:
+    """Boozer current on the computed surfaces.
+
+    A transform restored from a precomputed ``boozmn`` file carries the
+    currents on the whole half grid only (``Boozer_I_all``); a transform
+    that has run carries them on the computed surfaces.
+    """
+    if np.asarray(getattr(source, name)).size:
+        return _array(source, name, (surfaces,))
+    return _array(source, f"{name}_all")[indices]
 
 
 def _require_parity(name: str, cosine: np.ndarray, sine: np.ndarray) -> None:
@@ -354,6 +369,7 @@ def convert_geometry(
     beta_average: float,
     poloidal_max: int,
     toroidal_max: int,
+    stellarator_symmetric: bool = True,
 ) -> ConvertedGeometry:
     nfp = int(source.nfp)
     surfaces = int(source.ns_b)
@@ -373,7 +389,10 @@ def convert_geometry(
     indices = indices.astype(np.int64, copy=False)
     expected_s = (np.arange(surfaces) + 0.5) / surfaces
     if np.max(np.abs(s - expected_s)) > 1.0e-10:
-        raise ValueError("VMEC half-grid is not uniformly spaced in normalized flux")
+        raise ValueError(
+            "the Boozer surfaces are not a centered uniform subset of the VMEC "
+            "half grid (for a boozmn file, its jlist)"
+        )
     theta, zeta = _angular_grid(source, poloidal_max, toroidal_max)
     radius, radius_s = _regular_tensor(source, "rmnc_b", "rmns_b", s, nfp)
     height, height_s = _regular_tensor(source, "zmnc_b", "zmns_b", s, nfp)
@@ -440,7 +459,11 @@ def convert_geometry(
     phip = _array(source, "phip")
     if phip.shape != (available + 1,):
         raise ValueError("booz_xform returned phip on an unsupported radial grid")
-    phip_half = 0.5 * (phip[indices] + phip[indices + 1])[:, None, None]
+    # phip is booz_xform's VMEC half-grid dPhi/ds with an unused axis entry,
+    # laid out like pres: computed surface j is entry j + 1. Averaging entries
+    # j and j + 1 mixed neighbouring surfaces and, for a restored boozmn file
+    # whose axis entry is zero, halved the first surface.
+    phip_half = phip[indices + 1][:, None, None]
     gm_values = ev(gm)
     jacobian = phip_half * gm_values
     geometry_jacobian_residual = _relative_max(geometry_jacobian, jacobian)
@@ -450,8 +473,8 @@ def convert_geometry(
             "VMEC geometry and Boozer Jacobian disagree: "
             f"{geometry_jacobian_residual:.6g}"
         )
-    current_i = _array(source, "Boozer_I", (surfaces,))[:, None, None]
-    current_g = _array(source, "Boozer_G", (surfaces,))[:, None, None]
+    current_i = _boozer_current(source, "Boozer_I", indices, surfaces)[:, None, None]
+    current_g = _boozer_current(source, "Boozer_G", indices, surfaces)[:, None, None]
     rotational_transform = _array(source, "iota", (available,))[indices]
     rotational_transform = rotational_transform[:, None, None]
     contra_t = rotational_transform / gm_values
@@ -510,8 +533,9 @@ def convert_geometry(
         name: _project(values, theta, zeta, nfp, poloidal_max, toroidal_max)
         for name, values in pointwise.items()
     }
-    for name, (cosine, sine) in harmonics.items():
-        _require_parity(name, cosine, sine)
+    if stellarator_symmetric:
+        for name, (cosine, sine) in harmonics.items():
+            _require_parity(name, cosine, sine)
 
     phi = _array(source, "phi", (available + 1,))
     chi = _array(source, "chi", (available + 1,))
@@ -559,4 +583,6 @@ def convert_geometry(
         raise ValueError(f"VMEC conversion failed field-identity checks: {residuals}")
     if not np.isfinite(beta_average):
         raise ValueError("VMEC volume-averaged beta is not finite")
-    return ConvertedGeometry(s, profiles, harmonics, residuals)
+    return ConvertedGeometry(
+        s, profiles, harmonics, residuals, stellarator_symmetric
+    )

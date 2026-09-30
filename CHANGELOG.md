@@ -67,6 +67,14 @@
   Boozer Jacobian, |B| and covariant-current identities share one 3e-2
   tolerance because all three measure the same booz_xform-versus-geometry
   Jacobian mismatch; converged VMEC 9.0 li383 now converts at M = N = 16.
+- Add `convert_boozer` for precomputed BOOZ_XFORM `boozmn` files (the export
+  equals the direct `convert_vmec` result bit for bit for the same
+  transform), convert asymmetric VMEC files with both parities and
+  `stellarator_symmetry="False"`, record `vmec_signgs` and
+  `booz_xform_source`, and refuse asymmetric equilibria in the parity-class
+  operator with a named `GlissArgumentError`. The converter read the
+  half-grid `phip` as an average of neighbouring entries; it now takes the
+  surface's own entry (#10, parts A and B).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 

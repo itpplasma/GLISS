@@ -5,6 +5,7 @@ module fixed_boundary_spectrum
     use compatible_three_component_problem, only: &
         build_compatible_three_component_problem, &
         compatible_three_component_allocation_error, &
+        compatible_three_component_asymmetric, &
         compatible_three_component_invalid, compatible_three_component_ok, &
         compatible_three_component_problem_t
     use dense_spectrum_support, only: certify_dense_spectrum_inertia, &
@@ -40,6 +41,7 @@ module fixed_boundary_spectrum
     integer, parameter, public :: fixed_boundary_assembly_error = -3
     integer, parameter, public :: fixed_boundary_solver_error = -4
     integer, parameter, public :: fixed_boundary_allocation_error = -5
+    integer, parameter, public :: fixed_boundary_asymmetric = -6
     integer, parameter, public :: fixed_boundary_n_theta = 64
     integer, parameter, public :: fixed_boundary_n_zeta = 64
 
@@ -183,6 +185,9 @@ contains
                 info = fixed_boundary_allocation_error
             else if (compatible_info == compatible_three_component_invalid) then
                 info = fixed_boundary_invalid
+            else if (compatible_info == compatible_three_component_asymmetric) &
+                    then
+                info = fixed_boundary_asymmetric
             else
                 info = fixed_boundary_assembly_error
             end if

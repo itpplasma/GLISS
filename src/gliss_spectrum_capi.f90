@@ -3,7 +3,8 @@ module gliss_spectrum_capi
         c_f_pointer, c_int, c_loc, c_null_ptr, c_ptr, c_size_t, c_sizeof
     use fixed_boundary_spectrum, only: build_fixed_boundary_problem, &
         fixed_boundary_allocation_error, &
-        fixed_boundary_invalid, fixed_boundary_ok, fixed_boundary_problem_t, &
+        fixed_boundary_asymmetric, fixed_boundary_invalid, fixed_boundary_ok, &
+        fixed_boundary_problem_t, &
         fixed_boundary_spectrum_result_t, fixed_boundary_unknown_count, &
         solve_fixed_boundary_class
     use gliss_c_abi_support, only: error_buffer_status, status_allocation_error, &
@@ -431,6 +432,11 @@ contains
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
                 "invalid fixed-boundary stability configuration")
+        else if (info == fixed_boundary_asymmetric) then
+            status = status_invalid_argument
+            call write_error(error_pointer, error_capacity, &
+                "the equilibrium breaks stellarator symmetry; the parity-" &
+                // "class operator requires it")
         else if (info == fixed_boundary_allocation_error) then
             status = status_allocation_error
             call write_error(error_pointer, error_capacity, &
