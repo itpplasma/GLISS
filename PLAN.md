@@ -90,6 +90,14 @@ of every external solver.
   resonant Pfirsch-Schlueter harmonics, and
   [#34](https://github.com/itpplasma/GLISS/issues/34) nonpositive truncated
   metric.
+- Roadmap work on this branch: precomputed `boozmn` and asymmetric VMEC
+  conversion with a named refusal in the parity-class operator (#10 parts A
+  and B; the coupled operator, part C, stays open), the FEEC convergence
+  certification (#13), the native test harness without path hacks (#14,
+  wheels stay with the release workflow) and documentation sources whose
+  quickstart runs in the suite (#15, hosting stays open). New finding:
+  [#35](https://github.com/itpplasma/GLISS/issues/35) first-order radial
+  convergence at the axis.
 - Upstream trackers stay open until the upstream reports are filed:
   [#30](https://github.com/itpplasma/GLISS/issues/30) GVEC CAS3D export and
   [#31](https://github.com/itpplasma/GLISS/issues/31) DCON default tolerances.
@@ -196,8 +204,15 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
   cylinder vertical threshold. Require analytical eigenvalues or independently
   derived marginal limits, both stable and unstable controls, density/field/length
   scaling, and units. Distinguish physical mass from artificial coefficient norms.
-- [ ] For FEEC degrees 1 through 4, measure radial convergence on at least three
+- [x] For FEEC degrees 1 through 4, measure radial convergence on at least three
   meshes, verify commuting derivatives and traces, and test both parity classes.
+  `test_radial_feec_convergence` measures the optimal L2-projection rates p+1
+  and p on three graded meshes with a monomial oracle and a corrupted-map
+  control ([#13](https://github.com/itpplasma/GLISS/issues/13)); the exact
+  cylinder covers both parity classes. The Solov'ev toroidal sweep converges
+  only O(h) in ns because the first radial element under-integrates
+  r-smooth integrands and hides a non-conforming |m| = 1 axis combination
+  ([#35](https://github.com/itpplasma/GLISS/issues/35)).
   Use smooth manufactured solutions for optimal rates and state the separate
   behavior of singular or continuum solutions.
   The new cylinder slow-cluster diagnostic demonstrates ordering-dependent
