@@ -10,6 +10,7 @@
 ! spurious unstable mode whose eigenvalue scaled like the radial mesh width,
 ! so both fixtures counted one negative eigenvalue.
 program test_solovev_axis_regularity
+    use, intrinsic :: iso_fortran_env, only: dp => real64
     use axisymmetric_spectrum, only: axisymmetric_spectrum_ok, &
         axisymmetric_spectrum_result_t, compute_axisymmetric_spectrum
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
@@ -19,15 +20,18 @@ program test_solovev_axis_regularity
 
     call get_command_argument(1, directory)
     if (len_trim(directory) == 0) error stop 'supply the fixture directory'
-    call check(trim(directory) // '/solovev_q1.035.nc', 1)
-    call check(trim(directory) // '/solovev_q1.045.nc', 0)
+    call check(trim(directory) // '/solovev_q1.035.nc', 1, 6)
+    call check(trim(directory) // '/solovev_q1.045.nc', 0, 6)
+    ! The wider table has near-null directions at the zero-shift inertia
+    ! probe; a growth-free block factorization must still resolve it.
+    call check(trim(directory) // '/solovev_q1.045.nc', 0, 10)
     write (*, '(a)') 'Solov''ev axis-regularity regression passed'
 
 contains
 
-    subroutine check(path, expected)
+    subroutine check(path, expected, poloidal_max)
         character(len=*), intent(in) :: path
-        integer, intent(in) :: expected
+        integer, intent(in) :: expected, poloidal_max
         type(gvec_cas3d_equilibrium_t) :: equilibrium
         type(axisymmetric_spectrum_result_t) :: result
         character(len=256) :: message
@@ -35,12 +39,19 @@ contains
 
         call read_gvec_cas3d_file(path, equilibrium, info)
         if (info /= reader_ok) error stop 'Solov''ev fixture read failed'
-        call compute_axisymmetric_spectrum(equilibrium, 1, 6, 2, .false., &
+        call compute_axisymmetric_spectrum(equilibrium, 1, poloidal_max, 2, &
+            .true., &
             result, info, message)
         if (info /= axisymmetric_spectrum_ok) error stop 'spectrum failed'
-        write (*, '(a,a,i0)') path, ' negative count ', result%negative_count
+        write (*, '(a,a,i0,a,es12.4,a,es10.2)') path, ' negative count ', &
+            result%negative_count, ' lowest ', result%lowest_eigenvalue, &
+            ' certificate ', result%certificate
         if (result%negative_count /= expected) &
             error stop 'n=1 stability disagrees with the DCON marginal point'
+        if ((result%lowest_eigenvalue < 0.0_dp) .neqv. (expected > 0)) &
+            error stop 'lowest eigenvalue sign disagrees with the inertia'
+        if (result%certificate >= abs(result%lowest_eigenvalue)) &
+            error stop 'certificate does not resolve the eigenvalue sign'
     end subroutine check
 
 end program test_solovev_axis_regularity

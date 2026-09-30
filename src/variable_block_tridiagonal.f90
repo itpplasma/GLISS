@@ -92,7 +92,7 @@ contains
         type(variable_block_factor_t), intent(out) :: factor
         integer, intent(out) :: info
         real(dp), allocatable :: coupled(:, :), work(:), before(:, :)
-        real(dp) :: update_scale
+        real(dp) :: diagonal_scale, update_scale
         integer :: block, current_width, j, maximum_width, previous_width
 
         call validate_variable_blocks(blocks, info)
@@ -112,9 +112,11 @@ contains
                     factor%schur(block)%values(j, j) - shift
             end do
             update_scale = 0.0_dp
+            diagonal_scale = 0.0_dp
             if (block > 1) then
                 previous_width = blocks%widths(block - 1)
                 before = factor%schur(block)%values
+                diagonal_scale = maxval(abs(before))
                 call update_variable_schur(block, previous_width, &
                     current_width, factor, blocks%lower(block - 1)%values, &
                     coupled, info)
@@ -138,11 +140,17 @@ contains
             factor%negative_count = factor%negative_count &
                 + pivot_negative_count(factor%schur(block)%values, &
                 factor%pivots(block)%values)
+            ! Only element growth (an update far above the block it
+            ! modifies, from a tiny earlier pivot) adds rounding beyond the
+            ! backward error of the matrix itself.
             if (block > 1) then
-                if (smallest_pivot(factor%schur(block)%values, &
-                    factor%pivots(block)%values) <= 64.0_dp &
-                    * epsilon(1.0_dp) * real(current_width + previous_width, &
-                    dp) * update_scale) factor%count_reliable = .false.
+                if (update_scale > 64.0_dp * diagonal_scale) then
+                    if (smallest_pivot(factor%schur(block)%values, &
+                        factor%pivots(block)%values) <= 64.0_dp &
+                        * epsilon(1.0_dp) * real(current_width &
+                        + previous_width, dp) * update_scale) &
+                        factor%count_reliable = .false.
+                end if
             end if
         end do
         factor%complete = .true.
