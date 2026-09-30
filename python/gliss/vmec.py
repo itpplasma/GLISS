@@ -248,6 +248,14 @@ def convert_vmec(
             f"toroidal_max (now {poloidal_max}, {toroidal_max}) or raise "
             "truncation_tolerance"
         )
+    positivity = converted.residuals.get("metric_positivity", 1.0)
+    if positivity <= 0.0:
+        raise ValueError(
+            "the exported metric harmonics are not positive definite "
+            f"(min det(g)/(g_tt g_zz) = {positivity:.3g}); increase "
+            f"poloidal_max and toroidal_max (now {poloidal_max}, "
+            f"{toroidal_max})"
+        )
     force_balance = converted.residuals["force_balance"]
     if force_balance > 1.0e-1:
         message = (

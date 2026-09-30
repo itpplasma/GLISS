@@ -9,8 +9,8 @@ module gliss_capi
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok, &
         reader_position_frame_error
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
-    use mercier_diagnostic, only: compute_mercier, mercier_ok, &
-        mercier_result_t
+    use mercier_diagnostic, only: compute_mercier, mercier_metric_error, &
+        mercier_ok, mercier_result_t
     implicit none
     private
 
@@ -260,6 +260,13 @@ contains
         end if
         call compute_mercier(context%equilibrium, int(n_theta), int(n_zeta), &
             mercier, info)
+        if (info == mercier_metric_error) then
+            status = status_compute_error
+            call write_error(error_pointer, error_capacity, &
+                "Mercier: the exported surface metric is not positive " &
+                // "definite; export the metric with more harmonics")
+            return
+        end if
         if (info /= mercier_ok) then
             status = status_compute_error
             call write_error(error_pointer, error_capacity, &

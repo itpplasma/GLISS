@@ -275,6 +275,28 @@ def _truncated_jacobian_residual(
     return _relative_max(truncated, reference)
 
 
+def _truncated_metric_positivity(
+    harmonics: Dict[str, Tuple[np.ndarray, np.ndarray]],
+    theta: np.ndarray,
+    zeta: np.ndarray,
+    nfp: int,
+) -> float:
+    """Smallest ``det(g)/(g_tt g_zz)`` of the exported tangential metric.
+
+    The metric is quadratic in the geometry, so its truncated series can lose
+    positive definiteness although the exact metric is positive; GLISS then
+    has a vanishing area element and |grad psi|.
+    """
+    g_tt, g_tz, g_zz = (
+        _reconstruct(harmonics[name], theta, zeta, nfp)[0]
+        for name in ("g_tt", "g_tz", "g_zz")
+    )
+    scale = g_tt * g_zz
+    if np.any(scale <= 0.0):
+        return -1.0
+    return float(np.min((scale - g_tz**2) / scale))
+
+
 def _force_balance_residual(
     harmonics: Dict[str, Tuple[np.ndarray, np.ndarray]],
     profiles: Dict[str, np.ndarray],
@@ -508,6 +530,9 @@ def convert_geometry(
     )
     residuals["truncated_jacobian"] = _truncated_jacobian_residual(
         harmonics, exact_position, s, theta, zeta, nfp
+    )
+    residuals["metric_positivity"] = _truncated_metric_positivity(
+        harmonics, theta, zeta, nfp
     )
     if (
         residuals["toroidal_flux"] > 1.0e-2

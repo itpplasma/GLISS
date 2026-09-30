@@ -12,6 +12,9 @@ module export_surface_geometry
     integer, parameter, public :: mercier_ok = 0
     integer, parameter, public :: mercier_invalid_input = 1
     integer, parameter, public :: mercier_reconstruction_error = 2
+    ! The reconstructed tangential metric is not positive definite, which a
+    ! truncated metric series of a regular chart can produce.
+    integer, parameter, public :: mercier_metric_error = 3
 
     real(dp), parameter, public :: two_pi = 2.0_dp * acos(-1.0_dp)
     real(dp), parameter, public :: mu0 = 2.0_dp * two_pi * 1.0e-7_dp
@@ -159,7 +162,7 @@ contains
             determinant = g_tt * g_zz - g_tz**2
             if (.not. tangential_metric_is_positive( &
                 g_tt, g_zz, determinant)) then
-                info = mercier_invalid_input
+                info = mercier_metric_error
                 return
             end if
         end do
@@ -482,8 +485,15 @@ contains
             surface%g_sz, info)
         if (info /= mercier_ok) return
 
-        surface%area_element = sqrt(max(surface%g_tt * surface%g_zz &
-            - surface%g_tz**2, 0.0_dp))
+        ! A nonpositive determinant is an error, not a zero area element:
+        ! |grad psi| would vanish and every flux-surface integral become 0/0.
+        surface%area_element = surface%g_tt * surface%g_zz - surface%g_tz**2
+        if (.not. tangential_metric_is_positive(surface%g_tt, surface%g_zz, &
+            surface%area_element)) then
+            info = mercier_metric_error
+            return
+        end if
+        surface%area_element = sqrt(surface%area_element)
         info = mercier_ok
     end subroutine load_surface
 

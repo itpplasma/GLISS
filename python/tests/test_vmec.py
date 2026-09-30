@@ -306,3 +306,27 @@ def test_truncated_jacobian_residual_detects_missing_harmonics():
         )
     assert residuals[0] > 0.1
     assert residuals[1] < 1e-12
+
+
+def test_truncated_metric_positivity_detects_indefinite_metric():
+    # g_tt = g_zz = 1 and g_tz = a cos(theta): det/(g_tt g_zz) = 1 - a^2 at
+    # theta = 0, positive only for |a| < 1.
+    theta = np.linspace(0.0, 2.0 * np.pi, 16, endpoint=False)
+    zeta = np.linspace(0.0, 2.0 * np.pi, 4, endpoint=False)
+
+    def pair(constant, first):
+        cosine = np.zeros((1, 2, 1))
+        cosine[0, 0, 0] = constant
+        cosine[0, 1, 0] = first
+        return cosine, np.zeros_like(cosine)
+
+    for amplitude, expected in ((0.5, 0.75), (1.5, -1.25)):
+        harmonics = {
+            "g_tt": pair(1.0, 0.0),
+            "g_zz": pair(1.0, 0.0),
+            "g_tz": pair(0.0, amplitude),
+        }
+        positivity = _vmec_geometry._truncated_metric_positivity(
+            harmonics, theta, zeta, 1
+        )
+        assert positivity == pytest.approx(expected)

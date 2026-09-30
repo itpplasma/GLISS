@@ -3,7 +3,8 @@ module mercier_diagnostic
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use export_surface_geometry, only: beta_from_positions, beta_mode_denominator, &
         build_angular_grids, build_kernel_geometry, differentiate_pair, &
-        grid_mean, load_surface, mercier_invalid_input, mercier_ok, &
+        grid_mean, load_surface, mercier_invalid_input, mercier_metric_error, &
+        mercier_ok, &
         magnetic_differential_modes, mercier_reconstruction_error, mu0, &
         resonance_half_width, solve_beta_derivatives, surface_iota_spread, &
         surface_data_t, surface_derivatives, surface_profiles_t, &
@@ -19,6 +20,7 @@ module mercier_diagnostic
     public :: mercier_ok
     public :: mercier_invalid_input
     public :: mercier_reconstruction_error
+    public :: mercier_metric_error
     public :: surface_data_t
 
     type, public :: mercier_d_terms_t

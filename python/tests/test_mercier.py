@@ -79,3 +79,11 @@ def test_mercier_objective_is_instability_of_least_stable_surface(monkeypatch):
     stable = (profile[0], np.array([0.3, 0.2, 0.1]))
     monkeypatch.setattr(gliss.mercier, "mercier_profile", lambda *a, **k: stable)
     assert gliss.mercier.mercier_objective("unused.nc") == pytest.approx(-0.1)
+
+
+def test_mercier_objective_rejects_nan_profile(monkeypatch):
+    # A NaN surface must not reach an optimizer as a NaN objective.
+    profile = (np.array([0.25, 0.5]), np.array([0.3, np.nan]))
+    monkeypatch.setattr(gliss.mercier, "mercier_profile", lambda *a, **k: profile)
+    with pytest.raises(RuntimeError, match="non-finite"):
+        gliss.mercier.mercier_objective("unused.nc")

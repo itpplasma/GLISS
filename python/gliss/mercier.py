@@ -39,4 +39,9 @@ def mercier_objective(path: PathLike, n_theta: int = 64, n_zeta: int = 64) -> fl
     _, d_mercier = mercier_profile(path, n_theta=n_theta, n_zeta=n_zeta)
     if d_mercier.size == 0:
         raise RuntimeError("GLISS returned an empty Mercier profile")
+    if not np.all(np.isfinite(d_mercier)):
+        raise RuntimeError(
+            "GLISS returned a non-finite Mercier profile; an optimizer must "
+            "not minimize NaN"
+        )
     return float(-np.min(d_mercier))

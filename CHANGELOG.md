@@ -49,6 +49,11 @@
   rational iota into Mercier spikes (QAS3 D_Mercier -6.9 at iota = 2/3 now
   0.144 against VMEC 0.1435) and spurious negative directions. Nonresonant
   results change by O((w/D)^2) (#33).
+- Report a nonpositive exported surface metric as an error instead of
+  clipping det(g) to zero, which made every Mercier flux-surface integral
+  0/0 and returned NaN profiles without an error. `convert_vmec` rejects
+  metric harmonics that are not positive definite, and `mercier_objective`
+  raises on a non-finite profile (#34).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 
