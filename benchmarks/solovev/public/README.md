@@ -64,3 +64,21 @@ These are not GLISS defects; they are tracked in GLISS until reported to GVEC.
    parity; after item 4 the odd `g_st`, `g_sz` must use the sine parity.
 
 The patch fixes 1, 2, 4 and 5; `run.sh` passes `--winding -1` for 3.
+
+## Radial convergence
+
+`convergence.sh OUT 1.035` exports the same GVEC state at ns = 16, 32 and 64
+(M = 8) and solves the n = 1 family for FEEC degrees 1 to 4:
+
+| ns | degree 1 | degree 2 | degree 3 | degree 4 |
+|---|---|---|---|---|
+| 16 | +6.98e-3 (stable) | −2.338e-4 | −3.867e-4 | −3.912e-4 |
+| 32 | +1.83e-3 (stable) | −2.887e-4 | −3.056e-4 | −3.058e-4 |
+| 64 | +3.47e-4 (stable) | −2.589e-4 | −2.638e-4 | −2.640e-4 |
+
+Degree convergence at fixed ns is fast, but mesh convergence is first order,
+and degree 1 misses the instability. The first radial element integrates
+integrands that are smooth in sqrt(s) with a Gauss rule in s, and that
+under-integration also hides an axis mode at degree 4
+([#35](https://github.com/itpplasma/GLISS/issues/35)).
+
