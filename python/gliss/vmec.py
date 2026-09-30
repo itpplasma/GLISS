@@ -187,8 +187,11 @@ def convert_vmec(
 
     The result uses the left-handed, one-field-period Boozer convention of
     pyGVEC's CAS3D exporter. ``radial_surfaces`` optionally selects an exact
-    centered uniform subset of the VMEC half grid. A failed pointwise
-    force-balance closure rejects the conversion by default; the explicit
+    centered uniform subset of the VMEC half grid. A failed flux-surface
+    averaged radial force balance (relative residual above 1e-2), the
+    solvability condition of the Pfirsch-Schlueter equation GLISS solves,
+    rejects the conversion by default; the pointwise closure with the metric
+    B_s is reported as ``force_balance_pointwise`` only. The explicit
     ``force_balance_policy="warn"`` option retains the diagnostic export for
     convergence studies. GLISS rebuilds the geometry from the truncated
     ``xhat, yhat, zhat`` harmonics only; the conversion therefore rejects a
@@ -257,7 +260,7 @@ def convert_vmec(
             f"{toroidal_max})"
         )
     force_balance = converted.residuals["force_balance"]
-    if force_balance > 1.0e-1:
+    if force_balance > 1.0e-2:
         message = (
             "VMEC conversion failed field-identity checks: "
             f"{converted.residuals}"

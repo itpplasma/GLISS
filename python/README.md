@@ -92,9 +92,17 @@ contain a vacuum-region mesh or conducting-wall model for free-boundary work.
 
 Before writing, GLISS checks the chart orientation, surface metric, Boozer
 Jacobian, magnetic-field strength, flux identities, currents, symmetry and
-force balance. A conversion with an interior normalized force-balance
-residual above 0.1 is rejected. This is a corruption and gross-resolution
-gate, not a literature-validation tolerance. The residuals, source basename
+force balance. The Boozer Jacobian, |B| and covariant-current identities
+share a 3e-2 tolerance, because all three compare the booz_xform Jacobian with
+the geometric one (1-2e-2 near the edge of converged VMEC stellarators). A
+conversion whose flux-surface-averaged radial force balance, the solvability
+condition of the Pfirsch-Schlueter equation GLISS solves, has a normalized
+interior residual above 1e-2 is rejected; converged equilibria reach 1e-4 to
+1e-3, and a convention error gives order one. The pointwise closure with the
+metric B_s (a few percent to 0.25 for QAS3 and li383 at any M, N or ns,
+although the formula reproduces W7-X exactly) is stored as
+`force_balance_pointwise` for diagnosis only. These are corruption and
+gross-resolution gates, not literature-validation tolerances. The residuals, source basename
 and Boozer transform resolution are stored as NetCDF attributes so validation
 runs can reproduce the exact preprocessing choice.
 

@@ -330,3 +330,52 @@ def test_truncated_metric_positivity_detects_indefinite_metric():
             harmonics, theta, zeta, 1
         )
         assert positivity == pytest.approx(expected)
+
+
+def test_force_balance_gate_uses_the_flux_surface_average():
+    # Uniform fields with mu0 p' J + F G' + P I' = 0 close the averaged
+    # radial force balance exactly; an angular metric B_s = g_st B^theta
+    # (g_st = a sin theta) breaks only the pointwise closure, which GLISS
+    # does not use because it solves the magnetic differential equation.
+    ns = 12
+    s = np.linspace(0.06, 0.88, ns)
+    theta = np.linspace(0.0, 2.0 * np.pi, 16, endpoint=False)
+    zeta = np.linspace(0.0, 2.0 * np.pi, 4, endpoint=False)
+
+    def pair(cosine0=0.0, sine1=0.0):
+        cosine = np.zeros((ns, 2, 1))
+        sine = np.zeros((ns, 2, 1))
+        cosine[:, 0, 0] = cosine0
+        sine[:, 1, 0] = sine1
+        return cosine, sine
+
+    phi_slope, chi_slope, pressure_slope = 0.8, 0.3, -2.0e4
+    jacobian, g_slope = 1.5, 0.7
+    # mu0 p' J + F G' + P I' = 0 with F = -Phi', P = -chi', I' = 0.
+    g_zeta = 4.0e-7 * np.pi * pressure_slope * jacobian / phi_slope
+    profiles = {
+        "p": pressure_slope * s,
+        "Phi": phi_slope * s,
+        "chi": chi_slope * s,
+        "B_theta_avg": np.zeros(ns),
+        "B_zeta_avg": g_zeta * s,
+        "iota": np.full(ns, chi_slope / phi_slope),
+    }
+    for amplitude, expected_pointwise in ((0.0, False), (0.2, True)):
+        harmonics = {
+            "Jac": pair(cosine0=jacobian),
+            "B_contra_t": pair(cosine0=g_slope),
+            "B_contra_z": pair(cosine0=g_slope),
+            "g_st": pair(sine1=amplitude),
+            "g_sz": pair(),
+        }
+        average, pointwise = _vmec_geometry._force_balance_residual(
+            harmonics, profiles, s, theta, zeta, 1
+        )
+        assert average < 1.0e-12
+        assert (pointwise > 1.0e-2) == expected_pointwise
+    profiles["B_zeta_avg"] = 2.0 * g_zeta * s
+    average, _ = _vmec_geometry._force_balance_residual(
+        harmonics, profiles, s, theta, zeta, 1
+    )
+    assert average > 1.0e-1

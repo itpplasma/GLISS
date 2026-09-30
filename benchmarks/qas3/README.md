@@ -78,9 +78,8 @@ Fixed-boundary stability against the current fraction:
     0.75, where its own sign flips with ns (33 stable, 65 and 129 unstable),
     and GLISS is stable.
   - D_curr differs by 10–20 % for li383 and QAS below s = 0.4.
-  - `convert_vmec` rejects converged VMEC 9.0 li383/QAS outputs in its |B|
-    consistency check (residual 1.3e-2 > 5e-3). Zeroing Nyquist-only |B|
-    harmonics brings it to 4e-3.
-  - The `convert_vmec` force-balance residual is 0.1–0.26 for QAS3 even at
-    zero pressure. It does not change from M = N = 8 to 16, and the N_FP
-    scaling of the poloidal-flux term is confirmed (removing it gives 0.52).
+- `convert_vmec` used to reject converged VMEC 9.0 li383 and QAS outputs.
+  Its |B| and current identities now share the Boozer Jacobian tolerance,
+  and the averaged radial force balance is gated instead of the pointwise
+  metric closure. li383 converts at M = N = 16; QAS needs more harmonics
+  (the Jacobian truncation check reports 0.17 at 16).

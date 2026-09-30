@@ -59,6 +59,14 @@
   and the mapped derivative) on three graded meshes, monomials up to the
   space degree are reproduced to roundoff, and a corrupted derivative-map
   entry is detected (#13).
+- `convert_vmec` gates on the flux-surface-averaged radial force balance
+  (the solvability condition of the Pfirsch-Schlueter equation GLISS
+  solves, 2e-4 for converged QAS3 and 1e-3 for li383) instead of the
+  pointwise metric-B_s closure, which is 0.1-0.25 for VMEC stellarators at
+  any resolution and is now reported as `force_balance_pointwise`. The
+  Boozer Jacobian, |B| and covariant-current identities share one 3e-2
+  tolerance because all three measure the same booz_xform-versus-geometry
+  Jacobian mismatch; converged VMEC 9.0 li383 now converts at M = N = 16.
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 

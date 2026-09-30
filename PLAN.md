@@ -96,10 +96,11 @@ of every external solver.
 - `benchmarks/qas3` compares STELLOPT VMEC, TERPSICHORE 1.2 and GLISS on the
   QAS3 family. The TERPSICHORE replay agrees to 1e-8. Open, cause not
   established: the independent critical current (TERPSICHORE unstable at
-  0.75 of the base current, GLISS stable), D_curr differences of 10-20 % for
-  li383 and QAS below s = 0.4, the `convert_vmec` |B| gate on VMEC 9.0
-  Nyquist spectra, and a `convert_vmec` force-balance residual of 0.1-0.26
-  that does not converge with M, N.
+  0.75 of the base current, GLISS stable) and D_curr differences of 10-20 %
+  for li383 and QAS below s = 0.4. The `convert_vmec` force-balance and |B|
+  gates were resolved: the pointwise metric-B_s closure (0.1-0.26 at any M,
+  N, ns and Boozer resolution, while the formula reproduces W7-X with unit
+  coefficients) is a diagnostic, and the averaged balance is gated.
 - Reduced quadrature of the compression terms keeps the scheme non-variational:
   discrete eigenvalues are not upper bounds (p=1 cylinder fast modes fall
   slightly below the exact values). Near a shearless rational surface the
@@ -179,7 +180,7 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
   M36 Solov'ev export. Only the parity factor (`s^(1/2)` for odd m, `s` for
   even m) is now divided out; an exact shaped torus gives the same Jacobian
   error (2.5e-6 at 64 surfaces, set by edge extrapolation) for M16 through M36.
-- [ ] Replace fixed left-handed result metadata with the actual chart
+- [x] Replace fixed left-handed result metadata with the actual chart
   orientation ([#21](https://github.com/itpplasma/GLISS/issues/21)).
 - [ ] Complete production analytical coverage and public-API qualification.
   `benchmarks/analytic/run.sh` now runs an exact straight-cylinder case through
