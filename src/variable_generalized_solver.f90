@@ -41,16 +41,29 @@ contains
         count = factor%negative_count
     end subroutine variable_generalized_inertia
 
+    ! The mass factorization that validates the pencil costs as much as a
+    ! dense solve; callers diagnosing many vectors of one validated pencil
+    ! pass validated=.true. after the first call.
     subroutine variable_generalized_diagnostics(stiffness, mass, vector, &
-            eigenvalue, quotient, residual, resolution, info)
+            eigenvalue, quotient, residual, resolution, info, validated)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), contiguous, intent(in) :: vector(:)
         real(dp), intent(in) :: eigenvalue
         real(dp), intent(out) :: quotient, residual, resolution
         integer, intent(out) :: info
+        logical, intent(in), optional :: validated
         real(dp) :: mass_image(size(vector)), squared_norm
+        logical :: skip_validation
 
-        call validate_generalized_problem(stiffness, mass, info)
+        skip_validation = .false.
+        if (present(validated)) skip_validation = validated
+        if (skip_validation) then
+            info = variable_generalized_invalid
+            if (.not. matching_variable_blocks(stiffness, mass)) return
+            info = variable_generalized_ok
+        else
+            call validate_generalized_problem(stiffness, mass, info)
+        end if
         if (info /= variable_generalized_ok) return
         info = variable_generalized_invalid
         if (.not. ieee_is_finite(eigenvalue)) return

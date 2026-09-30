@@ -701,7 +701,10 @@ returns the result.
 
 `solve_full_spectrum()` returns both parity classes. It runs the certified
 block solve and then a dense LAPACK solve for each class. The dense stage costs
-`O(unknowns^3)` time and `O(unknowns^2)` memory; use `solve()` or
+`O(unknowns^3)` time and `O(unknowns^2)` memory: dense pairs that meet the
+residual and mass-orthonormality criteria are kept with their Rayleigh
+quotients, only the others are refined individually, and every resolved gap is
+certified by a Sturm count on one congruent tridiagonal reduction. Use `solve()` or
 `solve_class()` when only the stability margin is needed. NumPy and native
 allocation failures raise typed GLISS exceptions. `StabilityProblem.close()`
 is idempotent. Calls on one problem must not overlap, but independently

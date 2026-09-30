@@ -5,7 +5,8 @@ module dense_spectrum_support
         fixed_boundary_bracket_ok
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use variable_block_tridiagonal, only: apply_variable_block_tridiagonal, &
-        variable_block_ok, variable_block_tridiagonal_t
+        variable_block_ok, variable_block_to_dense, &
+        variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
         iterate_variable_generalized_eigenvalue, &
         variable_generalized_diagnostics, variable_generalized_inertia, &
@@ -24,6 +25,32 @@ module dense_spectrum_support
     public :: refine_dense_eigenpair
     public :: refine_dense_spectrum
     public :: unpermute_dense_vectors
+
+    interface
+        subroutine dpotrf(uplo, n, a, lda, info)
+            import :: dp
+            character(len=1), intent(in) :: uplo
+            integer, intent(in) :: n, lda
+            real(dp), intent(inout) :: a(lda, *)
+            integer, intent(out) :: info
+        end subroutine dpotrf
+        subroutine dsygst(itype, uplo, n, a, lda, b, ldb, info)
+            import :: dp
+            integer, intent(in) :: itype, n, lda, ldb
+            character(len=1), intent(in) :: uplo
+            real(dp), intent(inout) :: a(lda, *)
+            real(dp), intent(in) :: b(ldb, *)
+            integer, intent(out) :: info
+        end subroutine dsygst
+        subroutine dsytrd(uplo, n, a, lda, d, e, tau, work, lwork, info)
+            import :: dp
+            character(len=1), intent(in) :: uplo
+            integer, intent(in) :: n, lda, lwork
+            real(dp), intent(inout) :: a(lda, *)
+            real(dp), intent(out) :: d(*), e(*), tau(*), work(*)
+            integer, intent(out) :: info
+        end subroutine dsytrd
+    end interface
 
 contains
 
@@ -60,13 +87,18 @@ contains
         info = dense_spectrum_ok
     end subroutine certify_dense_spectrum_orthogonality
 
+    ! Inertia at every resolved gap midpoint.  The Cholesky congruence
+    ! K - sigma M = U^T (C - sigma I) U, C = U^(-T) K U^(-1), preserves the
+    ! count, and one orthogonal tridiagonal reduction of C gives Sturm counts
+    ! in O(n) per shift instead of one dense factorization per gap.
     subroutine certify_dense_spectrum_inertia(stiffness, mass, eigenvalues, &
             residuals, resolutions, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: eigenvalues(:), residuals(:), resolutions(:)
         integer, intent(out) :: info
+        real(dp), allocatable :: diagonal(:), offdiagonal(:)
         real(dp) :: gap, shift, uncertainty
-        integer :: count, index
+        integer :: index
 
         info = dense_spectrum_invalid
         if (size(eigenvalues) < 1) return
@@ -76,8 +108,12 @@ contains
         if (.not. all(ieee_is_finite(residuals))) return
         if (.not. all(ieee_is_finite(resolutions))) return
         if (any(residuals < 0.0_dp) .or. any(resolutions < 0.0_dp)) return
+        if (any(eigenvalues(2:) < eigenvalues(:size(eigenvalues) - 1))) return
+        call congruent_tridiagonal(stiffness, mass, diagonal, offdiagonal, &
+            info)
+        if (info /= dense_spectrum_ok) return
+        info = dense_spectrum_invalid
         do index = 1, size(eigenvalues) - 1
-            if (eigenvalues(index) > eigenvalues(index + 1)) return
             if (eigenvalues(index) == eigenvalues(index + 1)) cycle
             gap = eigenvalues(index + 1) - eigenvalues(index)
             uncertainty = residuals(index) + resolutions(index) &
@@ -87,29 +123,73 @@ contains
                 + 0.5_dp * gap
             if (shift <= eigenvalues(index)) cycle
             if (shift >= eigenvalues(index + 1)) cycle
-            call variable_generalized_inertia(stiffness, mass, shift, count, &
-                info)
-            if (info /= variable_generalized_ok) then
-                info = dense_spectrum_invalid
-                return
-            end if
-            if (count /= index) then
-                info = dense_spectrum_invalid
-                return
-            end if
+            if (sturm_count(diagonal, offdiagonal, shift) /= index) return
         end do
         info = dense_spectrum_ok
     end subroutine certify_dense_spectrum_inertia
+
+    subroutine congruent_tridiagonal(stiffness, mass, diagonal, offdiagonal, &
+            info)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), allocatable, intent(out) :: diagonal(:), offdiagonal(:)
+        integer, intent(out) :: info
+        real(dp), allocatable :: dense_k(:, :), dense_m(:, :), tau(:), work(:)
+        integer :: allocation_status, n, status
+
+        info = dense_spectrum_invalid
+        call variable_block_to_dense(stiffness, dense_k, status)
+        if (status /= variable_block_ok) return
+        call variable_block_to_dense(mass, dense_m, status)
+        if (status /= variable_block_ok) return
+        n = size(dense_k, 1)
+        info = dense_spectrum_allocation
+        allocate (diagonal(n), offdiagonal(max(1, n - 1)), tau(max(1, n - 1)), &
+            work(64 * n), stat=allocation_status)
+        if (allocation_status /= 0) return
+        info = dense_spectrum_invalid
+        call dpotrf("U", n, dense_m, n, status)
+        if (status /= 0) return
+        call dsygst(1, "U", n, dense_k, n, dense_m, n, status)
+        if (status /= 0) return
+        call dsytrd("U", n, dense_k, n, diagonal, offdiagonal, tau, work, &
+            size(work), status)
+        if (status /= 0) return
+        if (.not. all(ieee_is_finite(diagonal))) return
+        if (.not. all(ieee_is_finite(offdiagonal))) return
+        info = dense_spectrum_ok
+    end subroutine congruent_tridiagonal
+
+    ! Number of eigenvalues of the symmetric tridiagonal matrix below shift,
+    ! from the signs of the LDL^T pivots with the usual tiny-pivot guard.
+    pure function sturm_count(diagonal, offdiagonal, shift) result(count)
+        real(dp), intent(in) :: diagonal(:), offdiagonal(:), shift
+        integer :: count
+        real(dp) :: pivot, guard
+        integer :: i
+
+        guard = tiny(1.0_dp) / epsilon(1.0_dp)
+        count = 0
+        pivot = diagonal(1) - shift
+        if (abs(pivot) < guard) pivot = -guard
+        if (pivot < 0.0_dp) count = 1
+        do i = 2, size(diagonal)
+            pivot = diagonal(i) - shift - offdiagonal(i - 1)**2 / pivot
+            if (abs(pivot) < guard) pivot = -guard
+            if (pivot < 0.0_dp) count = count + 1
+        end do
+    end function sturm_count
 
     subroutine refine_dense_spectrum(stiffness, mass, controls, eigenvalues, &
             eigenvectors, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         type(fixed_boundary_solver_controls_t), intent(in) :: controls
-        real(dp), intent(inout) :: eigenvalues(:), eigenvectors(:, :)
+        real(dp), intent(inout) :: eigenvalues(:)
+        real(dp), contiguous, intent(inout) :: eigenvectors(:, :)
         integer, intent(out) :: info
-        real(dp), allocatable :: seeds(:), vector(:)
-        real(dp) :: eigenvalue, residual, resolution
-        integer :: allocation_status, index
+        real(dp), allocatable :: seeds(:), vector(:), images(:, :)
+        real(dp) :: eigenvalue, residual, resolution, tolerance
+        integer :: allocation_status, index, other
+        logical :: keep
 
         info = dense_spectrum_invalid
         if (size(eigenvalues) < 1) return
@@ -121,13 +201,54 @@ contains
         info = dense_spectrum_allocation
         allocate (seeds, source=eigenvalues, stat=allocation_status)
         if (allocation_status /= 0) return
+        allocate (images(size(eigenvalues), size(eigenvalues)), &
+            stat=allocation_status)
+        if (allocation_status /= 0) return
+        tolerance = 64.0_dp * sqrt(epsilon(1.0_dp))
         do index = 1, size(eigenvalues)
+            ! A dense pair is kept when it meets the inverse-iteration
+            ! residual criterion and is mass orthonormal to every pair kept
+            ! before it; the others are bracketed by index and refined.
+            call variable_generalized_diagnostics(stiffness, mass, &
+                eigenvectors(:, index), eigenvalues(index), eigenvalue, &
+                residual, resolution, info, validated=index > 1)
+            if (info /= variable_generalized_ok) then
+                info = dense_spectrum_invalid
+                return
+            end if
+            call apply_variable_block_tridiagonal(mass, &
+                eigenvectors(:, index), images(:, index), info)
+            if (info /= variable_block_ok) then
+                info = dense_spectrum_invalid
+                return
+            end if
+            keep = residual <= max(controls%residual_relative &
+                * max(1.0_dp, abs(eigenvalues(index))), resolution)
+            if (keep) keep = abs(dot_product(eigenvectors(:, index), &
+                images(:, index)) - 1.0_dp) <= tolerance
+            do other = 1, index - 1
+                if (.not. keep) exit
+                keep = abs(dot_product(eigenvectors(:, other), &
+                    images(:, index))) <= tolerance
+            end do
+            if (keep) then
+                ! The Rayleigh quotient of a kept vector is more accurate than
+                ! the dense eigenvalue (quadratic in the vector error).
+                eigenvalues(index) = eigenvalue
+                cycle
+            end if
             call refine_dense_eigenpair(stiffness, mass, controls, seeds, &
                 index, eigenvectors(:, index), eigenvalue, vector, residual, &
                 resolution, info)
             if (info /= dense_spectrum_ok) return
             eigenvalues(index) = eigenvalue
             eigenvectors(:, index) = vector
+            call apply_variable_block_tridiagonal(mass, &
+                eigenvectors(:, index), images(:, index), info)
+            if (info /= variable_block_ok) then
+                info = dense_spectrum_invalid
+                return
+            end if
         end do
         info = dense_spectrum_ok
     end subroutine refine_dense_spectrum
@@ -291,7 +412,7 @@ contains
             call variable_generalized_diagnostics(stiffness, mass, &
                 eigenvectors(:, index), eigenvalues(index), &
                 rayleigh_quotients(index), residuals(index), &
-                resolutions(index), info)
+                resolutions(index), info, validated=index > 1)
             if (info /= variable_generalized_ok) then
                 info = dense_spectrum_invalid
                 return
