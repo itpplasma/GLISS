@@ -29,6 +29,8 @@ module scalar_potential_vacuum
     real(dp), parameter :: pi = acos(-1.0_dp)
     ! Relative node mismatch below which a rotation is a mesh symmetry.
     real(dp), parameter :: symmetry_tolerance = 1.0e-10_dp
+    ! Relative amplitude below which a sector harmonic carries no data.
+    real(dp), parameter :: excitation_tolerance = 1.0e-12_dp
 
     public :: assemble_exterior_vacuum, edge_triangle_centroids
 
@@ -119,7 +121,7 @@ contains
         real(dp), allocatable :: datum(:, :, :), double_layer(:, :, :)
         real(dp), allocatable :: single_layer(:, :, :), harmonic(:, :, :)
         integer, allocatable :: order(:, :), owner(:), status(:)
-        real(dp) :: average, weight
+        real(dp) :: average, scale, weight
         integer :: block, column, data, harmonics, j, plasma_block
         integer :: plasma_count, row, sectors, total, wall_block
 
@@ -194,11 +196,13 @@ contains
             order, plasma_count, plasma_block, double_layer, single_layer)
 
         harmonics = sectors / 2 + 1
+        ! Parseval: the transformed data of all harmonics have this norm.
+        scale = sqrt(real(sectors, dp)) * norm2(datum)
         allocate (harmonic(data, data, harmonics), status(harmonics))
         !$omp parallel do schedule(dynamic) if (harmonics > 1)
         do j = 1, harmonics
             call solve_harmonic(j - 1, sectors, double_layer, single_layer, &
-                datum, area(1:plasma_block), present(wall), total, &
+                datum, area(1:plasma_block), present(wall), total, scale, &
                 harmonic(:, :, j), status(j))
         end do
         !$omp end parallel do
@@ -293,10 +297,10 @@ contains
     ! The walled region is bounded, so harmonic 0 carries the free constant
     ! of the Neumann potential, fixed by a zero mean.
     subroutine solve_harmonic(j, sectors, double_layer, single_layer, datum, &
-            area, walled, total, energy, info)
+            area, walled, total, scale, energy, info)
         integer, intent(in) :: j, sectors, total
         real(dp), intent(in) :: double_layer(:, :, :), single_layer(:, :, :)
-        real(dp), intent(in) :: datum(:, :, :), area(:)
+        real(dp), intent(in) :: datum(:, :, :), area(:), scale
         logical, intent(in) :: walled
         real(dp), intent(out) :: energy(:, :)
         integer, intent(out) :: info
@@ -312,6 +316,11 @@ contains
         block = size(double_layer, 1)
         plasma_block = size(single_layer, 2)
         data = size(datum, 3)
+        ! A harmonic the data do not excite adds nothing to the energy: its
+        ! transformed data are roundoff of the Parseval scale, and its energy
+        ! is quadratic in them. It returns zero without a solve.
+        energy = 0.0_dp
+        info = 0
         do sector = 1, sectors
             angle = 2.0_dp * pi * real(modulo(j * (sector - 1), sectors), dp) &
                 / real(sectors, dp)
@@ -328,17 +337,20 @@ contains
             end if
             count = block
             if (walled .and. j == 0) count = block + 1
+            allocate (transformed(plasma_block, data))
+            transformed = 0.0_dp
+            do sector = 1, sectors
+                transformed = transformed + phase(sector) * datum(:, sector, :)
+            end do
+            if (norm2(transformed) <= excitation_tolerance * scale) return
             allocate (system(count, count), rhs(count, data), &
-                transformed(plasma_block, data), layer(block, plasma_block), &
-                pivots(count))
+                layer(block, plasma_block), pivots(count))
             system = 0.0_dp
             layer = 0.0_dp
-            transformed = 0.0_dp
             do sector = 1, sectors
                 system(1:block, 1:block) = system(1:block, 1:block) &
                     + phase(sector) * double_layer(:, :, sector)
                 layer = layer + phase(sector) * single_layer(:, :, sector)
-                transformed = transformed + phase(sector) * datum(:, sector, :)
             end do
             rhs = 0.0_dp
             call dgemm("N", "N", block, data, plasma_block, 1.0_dp, layer, &
@@ -356,19 +368,23 @@ contains
                 end do
             end do
         else
+            allocate (transformed_c(plasma_block, data))
+            transformed_c = (0.0_dp, 0.0_dp)
+            do sector = 1, sectors
+                transformed_c = transformed_c + conjg(rotation(sector)) &
+                    * datum(:, sector, :)
+            end do
+            if (sqrt(sum(abs(transformed_c)**2)) &
+                <= excitation_tolerance * scale) return
             allocate (system_c(block, block), rhs_c(block, data), &
-                transformed_c(plasma_block, data), &
                 layer_c(block, plasma_block), pivots(block))
             system_c = (0.0_dp, 0.0_dp)
             layer_c = (0.0_dp, 0.0_dp)
-            transformed_c = (0.0_dp, 0.0_dp)
             do sector = 1, sectors
                 system_c = system_c + rotation(sector) &
                     * double_layer(:, :, sector)
                 layer_c = layer_c + rotation(sector) &
                     * single_layer(:, :, sector)
-                transformed_c = transformed_c + conjg(rotation(sector)) &
-                    * datum(:, sector, :)
             end do
             call zgemm("N", "N", block, data, plasma_block, &
                 (1.0_dp, 0.0_dp), layer_c, block, transformed_c, &
