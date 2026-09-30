@@ -4,7 +4,8 @@ module mercier_diagnostic
     use export_surface_geometry, only: beta_from_positions, beta_mode_denominator, &
         build_angular_grids, build_kernel_geometry, differentiate_pair, &
         grid_mean, load_surface, mercier_invalid_input, mercier_ok, &
-        mercier_reconstruction_error, mu0, solve_beta_derivatives, &
+        magnetic_differential_modes, mercier_reconstruction_error, mu0, &
+        solve_beta_derivatives, &
         surface_data_t, surface_derivatives, surface_profiles_t, &
         surface_values, two_pi
     use gvec_cas3d_reconstruction, only: project_harmonic_grid, &
@@ -424,16 +425,20 @@ contains
         real(dp), allocatable, intent(out) :: d_beta_zeta(:, :)
         type(harmonic_pair_t) :: d_pair
         real(dp), allocatable :: discard_values(:, :)
+        integer, allocatable :: poloidal(:), toroidal(:)
         real(dp) :: denominator, d_denominator, scale, mode_m, mode_n, mode_norm
         integer :: idx_m, idx_n, rec_info
 
+        call magnetic_differential_modes(equilibrium%poloidal_modes, &
+            equilibrium%toroidal_modes, size(theta), size(zeta), poloidal, &
+            toroidal)
         allocate (d_pair%cosine, mold=beta_harmonics%cosine)
         allocate (d_pair%sine, mold=beta_harmonics%sine)
         scale = max(abs(toroidal_flux_slope), abs(poloidal_flux_slope))
-        do idx_n = 1, size(equilibrium%toroidal_modes)
-            mode_n = real(equilibrium%toroidal_modes(idx_n), dp)
-            do idx_m = 1, size(equilibrium%poloidal_modes)
-                mode_m = real(equilibrium%poloidal_modes(idx_m), dp)
+        do idx_n = 1, size(toroidal)
+            mode_n = real(toroidal(idx_n), dp)
+            do idx_m = 1, size(poloidal)
+                mode_m = real(poloidal(idx_m), dp)
                 call beta_mode_denominator(mode_m, mode_n, poloidal_flux_slope, &
                     toroidal_flux_slope, denominator, mode_norm)
                 if (abs(denominator) <= 4.0_dp * epsilon(1.0_dp) * mode_norm) then
@@ -451,8 +456,7 @@ contains
                 end if
             end do
         end do
-        call reconstruct_harmonic_grid(d_pair, 1, &
-            equilibrium%poloidal_modes, equilibrium%toroidal_modes, theta, &
+        call reconstruct_harmonic_grid(d_pair, 1, poloidal, toroidal, theta, &
             zeta, discard_values, d_beta_theta, d_beta_zeta, rec_info)
     end subroutine beta_flux_slope_derivative
 

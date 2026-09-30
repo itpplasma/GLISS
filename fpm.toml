@@ -208,3 +208,7 @@ main = "test_gvec_cas3d_integrals.f90"
 [[test]]
 name = "axis_regular_displacement"
 main = "test_axis_regular_displacement.f90"
+
+[[test]]
+name = "magnetic_differential_equation"
+main = "test_magnetic_differential_equation.f90"

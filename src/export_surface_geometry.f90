@@ -43,6 +43,7 @@ module export_surface_geometry
     public :: solve_beta_derivatives
     public :: beta_mode_denominator
     public :: solve_beta_derivatives_modes
+    public :: magnetic_differential_modes
     public :: surface_derivatives
     public :: surface_values
     public :: validate_tangential_metric
@@ -527,12 +528,42 @@ contains
     ! nor Fourier truncation error. Nonconstant unresolved harmonics must have
     ! forcing consistent with RHS/projection roundoff; otherwise input is invalid.
     ! The valid nonresonant branch uses the exact inverse, without regularization.
-    subroutine solve_beta_derivatives_modes(poloidal_modes, toroidal_modes, &
+    ! The forcing sqrt(g) (mu0 p' + G' B^zeta + I' B^theta) reduces to
+    ! mu0 p' sqrt(g) plus flux constants, whose bandwidth is that of the
+    ! Jacobian, about three times the position bandwidth.  The equation is
+    ! therefore solved on this extended table, limited by angular Nyquist;
+    ! returned beta_harmonics use it as well.
+    pure subroutine magnetic_differential_modes(poloidal_modes, &
+            toroidal_modes, n_theta, n_zeta, poloidal, toroidal)
+        integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
+        integer, intent(in) :: n_theta, n_zeta
+        integer, allocatable, intent(out) :: poloidal(:), toroidal(:)
+        integer :: m_max, n_max, mode
+
+        m_max = maxval(abs(poloidal_modes))
+        m_max = max(m_max, min(3 * m_max, (n_theta - 1) / 2))
+        n_max = maxval(abs(toroidal_modes))
+        n_max = max(n_max, min(3 * n_max, (n_zeta - 1) / 2))
+        allocate (poloidal(m_max + 1), toroidal(2 * n_max + 1))
+        do mode = 0, m_max
+            poloidal(mode + 1) = mode
+        end do
+        do mode = 0, n_max
+            toroidal(mode + 1) = mode
+        end do
+        do mode = 1, n_max
+            toroidal(n_max + 1 + mode) = mode - n_max - 1
+        end do
+    end subroutine magnetic_differential_modes
+
+    subroutine solve_beta_derivatives_modes(position_poloidal_modes, &
+            position_toroidal_modes, &
             surface, theta, zeta, covariant_theta_slope, &
             covariant_zeta_slope, pressure_slope, poloidal_flux_slope, &
             toroidal_flux_slope, beta_values, beta_theta, beta_zeta, &
             beta_harmonics, info)
-        integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
+        integer, intent(in) :: position_poloidal_modes(:)
+        integer, intent(in) :: position_toroidal_modes(:)
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
         real(dp), intent(in) :: covariant_theta_slope, covariant_zeta_slope
@@ -545,14 +576,20 @@ contains
         integer, intent(out), optional :: info
         type(harmonic_pair_t) :: beta_pair
         real(dp), allocatable :: rhs(:, :)
-        real(dp) :: rhs_cosine(size(poloidal_modes), size(toroidal_modes))
-        real(dp) :: rhs_sine(size(poloidal_modes), size(toroidal_modes))
+        real(dp), allocatable :: rhs_cosine(:, :), rhs_sine(:, :)
+        integer, allocatable :: poloidal_modes(:), toroidal_modes(:)
         real(dp) :: denominator, scale, mode_scale, rhs_scale, roundoff
         integer :: allocation_status, mode_m, mode_n, rec_info
 
         if (present(info)) info = mercier_invalid_input
-        if (size(poloidal_modes) < 1 .or. size(toroidal_modes) < 1) return
+        if (size(position_poloidal_modes) < 1 &
+            .or. size(position_toroidal_modes) < 1) return
         if (size(theta) < 1 .or. size(zeta) < 1) return
+        call magnetic_differential_modes(position_poloidal_modes, &
+            position_toroidal_modes, size(theta), size(zeta), &
+            poloidal_modes, toroidal_modes)
+        allocate (rhs_cosine(size(poloidal_modes), size(toroidal_modes)), &
+            rhs_sine(size(poloidal_modes), size(toroidal_modes)))
         if (.not. all(ieee_is_finite(theta)) &
             .or. .not. all(ieee_is_finite(zeta))) return
         allocate (beta_values(size(theta), size(zeta)), &

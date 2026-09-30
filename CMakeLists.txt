@@ -490,6 +490,12 @@ if(BUILD_TESTING)
         COMMAND test_solovev_axis_regularity
             ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
 
+    add_executable(test_magnetic_differential_equation
+        test/test_magnetic_differential_equation.f90)
+    target_link_libraries(test_magnetic_differential_equation PRIVATE gliss)
+    add_test(NAME magnetic_differential_equation
+        COMMAND test_magnetic_differential_equation)
+
     add_executable(test_radial_cubic_spline
         test/test_radial_cubic_spline.f90)
     target_link_libraries(test_radial_cubic_spline PRIVATE gliss)
