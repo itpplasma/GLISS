@@ -377,7 +377,10 @@ therefore introduce exact zero-stiffness directions with positive mass. GLISS
 computes `negative_count` on the unique physical quotient, where those
 redundancies are absent, and solves the labeled pencil for the code-specific
 lowest Ritz value. The count uses the common numerical floor
-`lambda < -result.inertia_zero_floor`, currently `1e-12`.
+`lambda < -result.inertia_zero_floor`. The floor is `1024 eps max_i
+|K_ii|/M_ii`, the double-precision roundoff of the pencil, so the count is
+independent of the units of the stiffness and mass matrices. Axisymmetric
+and marginality results report the same field.
 
 `radial_quadrature="gauss5"` uses accurate radial integration. The optional
 `"cas3d_midpoint"` policy reproduces the tangent-trapezoid midpoint rule and

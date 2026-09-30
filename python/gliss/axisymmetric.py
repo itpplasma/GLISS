@@ -31,6 +31,7 @@ class AxisymmetricResult:
     certificate: Optional[float]
     eigenpair_residual: Optional[float]
     force_balance_residual: float
+    inertia_zero_floor: float
 
 
 class _AxisymmetricResult(ctypes.Structure):
@@ -49,6 +50,7 @@ class _AxisymmetricResult(ctypes.Structure):
         ("certificate", ctypes.c_double),
         ("eigenpair_residual", ctypes.c_double),
         ("force_balance_residual", ctypes.c_double),
+        ("zero_floor", ctypes.c_double),
     ]
 
 
@@ -104,6 +106,8 @@ def _result(
         and native.degree == degree
         and math.isfinite(native.force_balance_residual)
         and native.force_balance_residual >= 0.0
+        and math.isfinite(native.zero_floor)
+        and native.zero_floor > 0.0
     )
     eigenpair = (
         native.lowest_eigenvalue,
@@ -134,6 +138,7 @@ def _result(
         certificate=native.certificate if solve_eigenpair else None,
         eigenpair_residual=native.eigenpair_residual if solve_eigenpair else None,
         force_balance_residual=native.force_balance_residual,
+        inertia_zero_floor=native.zero_floor,
     )
 
 

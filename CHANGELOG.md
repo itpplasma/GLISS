@@ -16,6 +16,12 @@
   `||K x - lambda M x||_{M^-1} / ||x||_M` on every fixed-boundary and
   marginality path, and include the inertia interval in the dense marginality
   certificate so dense and sparse certificates have the same meaning (#26).
+- Make symmetry checks, eigenvalue convergence and bisection tolerances, and
+  the marginality and TERPSICHORE zero floors relative to the pencil scale
+  instead of absolute. Nonsymmetric input is rejected at every scale rather
+  than silently symmetrized below unit magnitude. Marginality and
+  axisymmetric results report `zero_floor`, which extends their C result
+  structs (#27).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 

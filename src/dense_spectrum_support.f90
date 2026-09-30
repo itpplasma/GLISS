@@ -9,7 +9,7 @@ module dense_spectrum_support
         variable_block_ok, variable_block_to_dense, &
         variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
-        iterate_variable_generalized_eigenvalue, &
+        iterate_variable_generalized_eigenvalue, pencil_roundoff, &
         variable_eigenvalue_bound, variable_generalized_diagnostics, &
         variable_generalized_inertia, variable_generalized_ok
     implicit none
@@ -188,7 +188,7 @@ contains
         real(dp), contiguous, intent(inout) :: eigenvectors(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: seeds(:), vector(:), images(:, :)
-        real(dp) :: eigenvalue, residual, resolution, tolerance
+        real(dp) :: eigenvalue, residual, resolution, roundoff, tolerance
         integer :: allocation_status, index, other
         logical :: keep
 
@@ -206,6 +206,7 @@ contains
             stat=allocation_status)
         if (allocation_status /= 0) return
         tolerance = 64.0_dp * sqrt(epsilon(1.0_dp))
+        roundoff = pencil_roundoff(stiffness, mass)
         do index = 1, size(eigenvalues)
             ! A dense pair is kept when it meets the inverse-iteration
             ! residual criterion and is mass orthonormal to every pair kept
@@ -224,7 +225,7 @@ contains
                 return
             end if
             keep = residual <= max(controls%residual_relative &
-                * max(1.0_dp, abs(eigenvalues(index))), resolution)
+                * abs(eigenvalues(index)), roundoff, resolution)
             if (keep) keep = abs(dot_product(eigenvectors(:, index), &
                 images(:, index)) - 1.0_dp) <= tolerance
             do other = 1, index - 1
@@ -306,12 +307,13 @@ contains
         real(dp), intent(out) :: shift
         integer, intent(out) :: info
         real(dp), intent(out) :: width
-        real(dp) :: center, lower, step, tolerance, upper
+        real(dp) :: center, lower, roundoff, step, tolerance, upper
         integer :: count, iteration, lower_count, upper_count
 
         info = dense_spectrum_invalid
         center = seeds(target)
-        step = sqrt(epsilon(1.0_dp)) * max(1.0_dp, abs(center))
+        roundoff = pencil_roundoff(stiffness, mass)
+        step = max(sqrt(epsilon(1.0_dp)) * abs(center), roundoff)
         if (target > 1) step = max(step, center - seeds(target - 1))
         if (target < size(seeds)) &
             step = max(step, seeds(target + 1) - center)
@@ -341,8 +343,8 @@ contains
         end if
         do iteration = 1, controls%bracket_iteration_limit
             shift = lower + 0.5_dp * (upper - lower)
-            tolerance = controls%eigenvalue_relative &
-                * max(1.0_dp, abs(shift))
+            tolerance = max(controls%eigenvalue_relative * abs(shift), &
+                roundoff)
             if (upper - lower <= tolerance) exit
             call bounded_inertia_probe(stiffness, mass, lower, upper, &
                 shift, count, info)
@@ -377,7 +379,8 @@ contains
         integer :: attempt
 
         origin = shift
-        delta = 16.0_dp * epsilon(1.0_dp) * max(1.0_dp, abs(origin))
+        delta = max(16.0_dp * epsilon(1.0_dp) * abs(origin), &
+            pencil_roundoff(stiffness, mass))
         do attempt = 0, 15
             candidate = origin
             if (attempt > 0) candidate = origin + direction * delta
@@ -455,9 +458,13 @@ contains
         if (any(eigenvalues(2:) < eigenvalues(:size(eigenvalues) - 1))) return
         if (count(eigenvalues < -zero_floor) /= negative_count) return
         if (count(abs(eigenvalues) <= zero_floor) /= floor_count) return
+        ! The dense spectrum spans the pencil, so its largest modulus sets
+        ! the roundoff floor of every eigenvalue.
+        scale = maxval(abs(eigenvalues))
         if (any(abs(eigenvalues - rayleigh_quotients) &
-            > sqrt(epsilon(1.0_dp)) * max(1.0_dp, abs(eigenvalues), &
-            abs(rayleigh_quotients)))) return
+            > max(sqrt(epsilon(1.0_dp)) * max(abs(eigenvalues), &
+            abs(rayleigh_quotients)), 1024.0_dp * epsilon(1.0_dp) * scale))) &
+            return
         if (.not. has_active) then
             valid = .true.
             return
@@ -465,8 +472,8 @@ contains
         active = 1
         if (negative_count == 0) active = floor_count + 1
         if (active > size(eigenvalues)) return
-        scale = max(1.0_dp, abs(lowest_active))
-        tolerance = certificate + 16.0_dp * epsilon(1.0_dp) * scale
+        tolerance = certificate + 16.0_dp * epsilon(1.0_dp) &
+            * max(scale, abs(lowest_active))
         valid = abs(eigenvalues(active) - lowest_active) <= tolerance
     end function dense_spectrum_is_certified
 

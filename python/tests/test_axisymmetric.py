@@ -55,6 +55,7 @@ class FakeLibrary:
         native.certificate = 1.0e-11 if solve_eigenpair else np.nan
         native.eigenpair_residual = 3.0e-14 if solve_eigenpair else np.nan
         native.force_balance_residual = 4.0e-10
+        native.zero_floor = 3.0e-9
         error.value = b""
         return 0
 
@@ -91,6 +92,7 @@ def test_axisymmetric_inertia_uses_loaded_equilibrium():
     assert result.certificate is None
     assert result.eigenpair_residual is None
     assert result.force_balance_residual == pytest.approx(4.0e-10)
+    assert result.inertia_zero_floor == 3.0e-9
 
 
 def test_solve_axisymmetric_returns_certified_pair():

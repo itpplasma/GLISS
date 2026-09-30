@@ -75,6 +75,7 @@ class FakeLibrary:
         native.certificate = 2.0e-10 if solve_eigenpair else np.nan
         native.eigenpair_residual = 4.0e-13 if solve_eigenpair else np.nan
         native.force_balance_residual = 7.0e-5
+        native.zero_floor = 3.0e-9
         error.value = b""
         return 0
 
@@ -120,6 +121,7 @@ class FakeLibrary:
         native.certificate = 3.0e-10 if solve_eigenpair else np.nan
         native.eigenpair_residual = 5.0e-13 if solve_eigenpair else np.nan
         native.force_balance_residual = 7.0e-5
+        native.zero_floor = 3.0e-9
         error.value = b""
         return 0
 
@@ -207,7 +209,7 @@ def test_solve_cas3d_phase_envelope_reports_labeled_input_count():
     assert result.base_mode == (3, 2)
     assert result.envelope_modes == ((0, 0), (1, 0), (0, 1), (0, -1))
     assert result.labeled_sideband_count == 7
-    assert result.inertia_zero_floor == 1.0e-12
+    assert result.inertia_zero_floor == 3.0e-9
     assert result.negative_count == 3
     assert result.lowest_eigenvalue == pytest.approx(-3.8e-4)
     assert "physical modes" in result.normalization

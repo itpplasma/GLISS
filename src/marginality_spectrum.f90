@@ -28,7 +28,8 @@ module marginality_spectrum
         validate_variable_blocks, variable_block_ok, &
         variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
-        iterate_variable_generalized_eigenvalue, variable_eigenvalue_bound, &
+        iterate_variable_generalized_eigenvalue, pencil_roundoff, &
+        variable_eigenvalue_bound, &
         variable_generalized_inertia, variable_generalized_ok
     use variable_spectrum_analysis, only: analyze_variable_spectrum, &
         variable_spectrum_ok, variable_spectrum_summary_t
@@ -44,7 +45,9 @@ module marginality_spectrum
         compatible_quadrature_gauss
     integer, parameter, public :: marginality_quadrature_cas3d_midpoint = &
         compatible_quadrature_cas3d_midpoint
-    real(dp), parameter :: zero_floor = 1.0e-12_dp
+    ! Eigenvalues within zero_floor_roundoff pencil roundoff floors of zero
+    ! are counted as marginal; see pencil_roundoff.
+    real(dp), parameter :: zero_floor_roundoff = 64.0_dp
 
     type, public :: marginality_spectrum_result_t
         logical :: has_eigenpair = .false.
@@ -59,6 +62,7 @@ module marginality_spectrum
         real(dp) :: certificate = 0.0_dp
         real(dp) :: eigenpair_residual = 0.0_dp
         real(dp) :: force_balance_residual = 0.0_dp
+        real(dp) :: zero_floor = 0.0_dp
     end type marginality_spectrum_result_t
 
     public :: compute_marginality_spectrum
@@ -248,6 +252,9 @@ contains
             call solve_compatible_marginality_problem(problem, &
                 solve_eigenpair, result, info, message, &
                 negative_count_override=quotient_negative_count)
+            ! The count, and hence its floor, is that of the quotient pencil.
+            if (info == marginality_spectrum_ok) &
+                result%zero_floor = quotient_result%zero_floor
         else
             call solve_compatible_marginality_problem(problem, &
                 solve_eigenpair, result, info, message)
@@ -288,7 +295,7 @@ contains
         type(variable_block_tridiagonal_t) :: block_k, block_m
         real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
         real(dp), allocatable :: stiffness(:, :), mass(:, :), vector(:)
-        real(dp) :: eigenvalue, interval, residual, resolution
+        real(dp) :: eigenvalue, interval, residual, resolution, zero_floor
         integer :: allocation_status, local_info
 
         result = marginality_spectrum_result_t()
@@ -306,6 +313,8 @@ contains
             message = "compatible FEEC matrix packing failed"
             return
         end if
+        zero_floor = zero_floor_roundoff * pencil_roundoff(block_k, block_m)
+        result%zero_floor = zero_floor
         if (present(negative_count_override)) then
             if (negative_count_override < 0 .or. &
                 negative_count_override > size(problem%stiffness, 1)) then
@@ -391,12 +400,16 @@ contains
         type(variable_spectrum_summary_t) :: summary
         real(dp), allocatable :: vector(:)
         real(dp) :: eigenvalue, interval, residual, resolution, shift
+        real(dp) :: zero_floor
         integer :: local_info, unknowns
 
         result = marginality_spectrum_result_t()
         info = marginality_spectrum_compute_error
         message = "sparse compatible FEEC spectrum analysis failed"
         unknowns = sum(problem%sparse_stiffness%widths)
+        zero_floor = zero_floor_roundoff &
+            * pencil_roundoff(problem%sparse_stiffness, problem%sparse_mass)
+        result%zero_floor = zero_floor
         if (present(negative_count_override)) then
             if (negative_count_override < 0 &
                 .or. negative_count_override > unknowns) then

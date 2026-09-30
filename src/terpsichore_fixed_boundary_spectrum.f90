@@ -21,8 +21,8 @@ module terpsichore_fixed_boundary_spectrum
     use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
         variable_block_ok, variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
-        iterate_variable_generalized_eigenvalue, variable_generalized_inertia, &
-        variable_generalized_ok
+        iterate_variable_generalized_eigenvalue, pencil_roundoff, &
+        variable_generalized_inertia, variable_generalized_ok
     implicit none
     private
 
@@ -294,10 +294,12 @@ contains
         real(dp), allocatable, intent(out) :: eigenvector(:)
         integer, intent(out) :: negative_count, info
         character(len=*), intent(out) :: message
-        real(dp) :: lower, upper, middle
+        real(dp) :: zero_floor, lower, upper, middle
         integer :: below, iteration
 
-        call variable_generalized_inertia(stiffness, mass, 0.0_dp, &
+        ! Null directions within the pencil roundoff are not negative.
+        zero_floor = 64.0_dp * pencil_roundoff(stiffness, mass)
+        call variable_generalized_inertia(stiffness, mass, -zero_floor, &
             negative_count, info)
         if (info /= variable_generalized_ok) then
             call solve_failure("TERPSICHORE inertia failed", info, message)
@@ -308,11 +310,12 @@ contains
                 info, message)
             return
         end if
-        call bracket_lowest(stiffness, mass, lower, upper, info, message)
+        call bracket_lowest(stiffness, mass, zero_floor, lower, upper, info, &
+            message)
         if (info /= terpsichore_fixed_spectrum_ok) return
         do iteration = 1, 200
             middle = lower + 0.5_dp * (upper - lower)
-            if (upper - lower <= 5.0e-5_dp * abs(middle) + 1.0e-16_dp) exit
+            if (upper - lower <= 5.0e-5_dp * abs(middle) + zero_floor) exit
             call variable_generalized_inertia(stiffness, mass, middle, below, &
                 info)
             if (info /= variable_generalized_ok) then
@@ -348,14 +351,16 @@ contains
         message = ""
     end subroutine solve_terpsichore_lowest_negative
 
-    subroutine bracket_lowest(stiffness, mass, lower, upper, info, message)
+    subroutine bracket_lowest(stiffness, mass, zero_floor, lower, upper, &
+            info, message)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), intent(in) :: zero_floor
         real(dp), intent(out) :: lower, upper
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
         integer :: below, iteration
 
-        lower = -1.0e-8_dp
+        lower = -2.0_dp * zero_floor
         do iteration = 1, 200
             call variable_generalized_inertia(stiffness, mass, lower, below, &
                 info)
@@ -369,7 +374,7 @@ contains
                 info, message)
             return
         end if
-        upper = 0.0_dp
+        upper = -zero_floor
         info = terpsichore_fixed_spectrum_ok
         message = ""
     end subroutine bracket_lowest

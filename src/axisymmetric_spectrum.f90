@@ -27,6 +27,7 @@ module axisymmetric_spectrum
         real(dp) :: certificate = 0.0_dp
         real(dp) :: eigenpair_residual = 0.0_dp
         real(dp) :: force_balance_residual = 0.0_dp
+        real(dp) :: zero_floor = 0.0_dp
     end type axisymmetric_spectrum_result_t
 
     public :: build_axisymmetric_mode_table
@@ -143,6 +144,7 @@ contains
         result%certificate = general%certificate
         result%eigenpair_residual = general%eigenpair_residual
         result%force_balance_residual = general%force_balance_residual
+        result%zero_floor = general%zero_floor
     end subroutine assign_result
 
 end module axisymmetric_spectrum

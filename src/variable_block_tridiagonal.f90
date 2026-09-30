@@ -45,6 +45,7 @@ module variable_block_tridiagonal
     public :: solve_variable_factored
     public :: validate_variable_blocks
     public :: variable_block_to_dense
+    public :: variable_pencil_scale
 
     interface
         subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
@@ -321,7 +322,7 @@ contains
         end do
         call variable_block_to_dense(blocks, reconstructed, status)
         if (status /= variable_block_ok) return
-        scale = max(1.0_dp, maxval(abs(dense)))
+        scale = maxval(abs(dense))
         if (maxval(abs(reconstructed - dense)) &
             > 128.0_dp * epsilon(1.0_dp) * scale) return
         info = variable_block_ok
@@ -459,8 +460,7 @@ contains
                 /= blocks%widths(block))) return
             if (.not. all(ieee_is_finite( &
                 blocks%diagonal(block)%values))) return
-            scale = max(1.0_dp, maxval(abs( &
-                blocks%diagonal(block)%values)))
+            scale = maxval(abs(blocks%diagonal(block)%values))
             if (maxval(abs(blocks%diagonal(block)%values &
                 - transpose(blocks%diagonal(block)%values))) &
                 > 128.0_dp * epsilon(1.0_dp) * scale) return
@@ -560,9 +560,28 @@ contains
         if (.not. valid) return
         valid = all(ieee_is_finite(dense))
         if (.not. valid) return
-        scale = max(1.0_dp, maxval(abs(dense)))
+        scale = maxval(abs(dense))
         valid = maxval(abs(dense - transpose(dense))) &
             <= 128.0_dp * epsilon(1.0_dp) * scale
     end function valid_dense_input
+
+    pure function variable_pencil_scale(stiffness, mass) result(scale)
+        ! Every |K_ii|/M_ii is the modulus of a Rayleigh quotient of the
+        ! pencil, so the maximum is a lower bound on the spectral radius of
+        ! M^-1 K for SPD M. Eigenvalue tolerances are relative to it.
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp) :: scale
+        integer :: block, i
+
+        scale = 0.0_dp
+        do block = 1, size(stiffness%widths)
+            do i = 1, stiffness%widths(block)
+                if (mass%diagonal(block)%values(i, i) <= 0.0_dp) cycle
+                scale = max(scale, abs(stiffness%diagonal(block)%values(i, i)) &
+                    / mass%diagonal(block)%values(i, i))
+            end do
+        end do
+        scale = max(scale, tiny(1.0_dp))
+    end function variable_pencil_scale
 
 end module variable_block_tridiagonal

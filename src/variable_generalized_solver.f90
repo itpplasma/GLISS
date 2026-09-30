@@ -7,7 +7,8 @@ module variable_generalized_solver
         apply_variable_block_tridiagonal, factorize_variable_shifted, &
         solve_variable_factored, validate_variable_blocks, &
         variable_block_factor_t, variable_block_ok, &
-        variable_block_tridiagonal_t, variable_matrix_block_t
+        variable_block_tridiagonal_t, variable_matrix_block_t, &
+        variable_pencil_scale
     implicit none
     private
 
@@ -20,6 +21,7 @@ module variable_generalized_solver
     public :: variable_generalized_diagnostics
     public :: variable_eigenvalue_bound
     public :: variable_generalized_inertia
+    public :: pencil_roundoff
 
 contains
 
@@ -100,11 +102,12 @@ contains
         type(variable_block_factor_t) :: factor
         type(fixed_boundary_solver_controls_t) :: stopping
         real(dp), allocatable :: iterate(:)
-        real(dp) :: previous
+        real(dp) :: previous, scale
         integer :: iteration, n
 
         stopping = fixed_boundary_solver_controls_t()
         if (present(controls)) stopping = controls
+        scale = pencil_roundoff(stiffness, mass)
         call factorize_generalized_shift(stiffness, mass, shift, factor, info)
         if (info /= variable_generalized_ok) return
         n = sum(stiffness%widths)
@@ -125,7 +128,7 @@ contains
                 iterate, eigenvalue, residual, resolution, info)
             if (info /= variable_generalized_ok) return
             if (iteration_converged(eigenvalue, previous, residual, &
-                resolution, stopping)) exit
+                resolution, scale, stopping)) exit
             previous = eigenvalue
         end do
         if (iteration > stopping%inverse_iteration_limit) then
@@ -521,19 +524,30 @@ contains
         end do
     end subroutine absolute_shifted_action
 
+    pure function pencil_roundoff(stiffness, mass) result(roundoff)
+        ! Eigenvalues of a pencil stored in double precision are resolved
+        ! only to O(eps ||M^-1 K||); tolerances near zero use this floor
+        ! instead of an absolute one so that they are unit independent.
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp) :: roundoff
+
+        roundoff = 16.0_dp * epsilon(1.0_dp) &
+            * variable_pencil_scale(stiffness, mass)
+    end function pencil_roundoff
+
     pure function iteration_converged(eigenvalue, previous, residual, &
-            resolution, controls) &
+            resolution, scale, controls) &
             result(converged)
         real(dp), intent(in) :: eigenvalue, previous, residual, resolution
+        real(dp), intent(in) :: scale
         type(fixed_boundary_solver_controls_t), intent(in) :: controls
         logical :: converged
 
         converged = abs(eigenvalue - previous) <= max( &
-            controls%eigenvalue_relative &
-            * max(1.0_dp, abs(eigenvalue)), resolution)
+            controls%eigenvalue_relative * abs(eigenvalue), scale, resolution)
         if (.not. converged) return
         converged = residual <= max(controls%residual_relative &
-            * max(1.0_dp, abs(eigenvalue)), resolution)
+            * abs(eigenvalue), scale, resolution)
     end function iteration_converged
 
 end module variable_generalized_solver

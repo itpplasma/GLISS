@@ -10,9 +10,10 @@ program test_variable_generalized_solver
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use stable_reduction, only: stable_norm2
     use symmetric_eigensolver, only: solve_symmetric_generalized, &
-        solve_symmetric_generalized_allocated
+        solve_symmetric_generalized_allocated, symmetric_eigensolver_ok
     use variable_block_tridiagonal, only: &
         apply_variable_block_tridiagonal, pack_variable_blocks, &
+        validate_variable_blocks, variable_block_ok, &
         variable_block_to_dense, variable_block_tridiagonal_t
     use variable_generalized_equilibration, only: &
         equilibrate_variable_generalized, undo_variable_congruence, &
@@ -21,7 +22,7 @@ program test_variable_generalized_solver
         iterate_variable_generalized_eigenvalue, variable_generalized_diagnostics, &
         variable_generalized_inertia, variable_generalized_invalid, &
         variable_generalized_mass_not_spd, variable_generalized_ok, &
-        variable_eigenvalue_bound
+        variable_eigenvalue_bound, pencil_roundoff
     implicit none
 
     integer, parameter :: widths(3) = [2, 3, 1]
@@ -101,6 +102,7 @@ program test_variable_generalized_solver
     call check_scaled_compensated_norm()
     call check_ill_scaled_dense_pencil()
     call check_rigorous_residual_bound()
+    call check_scale_invariant_tolerances()
 
     corrupt = stiffness
     corrupt%diagonal(1)%values(1, 2) = &
@@ -164,6 +166,51 @@ contains
                 "residual bound is smaller than the distance to the spectrum")
         end do
     end subroutine check_rigorous_residual_bound
+
+    subroutine check_scale_invariant_tolerances()
+        ! A grossly nonsymmetric matrix must be rejected at every scale, and
+        ! the pencil roundoff floor must scale with the pencil.
+        real(dp), parameter :: scales(3) = [1.0e-15_dp, 1.0_dp, 1.0e15_dp]
+        real(dp) :: nonsymmetric(2, 2), identity(2, 2), roundoff
+        real(dp), allocatable :: values(:), vectors(:, :)
+        type(variable_block_tridiagonal_t) :: packed, packed_mass
+        integer :: i, local_info
+
+        identity = reshape([1.0_dp, 0.0_dp, 0.0_dp, 1.0_dp], [2, 2])
+        do i = 1, size(scales)
+            nonsymmetric = scales(i) * reshape([2.0_dp, 1.0_dp, 0.0_dp, &
+                3.0_dp], [2, 2])
+            call pack_variable_blocks(nonsymmetric, [2], packed, local_info)
+            if (local_info == variable_block_ok) &
+                call fail("nonsymmetric dense input was symmetrized")
+            call pack_variable_blocks(nonsymmetric, [1, 1], packed, &
+                local_info)
+            if (local_info == variable_block_ok) &
+                call fail("nonsymmetric block input was symmetrized")
+            call solve_symmetric_generalized(nonsymmetric, identity, values, &
+                vectors, local_info)
+            if (local_info == symmetric_eigensolver_ok) &
+                call fail("nonsymmetric dense pencil was accepted")
+            packed = variable_block_tridiagonal_t()
+            allocate (packed%widths(1), source=[2])
+            allocate (packed%diagonal(1), packed%lower(0))
+            packed%diagonal(1)%values = nonsymmetric
+            call validate_variable_blocks(packed, local_info)
+            if (local_info == variable_block_ok) &
+                call fail("nonsymmetric diagonal block was accepted")
+            call pack_variable_blocks(scales(i) * reshape([2.0_dp, 1.0_dp, &
+                1.0_dp, 3.0_dp], [2, 2]), [2], packed, local_info)
+            if (local_info /= variable_block_ok) &
+                call fail("scaled symmetric input was rejected")
+            call pack_variable_blocks(identity, [2], packed_mass, local_info)
+            if (local_info /= variable_block_ok) &
+                call fail("identity mass was rejected")
+            roundoff = pencil_roundoff(packed, packed_mass)
+            if (abs(roundoff / (16.0_dp * epsilon(1.0_dp) * 3.0_dp &
+                * scales(i)) - 1.0_dp) > 1.0e-14_dp) &
+                call fail("pencil roundoff floor is not scale invariant")
+        end do
+    end subroutine check_scale_invariant_tolerances
 
     subroutine check_equilibration(stiffness, mass, expected)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
@@ -496,5 +543,11 @@ contains
         write (error_unit, "(a)") message
         error stop 1
     end subroutine require
+
+    subroutine fail(message)
+        character(len=*), intent(in) :: message
+
+        call require(.false., message)
+    end subroutine fail
 
 end program test_variable_generalized_solver

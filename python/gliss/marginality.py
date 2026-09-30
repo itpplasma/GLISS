@@ -44,6 +44,7 @@ class Cas3dMarginalityResult:
     certificate: Optional[float]
     eigenpair_residual: Optional[float]
     force_balance_residual: float
+    inertia_zero_floor: float
     normalization: str = (
         "compatible perpendicular L2 norm of normal and tangential components"
     )
@@ -71,10 +72,10 @@ class Cas3dPhaseEnvelopeResult:
     certificate: Optional[float]
     eigenpair_residual: Optional[float]
     force_balance_residual: float
+    inertia_zero_floor: float
     coefficient_angular_resolution: Optional[Tuple[int, int]] = None
     reference_length: Optional[float] = None
     radial_quadrature: str = "gauss5"
-    inertia_zero_floor: float = 1.0e-12
     normalization: str = "compatible perpendicular L2 norm on physical modes"
     interpretation: str = "stability and marginality only; not a physical growth rate"
     boundary_condition: str = "fixed"
@@ -99,6 +100,7 @@ class _Cas3dMarginalityResult(ctypes.Structure):
         ("certificate", ctypes.c_double),
         ("eigenpair_residual", ctypes.c_double),
         ("force_balance_residual", ctypes.c_double),
+        ("zero_floor", ctypes.c_double),
     ]
 
 
@@ -243,6 +245,8 @@ def _result(
         and (native.angular_theta, native.angular_zeta) == angular_resolution
         and math.isfinite(native.force_balance_residual)
         and native.force_balance_residual >= 0.0
+        and math.isfinite(native.zero_floor)
+        and native.zero_floor > 0.0
     )
     eigenpair = (
         native.lowest_eigenvalue,
@@ -272,6 +276,7 @@ def _result(
         certificate=native.certificate if solve_eigenpair else None,
         eigenpair_residual=(native.eigenpair_residual if solve_eigenpair else None),
         force_balance_residual=native.force_balance_residual,
+        inertia_zero_floor=native.zero_floor,
     )
 
 
@@ -392,6 +397,8 @@ def _phase_envelope_result(
         and (native.angular_theta, native.angular_zeta) == angular_resolution
         and math.isfinite(native.force_balance_residual)
         and native.force_balance_residual >= 0.0
+        and math.isfinite(native.zero_floor)
+        and native.zero_floor > 0.0
     )
     eigenpair = (
         native.lowest_eigenvalue,
@@ -423,6 +430,7 @@ def _phase_envelope_result(
         certificate=native.certificate if solve_eigenpair else None,
         eigenpair_residual=(native.eigenpair_residual if solve_eigenpair else None),
         force_balance_residual=native.force_balance_residual,
+        inertia_zero_floor=native.zero_floor,
         normalization=_NORMALIZATION_LABELS[normalization],
         coefficient_angular_resolution=coefficient_resolution,
         reference_length=reference_length,

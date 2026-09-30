@@ -113,8 +113,7 @@ contains
         ones = 1.0_dp
         result%closure_error = abs(result%potential_energy &
             - stable_dot_product(ones, components))
-        scale = max(1.0_dp, abs(result%potential_energy), &
-            sum(abs(components)))
+        scale = max(abs(result%potential_energy), sum(abs(components)))
         do index = 1, size(vector)
             absolute_permuted(index) = abs(permuted(index))
             absolute_residual(index) = abs(potential_image(index) &

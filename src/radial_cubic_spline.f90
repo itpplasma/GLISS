@@ -295,7 +295,7 @@ contains
         integer :: i
 
         info = radial_cubic_spline_invalid
-        scale = max(1.0_dp, maxval(abs(diagonal)), maxval(abs(lower)), &
+        scale = max(maxval(abs(diagonal)), maxval(abs(lower)), &
             maxval(abs(upper)))
         if (abs(diagonal(1)) <= epsilon(1.0_dp) * scale) return
         do i = 2, size(diagonal)

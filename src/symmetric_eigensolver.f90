@@ -167,7 +167,7 @@ contains
         real(dp) :: scale, tolerance
         integer :: column, row
 
-        scale = max(1.0_dp, maxval(abs(matrix)))
+        scale = maxval(abs(matrix))
         tolerance = 128.0_dp * epsilon(1.0_dp) * scale
         symmetric = .true.
         do column = 1, size(matrix, 2)

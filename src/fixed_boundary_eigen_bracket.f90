@@ -1,7 +1,8 @@
 module fixed_boundary_eigen_bracket
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
-    use variable_block_tridiagonal, only: variable_block_tridiagonal_t
+    use variable_block_tridiagonal, only: variable_block_tridiagonal_t, &
+        variable_pencil_scale
     use variable_generalized_solver, only: variable_generalized_inertia, &
         variable_generalized_ok
     implicit none
@@ -126,7 +127,7 @@ contains
         integer :: attempt
 
         origin = probe
-        scale = max(1.0_dp, abs(origin))
+        scale = max(abs(origin), variable_pencil_scale(stiffness, mass))
         delta = min(16.0_dp * epsilon(1.0_dp) * scale, &
             0.25_dp * (upper - lower))
         do attempt = 0, 15

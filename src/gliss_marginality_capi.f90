@@ -31,6 +31,7 @@ module gliss_marginality_capi
         real(c_double) :: certificate
         real(c_double) :: eigenpair_residual
         real(c_double) :: force_balance_residual
+        real(c_double) :: zero_floor
     end type marginality_result_c
 
     public :: gliss_cas3d_marginality_c
@@ -334,6 +335,7 @@ contains
         result%certificate = native%certificate
         result%eigenpair_residual = native%eigenpair_residual
         result%force_balance_residual = native%force_balance_residual
+        result%zero_floor = native%zero_floor
     end subroutine fill_result
 
 end module gliss_marginality_capi

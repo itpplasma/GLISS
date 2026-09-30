@@ -87,7 +87,7 @@ contains
         logical :: symmetric
         real(dp) :: scale
 
-        scale = max(1.0_dp, maxval(abs(matrix)))
+        scale = maxval(abs(matrix))
         symmetric = maxval(abs(matrix - transpose(matrix))) &
             <= 128.0_dp * epsilon(1.0_dp) * scale
     end function symmetric_matrix
