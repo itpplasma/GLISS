@@ -329,6 +329,8 @@ contains
 
         ! Null directions within the pencil roundoff are not negative.
         zero_floor = 64.0_dp * pencil_roundoff(stiffness, mass)
+        ! This first factorization validates the pencil for every later
+        ! probe of solve_terpsichore_lowest and its brackets.
         call variable_generalized_inertia(stiffness, mass, -zero_floor, &
             negative_count, info)
         if (info /= variable_generalized_ok) then
@@ -349,11 +351,11 @@ contains
             middle = lower + 0.5_dp * (upper - lower)
             if (upper - lower <= 5.0e-5_dp * abs(middle) + zero_floor) exit
             call variable_generalized_inertia(stiffness, mass, middle, below, &
-                info)
+                info, validated=.true.)
             if (info /= variable_generalized_ok) then
                 middle = nearest(middle, 1.0_dp)
                 call variable_generalized_inertia(stiffness, mass, middle, &
-                    below, info)
+                    below, info, validated=.true.)
             end if
             if (info /= variable_generalized_ok) then
                 call solve_failure("TERPSICHORE bisection inertia failed", &
@@ -373,7 +375,8 @@ contains
         end if
         certificate = upper - lower
         call iterate_variable_generalized_eigenvalue(stiffness, mass, lower, &
-            eigenvalue, eigenvector, residual, resolution, info)
+            eigenvalue, eigenvector, residual, resolution, info, &
+            validated=.true.)
         if (info /= variable_generalized_ok) then
             call solve_failure("TERPSICHORE inverse iteration failed", info, &
                 message)
@@ -395,7 +398,7 @@ contains
         lower = -2.0_dp * zero_floor
         do iteration = 1, 200
             call variable_generalized_inertia(stiffness, mass, lower, below, &
-                info)
+                info, validated=.true.)
             if (info == variable_generalized_ok .and. below == 0) exit
             if (info /= variable_generalized_ok) &
                 lower = nearest(lower, -1.0_dp)
@@ -424,7 +427,7 @@ contains
         upper = 2.0_dp * zero_floor
         do iteration = 1, 1100
             call variable_generalized_inertia(stiffness, mass, upper, below, &
-                info)
+                info, validated=.true.)
             if (info == variable_generalized_ok .and. below > 0) exit
             if (info /= variable_generalized_ok) &
                 upper = nearest(upper, 1.0_dp)

@@ -11,7 +11,8 @@ module dense_spectrum_support
     use variable_generalized_solver, only: &
         iterate_variable_generalized_eigenvalue, pencil_roundoff, &
         variable_eigenvalue_bound, variable_generalized_diagnostics, &
-        variable_generalized_inertia, variable_generalized_ok
+        variable_generalized_inertia, variable_generalized_ok, &
+        validate_variable_pencil
     implicit none
     private
 
@@ -314,9 +315,15 @@ contains
         if (size(seed_vector) /= size(seeds)) return
         if (.not. all(ieee_is_finite(seeds))) return
         if (.not. all(ieee_is_finite(seed_vector))) return
+        call validate_variable_pencil(stiffness, mass, info)
+        if (info /= variable_generalized_ok) then
+            info = dense_spectrum_invalid
+            return
+        end if
         info = dense_spectrum_allocation
         allocate (initial, source=seed_vector, stat=allocation_status)
         if (allocation_status /= 0) return
+        ! Every shift below factors this validated pencil.
         call bracket_indexed_eigenvalue(stiffness, mass, seeds, target, &
             controls, shift, info, width)
         if (info /= dense_spectrum_ok) return
@@ -329,7 +336,7 @@ contains
         end do
         call iterate_variable_generalized_eigenvalue(stiffness, mass, shift, &
             eigenvalue, vector, residual, resolution, info, controls, &
-            initial=initial)
+            initial=initial, validated=.true.)
         if (info /= variable_generalized_ok) then
             info = dense_spectrum_invalid
             return
@@ -386,7 +393,7 @@ contains
                 roundoff)
             if (upper - lower <= tolerance) exit
             call bounded_inertia_probe(stiffness, mass, lower, upper, &
-                shift, count, info)
+                shift, count, info, validated=.true.)
             if (info /= fixed_boundary_bracket_ok) then
                 info = dense_spectrum_invalid
                 return
@@ -425,7 +432,7 @@ contains
             if (attempt > 0) candidate = origin + direction * delta
             if (.not. ieee_is_finite(candidate)) exit
             call variable_generalized_inertia(stiffness, mass, candidate, &
-                count, info)
+                count, info, validated=.true.)
             if (info == variable_generalized_ok) then
                 shift = candidate
                 info = dense_spectrum_ok

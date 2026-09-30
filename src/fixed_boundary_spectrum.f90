@@ -623,7 +623,7 @@ contains
             class_problem%stiffness, class_problem%mass, shift, &
             result%lowest_eigenvalue, solver_vector, &
             result%eigenpair_residual, result%eigenpair_resolution, info, &
-            controls)
+            controls, validated=.true.)
         if (info /= variable_generalized_ok) then
             info = fixed_boundary_solver_error
             return

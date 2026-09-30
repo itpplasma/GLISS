@@ -2,8 +2,8 @@ module variable_spectrum_analysis
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use variable_block_tridiagonal, only: variable_block_tridiagonal_t
-    use variable_generalized_solver, only: variable_generalized_inertia, &
-        variable_generalized_ok
+    use variable_generalized_solver, only: validate_variable_pencil, &
+        variable_generalized_inertia, variable_generalized_ok
     implicit none
     private
 
@@ -41,6 +41,12 @@ contains
         info = variable_spectrum_invalid
         if (.not. ieee_is_finite(zero_floor) .or. zero_floor <= 0.0_dp) return
         if (zero_floor > 0.125_dp * huge(zero_floor)) return
+        ! Every probe below factors a shift of this validated pencil.
+        call validate_variable_pencil(stiffness, mass, info)
+        if (info /= variable_generalized_ok) then
+            info = variable_spectrum_invalid
+            return
+        end if
         lower_shift = -zero_floor
         upper_shift = zero_floor
         call directed_inertia(stiffness, mass, lower_shift, -1.0_dp, &
@@ -131,7 +137,7 @@ contains
                 return
             end if
             call variable_generalized_inertia(stiffness, mass, midpoint, &
-                count, info)
+                count, info, validated=.true.)
             if (info /= variable_generalized_ok) then
                 call resolve_singular_probe(stiffness, mass, midpoint, &
                     base_count, lower, upper, upper_count, info)
@@ -162,13 +168,15 @@ contains
         real(dp), intent(in) :: direction
         integer, intent(out) :: count, info
 
-        call variable_generalized_inertia(stiffness, mass, shift, count, info)
+        call variable_generalized_inertia(stiffness, mass, shift, count, info, &
+            validated=.true.)
         if (info == variable_generalized_ok) then
             info = variable_spectrum_ok
             return
         end if
         shift = nearest(shift, direction)
-        call variable_generalized_inertia(stiffness, mass, shift, count, info)
+        call variable_generalized_inertia(stiffness, mass, shift, count, info, &
+            validated=.true.)
         if (info == variable_generalized_ok) then
             info = variable_spectrum_ok
         else
@@ -190,13 +198,13 @@ contains
         left = nearest(shift, -1.0_dp)
         right = nearest(shift, 1.0_dp)
         call variable_generalized_inertia(stiffness, mass, left, left_count, &
-            info)
+            info, validated=.true.)
         if (info /= variable_generalized_ok) then
             info = variable_spectrum_invalid
             return
         end if
         call variable_generalized_inertia(stiffness, mass, right, right_count, &
-            info)
+            info, validated=.true.)
         if (info /= variable_generalized_ok .or. left_count < base_count &
             .or. right_count < left_count) then
             info = variable_spectrum_invalid

@@ -3,8 +3,8 @@ module fixed_boundary_eigen_bracket
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use variable_block_tridiagonal, only: variable_block_tridiagonal_t, &
         variable_pencil_scale
-    use variable_generalized_solver, only: variable_generalized_inertia, &
-        variable_generalized_ok
+    use variable_generalized_solver, only: validate_variable_pencil, &
+        variable_generalized_inertia, variable_generalized_ok
     implicit none
     private
 
@@ -33,10 +33,15 @@ contains
         info = fixed_boundary_bracket_error
         stopping = fixed_boundary_solver_controls_t()
         if (present(controls)) stopping = controls
+        call validate_variable_pencil(stiffness, mass, info)
+        if (info /= variable_generalized_ok) then
+            info = fixed_boundary_bracket_error
+            return
+        end if
         lower = -2.0_dp * zero_floor
         do iteration = 1, stopping%bracket_iteration_limit
             call variable_generalized_inertia(stiffness, mass, lower, count, &
-                info)
+                info, validated=.true.)
             if (info /= variable_generalized_ok) then
                 lower = 2.0_dp * lower
                 cycle
@@ -55,7 +60,7 @@ contains
                 * abs(middle) + stopping%negative_bracket_floor &
                 * zero_floor) exit
             call bounded_inertia_probe(stiffness, mass, lower, upper, &
-                middle, count, info)
+                middle, count, info, validated=.true.)
             if (info /= fixed_boundary_bracket_ok) return
             if (count == 0) then
                 lower = middle
@@ -92,15 +97,20 @@ contains
         interval = upper - lower
         below = lower
         above = upper
+        call validate_variable_pencil(stiffness, mass, info)
+        if (info /= variable_generalized_ok) then
+            info = fixed_boundary_bracket_error
+            return
+        end if
         call bounded_inertia_probe(stiffness, mass, below, above, below, &
-            base_count, info)
+            base_count, info, validated=.true.)
         if (info /= fixed_boundary_bracket_ok) return
         do iteration = 1, stopping%bracket_iteration_limit
             middle = 0.5_dp * (below + above)
             if (above - below <= stopping%negative_bracket_relative &
                 * abs(middle)) exit
             call bounded_inertia_probe(stiffness, mass, below, above, &
-                middle, count, info)
+                middle, count, info, validated=.true.)
             if (info /= fixed_boundary_bracket_ok) return
             if (count == base_count) then
                 below = middle
@@ -118,11 +128,12 @@ contains
     end subroutine bracket_lowest_positive
 
     subroutine bounded_inertia_probe(stiffness, mass, lower, upper, probe, &
-            count, info)
+            count, info, validated)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: lower, upper
         real(dp), intent(inout) :: probe
         integer, intent(out) :: count, info
+        logical, intent(in), optional :: validated
         real(dp) :: candidate, delta, origin, scale
         integer :: attempt
 
@@ -140,7 +151,7 @@ contains
                 delta = min(16.0_dp * delta, 0.25_dp * (upper - lower))
             end if
             call variable_generalized_inertia(stiffness, mass, candidate, &
-                count, info)
+                count, info, validated)
             if (info == variable_generalized_ok) then
                 probe = candidate
                 info = fixed_boundary_bracket_ok

@@ -524,7 +524,8 @@ contains
         end if
         call iterate_variable_generalized_eigenvalue( &
             problem%sparse_stiffness, problem%sparse_mass, shift, eigenvalue, &
-            vector, residual, resolution, local_info, controls)
+            vector, residual, resolution, local_info, controls, &
+            validated=.true.)
         if (local_info /= variable_generalized_ok) then
             message = "sparse compatible FEEC inverse iteration failed"
             return

@@ -22,18 +22,25 @@ module variable_generalized_solver
     public :: variable_eigenvalue_bound
     public :: variable_generalized_inertia
     public :: pencil_roundoff
+    public :: validate_variable_pencil
 
 contains
 
+    ! Checking that the mass is positive definite costs one factorization,
+    ! as much as the inertia itself; callers probing many shifts of one
+    ! pencil validate it once (validate_variable_pencil) and pass
+    ! validated=.true.
     subroutine variable_generalized_inertia(stiffness, mass, shift, count, &
-            info)
+            info, validated)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: shift
         integer, intent(out) :: count, info
+        logical, intent(in), optional :: validated
         type(variable_block_factor_t) :: factor
 
         count = -1
-        call factorize_generalized_shift(stiffness, mass, shift, factor, info)
+        call factorize_generalized_shift(stiffness, mass, shift, factor, info, &
+            validated)
         if (info /= variable_generalized_ok) return
         ! An unresolved block pivot makes the count unreliable at this shift;
         ! callers probe a nearby shift exactly as for a singular factor.
@@ -65,7 +72,7 @@ contains
             if (.not. matching_variable_blocks(stiffness, mass)) return
             info = variable_generalized_ok
         else
-            call validate_generalized_problem(stiffness, mass, info)
+            call validate_variable_pencil(stiffness, mass, info)
         end if
         if (info /= variable_generalized_ok) return
         info = variable_generalized_invalid
@@ -91,7 +98,7 @@ contains
 
     subroutine iterate_variable_generalized_eigenvalue(stiffness, mass, &
             shift, eigenvalue, vector, residual, resolution, info, controls, &
-            initial)
+            initial, validated)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: shift
         real(dp), intent(out) :: eigenvalue, residual, resolution
@@ -99,6 +106,7 @@ contains
         integer, intent(out) :: info
         type(fixed_boundary_solver_controls_t), intent(in), optional :: controls
         real(dp), intent(in), optional :: initial(:)
+        logical, intent(in), optional :: validated
         type(variable_block_factor_t) :: factor
         type(fixed_boundary_solver_controls_t) :: stopping
         real(dp), allocatable :: iterate(:)
@@ -108,7 +116,8 @@ contains
         stopping = fixed_boundary_solver_controls_t()
         if (present(controls)) stopping = controls
         scale = pencil_roundoff(stiffness, mass)
-        call factorize_generalized_shift(stiffness, mass, shift, factor, info)
+        call factorize_generalized_shift(stiffness, mass, shift, factor, info, &
+            validated)
         if (info /= variable_generalized_ok) return
         n = sum(stiffness%widths)
         allocate (vector(n), iterate(n))
@@ -179,17 +188,26 @@ contains
     end subroutine initialize_variable_iterate
 
     subroutine factorize_generalized_shift(stiffness, mass, shift, factor, &
-            info)
+            info, validated)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: shift
         type(variable_block_factor_t), intent(out) :: factor
         integer, intent(out) :: info
+        logical, intent(in), optional :: validated
         type(variable_block_tridiagonal_t) :: shifted
+        logical :: skip_validation
 
         info = variable_generalized_invalid
         if (.not. ieee_is_finite(shift)) return
-        call validate_generalized_problem(stiffness, mass, info)
-        if (info /= variable_generalized_ok) return
+        skip_validation = .false.
+        if (present(validated)) skip_validation = validated
+        if (skip_validation) then
+            ! The shifted factorization checks its own blocks.
+            if (.not. same_block_widths(stiffness, mass)) return
+        else
+            call validate_variable_pencil(stiffness, mass, info)
+            if (info /= variable_generalized_ok) return
+        end if
         call form_generalized_shift(stiffness, mass, shift, shifted)
         call factorize_variable_shifted(shifted, 0.0_dp, factor, info)
         if (info /= variable_block_ok) then
@@ -199,7 +217,8 @@ contains
         info = variable_generalized_ok
     end subroutine factorize_generalized_shift
 
-    subroutine validate_generalized_problem(stiffness, mass, info)
+    ! Matching symmetric blocks and a positive definite mass.
+    subroutine validate_variable_pencil(stiffness, mass, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         integer, intent(out) :: info
         type(variable_block_factor_t) :: mass_factor
@@ -216,7 +235,7 @@ contains
             return
         end if
         info = variable_generalized_ok
-    end subroutine validate_generalized_problem
+    end subroutine validate_variable_pencil
 
     function matching_variable_blocks(stiffness, mass) result(matches)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
@@ -233,6 +252,15 @@ contains
         if (.not. matches) return
         matches = all(stiffness%widths == mass%widths)
     end function matching_variable_blocks
+
+    pure logical function same_block_widths(stiffness, mass) result(same)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+
+        same = allocated(stiffness%widths) .and. allocated(mass%widths)
+        if (.not. same) return
+        same = size(stiffness%widths) == size(mass%widths)
+        if (same) same = all(stiffness%widths == mass%widths)
+    end function same_block_widths
 
     subroutine form_generalized_shift(stiffness, mass, shift, shifted)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
