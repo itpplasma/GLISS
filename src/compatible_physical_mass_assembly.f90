@@ -3,8 +3,9 @@ module compatible_physical_mass_assembly
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use phase_assembly_policy, only: phase_assembly_direct, &
         phase_assembly_transformed
-    use phase_factor_topology, only: phase_cosine, &
-        phase_product_coefficients, phase_sine
+    use period_averaged_assembly, only: accumulate_period_averaged, &
+        period_masks
+    use phase_factor_topology, only: phase_cosine, phase_sine
     use perpendicular_kinetic_kernel, only: perpendicular_kinetic_matrix
     use physical_mass_kernel, only: physical_mass_matrix
     implicit none
@@ -14,6 +15,17 @@ module compatible_physical_mass_assembly
 
     public :: assemble_compatible_perpendicular_mass_surface
     public :: assemble_compatible_physical_mass_surface
+
+    interface
+        subroutine dsyev(jobz, uplo, n, a, lda, w, work, lwork, info)
+            import :: dp
+            character(len=1), intent(in) :: jobz, uplo
+            integer, intent(in) :: n, lda, lwork
+            real(dp), intent(inout) :: a(lda, *)
+            real(dp), intent(out) :: w(*), work(*)
+            integer, intent(out) :: info
+        end subroutine dsyev
+    end interface
 
 contains
 
@@ -54,18 +66,10 @@ contains
                 end do
             end do
         else
-            angular_weight = radial_weight / real(size(fields, 1) &
-                * size(fields, 2), dp)
-            do k = 1, size(fields, 2)
-                do j = 1, size(fields, 1)
-                    call accumulate_transformed(fields, j, k, density_kg_m3, &
-                        trial_m, trial_n, trial_parity, &
-                        field_periods, h1_values, eta_values, l2_values, &
-                        real(j - 1, dp) / real(size(fields, 1), dp), &
-                        real(k - 1, dp) / real(size(fields, 2), dp), &
-                        angular_weight, mass)
-                end do
-            end do
+            call assemble_transformed(fields, density_kg_m3, trial_m, &
+                trial_n, trial_parity, field_periods, h1_values, eta_values, &
+                l2_values, radial_weight, 3, mass, info)
+            if (info /= 0) return
         end if
         info = 0
     end subroutine assemble_compatible_physical_mass_surface
@@ -103,21 +107,106 @@ contains
                 end do
             end do
         else
-            angular_weight = radial_weight / real(size(fields, 1) &
-                * size(fields, 2), dp)
-            do k = 1, size(fields, 2)
-                do j = 1, size(fields, 1)
-                    call accumulate_perpendicular_transformed(fields, j, k, &
-                        density_kg_m3, trial_m, trial_n, trial_parity, &
-                        field_periods, h1_values, l2_values, &
-                        real(j - 1, dp) / real(size(fields, 1), dp), &
-                        real(k - 1, dp) / real(size(fields, 2), dp), &
-                        angular_weight, mass)
-                end do
-            end do
+            call assemble_transformed(fields, density_kg_m3, trial_m, &
+                trial_n, trial_parity, field_periods, h1_values, l2_values, &
+                l2_values, radial_weight, 2, mass, info)
+            if (info /= 0) return
         end if
         info = 0
     end subroutine assemble_compatible_perpendicular_mass_surface
+
+    ! Period-averaged angular quadrature as matrix products: a factor
+    ! point mass = V diag(lambda) V^T gives one weighted channel per column
+    ! of V, whose response is V(:, c)^T of the basis coefficients.
+    ! components = 3 is the physical (xi^s, eta, nu) form, 2 the
+    ! perpendicular (xi^s, eta) form, which ignores eta.
+    subroutine assemble_transformed(fields, density, trial_m, trial_n, &
+            parity, field_periods, h1, eta, l2, radial_weight, components, &
+            mass, info)
+        real(dp), intent(in) :: fields(:, :, :), density
+        integer, intent(in) :: trial_m(:), trial_n(:), parity(:)
+        integer, intent(in) :: field_periods, components
+        real(dp), intent(in) :: h1(:, :), eta(:, :), l2(:, :), radial_weight
+        real(dp), intent(inout) :: mass(:, :)
+        integer, intent(out) :: info
+        integer, parameter :: chunk_limit = 256
+        real(dp), allocatable :: cosine_part(:, :, :), sine_part(:, :, :)
+        real(dp), allocatable :: cosine_phase(:, :), sine_phase(:, :)
+        real(dp), allocatable :: weight(:, :)
+        real(dp) :: coefficients(components, 2, size(mass, 1))
+        real(dp) :: point_mass(components, components), eigenvalues(components)
+        real(dp) :: work(8 * components), angular_weight, phase, theta, zeta
+        real(dp), allocatable :: plus(:, :), minus(:, :)
+        logical :: mixed
+        integer :: channel, chunk, column, columns, count, first, j, k
+        integer :: lapack_info, point, points, trial, trials
+
+        info = -1
+        columns = size(mass, 1)
+        trials = size(trial_m)
+        points = size(fields, 1) * size(fields, 2)
+        angular_weight = radial_weight / real(points, dp)
+        chunk = min(chunk_limit, points)
+        allocate (cosine_part(chunk, columns, components), &
+            sine_part(chunk, columns, components), &
+            cosine_phase(chunk, columns), sine_phase(chunk, columns), &
+            weight(chunk, components), plus(columns, columns), &
+            minus(columns, columns))
+        if (components == 3) then
+            call build_basis_coefficients(parity, h1, eta, l2, coefficients)
+        else
+            call build_perpendicular_basis(parity, h1, l2, coefficients)
+        end if
+        call period_masks(trial_n, field_periods, columns, plus, minus, &
+            mixed)
+        do first = 1, points, chunk
+            count = min(chunk, points - first + 1)
+            ! Rows past the last point carry zero weight and zero response.
+            cosine_part(count + 1:, :, :) = 0.0_dp
+            sine_part(count + 1:, :, :) = 0.0_dp
+            cosine_phase(count + 1:, :) = 0.0_dp
+            sine_phase(count + 1:, :) = 0.0_dp
+            weight(count + 1:, :) = 0.0_dp
+            do point = 1, count
+                j = modulo(first + point - 2, size(fields, 1)) + 1
+                k = (first + point - 2) / size(fields, 1) + 1
+                if (components == 3) then
+                    call point_mass_matrix(fields, j, k, density, point_mass)
+                else
+                    call perpendicular_point_mass(fields, j, k, density, &
+                        point_mass)
+                end if
+                call factor_point_mass(components, point_mass, eigenvalues, &
+                    work, size(work), lapack_info)
+                if (lapack_info /= 0) return
+                weight(point, :) = angular_weight * eigenvalues
+                theta = real(j - 1, dp) / real(size(fields, 1), dp)
+                zeta = real(k - 1, dp) / real(size(fields, 2), dp)
+                do column = 1, columns
+                    trial = modulo(column - 1, trials) + 1
+                    phase = two_pi * (real(trial_m(trial), dp) * theta &
+                        - real(trial_n(trial), dp) * zeta &
+                        / real(field_periods, dp))
+                    cosine_phase(point, column) = cos(phase)
+                    sine_phase(point, column) = sin(phase)
+                    do channel = 1, components
+                        cosine_part(point, column, channel) = dot_product( &
+                            point_mass(:, channel), &
+                            coefficients(:, phase_cosine, column))
+                        sine_part(point, column, channel) = dot_product( &
+                            point_mass(:, channel), &
+                            coefficients(:, phase_sine, column))
+                    end do
+                end do
+            end do
+            do channel = 1, components
+                call accumulate_period_averaged(cosine_part(:, :, channel), &
+                    sine_part(:, :, channel), cosine_phase, sine_phase, &
+                    weight(:, channel), plus, minus, mixed, mass)
+            end do
+        end do
+        info = 0
+    end subroutine assemble_transformed
 
     subroutine accumulate_perpendicular_direct(fields, j, k, density, &
             trial_m, trial_n, parity, field_periods, h1, l2, theta, zeta, &
@@ -147,31 +236,6 @@ contains
         end do
         call rank_update(basis, point_mass, weight, mass)
     end subroutine accumulate_perpendicular_direct
-
-    subroutine accumulate_perpendicular_transformed(fields, j, k, density, &
-            trial_m, trial_n, parity, field_periods, h1, l2, theta, zeta, &
-            weight, mass)
-        real(dp), intent(in) :: fields(:, :, :), density, h1(:, :), l2(:, :)
-        integer, intent(in) :: j, k
-        integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
-        real(dp), intent(in) :: theta, zeta, weight
-        real(dp), intent(inout) :: mass(:, :)
-        real(dp) :: coefficients(2, 2, size(mass, 1)), point_mass(2, 2)
-        real(dp) :: cosine(size(trial_m)), sine(size(trial_m)), phase
-        integer :: trial
-
-        call build_perpendicular_basis(parity, h1, l2, coefficients)
-        call perpendicular_point_mass(fields, j, k, density, point_mass)
-        do trial = 1, size(trial_m)
-            phase = two_pi * (real(trial_m(trial), dp) * theta &
-                - real(trial_n(trial), dp) * zeta &
-                / real(field_periods, dp))
-            cosine(trial) = cos(phase)
-            sine(trial) = sin(phase)
-        end do
-        call transformed_rank_update(coefficients, point_mass, cosine, sine, &
-            trial_n, field_periods, weight, mass)
-    end subroutine accumulate_perpendicular_transformed
 
     pure subroutine build_perpendicular_basis(parity, h1, l2, coefficients)
         integer, intent(in) :: parity(:)
@@ -235,32 +299,6 @@ contains
         end do
         call rank_update(basis, point_mass, weight, mass)
     end subroutine accumulate_direct
-
-    subroutine accumulate_transformed(fields, j, k, density, trial_m, &
-            trial_n, parity, field_periods, h1, eta, l2, theta, zeta, weight, &
-            mass)
-        real(dp), intent(in) :: fields(:, :, :), density, h1(:, :), l2(:, :)
-        real(dp), intent(in) :: eta(:, :)
-        integer, intent(in) :: j, k
-        integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
-        real(dp), intent(in) :: theta, zeta, weight
-        real(dp), intent(inout) :: mass(:, :)
-        real(dp) :: coefficients(3, 2, size(mass, 1)), point_mass(3, 3)
-        real(dp) :: cosine(size(trial_m)), sine(size(trial_m)), phase
-        integer :: trial
-
-        call build_basis_coefficients(parity, h1, eta, l2, coefficients)
-        call point_mass_matrix(fields, j, k, density, point_mass)
-        do trial = 1, size(trial_m)
-            phase = two_pi * (real(trial_m(trial), dp) * theta &
-                - real(trial_n(trial), dp) * zeta &
-                / real(field_periods, dp))
-            cosine(trial) = cos(phase)
-            sine(trial) = sin(phase)
-        end do
-        call transformed_rank_update(coefficients, point_mass, cosine, sine, &
-            trial_n, field_periods, weight, mass)
-    end subroutine accumulate_transformed
 
     pure subroutine build_basis_coefficients(parity, h1, eta, l2, &
             coefficients)
@@ -331,37 +369,6 @@ contains
         end do
     end subroutine rank_update
 
-    subroutine transformed_rank_update(coefficients, point_mass, cosine, &
-            sine, trial_n, field_periods, weight, mass)
-        real(dp), intent(in) :: coefficients(:, :, :), point_mass(:, :)
-        real(dp), intent(in) :: cosine(:), sine(:), weight
-        integer, intent(in) :: trial_n(:), field_periods
-        real(dp), intent(inout) :: mass(:, :)
-        real(dp) :: products(2, 2), contribution
-        integer :: a, b, kind_a, kind_b, trial_a, trial_b, trials
-
-        trials = size(trial_n)
-        do b = 1, size(mass, 2)
-            trial_b = modulo(b - 1, trials) + 1
-            do a = 1, size(mass, 1)
-                trial_a = modulo(a - 1, trials) + 1
-                call phase_product_coefficients(cosine(trial_a), &
-                    sine(trial_a), cosine(trial_b), sine(trial_b), &
-                    trial_n(trial_a), trial_n(trial_b), field_periods, products)
-                contribution = 0.0_dp
-                do kind_b = phase_cosine, phase_sine
-                    do kind_a = phase_cosine, phase_sine
-                        contribution = contribution &
-                            + products(kind_a, kind_b) * bilinear( &
-                            coefficients(:, kind_a, a), &
-                            point_mass, coefficients(:, kind_b, b))
-                    end do
-                end do
-                mass(a, b) = mass(a, b) + weight * contribution
-            end do
-        end do
-    end subroutine transformed_rank_update
-
     pure function bilinear(first, matrix, second) result(value)
         real(dp), intent(in) :: first(:), matrix(:, :), second(:)
         real(dp) :: value
@@ -374,6 +381,36 @@ contains
             end do
         end do
     end function bilinear
+
+    ! point_mass = V diag(lambda) V^T with V overwriting point_mass: the
+    ! Cholesky factor (lambda = 1) of the positive definite kinetic form,
+    ! or its eigenpairs when it is only semidefinite.
+    subroutine factor_point_mass(n, point_mass, lambda, work, lwork, info)
+        integer, intent(in) :: n, lwork
+        real(dp), intent(inout) :: point_mass(n, n)
+        real(dp), intent(out) :: lambda(n), work(lwork)
+        integer, intent(out) :: info
+        real(dp) :: factor(n, n), pivot
+        integer :: i, j
+
+        factor = 0.0_dp
+        do j = 1, n
+            pivot = point_mass(j, j) - sum(factor(j, 1:j - 1)**2)
+            if (pivot <= 1.0e-12_dp * maxval(abs(point_mass))) then
+                call dsyev("V", "U", n, point_mass, n, lambda, work, lwork, &
+                    info)
+                return
+            end if
+            factor(j, j) = sqrt(pivot)
+            do i = j + 1, n
+                factor(i, j) = (point_mass(i, j) &
+                    - sum(factor(i, 1:j - 1) * factor(j, 1:j - 1))) / factor(j, j)
+            end do
+        end do
+        point_mass = factor
+        lambda = 1.0_dp
+        info = 0
+    end subroutine factor_point_mass
 
     subroutine validate_inputs(fields, density, trial_m, trial_n, parity, &
             field_periods, h1, l2, radial_weight, phase_assembly, &

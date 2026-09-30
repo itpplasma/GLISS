@@ -3,8 +3,9 @@ module compatible_compressible_stiffness_assembly
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use phase_assembly_policy, only: phase_assembly_direct, &
         phase_assembly_transformed
-    use phase_factor_topology, only: phase_cosine, &
-        phase_product_coefficients, phase_sine
+    use phase_factor_topology, only: phase_cosine, phase_sine
+    use period_averaged_assembly, only: accumulate_period_averaged, &
+        period_masks
     use physical_constants, only: vacuum_permeability
     use three_component_kernel, only: compressible_divergence_value
     use two_component_kernel, only: bending_component_value, &
@@ -70,23 +71,99 @@ contains
                 end do
             end do
         else
-            angular_weight = radial_weight / real(size(fields, 1) &
-                * size(fields, 2), dp)
-            do k = 1, size(fields, 2)
-                do j = 1, size(fields, 1)
-                    call accumulate_transformed(fields(j, k, :), drive(j, k), &
-                        jacobian_radial(j, k), jacobian_theta(j, k), &
-                        jacobian_zeta(j, k), gamma_pressure(j, k), trial_m, &
-                        trial_n, trial_parity, field_periods, h1_values, &
-                        h1_derivatives, eta_values, l2_values, &
-                        real(j - 1, dp) / real(size(fields, 1), dp), &
-                        real(k - 1, dp) / real(size(fields, 2), dp), &
-                        angular_weight, stiffness, stiffness_terms)
-                end do
-            end do
+            call assemble_transformed(fields, drive, jacobian_radial, &
+                jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, &
+                trial_n, trial_parity, field_periods, h1_values, &
+                h1_derivatives, eta_values, l2_values, radial_weight, &
+                stiffness, stiffness_terms)
         end if
         info = 0
     end subroutine assemble_compatible_compressible_stiffness_surface
+
+    ! Period-averaged angular quadrature as matrix products over chunks of
+    ! angular points; each energy term is one weighted channel.
+    subroutine assemble_transformed(fields, drive, jacobian_radial, &
+            jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
+            parity, field_periods, h1, dh1, eta, l2, radial_weight, &
+            stiffness, stiffness_terms)
+        real(dp), intent(in) :: fields(:, :, :), drive(:, :)
+        real(dp), intent(in) :: jacobian_radial(:, :), jacobian_theta(:, :)
+        real(dp), intent(in) :: jacobian_zeta(:, :), gamma_pressure(:, :)
+        integer, intent(in) :: trial_m(:), trial_n(:), parity(:)
+        integer, intent(in) :: field_periods
+        real(dp), intent(in) :: h1(:, :), dh1(:, :), eta(:, :), l2(:, :)
+        real(dp), intent(in) :: radial_weight
+        real(dp), intent(inout) :: stiffness(:, :)
+        real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
+        integer, parameter :: chunk_limit = 256
+        real(dp), allocatable :: cosine_part(:, :, :), sine_part(:, :, :)
+        real(dp), allocatable :: cosine_phase(:, :), sine_phase(:, :)
+        real(dp), allocatable :: weight(:, :), term(:, :)
+        real(dp) :: coefficients(5, 2, size(stiffness, 1)), factors(5)
+        real(dp) :: angular_weight, phase, theta, zeta
+        real(dp), allocatable :: plus(:, :), minus(:, :)
+        logical :: mixed
+        integer :: chunk, column, columns, component, count, first, j, k
+        integer :: point, points, trial, trials
+
+        columns = size(stiffness, 1)
+        trials = size(trial_m)
+        points = size(fields, 1) * size(fields, 2)
+        angular_weight = radial_weight / real(points, dp)
+        chunk = min(chunk_limit, points)
+        allocate (cosine_part(chunk, columns, 5), sine_part(chunk, columns, 5), &
+            cosine_phase(chunk, columns), sine_phase(chunk, columns), &
+            weight(chunk, 5), term(columns, columns), &
+            plus(columns, columns), minus(columns, columns))
+        call period_masks(trial_n, field_periods, columns, plus, minus, &
+            mixed)
+        do first = 1, points, chunk
+            count = min(chunk, points - first + 1)
+            ! Rows past the last point carry zero weight and zero response.
+            cosine_part(count + 1:, :, :) = 0.0_dp
+            sine_part(count + 1:, :, :) = 0.0_dp
+            cosine_phase(count + 1:, :) = 0.0_dp
+            sine_phase(count + 1:, :) = 0.0_dp
+            weight(count + 1:, :) = 0.0_dp
+            do point = 1, count
+                j = modulo(first + point - 2, size(fields, 1)) + 1
+                k = (first + point - 2) / size(fields, 1) + 1
+                call build_response_coefficients(fields(j, k, :), &
+                    jacobian_radial(j, k), jacobian_theta(j, k), &
+                    jacobian_zeta(j, k), trial_m, trial_n, parity, &
+                    field_periods, h1, dh1, eta, l2, coefficients)
+                call build_response_factors(drive(j, k), gamma_pressure(j, k), &
+                    fields(j, k, 7), factors)
+                weight(point, :) = angular_weight * factors
+                theta = real(j - 1, dp) / real(size(fields, 1), dp)
+                zeta = real(k - 1, dp) / real(size(fields, 2), dp)
+                do column = 1, columns
+                    trial = modulo(column - 1, trials) + 1
+                    phase = two_pi * (real(trial_m(trial), dp) * theta &
+                        - real(trial_n(trial), dp) * zeta &
+                        / real(field_periods, dp))
+                    cosine_phase(point, column) = cos(phase)
+                    sine_phase(point, column) = sin(phase)
+                    do component = 1, 5
+                        cosine_part(point, column, component) = &
+                            coefficients(component, phase_cosine, column)
+                        sine_part(point, column, component) = &
+                            coefficients(component, phase_sine, column)
+                    end do
+                end do
+            end do
+            do component = 1, 5
+                term = 0.0_dp
+                call accumulate_period_averaged( &
+                    cosine_part(:, :, component), sine_part(:, :, component), &
+                    cosine_phase, sine_phase, weight(:, component), plus, &
+                    minus, mixed, term)
+                stiffness = stiffness + term
+                if (present(stiffness_terms)) stiffness_terms(:, :, component) &
+                    = stiffness_terms(:, :, component) + term
+            end do
+        end do
+    end subroutine assemble_transformed
 
     subroutine accumulate_direct(fields, drive, jacobian_radial, &
             jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
@@ -122,36 +199,9 @@ contains
         call rank_update(responses, factors, weight, stiffness, stiffness_terms)
     end subroutine accumulate_direct
 
-    subroutine accumulate_transformed(fields, drive, jacobian_radial, &
-            jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
-            parity, field_periods, h1, dh1, eta, l2, theta, zeta, weight, &
-            stiffness, stiffness_terms)
-        real(dp), intent(in) :: fields(:), drive, jacobian_radial
-        real(dp), intent(in) :: jacobian_theta, jacobian_zeta, gamma_pressure
-        real(dp), intent(in) :: h1(:, :), dh1(:, :), eta(:, :), l2(:, :)
-        integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
-        real(dp), intent(in) :: theta, zeta, weight
-        real(dp), intent(inout) :: stiffness(:, :)
-        real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
-        real(dp) :: coefficients(5, 2, size(stiffness, 1))
-        real(dp) :: cosine(size(trial_m)), sine(size(trial_m)), factors(5), phase
-        integer :: trial
-
-        call build_response_coefficients(fields, jacobian_radial, &
-            jacobian_theta, jacobian_zeta, trial_m, trial_n, parity, &
-            field_periods, h1, dh1, eta, l2, coefficients)
-        do trial = 1, size(trial_m)
-            phase = two_pi * (real(trial_m(trial), dp) * theta &
-                - real(trial_n(trial), dp) * zeta &
-                / real(field_periods, dp))
-            cosine(trial) = cos(phase)
-            sine(trial) = sin(phase)
-        end do
-        call build_response_factors(drive, gamma_pressure, fields(7), factors)
-        call transformed_rank_update(coefficients, cosine, sine, trial_n, &
-            field_periods, factors, weight, stiffness, stiffness_terms)
-    end subroutine accumulate_transformed
-
+    ! The responses are linear in the radial basis values, so each trial
+    ! evaluates the kernel once per unit channel (xi^s value, its radial
+    ! derivative, eta and mu) and every basis function scales them.
     pure subroutine build_response_coefficients(fields, jacobian_radial, &
             jacobian_theta, jacobian_zeta, trial_m, trial_n, parity, &
             field_periods, h1, dh1, eta, l2, responses)
@@ -160,52 +210,51 @@ contains
         real(dp), intent(in) :: eta(:, :), l2(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
         real(dp), contiguous, intent(out) :: responses(:, :, :)
-        real(dp) :: basis(9, 2)
-        real(dp) :: phase_coefficients(2)
+        real(dp) :: basis(9, 2), phase_coefficients(2)
+        real(dp) :: unit_value(5, 2), unit_radial(5, 2), unit_eta(5, 2)
+        real(dp) :: unit_mu(5, 2)
         integer :: basis_index, column, trial, trials
 
-        responses = 0.0_dp
         trials = size(trial_m)
-        do basis_index = 1, size(h1, 1)
-            do trial = 1, trials
-                basis = 0.0_dp
-                basis(xi_value, parity(trial)) = h1(basis_index, trial)
-                basis(xi_radial, parity(trial)) = dh1(basis_index, trial)
-                phase_coefficients = basis(xi_value, :)
-                call angular_derivative(phase_coefficients(phase_cosine), &
-                    phase_coefficients(phase_sine), &
-                    two_pi * real(trial_m(trial), dp), &
-                    basis(xi_theta, phase_cosine), &
-                    basis(xi_theta, phase_sine))
-                call angular_derivative(phase_coefficients(phase_cosine), &
-                    phase_coefficients(phase_sine), &
-                    -two_pi * real(trial_n(trial), dp) &
-                    / real(field_periods, dp), basis(xi_zeta, phase_cosine), &
-                    basis(xi_zeta, phase_sine))
+        do trial = 1, trials
+            basis = 0.0_dp
+            basis(xi_value, parity(trial)) = 1.0_dp
+            phase_coefficients = basis(xi_value, :)
+            call angular_derivative(phase_coefficients(phase_cosine), &
+                phase_coefficients(phase_sine), &
+                two_pi * real(trial_m(trial), dp), &
+                basis(xi_theta, phase_cosine), basis(xi_theta, phase_sine))
+            call angular_derivative(phase_coefficients(phase_cosine), &
+                phase_coefficients(phase_sine), &
+                -two_pi * real(trial_n(trial), dp) &
+                / real(field_periods, dp), basis(xi_zeta, phase_cosine), &
+                basis(xi_zeta, phase_sine))
+            call build_energy_responses(fields, jacobian_radial, &
+                jacobian_theta, jacobian_zeta, basis, unit_value)
+            basis = 0.0_dp
+            basis(xi_radial, parity(trial)) = 1.0_dp
+            call build_energy_responses(fields, jacobian_radial, &
+                jacobian_theta, jacobian_zeta, basis, unit_radial)
+            call build_tangential_basis(trial_m(trial), trial_n(trial), &
+                parity(trial), field_periods, 1.0_dp, .true., basis)
+            call build_energy_responses(fields, jacobian_radial, &
+                jacobian_theta, jacobian_zeta, basis, unit_eta)
+            call build_tangential_basis(trial_m(trial), trial_n(trial), &
+                parity(trial), field_periods, 1.0_dp, .false., basis)
+            call build_energy_responses(fields, jacobian_radial, &
+                jacobian_theta, jacobian_zeta, basis, unit_mu)
+            do basis_index = 1, size(h1, 1)
                 column = (basis_index - 1) * trials + trial
-                call build_energy_responses(fields, jacobian_radial, &
-                    jacobian_theta, jacobian_zeta, basis, &
-                    responses(:, :, column))
+                responses(:, :, column) = h1(basis_index, trial) * unit_value &
+                    + dh1(basis_index, trial) * unit_radial
             end do
-        end do
-        do basis_index = 1, size(l2, 1)
-            do trial = 1, trials
-                call build_tangential_basis(trial_m(trial), trial_n(trial), &
-                    parity(trial), field_periods, eta(basis_index, trial), &
-                    .true., basis)
-                column = size(h1, 1) * trials &
-                    + (basis_index - 1) * trials + trial
-                call build_energy_responses(fields, jacobian_radial, &
-                    jacobian_theta, jacobian_zeta, basis, &
-                    responses(:, :, column))
-                call build_tangential_basis(trial_m(trial), trial_n(trial), &
-                    parity(trial), field_periods, l2(basis_index, trial), &
-                    .false., basis)
+            do basis_index = 1, size(l2, 1)
+                column = size(h1, 1) * trials + (basis_index - 1) * trials &
+                    + trial
+                responses(:, :, column) = eta(basis_index, trial) * unit_eta
                 column = (size(h1, 1) + size(l2, 1)) * trials &
                     + (basis_index - 1) * trials + trial
-                call build_energy_responses(fields, jacobian_radial, &
-                    jacobian_theta, jacobian_zeta, basis, &
-                    responses(:, :, column))
+                responses(:, :, column) = l2(basis_index, trial) * unit_mu
             end do
         end do
     end subroutine build_response_coefficients
@@ -315,40 +364,6 @@ contains
             end do
         end do
     end subroutine rank_update
-
-    subroutine transformed_rank_update(responses, cosine, sine, trial_n, &
-            field_periods, factors, weight, stiffness, terms)
-        real(dp), intent(in) :: responses(:, :, :), cosine(:), sine(:)
-        integer, intent(in) :: trial_n(:), field_periods
-        real(dp), intent(in) :: factors(:), weight
-        real(dp), intent(inout) :: stiffness(:, :)
-        real(dp), optional, intent(inout) :: terms(:, :, :)
-        real(dp) :: products(2, 2), contributions(5)
-        integer :: a, b, kind_a, kind_b, trial_a, trial_b, trials
-
-        trials = size(trial_n)
-        do b = 1, size(stiffness, 2)
-            trial_b = modulo(b - 1, trials) + 1
-            do a = 1, size(stiffness, 1)
-                trial_a = modulo(a - 1, trials) + 1
-                call phase_product_coefficients(cosine(trial_a), &
-                    sine(trial_a), cosine(trial_b), sine(trial_b), &
-                    trial_n(trial_a), trial_n(trial_b), field_periods, products)
-                contributions = 0.0_dp
-                do kind_b = phase_cosine, phase_sine
-                    do kind_a = phase_cosine, phase_sine
-                        contributions = contributions &
-                            + products(kind_a, kind_b) * factors &
-                            * responses(:, kind_a, a) * responses(:, kind_b, b)
-                    end do
-                end do
-                stiffness(a, b) = stiffness(a, b) &
-                    + weight * sum(contributions)
-                if (present(terms)) &
-                    terms(a, b, :) = terms(a, b, :) + weight * contributions
-            end do
-        end do
-    end subroutine transformed_rank_update
 
     pure subroutine build_response_factors(drive, gamma_pressure, signed_sqrtg, &
             factors)

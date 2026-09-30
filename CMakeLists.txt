@@ -60,6 +60,7 @@ add_library(gliss
     src/helical_cylinder_limit.f90
     src/local_mode_model.f90
     src/phase_assembly_policy.f90
+    src/period_averaged_assembly.f90
     src/compatible_physical_mass_assembly.f90
     src/physical_mass_kernel.f90
     src/nonuniform_derivative.f90
