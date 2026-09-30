@@ -22,17 +22,21 @@ fixtures under `test/data` (16 surfaces, M=8) used by
 
 ## Result
 
-| q0 | DCON zero crossings | GLISS before #16: count, lowest omega^2 | GLISS now: count, lowest omega^2 |
-| --- | --- | --- | --- |
-| 1.035 | 1 | 1, -1.51e-3 | 1, -2.72e-4 |
-| 1.039062 | 1 | 1, -1.37e-3 | 1, -1.98e-5 |
-| 1.039843 | 0 | 1, -1.35e-3 | 0, +1.99e-5 |
-| 1.045 | 0 | 1, -1.21e-3 | 0, +2.32e-4 |
+| q0 | DCON zero crossings | GLISS before #16: count, lowest eigenvalue | GLISS after #16: count, lowest eigenvalue | GLISS now: count, lowest omega^2 (s^-2) |
+| --- | --- | --- | --- | --- |
+| 1.035 | 1 | 1, -1.51e-3 | 1, -2.72e-4 | 1, -342.3 |
+| 1.039062 | 1 | 1, -1.37e-3 | 1, -1.98e-5 | 1, -18.12 |
+| 1.039843 | 0 | 1, -1.35e-3 | 0, +1.99e-5 | 0, +45.28 |
+| 1.045 | 0 | 1, -1.21e-3 | 0, +2.32e-4 | 0, +472.8 |
 
-These are `run.sh` defaults (64 surfaces, export M=24, m=0..8, degree 2) with
-GLISS eigenvalues in the perpendicular-L2 marginality norm; one q0 takes about
-three minutes on one thread. Use `THREADS=1` on a loaded machine: OpenMP
-oversubscription slowed GVEC about a hundredfold here.
+These are `run.sh` defaults (64 surfaces, export M=24, m=0..8, degree 2).
+The first two GLISS columns used the earlier compatible perpendicular-L2
+norm, a pure number. The current eigenvalues are omega^2 in s^-2 with the
+perpendicular kinetic form at unit mass density (1 kg m^-3) as the inertia
+([#35](https://github.com/itpplasma/GLISS/issues/35)); only the sign and the
+count are compared with DCON. One q0 takes about 5 s on one thread (about
+three minutes before the matrix-product assembly). Use `THREADS=1` on a
+loaded machine: OpenMP oversubscription slowed GVEC about a hundredfold here.
 
 DCON (GPEC `f5595c06`, reproduced independently from its public regression
 inputs) is converged at q0=1.03956-1.03959; edge truncation only lowers it.
