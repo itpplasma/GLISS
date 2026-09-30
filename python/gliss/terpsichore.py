@@ -138,6 +138,8 @@ def _fixture_path(path: PathLike, label: str = "FORT.23") -> bytes:
         raise TypeError("path must resolve to a string")
     if "\0" in value:
         raise ValueError("path contains a null byte")
+    if value.endswith(" "):
+        raise ValueError("path must not end with a space")
     fixture = Path(value)
     if not fixture.exists():
         raise FileNotFoundError(f"TERPSICHORE {label} does not exist: {fixture}")

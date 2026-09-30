@@ -136,6 +136,7 @@ def test_fixed_boundary_rejects_invalid_native_result(monkeypatch, tmp_path):
     [
         (b"fort.23", TypeError, "resolve to a string"),
         ("bad\0fort.23", ValueError, "null byte"),
+        ("fort.23 ", ValueError, "end with a space"),
         ("missing", FileNotFoundError, "does not exist"),
     ],
 )

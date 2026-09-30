@@ -26,6 +26,8 @@ program test_gliss_capi
     character(c_char), target :: path(len(fixture)), error_buffer(256)
     character(c_char), target :: output_path(len(output_file))
     character(c_char), target :: embedded_nul(3), missing_path(10)
+    character(c_char), target :: trailing_space(4) = &
+        [character(c_char) :: "a", ".", "n", " "]
     real(c_double), allocatable, target :: s_values(:), d_mercier(:)
     real(c_double), allocatable :: legacy_s(:), legacy_d(:)
     type(c_ptr), target :: context, roundtrip_context
@@ -302,6 +304,12 @@ program test_gliss_capi
         int(size(error_buffer), c_size_t))
     call require(status == status_invalid_argument, &
         "embedded null was not rejected")
+    status = equilibrium_create(c_loc(trailing_space), &
+        int(size(trailing_space), c_size_t), c_loc(context), &
+        c_loc(error_buffer), int(size(error_buffer), c_size_t))
+    call require(status == status_invalid_argument .and. &
+        index(error_text(error_buffer), "space") > 0, &
+        "trailing space was not rejected")
     status = equilibrium_create(c_null_ptr, 1_c_size_t, c_loc(context), &
         c_null_ptr, 0_c_size_t)
     call require(status == status_invalid_argument, &

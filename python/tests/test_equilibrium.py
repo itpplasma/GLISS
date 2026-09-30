@@ -172,6 +172,7 @@ def test_equilibrium_write_preserves_destination_on_native_error(monkeypatch, tm
     [
         (b"bytes.nc", TypeError, "resolve to a string"),
         ("nul\0name.nc", ValueError, "null byte"),
+        ("trailing.nc ", ValueError, "end with a space"),
     ],
 )
 def test_equilibrium_write_rejects_invalid_paths(
@@ -279,3 +280,17 @@ def test_equilibrium_is_public():
 def test_equilibrium_bind_reports_missing_native_symbols():
     with pytest.raises(OSError, match="equilibrium context.*matching"):
         _bind(object())
+
+
+def test_equilibrium_rejects_trailing_space_before_native_open(
+    monkeypatch, tmp_path
+):
+    # Fortran OPEN and the NetCDF bridge drop trailing blanks; accepting the
+    # name would hash one file and read another.
+    library = FakeLibrary()
+    monkeypatch.setattr("gliss.equilibrium._load_library", lambda: library)
+    (tmp_path / "real.nc").write_bytes(b"valid")
+    (tmp_path / "real.nc ").write_bytes(b"garbage")
+    with pytest.raises(ValueError, match="end with a space"):
+        Equilibrium(tmp_path / "real.nc ")
+    assert library.creates == 0

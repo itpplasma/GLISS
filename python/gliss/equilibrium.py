@@ -118,6 +118,8 @@ def _export_path(path: PathLike) -> Tuple[Path, bytes]:
         raise TypeError("path must resolve to a string")
     if "\0" in value:
         raise ValueError("path contains a null byte")
+    if value.endswith(" "):
+        raise ValueError("path must not end with a space")
     export = Path(value)
     if not export.exists():
         raise FileNotFoundError(f"equilibrium export does not exist: {export}")
@@ -138,6 +140,8 @@ def _output_path(path: PathLike) -> Path:
         raise TypeError("output path must resolve to a string")
     if "\0" in value:
         raise ValueError("output path contains a null byte")
+    if value.endswith(" "):
+        raise ValueError("output path must not end with a space")
     output = Path(value)
     if not output.parent.is_dir():
         raise FileNotFoundError(f"output directory does not exist: {output.parent}")

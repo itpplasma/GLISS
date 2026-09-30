@@ -62,6 +62,14 @@ contains
             end if
             filename(i:i) = path(i)
         end do
+        ! Fortran OPEN and the NetCDF bridge drop trailing blanks, so such a
+        ! path would silently name a different file.
+        if (filename(length:length) == " ") then
+            deallocate (filename)
+            status = status_invalid_argument
+            message = "path must not end with a space"
+            return
+        end if
         status = status_ok
     end function decode_path
 
