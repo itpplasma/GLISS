@@ -18,5 +18,5 @@ not positive definite, whose Boozer Jacobian, |B| or current identities
 disagree with the geometry by more than 3e-2, or whose flux-surface-averaged
 radial force balance fails by more than 1e-2. The residuals are stored as
 attributes of the export. Asymmetric (`lasym`) files are converted with both
-parities; the stability operator refuses them. See the Python README for the
-full contract.
+parities and solved with the coupled parity operator (parity class 0). See
+the Python README for the full contract.

@@ -102,7 +102,7 @@ def _result(
         and native.poloidal_max == poloidal_max
         and native.mode_count == 2 * poloidal_max + 1
         and native.radial_surfaces >= 1
-        and native.parity_class == 1
+        and native.parity_class in (0, 1)
         and native.degree == degree
         and math.isfinite(native.force_balance_residual)
         and native.force_balance_residual >= 0.0

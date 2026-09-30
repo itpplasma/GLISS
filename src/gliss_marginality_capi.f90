@@ -8,7 +8,8 @@ module gliss_marginality_capi
     use gliss_c_contexts, only: equilibrium_context_t
     use marginality_spectrum, only: compute_marginality_spectrum, &
         compute_phase_envelope_spectrum, marginality_spectrum_compute_error, &
-        marginality_spectrum_invalid, marginality_spectrum_ok, &
+        marginality_spectrum_asymmetric, marginality_spectrum_invalid, &
+        marginality_spectrum_ok, &
         marginality_normalization_cas3d2mn, &
         marginality_normalization_perpendicular_l2, &
         marginality_quadrature_gauss, &
@@ -92,7 +93,7 @@ contains
             call fill_result(native, int(angular_theta), int(angular_zeta), &
                 result)
             status = status_ok
-        case (marginality_spectrum_invalid)
+        case (marginality_spectrum_invalid, marginality_spectrum_asymmetric)
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, trim(message))
         case (marginality_spectrum_compute_error)
@@ -226,7 +227,7 @@ contains
             call fill_result(native, int(angular_theta), int(angular_zeta), &
                 result)
             status = status_ok
-        case (marginality_spectrum_invalid)
+        case (marginality_spectrum_invalid, marginality_spectrum_asymmetric)
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, trim(message))
         case (marginality_spectrum_compute_error)

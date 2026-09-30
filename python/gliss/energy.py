@@ -88,9 +88,7 @@ def diagnose_energy(
 ) -> EnergyTerms:
     """Evaluate energy terms through the native assembled problem."""
     problem._require_open()
-    parity = mode_integer(parity_class, "parity_class")
-    if parity not in (1, 2):
-        raise ValueError("parity_class must be 1 or 2")
+    parity = problem._parity_class(parity_class)
     count = problem._unknown_count(parity)
     values = _coefficient_vector(vector, count, "energy vector", True)
     _bind(problem._library)

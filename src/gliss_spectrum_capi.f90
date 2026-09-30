@@ -1,9 +1,10 @@
 module gliss_spectrum_capi
     use, intrinsic :: iso_c_binding, only: c_associated, c_double, &
-        c_f_pointer, c_int, c_loc, c_null_ptr, c_ptr, c_size_t, c_sizeof
+        c_f_pointer, c_int, c_int32_t, c_loc, c_null_ptr, c_ptr, c_size_t, &
+        c_sizeof
     use fixed_boundary_spectrum, only: build_fixed_boundary_problem, &
         fixed_boundary_allocation_error, &
-        fixed_boundary_asymmetric, fixed_boundary_invalid, fixed_boundary_ok, &
+        fixed_boundary_invalid, fixed_boundary_is_coupled, fixed_boundary_ok, &
         fixed_boundary_problem_t, &
         fixed_boundary_spectrum_result_t, fixed_boundary_unknown_count, &
         solve_fixed_boundary_class
@@ -248,12 +249,37 @@ contains
         if (info /= fixed_boundary_ok) then
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
-                "parity_class must be 1 or 2")
+                "parity_class must be 1 or 2, or 0 for a coupled problem")
             return
         end if
         unknowns = int(count, c_size_t)
         status = status_ok
     end function gliss_stability_problem_unknown_count_c
+
+    function gliss_stability_problem_coupled_c(handle, coupled_pointer, &
+            error_pointer, error_capacity) &
+            bind(c, name="gliss_stability_problem_coupled") result(status)
+        type(c_ptr), value, intent(in) :: handle, coupled_pointer
+        type(c_ptr), value, intent(in) :: error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+        integer(c_int32_t), pointer :: coupled
+        type(stability_problem_context_t), pointer :: context
+
+        status = prepare_required_output(coupled_pointer, error_pointer, &
+            error_capacity, "coupled output pointer is null")
+        if (status /= status_ok) return
+        call c_f_pointer(coupled_pointer, coupled)
+        coupled = 0_c_int32_t
+        status = problem_from_handle(handle, context)
+        if (status /= status_ok) then
+            call write_error(error_pointer, error_capacity, &
+                "stability problem handle is null")
+            return
+        end if
+        if (fixed_boundary_is_coupled(context%problem)) coupled = 1_c_int32_t
+        status = status_ok
+    end function gliss_stability_problem_coupled_c
 
     function prepare_required_output(output_pointer, error_pointer, &
             error_capacity, message) result(status)
@@ -432,11 +458,6 @@ contains
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
                 "invalid fixed-boundary stability configuration")
-        else if (info == fixed_boundary_asymmetric) then
-            status = status_invalid_argument
-            call write_error(error_pointer, error_capacity, &
-                "the equilibrium breaks stellarator symmetry; the parity-" &
-                // "class operator requires it")
         else if (info == fixed_boundary_allocation_error) then
             status = status_allocation_error
             call write_error(error_pointer, error_capacity, &

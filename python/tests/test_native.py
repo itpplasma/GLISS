@@ -82,3 +82,54 @@ def test_native_rayleigh_gradient_matches_finite_differences(
             assert np.linalg.norm(stationary) * np.linalg.norm(
                 lowest.eigenvector
             ) < 1.0e-6 * scale
+
+
+def test_native_coupled_operator_reproduces_parity_classes(native_library, test_data):
+    # solovev_q1.035_shifted.nc is the symmetric export with the poloidal
+    # angle origin moved by 3/32 (test/data/shift_poloidal_origin.py): the
+    # same equilibrium stored with both parities. Its coupled operator must
+    # reproduce the union of the two parity classes of the original.
+    modes = [(0, 1), (1, 1), (2, 1)]
+    options = {"degree": 1, "angular_theta": 32, "angular_zeta": 8}
+    with gliss.Equilibrium(test_data / "solovev_q1.035.nc") as equilibrium:
+        with gliss.StabilityProblem(equilibrium, modes, **options) as problem:
+            assert not problem.coupled and problem.parity_classes == (1, 2)
+            symmetric = problem.solve()
+            union = np.sort(
+                np.concatenate(
+                    [problem.solve_full_spectrum_class(item).eigenvalues
+                     for item in (1, 2)]
+                )
+            )
+    with gliss.Equilibrium(test_data / "solovev_q1.035_shifted.nc") as equilibrium:
+        with gliss.StabilityProblem(equilibrium, modes, **options) as problem:
+            assert problem.coupled and problem.parity_classes == (0,)
+            with pytest.raises(ValueError, match="parity_class must be 0"):
+                problem.solve_class(1)
+            coupled = problem.solve()
+            full = problem.solve_full_spectrum()
+            energy = problem.energy(0, coupled.classes[0].eigenvector)
+    (item,) = coupled.classes
+    assert item.parity_class == 0
+    assert item.negative_count == sum(c.negative_count for c in symmetric.classes)
+    assert item.lowest_eigenvalue == pytest.approx(
+        symmetric.lowest.lowest_eigenvalue, rel=1e-9
+    )
+    assert energy.rayleigh_quotient == pytest.approx(item.lowest_eigenvalue, rel=1e-9)
+    assert np.allclose(full.classes[0].eigenvalues, union, rtol=0.0,
+                       atol=1e-9 * np.max(np.abs(union)))
+    restored = gliss.StabilityResult.read_dict(coupled.to_dict())
+    assert restored.classes[0].parity_class == 0
+
+
+def test_native_coupled_axisymmetric_family(native_library, test_data):
+    with gliss.Equilibrium(test_data / "solovev_q1.035.nc") as equilibrium:
+        symmetric = gliss.solve_axisymmetric(equilibrium, poloidal_max=6, degree=3)
+    with gliss.Equilibrium(test_data / "solovev_q1.035_shifted.nc") as equilibrium:
+        coupled = gliss.solve_axisymmetric(equilibrium, poloidal_max=6, degree=3)
+    assert (symmetric.parity_class, coupled.parity_class) == (1, 0)
+    # The n = 1 kink of an axisymmetric equilibrium appears in both parities.
+    assert coupled.negative_count == 2 * symmetric.negative_count == 2
+    assert coupled.lowest_eigenvalue == pytest.approx(
+        symmetric.lowest_eigenvalue, rel=1e-7
+    )

@@ -49,9 +49,10 @@ See the [Python guide](python/README.md) for examples, conventions, input and
 output contracts, direct VMEC conversion, and the optional SIMSOPT adapter.
 
 Release 0.0.2 provides a manylinux x86-64 wheel and a source distribution.
-macOS wheels, asymmetric or precomputed BOOZ_XFORM input, the production
-free-boundary solve, and the complete equilibrium-to-spectrum derivative chain
-are tracked as future work.
+macOS wheels, the production free-boundary solve, and the complete
+equilibrium-to-spectrum derivative chain are tracked as future work.
+Asymmetric equilibria take the coupled parity operator, and precomputed
+BOOZ_XFORM files convert with `convert_boozer`.
 
 See [PLAN.md](PLAN.md) for the current audit findings, validation priorities,
 and linked implementation issues.

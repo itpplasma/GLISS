@@ -98,7 +98,7 @@ contains
         real(dp), intent(in) :: eigenvalues(:), residuals(:), resolutions(:)
         integer, intent(out) :: info
         real(dp), allocatable :: diagonal(:), offdiagonal(:)
-        real(dp) :: gap, shift, uncertainty
+        real(dp) :: gap, shift, uncertainty, roundoff
         integer :: index
 
         info = dense_spectrum_invalid
@@ -114,11 +114,18 @@ contains
             info)
         if (info /= dense_spectrum_ok) return
         info = dense_spectrum_invalid
+        if (.not. allocated(diagonal) .or. .not. allocated(offdiagonal)) return
+        ! The Sturm count of the congruent tridiagonal matrix T is exact for
+        ! a matrix within about n eps ||T|| of it; closer eigenvalue pairs,
+        ! such as the parity-degenerate pairs of a coupled axisymmetric
+        ! operator, form one cluster and are not separated by a probe.
+        roundoff = 8.0_dp * real(size(diagonal), dp) * epsilon(1.0_dp) &
+            * (maxval(abs(diagonal)) + 2.0_dp * maxval(abs(offdiagonal)))
         do index = 1, size(eigenvalues) - 1
             if (eigenvalues(index) == eigenvalues(index + 1)) cycle
             gap = eigenvalues(index + 1) - eigenvalues(index)
             uncertainty = residuals(index) + resolutions(index) &
-                + residuals(index + 1) + resolutions(index + 1)
+                + residuals(index + 1) + resolutions(index + 1) + roundoff
             if (gap <= uncertainty) cycle
             shift = eigenvalues(index) &
                 + 0.5_dp * gap
@@ -252,8 +259,40 @@ contains
                 return
             end if
         end do
+        ! Rayleigh quotients of a degenerate cluster (the two parities of a
+        ! coupled axisymmetric operator) may leave the dense order by
+        ! roundoff; restore ascending order for the inertia certificate.
+        call sort_eigenpairs(eigenvalues, eigenvectors, vector)
         info = dense_spectrum_ok
     end subroutine refine_dense_spectrum
+
+    pure subroutine sort_eigenpairs(eigenvalues, eigenvectors, column)
+        real(dp), intent(inout) :: eigenvalues(:)
+        real(dp), intent(inout) :: eigenvectors(:, :)
+        real(dp), allocatable, intent(inout) :: column(:)
+        real(dp) :: key
+        integer :: index, position
+
+        if (.not. allocated(column)) allocate (column(size(eigenvectors, 1)))
+        if (size(column) /= size(eigenvectors, 1)) then
+            deallocate (column)
+            allocate (column(size(eigenvectors, 1)))
+        end if
+        do index = 2, size(eigenvalues)
+            if (eigenvalues(index) >= eigenvalues(index - 1)) cycle
+            key = eigenvalues(index)
+            column = eigenvectors(:, index)
+            position = index - 1
+            do while (position >= 1)
+                if (eigenvalues(position) <= key) exit
+                eigenvalues(position + 1) = eigenvalues(position)
+                eigenvectors(:, position + 1) = eigenvectors(:, position)
+                position = position - 1
+            end do
+            eigenvalues(position + 1) = key
+            eigenvectors(:, position + 1) = column
+        end do
+    end subroutine sort_eigenpairs
 
     subroutine refine_dense_eigenpair(stiffness, mass, controls, seeds, &
             target, seed_vector, eigenvalue, vector, residual, resolution, &

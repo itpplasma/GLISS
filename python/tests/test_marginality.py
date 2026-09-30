@@ -351,7 +351,7 @@ def test_cas3d_phase_envelope_rejects_invalid_input(keyword, value, exception, m
         ("modes", [(0, -1)], ValueError, "axis mode"),
         ("modes", [(True, 1)], TypeError, "integer"),
         ("parity_class", True, TypeError, "integer"),
-        ("parity_class", 0, ValueError, "1 or 2"),
+        ("parity_class", 3, ValueError, "1 or 2"),
         ("degree", True, TypeError, "integer"),
         ("degree", 0, ValueError, "between 1 and 4"),
         ("degree", 5, ValueError, "between 1 and 4"),

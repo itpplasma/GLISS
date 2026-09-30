@@ -46,9 +46,7 @@ _MAX_METADATA_BYTES = 16 * 1024 * 1024
 
 
 def _certified_result(result: FullStabilityResult) -> StabilityResult:
-    return StabilityResult(
-        (result.classes[0].certified_lowest, result.classes[1].certified_lowest)
-    )
+    return StabilityResult(tuple(item.certified_lowest for item in result.classes))
 
 
 def _unknown_count(certified: SpectrumResult, context: str) -> int:
@@ -72,15 +70,21 @@ def _expected_shapes(item: FullSpectrumResult) -> Dict[str, Tuple[int, ...]]:
 def _validate_full_result(result: FullStabilityResult) -> StabilityResult:
     if not isinstance(result, FullStabilityResult):
         raise TypeError("result must be a gliss.FullStabilityResult")
-    if not isinstance(result.classes, tuple) or len(result.classes) != 2:
-        raise ValueError("full result classes must contain parity classes 1 then 2")
+    if not isinstance(result.classes, tuple) or len(result.classes) not in (1, 2):
+        raise ValueError(
+            "full result classes must contain parity classes 1 then 2, or "
+            "the coupled class 0"
+        )
     if any(not isinstance(item, FullSpectrumResult) for item in result.classes):
         raise TypeError("full result classes must be gliss.FullSpectrumResult objects")
     certified = _certified_result(result)
     stability_result_to_dict(certified)
-    if tuple(item.certified_lowest.parity_class for item in result.classes) != (1, 2):
-        raise ValueError("full result parity classes must be 1 then 2")
-    for index, item in enumerate(result.classes, start=1):
+    parities = tuple(item.certified_lowest.parity_class for item in result.classes)
+    if parities not in ((1, 2), (0,)):
+        raise ValueError(
+            "full result parity classes must be 1 then 2, or the coupled class 0"
+        )
+    for index, item in zip(parities, result.classes):
         shapes = _expected_shapes(item)
         arrays = []
         for name in _ARRAY_ATTRIBUTES:
@@ -164,7 +168,8 @@ def _write_archive(
         descriptor = None
         with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_STORED) as archive:
             archive.writestr(_zip_info(_METADATA_NAME), payload)
-            for parity_class, item in enumerate(result.classes, start=1):
+            for item in result.classes:
+                parity_class = item.certified_lowest.parity_class
                 for attribute in _ARRAY_ATTRIBUTES:
                     array = _storage_array(
                         getattr(item, attribute),
@@ -220,9 +225,12 @@ def _validate_archive_entries(archive: zipfile.ZipFile, source: Path) -> None:
     names = [item.filename for item in information]
     if len(names) != len(set(names)):
         raise ValueError(f"{source}: full-spectrum container has duplicate entries")
+    # A coupled problem stores its single class 0; the class set follows
+    # from the entries and is checked against the metadata when read.
+    classes = (0,) if any(name.startswith("class-0-") for name in names) else (1, 2)
     expected = {_METADATA_NAME} | {
         _entry_name(parity_class, attribute)
-        for parity_class in (1, 2)
+        for parity_class in classes
         for attribute in _ARRAY_ATTRIBUTES
     }
     unknown = sorted(set(names) - expected)
@@ -333,7 +341,8 @@ def _read_full_result(
 ) -> FullStabilityResult:
     certified = _parse_result_metadata(metadata)
     classes = []
-    for parity_class, item in enumerate(certified.classes, start=1):
+    for item in certified.classes:
+        parity_class = item.parity_class
         count = _unknown_count(item, f"class {parity_class}")
         shapes: Dict[str, Tuple[int, ...]] = {
             name: (count,) for name in _ARRAY_ATTRIBUTES
@@ -349,7 +358,7 @@ def _read_full_result(
             for name in _ARRAY_ATTRIBUTES
         )
         classes.append(FullSpectrumResult(item, *arrays))
-    result = FullStabilityResult((classes[0], classes[1]))
+    result = FullStabilityResult(tuple(classes))
     _validate_full_result(result)
     return result
 

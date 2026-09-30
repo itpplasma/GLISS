@@ -26,10 +26,9 @@ Compatibility
   for validation. They are not a physical plasma-vacuum API.
 
 Unfinished
-: The free-boundary plasma-vacuum solve, the coupled operator for
-  asymmetric equilibria, and the equilibrium-to-spectrum derivative chain.
-  Asymmetric files convert and read, but the stability operator refuses
-  them.
+: The free-boundary plasma-vacuum solve and the equilibrium-to-spectrum
+  derivative chain. Asymmetric equilibria are solved with the coupled parity
+  operator (parity class 0).
 
 Every code block in the quickstart is executed by the native test suite
 (`python/tests/test_docs.py`) against the Solov'ev fixtures in `test/data`.

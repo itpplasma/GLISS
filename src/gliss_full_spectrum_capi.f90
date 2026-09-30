@@ -56,7 +56,7 @@ contains
         if (info /= fixed_boundary_ok) then
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
-                "parity_class must be 1 or 2")
+                "parity_class must be 1 or 2, or 0 for a coupled problem")
             return
         end if
         dimension = int(count, c_size_t)

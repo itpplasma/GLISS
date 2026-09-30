@@ -398,6 +398,17 @@ gliss_status gliss_stability_problem_set_solver_tolerances(
     char *error,
     size_t error_capacity);
 
+/* Report whether the problem couples both Fourier parities (1) or holds the
+ * two decoupled stellarator-symmetry parity classes (0). An equilibrium
+ * without stellarator symmetry, or whose reconstructed operator breaks it,
+ * is coupled; its single class has parity_class 0 in every class-indexed
+ * call, while a decoupled problem takes parity_class 1 or 2. */
+gliss_status gliss_stability_problem_coupled(
+    const gliss_stability_problem *problem,
+    int32_t *coupled,
+    char *error,
+    size_t error_capacity);
+
 gliss_status gliss_stability_problem_unknown_count(
     const gliss_stability_problem *problem,
     int32_t parity_class,

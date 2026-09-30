@@ -70,6 +70,10 @@ module fixed_boundary_spectrum
         type(fixed_boundary_solver_controls_t) :: solver_controls
         integer, allocatable :: mode_m(:)
         integer, allocatable :: mode_n(:)
+        ! An equilibrium without stellarator symmetry couples both Fourier
+        ! parities of every mode; its single class is parity class 0 and
+        ! lives in classes(1).
+        logical :: coupled = .false.
         type(fixed_boundary_class_problem_t) :: classes(2)
     end type fixed_boundary_problem_t
 
@@ -108,6 +112,7 @@ module fixed_boundary_spectrum
     end type fixed_boundary_full_spectrum_t
 
     public :: build_fixed_boundary_problem, diagnose_fixed_boundary_energy
+    public :: fixed_boundary_is_coupled
     public :: fixed_boundary_energy_terms_t, fixed_boundary_unknown_count
     public :: fixed_boundary_rayleigh_gradient
     public :: set_fixed_boundary_solver_controls, solve_fixed_boundary_class
@@ -117,13 +122,16 @@ contains
 
     subroutine build_fixed_boundary_problem(equilibrium, adiabatic_index, &
             density_kg_m3, zero_floor, mode_m, mode_n, degree, problem, info, &
-            angular_theta, angular_zeta)
+            angular_theta, angular_zeta, coupled)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3, zero_floor
         integer, intent(in) :: mode_m(:), mode_n(:), degree
         type(fixed_boundary_problem_t), intent(out) :: problem
         integer, intent(out) :: info
         integer, optional, intent(in) :: angular_theta, angular_zeta
+        ! Force the coupled operator for a symmetric equilibrium; it then
+        ! contains both parity classes as one problem.
+        logical, optional, intent(in) :: coupled
         real(dp), allocatable :: stored_power(:)
         integer :: allocation_status, mode, parity_class
 
@@ -147,12 +155,30 @@ contains
             problem%mode_m(mode) = mode_m(mode)
             problem%mode_n(mode) = mode_n(mode)
         end do
-        do parity_class = 1, 2
+        ! An equilibrium whose reconstructed operator breaks the parity
+        ! symmetry takes the coupled operator: the decoupled classes would
+        ! silently drop the coupling. The storage flag of the file is not
+        ! evidence; the admission test at every assembly point is.
+        problem%coupled = .false.
+        if (present(coupled)) problem%coupled = coupled
+        if (.not. problem%coupled) then
+            do parity_class = 1, 2
+                call assemble_class(equilibrium, adiabatic_index, &
+                    density_kg_m3, mode_m, mode_n, stored_power, &
+                    parity_class, degree, problem%classes(parity_class), &
+                    info, problem%n_theta, problem%n_zeta)
+                if (info == fixed_boundary_asymmetric) exit
+                if (info /= fixed_boundary_ok) return
+            end do
+            problem%coupled = info == fixed_boundary_asymmetric
+        end if
+        if (problem%coupled) then
+            problem%classes = fixed_boundary_class_problem_t()
             call assemble_class(equilibrium, adiabatic_index, density_kg_m3, &
-                mode_m, mode_n, stored_power, parity_class, degree, &
-                problem%classes(parity_class), info, problem%n_theta, problem%n_zeta)
+                mode_m, mode_n, stored_power, 0, degree, problem%classes(1), &
+                info, problem%n_theta, problem%n_zeta)
             if (info /= fixed_boundary_ok) return
-        end do
+        end if
         problem%has_chart_metric = equilibrium%has_chart_metric
         problem%field_periods = equilibrium%field_periods
         problem%degree = degree
@@ -278,15 +304,17 @@ contains
         real(dp), intent(in) :: vector(:)
         type(fixed_boundary_energy_terms_t), intent(out) :: result
         integer, intent(out) :: info
+        integer :: slot
 
         info = fixed_boundary_invalid
         if (.not. problem%ready) return
-        if (parity_class < 1 .or. parity_class > 2) return
+        slot = class_slot(problem, parity_class)
+        if (slot == 0) return
         call diagnose_fixed_boundary_energy_store( &
-            problem%classes(parity_class)%stiffness, &
-            problem%classes(parity_class)%mass, &
-            problem%classes(parity_class)%energy, &
-            problem%classes(parity_class)%permutation, vector, result, info)
+            problem%classes(slot)%stiffness, &
+            problem%classes(slot)%mass, &
+            problem%classes(slot)%energy, &
+            problem%classes(slot)%permutation, vector, result, info)
         info = map_fixed_boundary_energy_info(info)
     end subroutine diagnose_fixed_boundary_energy
 
@@ -297,14 +325,16 @@ contains
         real(dp), intent(in) :: vector(:)
         real(dp), allocatable, intent(out) :: gradient(:)
         integer, intent(out) :: info
+        integer :: slot
 
         info = fixed_boundary_invalid
         if (.not. problem%ready) return
-        if (parity_class < 1 .or. parity_class > 2) return
+        slot = class_slot(problem, parity_class)
+        if (slot == 0) return
         call rayleigh_gradient_fixed_boundary_store( &
-            problem%classes(parity_class)%stiffness, &
-            problem%classes(parity_class)%mass, &
-            problem%classes(parity_class)%permutation, vector, gradient, info)
+            problem%classes(slot)%stiffness, &
+            problem%classes(slot)%mass, &
+            problem%classes(slot)%permutation, vector, gradient, info)
         info = map_fixed_boundary_energy_info(info)
     end subroutine fixed_boundary_rayleigh_gradient
 
@@ -325,14 +355,16 @@ contains
         type(fixed_boundary_spectrum_result_t), intent(out) :: result
         integer, intent(out) :: info
         type(variable_spectrum_summary_t) :: summary
+        integer :: slot
 
         info = fixed_boundary_invalid
         if (.not. problem%ready) return
-        if (parity_class < 1 .or. parity_class > 2) return
+        slot = class_slot(problem, parity_class)
+        if (slot == 0) return
         call initialize_result(problem, parity_class, result)
         call analyze_variable_spectrum( &
-            problem%classes(parity_class)%stiffness, &
-            problem%classes(parity_class)%mass, problem%zero_floor, summary, &
+            problem%classes(slot)%stiffness, &
+            problem%classes(slot)%mass, problem%zero_floor, summary, &
             info)
         if (info /= variable_spectrum_ok) then
             info = fixed_boundary_solver_error
@@ -340,7 +372,7 @@ contains
         end if
         result%negative_count = summary%negative_count
         result%floor_count = summary%zero_count
-        call resolve_lowest(problem%classes(parity_class), summary, &
+        call resolve_lowest(problem%classes(slot), summary, &
             problem%solver_controls, result, info)
         if (info /= fixed_boundary_ok) return
         result%certificate = result%inertia_interval &
@@ -359,11 +391,34 @@ contains
         info = fixed_boundary_ok
     end subroutine set_fixed_boundary_solver_controls
 
+    pure function class_slot(problem, parity_class) result(slot)
+        type(fixed_boundary_problem_t), intent(in) :: problem
+        integer, intent(in) :: parity_class
+        integer :: slot
+
+        ! Parity classes 1 and 2 of a decoupled problem, or class 0 of a
+        ! coupled one; zero rejects the request.
+        slot = 0
+        if (problem%coupled) then
+            if (parity_class == 0) slot = 1
+        else if (parity_class == 1 .or. parity_class == 2) then
+            slot = parity_class
+        end if
+    end function class_slot
+
+    pure logical function fixed_boundary_is_coupled(problem) result(coupled)
+        type(fixed_boundary_problem_t), intent(in) :: problem
+
+        coupled = problem%ready .and. problem%coupled
+    end function fixed_boundary_is_coupled
+
     subroutine initialize_result(problem, parity_class, result)
         type(fixed_boundary_problem_t), intent(in) :: problem
         integer, intent(in) :: parity_class
         type(fixed_boundary_spectrum_result_t), intent(out) :: result
+        integer :: slot
 
+        slot = class_slot(problem, parity_class)
         result%has_chart_metric = problem%has_chart_metric
         result%field_periods = problem%field_periods
         result%mode_count = size(problem%mode_m)
@@ -374,11 +429,11 @@ contains
         result%adiabatic_index = problem%adiabatic_index
         result%density_kg_m3 = problem%density_kg_m3
         result%zero_floor = problem%zero_floor
-        result%unknowns = problem%classes(parity_class)%unknowns
+        result%unknowns = problem%classes(slot)%unknowns
         result%normal_unknowns = &
-            problem%classes(parity_class)%normal_unknowns
-        result%eta_unknowns = problem%classes(parity_class)%eta_unknowns
-        result%mu_unknowns = problem%classes(parity_class)%mu_unknowns
+            problem%classes(slot)%normal_unknowns
+        result%eta_unknowns = problem%classes(slot)%eta_unknowns
+        result%mu_unknowns = problem%classes(slot)%mu_unknowns
     end subroutine initialize_result
 
     subroutine fixed_boundary_unknown_count(problem, parity_class, unknowns, &
@@ -386,12 +441,14 @@ contains
         type(fixed_boundary_problem_t), intent(in) :: problem
         integer, intent(in) :: parity_class
         integer, intent(out) :: unknowns, info
+        integer :: slot
 
         unknowns = 0
         info = fixed_boundary_invalid
         if (.not. problem%ready) return
-        if (parity_class < 1 .or. parity_class > 2) return
-        unknowns = problem%classes(parity_class)%unknowns
+        slot = class_slot(problem, parity_class)
+        if (slot == 0) return
+        unknowns = problem%classes(slot)%unknowns
         info = fixed_boundary_ok
     end subroutine fixed_boundary_unknown_count
 
@@ -403,18 +460,20 @@ contains
         integer, intent(out) :: info
         type(fixed_boundary_spectrum_result_t) :: certified
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
+        integer :: slot
 
         info = fixed_boundary_invalid
         if (.not. problem%ready) return
-        if (parity_class < 1 .or. parity_class > 2) return
-        call variable_block_to_dense(problem%classes(parity_class)%stiffness, &
+        slot = class_slot(problem, parity_class)
+        if (slot == 0) return
+        call variable_block_to_dense(problem%classes(slot)%stiffness, &
             stiffness, info)
         if (info /= variable_block_ok) then
             info = merge(fixed_boundary_allocation_error, &
                 fixed_boundary_assembly_error, info == variable_block_allocation)
             return
         end if
-        call variable_block_to_dense(problem%classes(parity_class)%mass, &
+        call variable_block_to_dense(problem%classes(slot)%mass, &
             mass, info)
         if (info /= variable_block_ok) then
             info = merge(fixed_boundary_allocation_error, &
@@ -429,8 +488,8 @@ contains
                 info == symmetric_eigensolver_allocation)
             return
         end if
-        call refine_dense_spectrum(problem%classes(parity_class)%stiffness, &
-            problem%classes(parity_class)%mass, problem%solver_controls, &
+        call refine_dense_spectrum(problem%classes(slot)%stiffness, &
+            problem%classes(slot)%mass, problem%solver_controls, &
             result%eigenvalues, result%eigenvectors, info)
         if (info == dense_spectrum_allocation) then
             info = fixed_boundary_allocation_error
@@ -440,14 +499,14 @@ contains
             return
         end if
         call certify_dense_spectrum_orthogonality( &
-            problem%classes(parity_class)%mass, result%eigenvectors, info)
+            problem%classes(slot)%mass, result%eigenvectors, info)
         if (info /= dense_spectrum_ok) then
             info = merge(fixed_boundary_allocation_error, &
                 fixed_boundary_solver_error, info == dense_spectrum_allocation)
             return
         end if
-        call diagnose_dense_spectrum(problem%classes(parity_class)%stiffness, &
-            problem%classes(parity_class)%mass, result%eigenvalues, &
+        call diagnose_dense_spectrum(problem%classes(slot)%stiffness, &
+            problem%classes(slot)%mass, result%eigenvalues, &
             result%eigenvectors, result%rayleigh_quotients, result%residuals, &
             result%resolutions, info)
         if (info /= dense_spectrum_ok) then
@@ -456,8 +515,8 @@ contains
             return
         end if
         call certify_dense_spectrum_inertia( &
-            problem%classes(parity_class)%stiffness, &
-            problem%classes(parity_class)%mass, result%eigenvalues, &
+            problem%classes(slot)%stiffness, &
+            problem%classes(slot)%mass, result%eigenvalues, &
             result%residuals, result%resolutions, info)
         if (info /= dense_spectrum_ok) then
             info = fixed_boundary_solver_error

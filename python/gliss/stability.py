@@ -71,9 +71,17 @@ def _bind(library: Any) -> None:
             "gliss_stability_problem_destroy",
             "gliss_stability_problem_unknown_count",
             "gliss_stability_problem_solve_class",
+            "gliss_stability_problem_coupled",
         ),
         "stability problem",
     )
+    library.gliss_stability_problem_coupled.argtypes = (
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    )
+    library.gliss_stability_problem_coupled.restype = ctypes.c_int
     library.gliss_stability_problem_create_v2.argtypes = (
         ctypes.c_void_p,
         ctypes.c_double,
@@ -172,9 +180,14 @@ class SpectrumResult:
 
 @dataclass(frozen=True)
 class StabilityResult:
-    """Certified results for both decoupled parity classes."""
+    """Certified results for the parity classes of one problem.
 
-    classes: Tuple[SpectrumResult, SpectrumResult]
+    ``classes`` holds parity classes 1 and 2 of a stellarator-symmetric
+    problem, or the single coupled class 0 of an equilibrium without
+    stellarator symmetry.
+    """
+
+    classes: Tuple[SpectrumResult, ...]
 
     @property
     def lowest(self) -> SpectrumResult:
@@ -258,6 +271,7 @@ class StabilityProblem:
         self._handle = ctypes.c_void_p()
         self._create(equilibrium)
         self._set_solver_tolerances()
+        self.coupled = self._query_coupled()
 
     def _create(self, equilibrium: Equilibrium) -> None:
         count = len(self.modes)
@@ -292,6 +306,39 @@ class StabilityProblem:
             self, _release_handle, self._library.gliss_stability_problem_destroy,
             self._handle,
         )
+
+    def _query_coupled(self) -> bool:
+        coupled = ctypes.c_int32()
+        error = _error_buffer()
+        status = self._library.gliss_stability_problem_coupled(
+            self._handle, ctypes.byref(coupled), error, len(error)
+        )
+        if status != 0:
+            self.close()
+        _raise_for_status(status, error, "gliss_stability_problem_coupled")
+        if coupled.value not in (0, 1):
+            self.close()
+            raise GlissInternalError("GLISS returned an invalid coupling flag")
+        return bool(coupled.value)
+
+    @property
+    def parity_classes(self) -> Tuple[int, ...]:
+        """Class numbers: (1, 2), or (0,) when both parities are coupled.
+
+        An equilibrium without stellarator symmetry couples the two Fourier
+        parities of every mode into one operator, parity class 0.
+        """
+        return (0,) if self.coupled else (1, 2)
+
+    def _parity_class(self, value: Any) -> int:
+        parity_class = mode_integer(value, "parity_class")
+        if parity_class not in self.parity_classes:
+            if self.coupled:
+                raise ValueError(
+                    "parity_class must be 0: the problem couples both parities"
+                )
+            raise ValueError("parity_class must be 1 or 2")
+        return parity_class
 
     def _set_solver_tolerances(self) -> None:
         try:
@@ -377,16 +424,16 @@ class StabilityProblem:
         )
 
     def solve(self) -> StabilityResult:
-        """Solve and certify the lowest eigenpair in both parity classes."""
+        """Solve and certify the lowest eigenpair in every parity class."""
         self._require_open()
-        return StabilityResult((self.solve_class(1), self.solve_class(2)))
+        return StabilityResult(
+            tuple(self.solve_class(item) for item in self.parity_classes)
+        )
 
     def solve_class(self, parity_class: int) -> SpectrumResult:
-        """Solve and certify one parity class, numbered 1 or 2."""
+        """Solve and certify one class of ``parity_classes``."""
         self._require_open()
-        parity_class = mode_integer(parity_class, "parity_class")
-        if parity_class not in (1, 2):
-            raise ValueError("parity_class must be 1 or 2")
+        parity_class = self._parity_class(parity_class)
         count = self._unknown_count(parity_class)
         vector = _empty_float64(count, f"eigenvector with {count} entries")
         written = ctypes.c_size_t()

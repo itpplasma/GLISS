@@ -67,9 +67,7 @@ def _validated_primal(
     problem: "StabilityProblem", parity_class: int, vector: Any
 ) -> tuple[int, int, np.ndarray]:
     problem._require_open()
-    parity = mode_integer(parity_class, "parity_class")
-    if parity not in (1, 2):
-        raise ValueError("parity_class must be 1 or 2")
+    parity = problem._parity_class(parity_class)
     count = problem._unknown_count(parity)
     primal = _coefficient_vector(vector, count, "Rayleigh vector", True)
     return parity, count, primal

@@ -311,8 +311,8 @@ def convert_vmec(
     The result uses the left-handed, one-field-period Boozer convention of
     pyGVEC's CAS3D exporter. A stellarator-symmetric file stores the
     populated parity of each field; an asymmetric (``lasym``) file stores
-    both parities and ``stellarator_symmetry="False"``, which GLISS reads
-    but its parity-class operators refuse. ``radial_surfaces`` optionally
+    both parities and ``stellarator_symmetry="False"``, which GLISS solves
+    with the coupled parity operator. ``radial_surfaces`` optionally
     selects an exact centered uniform subset of the VMEC half grid. A failed
     flux-surface averaged radial force balance (relative residual above
     1e-2), the solvability condition of the Pfirsch-Schlueter equation GLISS

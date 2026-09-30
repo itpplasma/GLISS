@@ -172,8 +172,10 @@ def _angular_resolution(value: Any, name: str) -> int:
 
 def _parity_class(value: Any) -> int:
     result = mode_integer(value, "parity_class")
-    if result not in (1, 2):
-        raise ValueError("parity_class must be 1 or 2")
+    if result not in (0, 1, 2):
+        raise ValueError(
+            "parity_class must be 1 or 2, or 0 to couple both parities"
+        )
     return result
 
 

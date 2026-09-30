@@ -3,7 +3,8 @@ module axisymmetric_spectrum
     use gvec_cas3d_types, only: equilibrium_is_axisymmetric, &
         gvec_cas3d_equilibrium_t
     use marginality_spectrum, only: compute_marginality_spectrum, &
-        marginality_spectrum_invalid, marginality_spectrum_ok, &
+        marginality_spectrum_asymmetric, marginality_spectrum_invalid, &
+        marginality_spectrum_ok, &
         marginality_spectrum_result_t
     implicit none
     private
@@ -47,16 +48,25 @@ contains
         type(marginality_spectrum_result_t) :: general
         integer, allocatable :: mode_m(:), mode_n(:)
         real(dp), allocatable :: normal_stored_power(:)
-        integer :: general_info
+        integer :: general_info, parity_class
 
         call validate_input(equilibrium, toroidal_mode, poloidal_max, &
             degree, info, message)
         if (info /= axisymmetric_spectrum_ok) return
         call build_axisymmetric_mode_table(toroidal_mode, poloidal_max, &
             mode_m, mode_n, normal_stored_power)
+        parity_class = 1
         call compute_marginality_spectrum(equilibrium, mode_m, mode_n, &
-            normal_stored_power, 1, degree, n_theta, n_zeta, &
+            normal_stored_power, parity_class, degree, n_theta, n_zeta, &
             solve_eigenpair, general, general_info, message)
+        if (general_info == marginality_spectrum_asymmetric) then
+            ! An up-down asymmetric equilibrium couples the sine-parity
+            ! family to its cosine partner; parity class 0 assembles both.
+            parity_class = 0
+            call compute_marginality_spectrum(equilibrium, mode_m, mode_n, &
+                normal_stored_power, parity_class, degree, n_theta, n_zeta, &
+                solve_eigenpair, general, general_info, message)
+        end if
         if (general_info /= marginality_spectrum_ok) then
             if (general_info == marginality_spectrum_invalid) then
                 info = axisymmetric_spectrum_invalid_input

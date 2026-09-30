@@ -190,9 +190,9 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
     else:
         expected = _SPECTRUM_FIELDS_V5
     value = fields(document, expected, context)
-    parity = integer(value["parity_class"], f"{context}.parity_class", 1)
-    if parity not in (1, 2):
-        raise ValueError(f"{context}.parity_class must be 1 or 2")
+    parity = integer(value["parity_class"], f"{context}.parity_class", 0)
+    if parity not in (0, 1, 2):
+        raise ValueError(f"{context}.parity_class must be 0, 1 or 2")
     field_periods = integer(value["field_periods"], f"{context}.field_periods", 1)
     modes, degree, angular_resolution = _problem_metadata(value, context, version)
     gamma = real(value["adiabatic_index"], f"{context}.adiabatic_index", 0.0)
@@ -264,16 +264,24 @@ def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
     value = fields(document, {"schema", "schema_version", "classes"}, "result")
     version = schema(value, RESULT_SCHEMA, "result", SCHEMA_VERSIONS)
     classes = value["classes"]
-    if not isinstance(classes, list) or len(classes) != 2:
-        raise ValueError("result.classes must contain parity classes 1 then 2")
+    if not isinstance(classes, list) or len(classes) not in (1, 2):
+        raise ValueError(
+            "result.classes must contain parity classes 1 then 2, or the "
+            "coupled class 0"
+        )
     result = StabilityResult(
-        (
-            _spectrum_from_dict(classes[0], 0, version),
-            _spectrum_from_dict(classes[1], 1, version),
+        tuple(
+            _spectrum_from_dict(item, index, version)
+            for index, item in enumerate(classes)
         )
     )
-    if tuple(item.parity_class for item in result.classes) != (1, 2):
-        raise ValueError("result parity classes must be 1 then 2")
+    parities = tuple(item.parity_class for item in result.classes)
+    if parities not in ((1, 2), (0,)):
+        raise ValueError(
+            "result parity classes must be 1 then 2, or the coupled class 0"
+        )
+    if parities == (0,) and version < 5:
+        raise ValueError("the coupled class 0 requires schema version 5")
     reference = result.classes[0]
     for item in result.classes[1:]:
         shared = (

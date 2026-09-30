@@ -90,9 +90,9 @@ class FullSpectrumResult:
 
 @dataclass(frozen=True)
 class FullStabilityResult:
-    """Complete spectra for both decoupled parity classes."""
+    """Complete spectra for the parity classes of one problem."""
 
-    classes: Tuple[FullSpectrumResult, FullSpectrumResult]
+    classes: Tuple[FullSpectrumResult, ...]
 
     @property
     def lowest(self) -> FullSpectrumResult:
@@ -119,9 +119,9 @@ class FullStabilityResult:
 def solve_full_spectrum(problem: StabilityProblem) -> FullStabilityResult:
     problem._require_open()
     return FullStabilityResult(
-        (
-            solve_full_spectrum_class(problem, 1),
-            solve_full_spectrum_class(problem, 2),
+        tuple(
+            solve_full_spectrum_class(problem, parity_class)
+            for parity_class in problem.parity_classes
         )
     )
 
@@ -130,9 +130,7 @@ def solve_full_spectrum_class(
     problem: StabilityProblem, parity_class: int
 ) -> FullSpectrumResult:
     problem._require_open()
-    parity_class = _mode_integer(parity_class, "parity_class")
-    if parity_class not in (1, 2):
-        raise ValueError("parity_class must be 1 or 2")
+    parity_class = problem._parity_class(parity_class)
     _bind_full_spectrum(problem._library)
     certified = problem.solve_class(parity_class)
     count = problem._unknown_count(parity_class)

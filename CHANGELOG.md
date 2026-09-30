@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Solve equilibria without stellarator symmetry with a coupled parity
+  operator (#10 part C). Every mode enters with both Fourier parities as one
+  problem, parity class 0. A fixed-boundary problem couples when the
+  reconstructed operator fails the parity admission test at an assembly
+  point, whatever the file declares; `StabilityProblem.coupled`,
+  `parity_classes` and `gliss_stability_problem_coupled` report it, and
+  results, full spectra and their documents hold the single class 0.
+  Marginality accepts `parity_class=0`, its decoupled classes refuse an
+  asymmetric operator by name instead of solving it silently, and
+  `solve_axisymmetric` couples an up-down asymmetric family. A shifted
+  poloidal angle origin, which stores the same equilibrium with both
+  parities, reproduces the union of the two symmetric class spectra on the
+  Solov'ev export and on a three-dimensional QA export. Dense inertia
+  certification now accounts for Sturm-count roundoff and re-sorts refined
+  eigenpairs, which degenerate parity pairs otherwise break.
 - Make the compatible FEEC space conforming at the axis for |m|=1 (#35). A
   smooth displacement ties the leading coefficients of `xi^s ~ s^(1/2)` and
   `eta ~ s^(-1/2)`; the independent pair had a logarithmically divergent

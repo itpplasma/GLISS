@@ -3,7 +3,7 @@ program test_fixed_boundary_symmetry
     use cylinder_fixture, only: create_cylinder_fixture
     use export_surface_geometry, only: build_angular_grids
     use fixed_boundary_spectrum, only: build_fixed_boundary_problem, &
-        fixed_boundary_ok, fixed_boundary_problem_t
+        fixed_boundary_is_coupled, fixed_boundary_ok, fixed_boundary_problem_t
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use primitive_equilibrium_spline, only: fit_primitive_equilibrium, &
@@ -25,6 +25,8 @@ program test_fixed_boundary_symmetry
         "control must exercise full sine/cosine storage")
     call build(equilibrium)
     call require(info == fixed_boundary_ok, "symmetric full storage rejected")
+    call require(.not. fixed_boundary_is_coupled(problem), &
+        "symmetric full storage was coupled")
     call cross_mass(equilibrium, coupling)
     call require(coupling < 1.0e-12_dp, "symmetric cross-parity mass is nonzero")
 
@@ -55,11 +57,17 @@ program test_fixed_boundary_symmetry
     call cross_mass(changed, coupling)
     write (*, '(a,es16.8)') "odd-harmonic relative cross mass: ", coupling
     call require(coupling > 1.0e-4_dp, "odd-harmonic oracle has no parity coupling")
+    ! A parity-breaking geometry takes the coupled operator (#10) instead of
+    ! the decoupled classes, whatever the file declares.
     call build(changed)
-    call require(info /= fixed_boundary_ok, "odd position harmonic accepted")
+    call require(info == fixed_boundary_ok .and. &
+        fixed_boundary_is_coupled(problem), &
+        "odd position harmonic did not couple the parities")
     changed%stellarator_symmetric = .true.
     call build(changed)
-    call require(info /= fixed_boundary_ok, "false symmetry declaration trusted")
+    call require(info == fixed_boundary_ok .and. &
+        fixed_boundary_is_coupled(problem), &
+        "false symmetry declaration trusted")
 
     ! The identity chart transform retains parity. A radial-dependent poloidal
     ! shift is physically symmetric but its fixed Fourier classes couple.
@@ -68,6 +76,8 @@ program test_fixed_boundary_symmetry
     call require(info == reader_ok, "identity chart read failed")
     call build(changed)
     call require(info == fixed_boundary_ok, "identity chart rejected")
+    call require(.not. fixed_boundary_is_coupled(problem), &
+        "identity chart was coupled")
     call create_cylinder_fixture(filename, surfaces=5, chart_shift=0.2_dp)
     call read_gvec_cas3d_file(filename, changed, info)
     call require(info == reader_ok, "shifted chart read failed")
@@ -75,7 +85,9 @@ program test_fixed_boundary_symmetry
     write (*, '(a,es16.8)') "shifted-chart relative cross mass: ", coupling
     call require(coupling > 1.0e-4_dp, "shifted chart oracle has no coupling")
     call build(changed)
-    call require(info /= fixed_boundary_ok, "parity-coupling chart accepted")
+    call require(info == fixed_boundary_ok .and. &
+        fixed_boundary_is_coupled(problem), &
+        "parity-coupling chart did not couple the parities")
 
     call check_field_scaling()
 
@@ -157,7 +169,8 @@ contains
             scaled = equilibrium
             call rescale(scaled, 1.0_dp, amplitude)
             call build(scaled)
-            call require(info == fixed_boundary_ok, &
+            call require(info == fixed_boundary_ok .and. &
+                .not. fixed_boundary_is_coupled(problem), &
                 "field-rescaled symmetric geometry rejected")
             scaled = sheared
             scaled%toroidal_flux = amplitude * sheared%toroidal_flux
@@ -170,8 +183,9 @@ contains
             call require(abs(measured - reference) < 1.0e-10_dp, &
                 "dimensionless shear oracle changed under field scaling")
             call build(scaled)
-            call require(info /= fixed_boundary_ok, &
-                "field-rescaled parity coupling accepted")
+            call require(info == fixed_boundary_ok .and. &
+                fixed_boundary_is_coupled(problem), &
+                "field-rescaled parity coupling was not detected")
         end do
         do exponent = -3, 3, 3
             length = 10.0_dp**exponent
@@ -182,7 +196,8 @@ contains
             call require(measured < 1.0e-12_dp, &
                 "rescaled symmetric cross mass is nonzero")
             call build(scaled)
-            call require(info == fixed_boundary_ok, &
+            call require(info == fixed_boundary_ok .and. &
+                .not. fixed_boundary_is_coupled(problem), &
                 "rescaled symmetric geometry rejected")
             scaled = sheared
             call rescale(scaled, length, amplitude)
@@ -190,8 +205,9 @@ contains
             call require(abs(measured - reference) < 1.0e-10_dp, &
                 "shear oracle changed under length/field scaling")
             call build(scaled)
-            call require(info /= fixed_boundary_ok, &
-                "length/field-rescaled parity coupling accepted")
+            call require(info == fixed_boundary_ok .and. &
+                fixed_boundary_is_coupled(problem), &
+                "length/field-rescaled parity coupling was not detected")
         end do
     end subroutine check_field_scaling
 

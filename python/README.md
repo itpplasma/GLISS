@@ -11,8 +11,8 @@ The supported production scope is fixed-boundary FEEC. TERPSICHORE FORT.23/24
 solves are compatibility replays for validation. Selected free-boundary
 operators are not exposed as a production plasma-vacuum solve, and the public
 equilibrium-to-spectrum derivative chain is incomplete. Version 0.0.2 ships a
-manylinux x86-64 wheel and source distribution. macOS wheels and the coupled
-operator for asymmetric equilibria remain future work; asymmetric and
+manylinux x86-64 wheel and source distribution. macOS wheels remain future
+work. Asymmetric equilibria are solved with the coupled parity operator, and
 precomputed BOOZ_XFORM inputs convert.
 
 ## Installation
@@ -71,9 +71,16 @@ The importer accepts fixed-boundary VMEC files with `signgs=-1` and a
 successful `ier_flag`, and rejects reversed-field-pinch files. A symmetric file
 stores the populated parity of each field (15 harmonic variables). An
 asymmetric (`lasym`) file stores both parities (30 variables) and
-`stellarator_symmetry="False"`; GLISS reads it and computes Mercier profiles,
-but the fixed-boundary operator, whose two parity classes decouple only under
-stellarator symmetry, refuses it with `GlissArgumentError`. Every export
+`stellarator_symmetry="False"`. The two Fourier parity classes decouple only
+under stellarator symmetry, so an asymmetric equilibrium, or a symmetric file
+whose reconstructed operator breaks the symmetry, is solved with the coupled
+operator: every mode enters with both parities, `StabilityProblem.coupled` is
+true, `parity_classes` is `(0,)`, and results hold the single class 0. On a
+symmetric equilibrium the coupled spectrum is the union of classes 1 and 2
+(`test_asymmetric_coupling`). `solve_axisymmetric` couples the sine family to
+its cosine partner in the same way, so its count then includes both
+orientations of each mode. The decoupled marginality classes 1 and 2 refuse
+such a file by name; pass `parity_class=0`. Every export
 records `vmec_signgs` and, for the precomputed path, `booz_xform_source`.
 
 A precomputed BOOZ_XFORM file converts without re-running the transform;

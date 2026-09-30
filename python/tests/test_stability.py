@@ -52,6 +52,8 @@ class FakeLibrary:
         self.gliss_stability_problem_unknown_count = FakeFunction(
             self.problem_unknown_count
         )
+        self.coupled = 0
+        self.gliss_stability_problem_coupled = FakeFunction(self.problem_coupled)
         self.gliss_stability_problem_solve_class = FakeFunction(
             self.problem_solve_class
         )
@@ -131,6 +133,11 @@ class FakeLibrary:
             values.inverse_iteration_limit,
             values.bracket_iteration_limit,
         )
+        error.value = b""
+        return 0
+
+    def problem_coupled(self, handle, coupled, error, error_capacity):
+        coupled._obj.value = self.coupled
         error.value = b""
         return 0
 

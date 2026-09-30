@@ -9,6 +9,7 @@ module compatible_three_component_problem
     use compatible_physical_mass_assembly, only: &
         assemble_compatible_physical_mass_surface
     use compatible_problem_assembly_support, only: apply_stored_power, &
+        surface_preserves_parity, &
         apply_tangential_axis_weight, build_active_indices, &
         build_uniform_breaks, &
         compatible_support_allocation, compatible_support_ok, &
@@ -51,6 +52,10 @@ module compatible_three_component_problem
         integer :: eta_unknowns = 0
         integer :: mu_unknowns = 0
         integer :: axis_quadrature_points = 0
+        ! Parity class 0 couples both Fourier parities of every mode, the
+        ! operator of an equilibrium without stellarator symmetry; its
+        ! trials are the mode table with parity 1 followed by parity 2.
+        logical :: coupled = .false.
         type(axis_tie_t) :: axis_tie
     end type compatible_three_component_problem_t
 
@@ -74,28 +79,71 @@ contains
         integer, intent(in) :: parity_class, degree, n_theta, n_zeta
         type(compatible_three_component_problem_t), intent(out) :: problem
         integer, intent(out) :: info
-        type(primitive_equilibrium_spline_t) :: spline
-        type(radial_feec_complex_t) :: complex
-        type(trial_space_topology_t) :: topology
-        real(dp), allocatable :: breaks(:), theta(:), zeta(:)
-        integer, allocatable :: parity(:), ranks(:, :)
-        integer :: allocation_status, intervals, local_info, unknowns
+        integer, allocatable :: parity(:), trial_m(:), trial_n(:)
+        real(dp), allocatable :: trial_power(:)
+        integer :: allocation_status, count
 
         problem = compatible_three_component_problem_t()
         info = compatible_three_component_invalid
         if (.not. inputs_are_valid(equilibrium, adiabatic_index, &
             density_kg_m3, mode_m, mode_n, stored_power, parity_class, &
             degree, n_theta, n_zeta)) return
+        count = size(mode_m)
+        if (parity_class == 0) count = 2 * count
+        allocate (parity(count), trial_m(count), trial_n(count), &
+            trial_power(count), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_three_component_allocation_error
+            return
+        end if
+        if (parity_class == 0) then
+            trial_m(:size(mode_m)) = mode_m
+            trial_m(size(mode_m) + 1:) = mode_m
+            trial_n(:size(mode_m)) = mode_n
+            trial_n(size(mode_m) + 1:) = mode_n
+            trial_power(:size(mode_m)) = stored_power
+            trial_power(size(mode_m) + 1:) = stored_power
+            parity(:size(mode_m)) = 1
+            parity(size(mode_m) + 1:) = 2
+        else
+            trial_m = mode_m
+            trial_n = mode_n
+            trial_power = stored_power
+            parity = parity_class
+        end if
+        problem%coupled = parity_class == 0
+        call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
+            trial_m, trial_n, trial_power, parity, degree, n_theta, n_zeta, &
+            problem, info)
+    end subroutine build_compatible_three_component_problem
+
+    subroutine build_trials(equilibrium, adiabatic_index, density_kg_m3, &
+            mode_m, mode_n, stored_power, parity, degree, n_theta, n_zeta, &
+            problem, info)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        real(dp), intent(in) :: adiabatic_index, density_kg_m3
+        integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
+        real(dp), intent(in) :: stored_power(:)
+        integer, intent(in) :: degree, n_theta, n_zeta
+        type(compatible_three_component_problem_t), intent(inout) :: problem
+        integer, intent(out) :: info
+        type(primitive_equilibrium_spline_t) :: spline
+        type(radial_feec_complex_t) :: complex
+        type(trial_space_topology_t) :: topology
+        real(dp), allocatable :: breaks(:), theta(:), zeta(:)
+        integer, allocatable :: ranks(:, :)
+        integer :: allocation_status, intervals, local_info, unknowns
+
+        info = compatible_three_component_invalid
         intervals = size(equilibrium%s)
-        allocate (breaks(intervals + 1), parity(size(mode_m)), &
-            ranks(3, size(mode_m)), stat=allocation_status)
+        allocate (breaks(intervals + 1), ranks(3, size(mode_m)), &
+            stat=allocation_status)
         if (allocation_status /= 0) then
             info = compatible_three_component_allocation_error
             return
         end if
         call build_uniform_breaks(intervals, breaks, local_info)
         if (local_info /= compatible_support_ok) return
-        parity = parity_class
         call build_radial_feec_complex(breaks, degree, .true., .true., &
             complex, local_info)
         if (local_info /= radial_feec_ok) return
@@ -153,7 +201,7 @@ contains
         problem%quadrature_points = size(accurate_nodes)
         problem%h1_dofs = complex%h1_dofs
         problem%l2_dofs = complex%l2_dofs
-    end subroutine build_compatible_three_component_problem
+    end subroutine build_trials
 
     subroutine assemble_problem(spline, complex, breaks, theta, zeta, &
             adiabatic_index, density, mode_m, mode_n, parity, stored_power, &
@@ -216,84 +264,6 @@ contains
         call sum_tensor(problem%stiffness_terms, problem%stiffness)
         info = compatible_three_component_ok
     end subroutine assemble_problem
-
-    function surface_preserves_parity(fields, drive, jacobian_s, &
-            jacobian_t, jacobian_z) result(valid)
-        real(dp), intent(in) :: fields(:, :, :), drive(:, :)
-        real(dp), intent(in) :: jacobian_s(:, :), jacobian_t(:, :)
-        real(dp), intent(in) :: jacobian_z(:, :)
-        logical :: valid
-        real(dp) :: natural(13), magnetic, length, jacobian
-        integer :: field
-
-        ! Test the physical operator, after Cartesian/G-frame reconstruction
-        ! and winding conversion. The storage symmetry flag is not evidence.
-        ! In the fixed Fourier classes normal displacement has the opposite
-        ! parity to eta/mu. Flux/profile scalars, J, |B|, grad(s)^2 and the
-        ! current scalar (fields 1:11) are even under (theta,zeta)->(-theta,-zeta).
-        ! sigma and beta (12:13) are odd, making normal/tangential mass and
-        ! stiffness cross terms odd. Radial differentiation preserves parity;
-        ! angular differentiation reverses it. These are admission diagnostics
-        ! at every assembly quadrature point, not differentiable objectives or
-        ! a certificate of angular convergence of nonlinear metric products.
-        valid = .false.
-        ! L=1/|grad s| and B supply dimensional reference scales only for
-        ! floating-point cancellation. Flux scales as B L^2, covariant field
-        ! as B L, current scalar as B^2/L, and drive/pressure as B^2.
-        magnetic = maxval(abs(fields(:, :, 8)))
-        length = 1.0_dp / sqrt(maxval(fields(:, :, 9)))
-        jacobian = maxval(abs(fields(:, :, 7)))
-        natural(1:4) = magnetic * length**2
-        natural(5:6) = magnetic * length
-        natural(7) = jacobian
-        natural(8) = magnetic
-        natural(9) = 1.0_dp / length**2
-        natural(10) = magnetic**2 / length
-        natural(11) = magnetic**2
-        natural(12) = 1.0_dp
-        natural(13) = magnetic * length
-        do field = 1, 13
-            if (.not. grid_has_parity(fields(:, :, field), &
-                merge(1, -1, field <= 11), natural(field))) return
-        end do
-        if (.not. grid_has_parity(drive, 1, magnetic**2)) return
-        if (.not. grid_has_parity(jacobian_s, 1, jacobian)) return
-        if (.not. grid_has_parity(jacobian_t, -1, jacobian)) return
-        if (.not. grid_has_parity(jacobian_z, -1, jacobian)) return
-        valid = .true.
-    end function surface_preserves_parity
-
-    function grid_has_parity(values, sign, natural_scale) result(valid)
-        real(dp), intent(in) :: values(:, :), natural_scale
-        integer, intent(in) :: sign
-        logical :: valid
-        real(dp) :: scale, defect, actual_scale, tolerance
-        integer :: j, k, reflected_j, reflected_k
-
-        ! Relative 1e-8 admission plus a 1024-epsilon rounding allowance
-        ! against a physical scale with the same dimensions. A fixed SI-unit
-        ! floor would change admission under length or magnetic-field scaling.
-        ! The rounding allowance admits identically zero derived quantities
-        ! after floating-point cancellation without hiding a small finite field.
-        valid = .false.
-        if (.not. all(ieee_is_finite(values))) return
-        if (.not. ieee_is_finite(natural_scale)) return
-        if (natural_scale <= 0.0_dp) return
-        actual_scale = maxval(abs(values))
-        scale = max(natural_scale, actual_scale)
-        tolerance = 1.0e-8_dp * (actual_scale / scale) &
-            + 1024.0_dp * epsilon(scale) * (natural_scale / scale)
-        do k = 1, size(values, 2)
-            reflected_k = modulo(1 - k, size(values, 2)) + 1
-            do j = 1, size(values, 1)
-                reflected_j = modulo(1 - j, size(values, 1)) + 1
-                defect = abs(values(j, k) / scale - real(sign, dp) &
-                    * values(reflected_j, reflected_k) / scale)
-                if (defect > tolerance) return
-            end do
-        end do
-        valid = .true.
-    end function grid_has_parity
 
     subroutine assemble_radial_point(spline, complex, coordinate, weight, &
             theta, zeta, adiabatic_index, density, mode_m, mode_n, parity, &
@@ -362,10 +332,12 @@ contains
             zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
             jacobian_z, pressure, orientation=orientation)
         if (local_info /= primitive_kernel_ok) return
-        if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
-            jacobian_t, jacobian_z)) then
-            info = compatible_three_component_asymmetric
-            return
+        if (.not. problem%coupled) then
+            if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
+                jacobian_t, jacobian_z)) then
+                info = compatible_three_component_asymmetric
+                return
+            end if
         end if
         allocate (gamma_p(size(theta), size(zeta)), &
             source=adiabatic_index * pressure, stat=allocation_status)
@@ -529,7 +501,7 @@ contains
         valid = valid .and. ieee_is_finite(adiabatic_index) &
             .and. adiabatic_index > 0.0_dp
         valid = valid .and. ieee_is_finite(density) .and. density > 0.0_dp
-        valid = valid .and. parity_class >= 1 .and. parity_class <= 2
+        valid = valid .and. parity_class >= 0 .and. parity_class <= 2
         valid = valid .and. degree >= 1 .and. degree <= 4
         valid = valid .and. n_theta >= 8 .and. n_zeta >= 8
         if (.not. valid) return

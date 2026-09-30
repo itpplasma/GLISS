@@ -17,7 +17,7 @@ module compatible_two_component_problem
         apply_tangential_axis_weight, &
         build_active_indices, build_uniform_breaks, &
         compatible_support_allocation, compatible_support_ok, &
-        mode_table_is_unique, scale_matrix, &
+        mode_table_is_unique, scale_matrix, surface_preserves_parity, &
         scale_tensor, scatter_matrix, sum_tensor, symmetrize_matrix, &
         symmetrize_tensor
     use compatible_radial_quadrature, only: accurate_nodes, &
@@ -44,6 +44,9 @@ module compatible_two_component_problem
     integer, parameter, public :: compatible_problem_invalid = -1
     integer, parameter, public :: compatible_problem_assembly_error = -2
     integer, parameter, public :: compatible_problem_allocation_error = -3
+    ! The reconstructed operator breaks the (theta,zeta)->(-theta,-zeta)
+    ! symmetry that decouples the parity classes 1 and 2.
+    integer, parameter, public :: compatible_problem_asymmetric = -4
     integer, parameter, public :: compatible_quadrature_gauss = 1
     integer, parameter, public :: compatible_quadrature_cas3d_midpoint = 2
 
@@ -55,6 +58,10 @@ module compatible_two_component_problem
         type(axis_tie_t) :: axis_tie
         logical :: axis_conforming = .false.
         integer :: axis_quadrature_points = 0
+        ! Parity class 0: both parities of every mode (trials are the table
+        ! with parity 1, then parity 2) for equilibria without stellarator
+        ! symmetry.
+        logical :: coupled = .false.
         integer :: degree = 0
         integer :: quadrature_points = 0
         integer :: h1_dofs = 0
@@ -100,6 +107,8 @@ contains
         type(trial_space_topology_t) :: topology
         real(dp), allocatable :: breaks(:), theta(:), zeta(:)
         integer, allocatable :: eta_rank(:), normal_rank(:), parity(:)
+        integer, allocatable :: trial_m(:), trial_n(:)
+        real(dp), allocatable :: trial_power(:)
         integer :: allocation_status, intervals, local_info, quadrature_policy
         integer :: unknowns
         logical :: use_sparse, conforming
@@ -120,6 +129,13 @@ contains
             if (.not. ieee_is_finite(density_kg_m3) &
                 .or. density_kg_m3 <= 0.0_dp) return
         end if
+        call expand_trials(mode_m, mode_n, stored_power, parity_class, &
+            trial_m, trial_n, trial_power, parity, allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
+        problem%coupled = parity_class == 0
         intervals = size(equilibrium%s)
         if (present(trace_cells) .neqv. present(trace)) return
         if (present(trace_cells)) then
@@ -130,8 +146,8 @@ contains
                 return
             end if
         end if
-        allocate (breaks(intervals + 1), parity(size(mode_m)), &
-            normal_rank(size(mode_m)), eta_rank(size(mode_m)), &
+        allocate (breaks(intervals + 1), &
+            normal_rank(size(trial_m)), eta_rank(size(trial_m)), &
             stat=allocation_status)
         if (allocation_status /= 0) then
             info = compatible_problem_allocation_error
@@ -139,11 +155,10 @@ contains
         end if
         call build_uniform_breaks(intervals, breaks, local_info)
         if (local_info /= compatible_support_ok) return
-        parity = parity_class
         call build_radial_feec_complex(breaks, degree, .true., .true., &
             complex, local_info)
         if (local_info /= radial_feec_ok) return
-        call build_trial_space_topology(mode_m, mode_n, parity, topology, &
+        call build_trial_space_topology(trial_m, trial_n, parity, topology, &
             local_info)
         if (local_info /= trial_topology_ok) return
         call build_component_ranks(topology, normal_rank, eta_rank)
@@ -158,8 +173,8 @@ contains
             info = compatible_problem_assembly_error
             return
         end if
-        call build_trial_axis_tie(spline, complex, mode_m, parity, &
-            stored_power, normal_rank, eta_rank, unknowns, conforming, &
+        call build_trial_axis_tie(spline, complex, trial_m, parity, &
+            trial_power, normal_rank, eta_rank, unknowns, conforming, &
             problem%axis_tie, local_info)
         if (local_info /= axis_regularity_ok) then
             info = compatible_problem_assembly_error
@@ -170,7 +185,7 @@ contains
             - problem%axis_tie%eliminated_count
         unknowns = problem%axis_tie%reduced_unknowns
         if (conforming) problem%axis_quadrature_points = &
-            axis_quadrature_points(degree, maxval(mode_m))
+            axis_quadrature_points(degree, maxval(trial_m))
         if (use_sparse) then
             call initialize_compatible_block_pencil(complex%h1_dofs, &
                 complex%l2_dofs, &
@@ -209,12 +224,12 @@ contains
         call build_angular_grids(n_theta, n_zeta, theta, zeta)
         if (present(trace)) then
             call assemble_problem(spline, complex, breaks, theta, zeta, &
-                mode_m, mode_n, parity, stored_power, topology, normal_rank, &
+                trial_m, trial_n, parity, trial_power, topology, normal_rank, &
                 eta_rank, problem, info, trace_cells, trace, density_kg_m3, &
                 quadrature_policy)
         else
             call assemble_problem(spline, complex, breaks, theta, zeta, &
-                mode_m, mode_n, parity, stored_power, topology, normal_rank, &
+                trial_m, trial_n, parity, trial_power, topology, normal_rank, &
                 eta_rank, problem, info, quadrature_policy=quadrature_policy, &
                 density_kg_m3=density_kg_m3)
         end if
@@ -402,6 +417,8 @@ contains
         real(dp), optional, intent(in) :: density_kg_m3
         integer, optional, intent(inout) :: orientation
         real(dp), allocatable :: fields(:, :, :), drive(:, :), h1(:), dh1(:)
+        real(dp), allocatable :: jacobian_s(:, :), jacobian_t(:, :)
+        real(dp), allocatable :: jacobian_z(:, :)
         real(dp), allocatable :: l2(:), local(:, :), local_dh1(:, :)
         real(dp), allocatable :: local_mass(:, :), local_terms(:, :, :)
         real(dp), allocatable :: local_h1(:, :), local_l2(:, :)
@@ -444,8 +461,16 @@ contains
             l2_index, local_l2, local_info)
         if (local_info /= compatible_support_ok) return
         call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
-            zeta, fields, drive, local_info, orientation=orientation)
+            zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
+            jacobian_z, orientation=orientation)
         if (local_info /= primitive_kernel_ok) return
+        if (.not. problem%coupled) then
+            if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
+                jacobian_t, jacobian_z)) then
+                info = compatible_problem_asymmetric
+                return
+            end if
+        end if
         allocate (local(trials * (size(h1_index) + size(l2_index)), &
             trials * (size(h1_index) + size(l2_index))), source=0.0_dp, &
             stat=local_info)
@@ -658,6 +683,34 @@ contains
         end do
     end subroutine sum_selected_terms
 
+    subroutine expand_trials(mode_m, mode_n, stored_power, parity_class, &
+            trial_m, trial_n, trial_power, parity, status)
+        integer, intent(in) :: mode_m(:), mode_n(:), parity_class
+        real(dp), intent(in) :: stored_power(:)
+        integer, allocatable, intent(out) :: trial_m(:), trial_n(:), parity(:)
+        real(dp), allocatable, intent(out) :: trial_power(:)
+        integer, intent(out) :: status
+        integer :: count, modes
+
+        modes = size(mode_m)
+        count = modes
+        if (parity_class == 0) count = 2 * modes
+        allocate (trial_m(count), trial_n(count), trial_power(count), &
+            parity(count), stat=status)
+        if (status /= 0) return
+        trial_m(:modes) = mode_m
+        trial_n(:modes) = mode_n
+        trial_power(:modes) = stored_power
+        parity = parity_class
+        if (parity_class == 0) then
+            trial_m(modes + 1:) = mode_m
+            trial_n(modes + 1:) = mode_n
+            trial_power(modes + 1:) = stored_power
+            parity(:modes) = 1
+            parity(modes + 1:) = 2
+        end if
+    end subroutine expand_trials
+
     pure subroutine build_component_ranks(topology, normal_rank, eta_rank)
         type(trial_space_topology_t), intent(in) :: topology
         integer, intent(out) :: normal_rank(:), eta_rank(:)
@@ -696,7 +749,7 @@ contains
         end if
         valid = mode_table_is_unique(mode_m, mode_n)
         if (.not. valid) return
-        valid = parity_class >= 1 .and. parity_class <= 2
+        valid = parity_class >= 0 .and. parity_class <= 2
         if (.not. valid) return
         valid = degree >= 1 .and. degree <= 4
         if (.not. valid) return

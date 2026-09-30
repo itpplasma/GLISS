@@ -91,8 +91,9 @@ of every external solver.
   [#34](https://github.com/itpplasma/GLISS/issues/34) nonpositive truncated
   metric.
 - Roadmap work on this branch: precomputed `boozmn` and asymmetric VMEC
-  conversion with a named refusal in the parity-class operator (#10 parts A
-  and B; the coupled operator, part C, stays open), the FEEC convergence
+  conversion (#10 parts A and B) and the coupled parity operator for
+  equilibria without stellarator symmetry (#10 part C, checked against the
+  class union of a shifted angle origin), the FEEC convergence
   certification (#13), the native test harness without path hacks (#14,
   wheels stay with the release workflow) and documentation sources whose
   quickstart runs in the suite (#15, hosting stays open).

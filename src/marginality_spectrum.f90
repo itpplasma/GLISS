@@ -5,6 +5,7 @@ module marginality_spectrum
     use compatible_problem_assembly_support, only: angular_grid_aliases
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_problem_ok, &
+        compatible_problem_asymmetric, &
         compatible_quadrature_cas3d_midpoint, compatible_quadrature_gauss, &
         compatible_two_component_problem_t
     use cas3d_coefficient_mass, only: &
@@ -39,6 +40,9 @@ module marginality_spectrum
     integer, parameter, public :: marginality_spectrum_ok = 0
     integer, parameter, public :: marginality_spectrum_invalid = 1
     integer, parameter, public :: marginality_spectrum_compute_error = 2
+    ! The reconstructed operator breaks stellarator symmetry, so the
+    ! decoupled parity classes 1 and 2 do not apply; class 0 couples them.
+    integer, parameter, public :: marginality_spectrum_asymmetric = 3
     integer, parameter, public :: marginality_normalization_perpendicular_l2 = 1
     integer, parameter, public :: marginality_normalization_cas3d2mn = 2
     integer, parameter, public :: marginality_quadrature_gauss = &
@@ -230,7 +234,12 @@ contains
                 radial_quadrature_policy=radial_quadrature_policy, &
                 sparse_storage=.true.)
         end if
-        if (info /= compatible_problem_ok) then
+        if (info == compatible_problem_asymmetric) then
+            info = marginality_spectrum_asymmetric
+            message = "the equilibrium breaks stellarator symmetry; " &
+                // "use parity class 0, which couples both parities"
+            return
+        else if (info /= compatible_problem_ok) then
             info = marginality_spectrum_compute_error
             message = "compatible FEEC marginality assembly failed"
             return
@@ -583,8 +592,13 @@ contains
         info = marginality_spectrum_invalid
         if (.not. valid_mode_table(mode_m, mode_n, stored_power)) then
             message = "mode table is invalid"
-        else if (parity_class < 1 .or. parity_class > 2) then
-            message = "parity class must be 1 or 2"
+        else if (parity_class < 0 .or. parity_class > 2) then
+            message = "parity class must be 0, 1 or 2"
+        else if (parity_class == 0 .and. (normalization_policy /= &
+                marginality_normalization_perpendicular_l2 .or. &
+                radial_quadrature_policy /= marginality_quadrature_gauss)) then
+            message = "the coupled parity class 0 requires the " &
+                // "perpendicular normalization and Gauss quadrature"
         else if (degree < 1 .or. degree > 4) then
             message = "FEEC degree must be between 1 and 4"
         else if (normalization_policy /= &

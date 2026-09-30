@@ -484,10 +484,10 @@ if(BUILD_TESTING)
     add_test(NAME axis_regular_displacement
         COMMAND test_axis_regular_displacement)
 
-    add_executable(test_asymmetric_rejection test/test_asymmetric_rejection.f90)
-    target_link_libraries(test_asymmetric_rejection PRIVATE gliss)
-    add_test(NAME asymmetric_rejection
-        COMMAND test_asymmetric_rejection ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
+    add_executable(test_asymmetric_coupling test/test_asymmetric_coupling.f90)
+    target_link_libraries(test_asymmetric_coupling PRIVATE gliss)
+    add_test(NAME asymmetric_coupling
+        COMMAND test_asymmetric_coupling ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
 
     add_executable(test_mercier_metric test/test_mercier_metric.f90)
     target_link_libraries(test_mercier_metric PRIVATE gliss)
