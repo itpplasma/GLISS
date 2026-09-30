@@ -451,8 +451,9 @@ gliss_status gliss_stability_problem_rayleigh_vjp(
  * required. Eigenvectors contains unknowns contiguous vectors in ascending
  * eigenvalue order, each in dynamic component order and normalized by
  * x^T M x = 1. rayleigh_quotients independently reevaluates x^T K x / x^T M x;
- * residuals and resolutions report the scaled backward error and roundoff
- * resolution for each pair. On a capacity error, both written outputs report
+ * residuals report the M^-1-norm residual ||K x - lambda M x||_(M^-1) /
+ * ||x||_M, a bound on the distance from each eigenvalue to the spectrum, and
+ * resolutions its roundoff resolution. On a capacity error, both written outputs report
  * the required counts and no data array is modified. eigenvalue_capacity
  * applies to eigenvalues, residuals, resolutions, and rayleigh_quotients.
  * Output arrays must not overlap. */

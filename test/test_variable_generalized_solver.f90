@@ -20,7 +20,8 @@ program test_variable_generalized_solver
     use variable_generalized_solver, only: &
         iterate_variable_generalized_eigenvalue, variable_generalized_diagnostics, &
         variable_generalized_inertia, variable_generalized_invalid, &
-        variable_generalized_mass_not_spd, variable_generalized_ok
+        variable_generalized_mass_not_spd, variable_generalized_ok, &
+        variable_eigenvalue_bound
     implicit none
 
     integer, parameter :: widths(3) = [2, 3, 1]
@@ -99,6 +100,7 @@ program test_variable_generalized_solver
     call check_long_chain_resolution()
     call check_scaled_compensated_norm()
     call check_ill_scaled_dense_pencil()
+    call check_rigorous_residual_bound()
 
     corrupt = stiffness
     corrupt%diagonal(1)%values(1, 2) = &
@@ -120,6 +122,48 @@ program test_variable_generalized_solver
     write (*, "(a)") "PASS"
 
 contains
+
+    ! For an ill-conditioned mass the Euclidean residual ||r||/||Mx|| can
+    ! underestimate the distance to the spectrum by orders of magnitude; the
+    ! M^-1-norm residual is a rigorous bound for every trial vector.
+    subroutine check_rigorous_residual_bound()
+        real(dp) :: dense_k(3, 3), dense_m(3, 3), trial(3), exact(3), image(3)
+        real(dp), allocatable :: values(:), vectors(:, :)
+        type(variable_block_tridiagonal_t) :: packed_k, packed_m
+        real(dp) :: quotient, bound, distance, numerator, denominator
+        integer :: info, attempt
+
+        dense_k = reshape([2.0_dp, 0.3_dp, -0.7_dp, 0.3_dp, 1.0_dp, 0.4_dp, &
+            -0.7_dp, 0.4_dp, 3.0_dp], [3, 3])
+        dense_m = 0.0_dp
+        dense_m(1, 1) = 1.0_dp
+        dense_m(2, 2) = 1.0e-4_dp
+        dense_m(3, 3) = 1.0e-8_dp
+        dense_m(1, 3) = 5.0e-5_dp
+        dense_m(3, 1) = 5.0e-5_dp
+        call solve_symmetric_generalized(dense_k, dense_m, values, vectors, info)
+        call require(info == 0, "bound fixture eigensolve failed")
+        call pack_variable_blocks(dense_k, [3], packed_k, info)
+        call pack_variable_blocks(dense_m, [3], packed_m, info)
+        do attempt = 1, 20
+            exact = vectors(:, 1 + modulo(attempt, 3))
+            trial(1) = exact(1) + 1.0e-3_dp * sin(real(attempt, dp))
+            trial(2) = exact(2) + 1.0e-3_dp * cos(3.0_dp * attempt)
+            trial(3) = exact(3) + 1.0e-3_dp * sin(7.0_dp * attempt)
+            image = matmul(dense_k, trial)
+            numerator = dot_product(trial, image)
+            image = matmul(dense_m, trial)
+            denominator = dot_product(trial, image)
+            quotient = numerator / denominator
+            call variable_eigenvalue_bound(packed_k, packed_m, trial, &
+                quotient, bound, info)
+            call require(info == variable_generalized_ok, &
+                "residual bound failed")
+            distance = minval(abs(values - quotient))
+            call require(bound >= distance * (1.0_dp - 1.0e-10_dp), &
+                "residual bound is smaller than the distance to the spectrum")
+        end do
+    end subroutine check_rigorous_residual_bound
 
     subroutine check_equilibration(stiffness, mass, expected)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass

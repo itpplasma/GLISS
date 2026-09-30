@@ -27,7 +27,8 @@ module fixed_boundary_spectrum
         variable_block_allocation, variable_block_ok, &
         variable_block_to_dense, variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
-        iterate_variable_generalized_eigenvalue, variable_generalized_ok
+        iterate_variable_generalized_eigenvalue, variable_eigenvalue_bound, &
+        variable_generalized_ok
     use variable_spectrum_analysis, only: analyze_variable_spectrum, &
         variable_spectrum_ok, variable_spectrum_summary_t
     implicit none
@@ -513,6 +514,15 @@ contains
             result%lowest_eigenvalue, solver_vector, &
             result%eigenpair_residual, result%eigenpair_resolution, info, &
             controls)
+        if (info /= variable_generalized_ok) then
+            info = fixed_boundary_solver_error
+            return
+        end if
+        ! Report the rigorous M^-1-norm residual bound rather than the
+        ! iteration's convergence metric.
+        call variable_eigenvalue_bound(class_problem%stiffness, &
+            class_problem%mass, solver_vector, result%lowest_eigenvalue, &
+            result%eigenpair_residual, info)
         if (info /= variable_generalized_ok) then
             info = fixed_boundary_solver_error
             return

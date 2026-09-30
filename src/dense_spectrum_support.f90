@@ -5,12 +5,13 @@ module dense_spectrum_support
         fixed_boundary_bracket_ok
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use variable_block_tridiagonal, only: apply_variable_block_tridiagonal, &
+        factorize_variable_shifted, variable_block_factor_t, &
         variable_block_ok, variable_block_to_dense, &
         variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
         iterate_variable_generalized_eigenvalue, &
-        variable_generalized_diagnostics, variable_generalized_inertia, &
-        variable_generalized_ok
+        variable_eigenvalue_bound, variable_generalized_diagnostics, &
+        variable_generalized_inertia, variable_generalized_ok
     implicit none
     private
 
@@ -255,7 +256,7 @@ contains
 
     subroutine refine_dense_eigenpair(stiffness, mass, controls, seeds, &
             target, seed_vector, eigenvalue, vector, residual, resolution, &
-            info)
+            info, interval)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         type(fixed_boundary_solver_controls_t), intent(in) :: controls
         real(dp), intent(in) :: seeds(:), seed_vector(:)
@@ -263,8 +264,9 @@ contains
         real(dp), intent(out) :: eigenvalue, residual, resolution
         real(dp), allocatable, intent(out) :: vector(:)
         integer, intent(out) :: info
+        real(dp), intent(out), optional :: interval
         real(dp), allocatable :: initial(:)
-        real(dp) :: initial_scale, shift
+        real(dp) :: initial_scale, shift, width
         integer :: allocation_status, entry
 
         info = dense_spectrum_invalid
@@ -276,8 +278,9 @@ contains
         allocate (initial, source=seed_vector, stat=allocation_status)
         if (allocation_status /= 0) return
         call bracket_indexed_eigenvalue(stiffness, mass, seeds, target, &
-            controls, shift, info)
+            controls, shift, info, width)
         if (info /= dense_spectrum_ok) return
+        if (present(interval)) interval = width
         initial_scale = sqrt(epsilon(1.0_dp)) * norm2(seed_vector) &
             / sqrt(real(size(initial), dp))
         do entry = 1, size(initial)
@@ -295,13 +298,14 @@ contains
     end subroutine refine_dense_eigenpair
 
     subroutine bracket_indexed_eigenvalue(stiffness, mass, seeds, target, &
-            controls, shift, info)
+            controls, shift, info, width)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: seeds(:)
         integer, intent(in) :: target
         type(fixed_boundary_solver_controls_t), intent(in) :: controls
         real(dp), intent(out) :: shift
         integer, intent(out) :: info
+        real(dp), intent(out) :: width
         real(dp) :: center, lower, step, tolerance, upper
         integer :: count, iteration, lower_count, upper_count
 
@@ -359,6 +363,7 @@ contains
         ! The lower endpoint has a successful factorization and fewer than
         ! target eigenvalues below it. An unprobed midpoint can be singular.
         shift = lower
+        width = upper - lower
         info = dense_spectrum_ok
     end subroutine bracket_indexed_eigenvalue
 
@@ -397,7 +402,8 @@ contains
         real(dp), allocatable, intent(out) :: rayleigh_quotients(:)
         real(dp), allocatable, intent(out) :: residuals(:), resolutions(:)
         integer, intent(out) :: info
-        integer :: allocation_status, index, count
+        type(variable_block_factor_t) :: mass_factor
+        integer :: allocation_status, index, count, status
 
         info = dense_spectrum_invalid
         count = size(eigenvalues)
@@ -408,11 +414,22 @@ contains
         allocate (rayleigh_quotients(count), residuals(count), &
             resolutions(count), stat=allocation_status)
         if (allocation_status /= 0) return
+        info = dense_spectrum_invalid
+        call factorize_variable_shifted(mass, 0.0_dp, mass_factor, status)
+        if (status /= variable_block_ok) return
+        if (mass_factor%negative_count /= 0) return
         do index = 1, count
             call variable_generalized_diagnostics(stiffness, mass, &
                 eigenvectors(:, index), eigenvalues(index), &
                 rayleigh_quotients(index), residuals(index), &
                 resolutions(index), info, validated=index > 1)
+            if (info /= variable_generalized_ok) then
+                info = dense_spectrum_invalid
+                return
+            end if
+            call variable_eigenvalue_bound(stiffness, mass, &
+                eigenvectors(:, index), eigenvalues(index), residuals(index), &
+                info, mass_factor)
             if (info /= variable_generalized_ok) then
                 info = dense_spectrum_invalid
                 return

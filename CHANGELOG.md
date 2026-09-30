@@ -12,6 +12,10 @@
 - Refine positive-spectrum inertia brackets by bisection before inverse
   iteration; the previous midpoint shift could return a non-lowest eigenvalue
   with a certificate as wide as the coarse bracket (#17).
+- Report `eigenpair_residual` as the rigorous eigenvalue distance bound
+  `||K x - lambda M x||_{M^-1} / ||x||_M` on every fixed-boundary and
+  marginality path, and include the inertia interval in the dense marginality
+  certificate so dense and sparse certificates have the same meaning (#26).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 

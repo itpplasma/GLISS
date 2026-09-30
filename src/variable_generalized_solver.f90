@@ -18,6 +18,7 @@ module variable_generalized_solver
 
     public :: iterate_variable_generalized_eigenvalue
     public :: variable_generalized_diagnostics
+    public :: variable_eigenvalue_bound
     public :: variable_generalized_inertia
 
 contains
@@ -326,6 +327,68 @@ contains
         end if
         info = variable_generalized_ok
     end subroutine variable_rayleigh_quotient
+
+    ! For symmetric K and positive definite M = L L^T, some eigenvalue of the
+    ! pencil lies within ||K x - lambda M x||_(M^-1) / ||x||_M of lambda
+    ! (the standard residual bound for L^-1 K L^-T).  The mass may be passed
+    ! factorized to avoid refactorizing it for every vector.
+    subroutine variable_eigenvalue_bound(stiffness, mass, vector, eigenvalue, &
+            bound, info, mass_factor)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), contiguous, intent(in) :: vector(:)
+        real(dp), intent(in) :: eigenvalue
+        real(dp), intent(out) :: bound
+        integer, intent(out) :: info
+        type(variable_block_factor_t), intent(in), optional, target :: &
+            mass_factor
+        type(variable_block_factor_t), target :: local_factor
+        type(variable_block_factor_t), pointer :: factor
+        real(dp) :: stiffness_image(size(vector)), mass_image(size(vector))
+        real(dp) :: residual_image(size(vector)), solved(size(vector))
+        real(dp) :: energy, squared_norm
+
+        bound = huge(1.0_dp)
+        info = variable_generalized_invalid
+        if (.not. ieee_is_finite(eigenvalue)) return
+        if (size(vector) /= sum(mass%widths)) return
+        if (present(mass_factor)) then
+            factor => mass_factor
+        else
+            call factorize_variable_shifted(mass, 0.0_dp, local_factor, info)
+            if (info /= variable_block_ok .or. &
+                local_factor%negative_count /= 0) then
+                info = variable_generalized_mass_not_spd
+                return
+            end if
+            factor => local_factor
+        end if
+        call apply_variable_block_tridiagonal(stiffness, vector, &
+            stiffness_image, info)
+        if (info /= variable_block_ok) then
+            info = variable_generalized_invalid
+            return
+        end if
+        call apply_variable_block_tridiagonal(mass, vector, mass_image, info)
+        if (info /= variable_block_ok) then
+            info = variable_generalized_invalid
+            return
+        end if
+        residual_image = stiffness_image - eigenvalue * mass_image
+        solved = residual_image
+        call solve_variable_factored(factor, solved, info)
+        if (info /= variable_block_ok) then
+            info = variable_generalized_invalid
+            return
+        end if
+        info = variable_generalized_invalid
+        energy = stable_dot_product(residual_image, solved)
+        squared_norm = stable_dot_product(vector, mass_image)
+        if (.not. ieee_is_finite(energy) .or. &
+            .not. ieee_is_finite(squared_norm)) return
+        if (squared_norm <= 0.0_dp) return
+        bound = sqrt(max(energy, 0.0_dp) / squared_norm)
+        info = variable_generalized_ok
+    end subroutine variable_eigenvalue_bound
 
     subroutine variable_residual(stiffness, mass, vector, eigenvalue, &
             residual, info)

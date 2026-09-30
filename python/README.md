@@ -218,9 +218,9 @@ Both functions return a frozen `AxisymmetricResult`. `negative_count` is the
 inertia of the assembled operator below zero. A zero count is stable within
 the selected Fourier and radial discretization; a positive count gives the
 number of unstable directions. `solve_axisymmetric()` also returns the lowest
-eigenvalue, a `certificate` combining backward error and numerical
-resolution, and the backward error in
-`eigenpair_residual`. The count-only function sets these three fields to
+eigenvalue, its `M^-1`-norm residual bound in `eigenpair_residual`, and a
+`certificate` that adds the inertia-bracket width and numerical resolution to
+that bound. The count-only function sets these three fields to
 `None`. `force_balance_residual` is the maximum dimensionless residual of the
 equilibrium identity used while reconstructing the kernel geometry.
 
@@ -236,8 +236,10 @@ defaults to 2.
 The eigenvalue and certificate use the native normalization of this
 two-component comparison operator. They are not an SI `omega^2` or a growth
 rate. Use their sign, convergence under radial and Fourier refinement, and a
-matched normalization for cross-code comparisons. The residual and inertia
-count are dimensionless.
+matched normalization for cross-code comparisons. The residual is the
+`M^-1`-norm residual `||K x - lambda M x||_(M^-1) / ||x||_M`, which has the
+units of the eigenvalue and bounds its distance to the discrete spectrum; the
+inertia count is dimensionless.
 
 The equilibrium must use one field period, contain no nonaxisymmetric
 primitive harmonics, and provide at least four half-grid surfaces.
@@ -300,9 +302,9 @@ stellarator-symmetric parity families. The plasma edge is fixed.
 
 Both calls return a frozen `Cas3dMarginalityResult`. The count-only call sets
 `lowest_eigenvalue`, `certificate`, and `eigenpair_residual` to `None`. The
-solve call returns the lowest eigenvalue and backward error. `certificate`
-combines the final inertia-bracket width, backward error, and roundoff
-resolution. The result also records the exact mode table, parity, angular
+solve call returns the lowest eigenvalue and its `M^-1`-norm residual bound.
+`certificate` is the sum of the final inertia-bracket width, that bound and
+the roundoff resolution on every path. The result also records the exact mode table, parity, angular
 resolution, radial surface count, Fourier convention, coordinate handedness,
 boundary condition, and normalization warning.
 
@@ -391,14 +393,15 @@ normalization warning, inertia and optional certified lowest pair. The
 ordinary `cas3d_marginality_*` functions continue to require a unique,
 explicit physical-mode table and do not apply this labeled multiplicity.
 
-The roundoff term evaluates the absolute shifted action in the equilibrated
-coordinates. Its vector norms use a scaled compensated sum of squares, so they
+The roundoff term evaluates the absolute shifted action of the assembled
+pencil (no equilibration is applied). Its vector norms use a scaled
+compensated sum of squares, so they
 do not overflow for large finite coefficients or underflow for uniformly small
 ones. For `t` terms in the widest block row, `n` unknowns and binary64 machine
 epsilon `eps`, the guarded operation bound starts from
 `(6*t + 48)*eps + 16*n*eps**2`. This replaces a naive `O(n*eps)` norm-reduction
 allowance; it does not change the matrix pencil, eigenvalue, inertia bracket or
-back-transformed residual.
+residual bound.
 
 Choose angular resolutions above the convolution bandwidth of both the trial
 modes and equilibrium spectrum. GLISS rejects an aliased grid before

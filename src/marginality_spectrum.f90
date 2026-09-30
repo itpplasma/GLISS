@@ -28,8 +28,8 @@ module marginality_spectrum
         validate_variable_blocks, variable_block_ok, &
         variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
-        iterate_variable_generalized_eigenvalue, variable_generalized_inertia, &
-        variable_generalized_ok
+        iterate_variable_generalized_eigenvalue, variable_eigenvalue_bound, &
+        variable_generalized_inertia, variable_generalized_ok
     use variable_spectrum_analysis, only: analyze_variable_spectrum, &
         variable_spectrum_ok, variable_spectrum_summary_t
     implicit none
@@ -288,7 +288,7 @@ contains
         type(variable_block_tridiagonal_t) :: block_k, block_m
         real(dp), allocatable :: eigenvalues(:), eigenvectors(:, :)
         real(dp), allocatable :: stiffness(:, :), mass(:, :), vector(:)
-        real(dp) :: eigenvalue, residual, resolution
+        real(dp) :: eigenvalue, interval, residual, resolution
         integer :: allocation_status, local_info
 
         result = marginality_spectrum_result_t()
@@ -353,15 +353,22 @@ contains
         end if
         call refine_dense_eigenpair(block_k, block_m, controls, eigenvalues, &
             1, eigenvectors(:, 1), eigenvalue, vector, residual, resolution, &
-            local_info)
+            local_info, interval)
         if (local_info /= dense_spectrum_ok) then
             info = marginality_spectrum_compute_error
             message = "compatible FEEC eigenpair refinement failed"
             return
         end if
+        call variable_eigenvalue_bound(block_k, block_m, vector, eigenvalue, &
+            residual, local_info)
+        if (local_info /= variable_generalized_ok) then
+            info = marginality_spectrum_compute_error
+            message = "compatible FEEC residual bound failed"
+            return
+        end if
         result%lowest_eigenvalue = eigenvalue
         result%eigenpair_residual = residual
-        result%certificate = residual + resolution
+        result%certificate = interval + residual + resolution
         if (present(eigenvector)) call move_alloc(vector, eigenvector)
         if (present(full_eigenvalues)) &
             call move_alloc(eigenvalues, full_eigenvalues)
@@ -450,6 +457,12 @@ contains
             vector, residual, resolution, local_info, controls)
         if (local_info /= variable_generalized_ok) then
             message = "sparse compatible FEEC inverse iteration failed"
+            return
+        end if
+        call variable_eigenvalue_bound(problem%sparse_stiffness, &
+            problem%sparse_mass, vector, eigenvalue, residual, local_info)
+        if (local_info /= variable_generalized_ok) then
+            message = "sparse compatible FEEC residual bound failed"
             return
         end if
         result%lowest_eigenvalue = eigenvalue
