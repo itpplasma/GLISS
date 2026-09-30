@@ -30,41 +30,29 @@ module period_averaged_assembly
 
 contains
 
-    ! Column weights of the two period averages: plus(a, b) multiplies
-    ! X^T W X and minus(a, b) multiplies Y^T W Y, from same = (n_a - n_b = 0)
-    ! and opposite = (n_a + n_b = 0) modulo the field periods of the trials
-    ! of columns a and b (column a has trial modulo(a - 1, trials) + 1);
-    ! mixed is false when minus vanishes, and Y then drops out.
-    pure subroutine period_masks(trial_n, field_periods, columns, plus, &
-            minus, mixed)
-        integer, intent(in) :: trial_n(:), field_periods, columns
+    ! Trial weights of the two period averages: plus(a, b) multiplies
+    ! X^T W X and minus(a, b) multiplies Y^T W Y for columns of trials a and
+    ! b, from same = (n_a - n_b = 0) and opposite = (n_a + n_b = 0) modulo the
+    ! field periods; mixed is false when minus vanishes, and Y then drops out.
+    ! Column a has trial modulo(a - 1, trials) + 1.
+    pure subroutine period_masks(trial_n, field_periods, plus, minus, mixed)
+        integer, intent(in) :: trial_n(:), field_periods
         real(dp), intent(out) :: plus(:, :), minus(:, :)
         logical, intent(out) :: mixed
-        real(dp) :: trial_plus(size(trial_n), size(trial_n))
-        real(dp) :: trial_minus(size(trial_n), size(trial_n))
         real(dp) :: same, opposite
-        integer :: a, b, trials
+        integer :: a, b
 
-        trials = size(trial_n)
-        do b = 1, trials
-            do a = 1, trials
+        do b = 1, size(trial_n)
+            do a = 1, size(trial_n)
                 same = merge(1.0_dp, 0.0_dp, &
                     modulo(trial_n(a) - trial_n(b), field_periods) == 0)
                 opposite = merge(1.0_dp, 0.0_dp, &
                     modulo(trial_n(a) + trial_n(b), field_periods) == 0)
-                trial_plus(a, b) = 0.5_dp * (same + opposite)
-                trial_minus(a, b) = 0.5_dp * (same - opposite)
+                plus(a, b) = 0.5_dp * (same + opposite)
+                minus(a, b) = 0.5_dp * (same - opposite)
             end do
         end do
-        mixed = any(trial_minus /= 0.0_dp)
-        do b = 1, columns
-            do a = 1, columns
-                plus(a, b) = trial_plus(modulo(a - 1, trials) + 1, &
-                    modulo(b - 1, trials) + 1)
-                minus(a, b) = trial_minus(modulo(a - 1, trials) + 1, &
-                    modulo(b - 1, trials) + 1)
-            end do
-        end do
+        mixed = any(minus /= 0.0_dp)
     end subroutine period_masks
 
     ! cosine_part(p, a), sine_part(p, a): C_a and S_a at point p;
@@ -81,10 +69,15 @@ contains
         real(dp), intent(inout) :: target(:, :)
         real(dp), allocatable :: real_part(:, :), weighted(:, :)
         real(dp), allocatable :: product(:, :)
-        integer :: a, b, columns, p, points
+        integer :: column_trial(size(cosine_part, 2))
+        integer :: a, b, columns, p, points, trials
 
         points = size(cosine_part, 1)
         columns = size(cosine_part, 2)
+        trials = size(plus, 1)
+        do a = 1, columns
+            column_trial(a) = modulo(a - 1, trials) + 1
+        end do
         allocate (real_part(points, columns), weighted(points, columns), &
             product(columns, columns))
         do a = 1, columns
@@ -98,7 +91,8 @@ contains
             points, weighted, points, 0.0_dp, product, columns)
         do b = 1, columns
             do a = 1, columns
-                target(a, b) = target(a, b) + plus(a, b) * product(a, b)
+                target(a, b) = target(a, b) + plus(column_trial(a), &
+                    column_trial(b)) * product(a, b)
             end do
         end do
         if (.not. mixed) return
@@ -113,7 +107,8 @@ contains
             points, weighted, points, 0.0_dp, product, columns)
         do b = 1, columns
             do a = 1, columns
-                target(a, b) = target(a, b) + minus(a, b) * product(a, b)
+                target(a, b) = target(a, b) + minus(column_trial(a), &
+                    column_trial(b)) * product(a, b)
             end do
         end do
     end subroutine accumulate_period_averaged

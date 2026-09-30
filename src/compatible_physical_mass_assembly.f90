@@ -151,15 +151,14 @@ contains
         allocate (cosine_part(chunk, columns, components), &
             sine_part(chunk, columns, components), &
             cosine_phase(chunk, columns), sine_phase(chunk, columns), &
-            weight(chunk, components), plus(columns, columns), &
-            minus(columns, columns))
+            weight(chunk, components), plus(trials, trials), &
+            minus(trials, trials))
         if (components == 3) then
             call build_basis_coefficients(parity, h1, eta, l2, coefficients)
         else
             call build_perpendicular_basis(parity, h1, l2, coefficients)
         end if
-        call period_masks(trial_n, field_periods, columns, plus, minus, &
-            mixed)
+        call period_masks(trial_n, field_periods, plus, minus, mixed)
         do first = 1, points, chunk
             count = min(chunk, points - first + 1)
             ! Rows past the last point carry zero weight and zero response.
