@@ -23,6 +23,9 @@ program test_fixed_boundary_spectrum
     implicit none
 
     character(len=*), parameter :: fixture = "fixed_boundary_spectrum.nc"
+    ! Self-regression value on the synthetic fixture, not an independent
+    ! oracle; physical agreement is checked in test_solovev_axis_regularity
+    ! and test_axis_regular_displacement.
     real(dp), parameter :: reference_lowest(2) = &
         [1.1918434950137493e0_dp, 1.1918434948672756e0_dp]
     real(dp), parameter :: reference_certificate_limit = 1.2e-3_dp

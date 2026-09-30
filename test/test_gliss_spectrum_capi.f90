@@ -12,6 +12,9 @@ program test_gliss_spectrum_capi
     integer(c_int), parameter :: status_capacity = 3
     integer(c_int), parameter :: status_invalid_argument = 4
     character(len=*), parameter :: fixture = "spectrum_capi_cylinder.nc"
+    ! Self-regression value on the synthetic fixture, not an independent
+    ! oracle; physical agreement is checked in test_solovev_axis_regularity
+    ! and test_axis_regular_displacement.
     real(c_double), parameter :: expected_lowest = &
         1.1918434950137493e0_c_double
     real(c_double), parameter :: reference_certificate_limit = 1.2e-3_c_double

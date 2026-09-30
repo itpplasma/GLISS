@@ -6,7 +6,8 @@ import pytest
 import gliss
 
 
-def test_python_and_compiled_versions_match():
+@pytest.mark.native
+def test_python_and_compiled_versions_match(native_library):
     assert gliss.version() == gliss.__version__
 
 

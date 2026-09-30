@@ -22,6 +22,13 @@
   than silently symmetrized below unit magnitude. Marginality and
   axisymmetric results report `zero_floor`, which extends their C result
   structs (#27).
+- Separate native Python tests (`pytest -m native`) from contract tests
+  against fakes. Native tests load libgliss_c, fail rather than skip without
+  it, and check the Solov'ev DCON stability bracket, the Mercier sign and
+  Rayleigh-quotient identities. The closure registry now requires each
+  evidence item to name a ctest-registered check or a collected test, and the
+  installed-wheel check verifies parameter derivatives by central
+  differences (#28).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 

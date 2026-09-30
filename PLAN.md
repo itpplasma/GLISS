@@ -290,11 +290,18 @@ Related issue: [#15, executable versioned documentation](https://github.com/itpp
 - [ ] Publish the minimal redistributable fixtures and acceptance manifests
   needed for current production analytical and cross-code gates. Link restricted
   research evidence explicitly and report tests skipped for missing data.
-- [x] Test an installed wheel with the physics suite, not just import/version
-  smoke checks. `ci/check_installed.py` enforces bundled-library loading, checks
-  production inverse-density scaling, and runs the portable Python suite from
-  a temporary directory outside the checkout. The cylinder is a synthetic ABI
-  control, not a qualified straight-cylinder analytical benchmark.
+- [x] Test an installed wheel against independent oracles, not just
+  import/version smoke checks. `ci/check_installed.py` enforces bundled-library
+  loading, checks production inverse-density scaling and both material
+  derivatives against central differences, and runs the Python suite from a
+  temporary directory outside the checkout. Most Python tests are contract
+  tests against a fake library; only tests marked `native`
+  (`python/tests/test_native.py` and a few others) load libgliss_c, and they
+  check the Solov'ev DCON stability bracket and Mercier sign and exact
+  Rayleigh-quotient identities. `pytest -m native` selects them, and they fail
+  rather than skip without the library. The cylinder is a synthetic ABI
+  control, not a qualified straight-cylinder analytical benchmark
+  ([#28](https://github.com/itpplasma/GLISS/issues/28)).
 - [ ] Add controlled thread counts, pinned toolchain identities, and derivative
   gate artifacts to CI. Keep performance measurements separate from correctness.
   CI now fixes BLAS/OpenMP thread counts to one; automatic derivative gates and
@@ -347,6 +354,11 @@ Enzyme gates. The runtime-checking build passes with `-fcheck=all -O1`.
 The installed wheel passes 245 portable Python tests, plus real production
 angular-grid, density-scaling, and material spectral-derivative checks; the
 source suite passes 248. Both Python runs retain the two optional skips above.
+Correction ([#28](https://github.com/itpplasma/GLISS/issues/28)): those Python
+counts were almost entirely contract tests against a fake library and are not
+native physics evidence; the fixed-boundary reference eigenvalues were
+self-regression values that moved from -79.144 to +1.19184 when the spurious
+axis mode was removed (#16).
 Independent analytical benchmark reruns reproduce the reported spectra and
 convergence rates. The integrated marginality path reproduces count one at
 the DCON stable endpoint and zero at q0=1.1; this preserves the unresolved

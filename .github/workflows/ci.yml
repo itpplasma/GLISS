@@ -84,9 +84,10 @@ jobs:
           cmake --build build --target gliss_c gliss_wheel_fixture
           build/gliss_wheel_fixture build/installed_wheel_fixture.nc
       - name: Run Python binding tests
-        # Contract tests run against the built libgliss_c; the golden and
-        # simsopt tests skip without the LFS fixtures / simsopt, which is the
-        # intended behavior in public CI.
+        # Most tests are contract tests against a fake library. Tests marked
+        # native load the built libgliss_c and check it against independent
+        # oracles (test/data Solov'ev fixtures); they fail without it. The
+        # golden and simsopt tests skip without the LFS fixtures / simsopt.
         run: GLISS_LIB=$PWD/build/libgliss_c.so python -m pytest python/tests -v
       - name: Build distributions
         run: python -m build

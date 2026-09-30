@@ -23,7 +23,7 @@ def _ensure_library():
     if os.path.exists(_DEFAULT_LIB):
         os.environ["GLISS_LIB"] = _DEFAULT_LIB
     else:
-        pytest.skip("libgliss_c.so not found; set GLISS_LIB to the built library")
+        pytest.fail("libgliss_c.so not found; set GLISS_LIB to the built library")
 
 
 def test_mercier_profile_nonexistent_path_raises():
@@ -39,8 +39,8 @@ def test_mercier_profile_rejects_invalid_resolution(tmp_path, resolution):
         gliss.mercier_profile(export, n_theta=resolution)
 
 
-def test_mercier_profile_accepts_pathlike(tmp_path):
-    _ensure_library()
+@pytest.mark.native
+def test_mercier_profile_accepts_pathlike(native_library, tmp_path):
     export = Path(tmp_path, "invalid.nc")
     export.touch()
     with pytest.raises(RuntimeError, match="failed to read"):
@@ -72,9 +72,6 @@ def test_mercier_profile_matches_golden():
     np.testing.assert_allclose(d_mercier, golden[:, 5], rtol=1e-9)
 
 
-_SOLOVEV = Path(__file__).resolve().parents[2] / "test" / "data" / "solovev_q1.035.nc"
-
-
 def test_mercier_objective_is_instability_of_least_stable_surface(monkeypatch):
     profile = (np.array([0.25, 0.5, 0.75]), np.array([0.3, -0.2, 0.1]))
     monkeypatch.setattr(gliss.mercier, "mercier_profile", lambda *a, **k: profile)
@@ -82,23 +79,3 @@ def test_mercier_objective_is_instability_of_least_stable_surface(monkeypatch):
     stable = (profile[0], np.array([0.3, 0.2, 0.1]))
     monkeypatch.setattr(gliss.mercier, "mercier_profile", lambda *a, **k: stable)
     assert gliss.mercier.mercier_objective("unused.nc") == pytest.approx(-0.1)
-
-
-def test_solovev_mercier_sign_matches_dcon():
-    # Independent GPEC/DCON Newcomb runs of this analytic Solov'ev family near
-    # q0=1.04 find the core Mercier-unstable (D_I > 0) for s below about 0.16
-    # and stable outside.  Positive D_Mercier is stable in GLISS.
-    _ensure_library()
-    s, d_mercier = gliss.mercier_profile(_SOLOVEV)
-    assert d_mercier[0] < 0.0
-    assert np.all(d_mercier[s > 0.25] > 0.0)
-    crossing = s[np.argmax(d_mercier > 0.0)]
-    assert 0.1 < crossing < 0.3
-    assert gliss.mercier_objective(_SOLOVEV) == pytest.approx(-d_mercier.min())
-    assert gliss.mercier_objective(_SOLOVEV) > 0.0
-
-
-def test_gvec_export_reports_left_handed_chart():
-    _ensure_library()
-    with gliss.Equilibrium(_SOLOVEV) as equilibrium:
-        assert equilibrium.coordinate_handedness == "left-handed"

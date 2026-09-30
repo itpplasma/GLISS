@@ -52,13 +52,23 @@ CLOSURES = (
         "gvec-cas3d-v1",
         "equilibrium",
         ("src/gvec_cas3d_reader.f90", "src/gvec_cas3d_writer.f90"),
-        (_evidence("test/test_gvec_cas3d_reader.f90", "reader_schema_error"),),
+        (_evidence(
+                "test/test_gvec_cas3d_reader.f90",
+                "missing required harmonic component was accepted",
+            ),),
     ),
     Closure(
         "vmec-symmetric",
         "equilibrium",
         ("python/gliss/vmec.py", "python/gliss/_vmec_geometry.py"),
-        (_evidence("python/tests/test_vmec.py", "test_convert_vmec"),),
+        (_evidence(
+                "python/tests/test_vmec.py",
+                "test_vmec_position_frame_reconstructs_cylindrical_position",
+            ),
+            _evidence(
+                "python/tests/test_vmec.py",
+                "test_truncated_jacobian_residual_detects_missing_harmonics",
+            ),),
     ),
     Closure(
         "terpsichore-fort23",
@@ -67,7 +77,7 @@ CLOSURES = (
         (
             _evidence(
                 "test/test_terpsichore_reduced_mass_adapter.f90",
-                "terpsichore_matrix_fixture_ok",
+                "valid TERPSICHORE matrix fixture was rejected",
             ),
         ),
     ),
@@ -103,13 +113,17 @@ CLOSURES = (
         "axisymmetric-family",
         "topology",
         ("src/axisymmetric_spectrum.f90",),
-        (_evidence("test/test_gliss_marginality_capi.f90", "require_same_result"),),
+        (_evidence("test/test_gliss_marginality_capi.f90", "require_same_result"),
+            _evidence("test/test_solovev_axis_regularity.f90", "check"),),
     ),
     Closure(
         "terpsichore-mask",
         "topology",
         ("src/terpsichore_topology.f90",),
-        (_evidence("test/test_terpsichore_topology.f90", "PARFAC"),),
+        (_evidence(
+                "test/test_terpsichore_topology.f90",
+                "PARFAC zero selected the wrong parity",
+            ),),
     ),
     Closure(
         "compressible-ideal-mhd",
@@ -146,6 +160,7 @@ CLOSURES = (
                 "test/test_cartesian_harmonic_spline.f90",
                 "compatible problem assembly failed",
             ),
+            _evidence("test/test_axis_regular_displacement.f90", "check_case"),
         ),
     ),
     Closure(
@@ -168,6 +183,7 @@ CLOSURES = (
                 "test/test_cartesian_harmonic_spline.f90",
                 "compatible mass is not positive definite",
             ),
+            _evidence("test/test_axis_regular_displacement.f90", "check_case"),
         ),
     ),
     Closure(
@@ -179,6 +195,7 @@ CLOSURES = (
                 "test/test_gliss_marginality_capi.f90",
                 "forced-general solve failed",
             ),
+            _evidence("test/test_solovev_axis_regularity.f90", "check"),
         ),
     ),
     Closure(
@@ -232,7 +249,17 @@ CLOSURES = (
             "src/fixed_boundary_eigen_bracket.f90",
             "src/variable_generalized_solver.f90",
         ),
-        (_evidence("test/test_fixed_boundary_spectrum.f90", "certificate"),),
+        (
+            _evidence(
+                "test/test_variable_generalized_solver.f90",
+                "check_rigorous_residual_bound",
+            ),
+            _evidence(
+                "test/test_variable_block_factorization.f90",
+                "check_unresolved_block_pivot",
+            ),
+            _evidence("test/test_solovev_axis_regularity.f90", "check"),
+        ),
     ),
     Closure(
         "dense-lapack-complete",
@@ -244,7 +271,12 @@ CLOSURES = (
         "rayleigh-displacement",
         "derivative",
         ("python/gliss/derivatives.py",),
-        (_evidence("python/tests/test_stability.py", "rayleigh_jvp_and_vjp"),),
+        (
+            _evidence(
+                "python/tests/test_native.py",
+                "test_native_rayleigh_gradient_matches_finite_differences",
+            ),
+        ),
     ),
 )
 

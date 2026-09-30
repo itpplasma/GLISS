@@ -5,7 +5,7 @@
       "evidence": [
         {
           "path": "test/test_gvec_cas3d_reader.f90",
-          "token": "reader_schema_error"
+          "token": "missing required harmonic component was accepted"
         }
       ],
       "id": "gvec-cas3d-v1",
@@ -19,7 +19,11 @@
       "evidence": [
         {
           "path": "python/tests/test_vmec.py",
-          "token": "test_convert_vmec"
+          "token": "test_vmec_position_frame_reconstructs_cylindrical_position"
+        },
+        {
+          "path": "python/tests/test_vmec.py",
+          "token": "test_truncated_jacobian_residual_detects_missing_harmonics"
         }
       ],
       "id": "vmec-symmetric",
@@ -33,7 +37,7 @@
       "evidence": [
         {
           "path": "test/test_terpsichore_reduced_mass_adapter.f90",
-          "token": "terpsichore_matrix_fixture_ok"
+          "token": "valid TERPSICHORE matrix fixture was rejected"
         }
       ],
       "id": "terpsichore-fort23",
@@ -87,6 +91,10 @@
         {
           "path": "test/test_gliss_marginality_capi.f90",
           "token": "require_same_result"
+        },
+        {
+          "path": "test/test_solovev_axis_regularity.f90",
+          "token": "check"
         }
       ],
       "id": "axisymmetric-family",
@@ -99,7 +107,7 @@
       "evidence": [
         {
           "path": "test/test_terpsichore_topology.f90",
-          "token": "PARFAC"
+          "token": "PARFAC zero selected the wrong parity"
         }
       ],
       "id": "terpsichore-mask",
@@ -152,6 +160,10 @@
         {
           "path": "test/test_cartesian_harmonic_spline.f90",
           "token": "compatible problem assembly failed"
+        },
+        {
+          "path": "test/test_axis_regular_displacement.f90",
+          "token": "check_case"
         }
       ],
       "id": "compatible-primitive-feec",
@@ -179,6 +191,10 @@
         {
           "path": "test/test_cartesian_harmonic_spline.f90",
           "token": "compatible mass is not positive definite"
+        },
+        {
+          "path": "test/test_axis_regular_displacement.f90",
+          "token": "check_case"
         }
       ],
       "id": "physical-kinetic",
@@ -192,6 +208,10 @@
         {
           "path": "test/test_gliss_marginality_capi.f90",
           "token": "forced-general solve failed"
+        },
+        {
+          "path": "test/test_solovev_axis_regularity.f90",
+          "token": "check"
         }
       ],
       "id": "perpendicular-marginality",
@@ -255,8 +275,16 @@
       "category": "solver",
       "evidence": [
         {
-          "path": "test/test_fixed_boundary_spectrum.f90",
-          "token": "certificate"
+          "path": "test/test_variable_generalized_solver.f90",
+          "token": "check_rigorous_residual_bound"
+        },
+        {
+          "path": "test/test_variable_block_factorization.f90",
+          "token": "check_unresolved_block_pivot"
+        },
+        {
+          "path": "test/test_solovev_axis_regularity.f90",
+          "token": "check"
         }
       ],
       "id": "certified-feec-inertia",
@@ -282,8 +310,8 @@
       "category": "derivative",
       "evidence": [
         {
-          "path": "python/tests/test_stability.py",
-          "token": "rayleigh_jvp_and_vjp"
+          "path": "python/tests/test_native.py",
+          "token": "test_native_rayleigh_gradient_matches_finite_differences"
         }
       ],
       "id": "rayleigh-displacement",

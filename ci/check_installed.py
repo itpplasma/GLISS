@@ -11,6 +11,20 @@ import tempfile
 import numpy as np
 
 
+def _full_trace(gliss, equilibrium, density, gamma, theta, zeta):
+    with gliss.StabilityProblem(
+        equilibrium,
+        modes=[(1, 1), (2, 1)],
+        adiabatic_index=gamma,
+        density_kg_m3=density,
+        zero_floor=2.0 / density,
+        degree=1,
+        angular_theta=theta,
+        angular_zeta=zeta,
+    ) as problem:
+        return float(np.sum(problem.solve_full_spectrum_class(1).eigenvalues))
+
+
 def check_production_spectrum(gliss, equilibrium_path):
     # The smooth synthetic torus resolves at these angular grids. M is linear
     # in density, while K is independent of density. Check convergence and this
@@ -71,21 +85,32 @@ def check_production_spectrum(gliss, equilibrium_path):
                     sensitivity = gliss.spectral_parameter_sensitivity(
                         problem, 1, 0, len(full.eigenvalues), gap=1.0
                     )
-                    trace = float(np.sum(full.eigenvalues))
-                    assert np.isfinite(trace)
-                    np.testing.assert_allclose(sensitivity.value, trace, rtol=1e-12)
-                    np.testing.assert_allclose(
-                        sensitivity.jvp([1.0, 0.0]), -trace / density, rtol=1e-10
-                    )
-                    assert np.isfinite(sensitivity.gradient[1])
+                    # Central differences of independently assembled
+                    # problems are the oracle for both parameter derivatives.
+                    for axis, (d_density, d_gamma) in enumerate(
+                        ((1.0e-4 * density, 0.0), (0.0, 1.0e-4))
+                    ):
+                        traces = [
+                            _full_trace(
+                                gliss, equilibrium, density + sign * d_density,
+                                5.0 / 3.0 + sign * d_gamma, theta, zeta,
+                            )
+                            for sign in (1.0, -1.0)
+                        ]
+                        difference = (traces[0] - traces[1]) / (
+                            2.0 * (d_density + d_gamma)
+                        )
+                        np.testing.assert_allclose(
+                            sensitivity.gradient[axis], difference, rtol=1e-6
+                        )
                     assert sensitivity.gradient[1] > 0
                     tangent = np.array([0.3, -0.2])
                     np.testing.assert_allclose(
                         1.7 * sensitivity.jvp(tangent),
                         np.dot(sensitivity.vjp(1.7), tangent), rtol=1e-12,
                     )
-    print("Installed production spectrum: angular convergence and inverse-density "
-          "scaling passed", flush=True)
+    print("Installed production spectrum: angular convergence, inverse-density "
+          "scaling and finite-difference parameter derivatives passed", flush=True)
 
 
 def main():
@@ -118,6 +143,7 @@ def main():
         environment = os.environ.copy()
         environment.pop("PYTHONPATH", None)
         environment["GLISS_LIB"] = str(library)
+        environment["GLISS_TEST_DATA"] = str(tests.parents[1] / "test" / "data")
         subprocess.run(
             [
                 sys.executable,
