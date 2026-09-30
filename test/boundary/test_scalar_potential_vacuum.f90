@@ -31,6 +31,7 @@ program test_scalar_potential_vacuum
     call test_exterior_convergence()
     call test_wall_convergence()
     call test_symmetry_and_scaling()
+    call test_sector_solution()
     call test_rejections()
     write (*, "(a)") "PASS"
 
@@ -106,6 +107,97 @@ contains
         call require(abs(energy(3, 3) / energy(1, 1) - 4.0_dp) < 1.0e-12_dp, &
             "energy is not quadratic in the datum")
     end subroutine test_symmetry_and_scaling
+
+    ! The block-circulant solve over rotation sectors reproduces the full
+    ! system: the axisymmetric torus with and without a wall (one sector per
+    ! toroidal node) and a five-period rotating ellipse, whose data mix the
+    ! Fourier harmonics over sectors.
+    subroutine test_sector_solution()
+        integer, parameter :: nu = 10, nv = 20
+        real(dp), allocatable :: dense(:, :), flux(:, :), plasma(:, :, :)
+        real(dp), allocatable :: sectors(:, :), wall(:, :, :)
+        integer :: info
+
+        call coordinate_torus(minor, nu, nv, plasma)
+        call harmonic_flux(nu, nv, 0.1_dp, flux)
+        call coordinate_torus(wall_minor, nu, nv, wall)
+        call assemble_exterior_vacuum(plasma, flux, sectors, info)
+        call require(info == vacuum_bie_ok, "sector assembly failed")
+        call assemble_exterior_vacuum(plasma, flux, dense, info, &
+            symmetric=.false.)
+        call require(info == vacuum_bie_ok, "dense assembly failed")
+        call require(agree(sectors, dense), &
+            "axisymmetric sector solve differs from the full system")
+        call assemble_exterior_vacuum(plasma, flux, sectors, info, wall)
+        call require(info == vacuum_bie_ok, "walled sector assembly failed")
+        call assemble_exterior_vacuum(plasma, flux, dense, info, wall, &
+            symmetric=.false.)
+        call require(info == vacuum_bie_ok, "walled dense assembly failed")
+        call require(agree(sectors, dense), &
+            "walled sector solve differs from the full system")
+
+        call rotating_ellipse(0.0_dp, nu, 4 * nv, plasma)
+        call rotating_ellipse(0.4_dp, nu, 4 * nv, wall)
+        call mixed_flux(nu, 4 * nv, flux)
+        call assemble_exterior_vacuum(plasma, flux, sectors, info, wall)
+        call require(info == vacuum_bie_ok, "helical sector assembly failed")
+        call assemble_exterior_vacuum(plasma, flux, dense, info, wall, &
+            symmetric=.false.)
+        call require(info == vacuum_bie_ok, "helical dense assembly failed")
+        call require(agree(sectors, dense), &
+            "five-period sector solve differs from the full system")
+    end subroutine test_sector_solution
+
+    logical function agree(first, second)
+        real(dp), intent(in) :: first(:, :), second(:, :)
+
+        agree = all(abs(first - second) <= 1.0e-10_dp * maxval(abs(second)))
+    end function agree
+
+    ! Ellipse of semi-axes 1 + offset and 0.6 + offset rotating five times
+    ! poloidally per toroidal turn about the circle R = 4.
+    subroutine rotating_ellipse(offset, nu, nv, surface)
+        real(dp), intent(in) :: offset
+        integer, intent(in) :: nu, nv
+        real(dp), allocatable, intent(out) :: surface(:, :, :)
+        real(dp) :: along, across, phi, r, theta, tilt
+        integer :: i, k
+
+        allocate (surface(3, nu, nv))
+        do k = 1, nv
+            phi = 2.0_dp * pi * real(k - 1, dp) / real(nv, dp)
+            tilt = 5.0_dp * phi
+            do i = 1, nu
+                theta = 2.0_dp * pi * real(i - 1, dp) / real(nu, dp)
+                along = (1.0_dp + offset) * cos(theta)
+                across = (0.6_dp + offset) * sin(theta)
+                r = 4.0_dp + along * cos(tilt) - across * sin(tilt)
+                surface(1, i, k) = r * cos(phi)
+                surface(2, i, k) = r * sin(phi)
+                surface(3, i, k) = along * sin(tilt) + across * cos(tilt)
+            end do
+        end do
+    end subroutine rotating_ellipse
+
+    ! Fluxes with poloidal and toroidal numbers that are not multiples of
+    ! the five periods, and one datum with zero net flux per sector pair.
+    subroutine mixed_flux(nu, nv, flux)
+        integer, intent(in) :: nu, nv
+        real(dp), allocatable, intent(out) :: flux(:, :)
+        real(dp), allocatable :: centroid(:, :)
+        real(dp) :: u, v
+        integer :: t
+
+        allocate (centroid(2, 2 * nu * nv), flux(2 * nu * nv, 3))
+        call edge_triangle_centroids(nu, nv, centroid)
+        do t = 1, size(centroid, 2)
+            u = 2.0_dp * pi * centroid(1, t)
+            v = 2.0_dp * pi * centroid(2, t)
+            flux(t, 1) = cos(u - v)
+            flux(t, 2) = sin(2.0_dp * u + 3.0_dp * v)
+            flux(t, 3) = cos(u) * sin(5.0_dp * v)
+        end do
+    end subroutine mixed_flux
 
     subroutine test_rejections()
         integer, parameter :: nu = 8, nv = 24

@@ -783,9 +783,15 @@ print(result.boundary_condition, result.negative_count, energy.vacuum_energy)
 ```
 
 `edge_resolution` counts the poloidal and toroidal edge nodes; each must
-exceed twice the largest `|m|` and `|n|` of the mode table, and the vacuum
-costs dense `O((nu*nv)^2)` memory and `O((nu*nv)^3)` time, doubled with a
-wall; its energy converges at second order in the mesh spacing. `wall` is `None` (vacuum to infinity), a positive distance in metres of
+exceed twice the largest `|m|` and `|n|` of the mode table. The vacuum
+energy converges at second order in the mesh spacing. When the edge and wall
+meshes are invariant under a rotation by `2 pi / P` about the z axis (`P`
+dividing `nv`: every node of an axisymmetric edge, `N_FP` periods of a
+stellarator), the boundary-integral system is block circulant and splits
+into `P` systems of one sector's size, at `O(P * (nu*nv/P)^2)` memory and
+`O(P * (nu*nv/P)^3)` time; an axisymmetric `(128, 64)` edge costs a few
+seconds. Without such a symmetry the full system costs `O((nu*nv)^2)` memory
+and `O((nu*nv)^3)` time. `wall` is `None` (vacuum to infinity), a positive distance in metres of
 a conformal wall along the outward edge normal, or a `(3, nu, nv)` array of
 Cartesian wall nodes in metres, poloidal index first. Construction rejects a
 wall that does not enclose the plasma, an edge mesh that aliases the modes,

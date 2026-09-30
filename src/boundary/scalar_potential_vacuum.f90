@@ -27,6 +27,8 @@ module scalar_potential_vacuum
     integer, parameter, public :: vacuum_bie_singular = 4
 
     real(dp), parameter :: pi = acos(-1.0_dp)
+    ! Relative node mismatch below which a rotation is a mesh symmetry.
+    real(dp), parameter :: symmetry_tolerance = 1.0e-10_dp
 
     public :: assemble_exterior_vacuum, edge_triangle_centroids
 
@@ -37,6 +39,33 @@ module scalar_potential_vacuum
             real(dp), intent(inout) :: a(lda, *), b(ldb, *)
             integer, intent(out) :: ipiv(*), info
         end subroutine dgesv
+
+        subroutine zgesv(n, nrhs, a, lda, ipiv, b, ldb, info)
+            import :: dp
+            integer, intent(in) :: n, nrhs, lda, ldb
+            complex(dp), intent(inout) :: a(lda, *), b(ldb, *)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine zgesv
+
+        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            real(dp), intent(in) :: alpha, beta
+            real(dp), intent(in) :: a(lda, *), b(ldb, *)
+            real(dp), intent(inout) :: c(ldc, *)
+        end subroutine dgemm
+
+        subroutine zgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            complex(dp), intent(in) :: alpha, beta
+            complex(dp), intent(in) :: a(lda, *), b(ldb, *)
+            complex(dp), intent(inout) :: c(ldc, *)
+        end subroutine zgemm
     end interface
 
 contains
@@ -69,18 +98,30 @@ contains
     ! flux(t, k) is B.n dA / (du dv) of Neumann datum k at the centroid of
     ! edge triangle t, for either consistent orientation of n. energy(k, l)
     ! is the bilinear form of integral_V B_k . B_l dV (units mu0 = 1).
-    subroutine assemble_exterior_vacuum(plasma, flux, energy, info, wall)
+    !
+    ! When the edge and wall meshes are invariant under a rotation by 2 pi / P
+    ! about the z axis that shifts the toroidal node index by nv / P, the
+    ! collocation matrices are block circulant over the P sectors: only the
+    ! rows of the first sector are assembled, and a discrete Fourier
+    ! transform over sectors leaves P independent systems of one sector's
+    ! size. symmetric = .false. solves the full system instead; both give the
+    ! same energy to rounding.
+    subroutine assemble_exterior_vacuum(plasma, flux, energy, info, wall, &
+            symmetric)
         real(dp), contiguous, intent(in) :: plasma(:, :, :)
         real(dp), intent(in) :: flux(:, :)
         real(dp), allocatable, intent(out) :: energy(:, :)
         integer, intent(out) :: info
         real(dp), contiguous, intent(in), optional :: wall(:, :, :)
+        logical, intent(in), optional :: symmetric
         real(dp), allocatable :: area(:), centre(:, :), corners(:, :, :)
-        real(dp), allocatable :: normal(:, :), system(:, :), rhs(:, :)
-        real(dp), allocatable :: wall_corners(:, :, :), datum(:, :)
-        integer, allocatable :: owner(:), pivots(:)
-        real(dp) :: symmetric, uv_area
-        integer :: column, count, data, lapack_info, plasma_count, row, total
+        real(dp), allocatable :: normal(:, :), wall_corners(:, :, :)
+        real(dp), allocatable :: datum(:, :, :), double_layer(:, :, :)
+        real(dp), allocatable :: single_layer(:, :, :), harmonic(:, :, :)
+        integer, allocatable :: order(:, :), owner(:), status(:)
+        real(dp) :: average, weight
+        integer :: block, column, data, harmonics, j, plasma_block
+        integer :: plasma_count, row, sectors, total, wall_block
 
         info = vacuum_bie_invalid
         if (.not. valid_surface(plasma)) return
@@ -96,112 +137,308 @@ contains
         if (present(wall)) then
             call build_surface(wall, wall_corners, info)
             if (info /= vacuum_bie_ok) return
-            if (.not. nested(plasma, wall, corners, wall_corners)) then
+            total = total + size(wall_corners, 3)
+        end if
+        sectors = 1
+        if (present(symmetric)) then
+            if (symmetric) sectors = rotational_sectors(plasma, wall)
+        else
+            sectors = rotational_sectors(plasma, wall)
+        end if
+        plasma_block = plasma_count / sectors
+        wall_block = (total - plasma_count) / sectors
+        block = plasma_block + wall_block
+        if (present(wall)) then
+            ! Rotation carries the first sector onto every other one.
+            if (.not. nested(plasma, wall, corners, wall_corners, sectors)) &
+                then
                 info = vacuum_bie_not_nested
                 return
             end if
-            total = total + size(wall_corners, 3)
         end if
         allocate (centre(3, total), normal(3, total), area(total), &
-            owner(total))
+            owner(total), order(block, sectors))
         call triangle_frames(corners, 1, centre, normal, area, owner, 1)
         if (present(wall)) call triangle_frames(wall_corners, 2, centre, &
             normal, area, owner, plasma_count + 1)
         ! n_V points into the plasma on its edge and out through the wall.
         call orient(centre, normal, area, owner, 1, -1.0_dp)
         if (present(wall)) call orient(centre, normal, area, owner, 2, 1.0_dp)
-
-        count = total
-        if (present(wall)) count = total + 1
-        data = size(flux, 2)
-        allocate (system(count, count), rhs(count, data), &
-            datum(plasma_count, data), pivots(count))
-        uv_area = 1.0_dp / real(plasma_count, dp)
-        do row = 1, plasma_count
-            ! Mean dPhi/dn_V over the triangle; the sign convention cancels
-            ! in the quadratic energy.
-            datum(row, :) = flux(row, :) * uv_area / area(row)
-        end do
-        call assemble_system(corners, wall_corners, centre, normal, owner, &
-            plasma_count, total, datum, system, rhs, present(wall))
-        call dgesv(count, data, system, count, pivots, rhs, count, &
-            lapack_info)
-        if (lapack_info /= 0) then
-            info = vacuum_bie_singular
-            return
-        end if
-        allocate (energy(data, data))
-        do column = 1, data
-            do row = 1, data
-                energy(row, column) = sum(datum(:, row) &
-                    * rhs(1:plasma_count, column) * area(1:plasma_count))
+        ! Unknown row of sector s: its plasma triangles, then its wall ones.
+        do j = 1, sectors
+            do row = 1, plasma_block
+                order(row, j) = (j - 1) * plasma_block + row
             end do
+            do row = 1, wall_block
+                order(plasma_block + row, j) = plasma_count &
+                    + (j - 1) * wall_block + row
+            end do
+        end do
+
+        data = size(flux, 2)
+        allocate (datum(plasma_block, sectors, data))
+        average = 1.0_dp / real(plasma_count, dp)
+        do column = 1, data
+            do j = 1, sectors
+                do row = 1, plasma_block
+                    ! Mean dPhi/dn_V over the triangle; the sign convention
+                    ! cancels in the quadratic energy.
+                    datum(row, j, column) = flux(order(row, j), column) &
+                        * average / area(order(row, j))
+                end do
+            end do
+        end do
+        allocate (double_layer(block, block, sectors), &
+            single_layer(block, plasma_block, sectors))
+        call assemble_sector_rows(corners, wall_corners, centre, normal, &
+            order, plasma_count, plasma_block, double_layer, single_layer)
+
+        harmonics = sectors / 2 + 1
+        allocate (harmonic(data, data, harmonics), status(harmonics))
+        !$omp parallel do schedule(dynamic) if (harmonics > 1)
+        do j = 1, harmonics
+            call solve_harmonic(j - 1, sectors, double_layer, single_layer, &
+                datum, area(1:plasma_block), present(wall), total, &
+                harmonic(:, :, j), status(j))
+        end do
+        !$omp end parallel do
+        info = vacuum_bie_singular
+        if (any(status /= 0)) return
+        ! Parseval over sectors; harmonics j and P - j are conjugate.
+        allocate (energy(data, data))
+        energy = 0.0_dp
+        do j = 1, harmonics
+            weight = 2.0_dp
+            if (j == 1 .or. 2 * (j - 1) == sectors) weight = 1.0_dp
+            energy = energy + weight / real(sectors, dp) * harmonic(:, :, j)
         end do
         do column = 1, data
             do row = 1, column - 1
-                symmetric = 0.5_dp * (energy(row, column) + energy(column, row))
-                energy(row, column) = symmetric
-                energy(column, row) = symmetric
+                average = 0.5_dp * (energy(row, column) + energy(column, row))
+                energy(row, column) = average
+                energy(column, row) = average
             end do
         end do
-        info = vacuum_bie_singular
         if (.not. all(ieee_is_finite(energy))) return
         info = vacuum_bie_ok
     end subroutine assemble_exterior_vacuum
 
-    subroutine assemble_system(corners, wall_corners, centre, normal, owner, &
-            plasma_count, total, datum, system, rhs, walled)
+    ! Rows of the first sector against the columns of every sector:
+    ! double_layer(:, :, d) and single_layer(:, :, d) couple the collocation
+    ! points of sector 1 to the triangles of sector d. The self term of the
+    ! double layer is the jump coefficient, each surface's discrete
+    ! solid-angle sum: +1/2 on the plasma edge, -1/2 on the wall in the
+    ! continuum, whose n_V is the outward normal of the enclosed body.
+    subroutine assemble_sector_rows(corners, wall_corners, centre, normal, &
+            order, plasma_count, plasma_block, double_layer, single_layer)
         real(dp), intent(in) :: corners(:, :, :)
         real(dp), allocatable, intent(in) :: wall_corners(:, :, :)
         real(dp), intent(in) :: centre(:, :), normal(:, :)
-        integer, intent(in) :: owner(:), plasma_count, total
-        real(dp), intent(in) :: datum(:, :)
-        real(dp), intent(out) :: system(:, :), rhs(:, :)
-        logical, intent(in) :: walled
-        real(dp) :: double_layer, jump(2), point(3), single, vertices(3, 3)
-        real(dp) :: direction(3)
-        integer :: column, row
+        integer, intent(in) :: order(:, :), plasma_count, plasma_block
+        real(dp), intent(out) :: double_layer(:, :, :), single_layer(:, :, :)
+        real(dp) :: direction(3), jump, point(3), sense, vertices(3, 3)
+        integer :: block, column, index, row, sector, sectors
 
-        system = 0.0_dp
-        rhs = 0.0_dp
-        !$omp parallel do private(column, direction, double_layer, jump, &
-        !$omp point, single, vertices)
-        do row = 1, total
-            jump = 0.0_dp
-            point = centre(:, row)
-            do column = 1, total
-                if (column <= plasma_count) then
-                    vertices = corners(:, :, column)
+        block = size(order, 1)
+        sectors = size(order, 2)
+        !$omp parallel do collapse(2) private(direction, index, point, &
+        !$omp sense, vertices, row)
+        do sector = 1, sectors
+            do column = 1, block
+                index = order(column, sector)
+                if (index <= plasma_count) then
+                    vertices = corners(:, :, index)
                 else
-                    vertices = wall_corners(:, :, column - plasma_count)
+                    vertices = wall_corners(:, :, index - plasma_count)
                 end if
-                double_layer = 0.0_dp
-                direction = normal(:, column)
-                if (column /= row) double_layer = -solid_angle(vertices, &
-                    point) * orientation(vertices, direction) / (4.0_dp * pi)
-                system(row, column) = double_layer
-                if (owner(column) == owner(row)) jump(owner(row)) = &
-                    jump(owner(row)) + double_layer
-                if (column <= plasma_count) then
-                    single = triangle_potential(vertices, point) &
-                        / (4.0_dp * pi)
-                    rhs(row, :) = rhs(row, :) + single * datum(column, :)
-                end if
+                direction = normal(:, index)
+                sense = orientation(vertices, direction) / (4.0_dp * pi)
+                do row = 1, block
+                    point = centre(:, order(row, 1))
+                    if (index == order(row, 1)) then
+                        double_layer(row, column, sector) = 0.0_dp
+                    else
+                        double_layer(row, column, sector) = &
+                            -solid_angle(vertices, point) * sense
+                    end if
+                    if (column <= plasma_block) &
+                        single_layer(row, column, sector) = &
+                        triangle_potential(vertices, point) / (4.0_dp * pi)
+                end do
             end do
-            ! Continuum: +1/2 on the plasma edge, -1/2 on the wall, whose
-            ! n_V is the outward normal of the enclosed body.
-            system(row, row) = abs(jump(owner(row)))
         end do
         !$omp end parallel do
-        if (walled) then
-            ! V is bounded: fix the free constant of the Neumann potential.
-            system(:, total + 1) = 0.0_dp
-            system(1:total, total + 1) = 1.0_dp
-            system(total + 1, :) = 0.0_dp
-            system(total + 1, 1:total) = 1.0_dp / real(total, dp)
-            rhs(total + 1, :) = 0.0_dp
+        do row = 1, block
+            jump = 0.0_dp
+            do sector = 1, sectors
+                if (row <= plasma_block) then
+                    do column = 1, plasma_block
+                        jump = jump + double_layer(row, column, sector)
+                    end do
+                else
+                    do column = plasma_block + 1, block
+                        jump = jump + double_layer(row, column, sector)
+                    end do
+                end if
+            end do
+            double_layer(row, row, 1) = abs(jump)
+        end do
+    end subroutine assemble_sector_rows
+
+    ! Energy of Fourier harmonic j over the sectors: with
+    ! x^_j = sum_s x_s exp(-2 pi i j s / P), the block-circulant system
+    ! sum_b A_(b-a) x_b = sum_b S_(b-a) d_b becomes A^_j x^_j = S^_j d^_j with
+    ! A^_j = sum_d A_d exp(2 pi i j d / P), and the energy sum_s d_s . W x_s
+    ! is (1/P) sum_j Re(conj(d^_j) . W x^_j). Harmonics 0 and P/2 are real.
+    ! The walled region is bounded, so harmonic 0 carries the free constant
+    ! of the Neumann potential, fixed by a zero mean.
+    subroutine solve_harmonic(j, sectors, double_layer, single_layer, datum, &
+            area, walled, total, energy, info)
+        integer, intent(in) :: j, sectors, total
+        real(dp), intent(in) :: double_layer(:, :, :), single_layer(:, :, :)
+        real(dp), intent(in) :: datum(:, :, :), area(:)
+        logical, intent(in) :: walled
+        real(dp), intent(out) :: energy(:, :)
+        integer, intent(out) :: info
+        real(dp), allocatable :: system(:, :), rhs(:, :), transformed(:, :)
+        real(dp), allocatable :: layer(:, :)
+        complex(dp), allocatable :: system_c(:, :), rhs_c(:, :)
+        complex(dp), allocatable :: transformed_c(:, :), layer_c(:, :)
+        integer, allocatable :: pivots(:)
+        real(dp) :: angle, phase(sectors)
+        complex(dp) :: rotation(sectors)
+        integer :: block, column, count, data, plasma_block, row, sector
+
+        block = size(double_layer, 1)
+        plasma_block = size(single_layer, 2)
+        data = size(datum, 3)
+        do sector = 1, sectors
+            angle = 2.0_dp * pi * real(modulo(j * (sector - 1), sectors), dp) &
+                / real(sectors, dp)
+            phase(sector) = cos(angle)
+            rotation(sector) = cmplx(cos(angle), sin(angle), dp)
+        end do
+        if (j == 0 .or. 2 * j == sectors) then
+            if (2 * j == sectors .and. j > 0) then
+                do sector = 1, sectors
+                    phase(sector) = real(1 - 2 * modulo(sector - 1, 2), dp)
+                end do
+            else
+                phase = 1.0_dp
+            end if
+            count = block
+            if (walled .and. j == 0) count = block + 1
+            allocate (system(count, count), rhs(count, data), &
+                transformed(plasma_block, data), layer(block, plasma_block), &
+                pivots(count))
+            system = 0.0_dp
+            layer = 0.0_dp
+            transformed = 0.0_dp
+            do sector = 1, sectors
+                system(1:block, 1:block) = system(1:block, 1:block) &
+                    + phase(sector) * double_layer(:, :, sector)
+                layer = layer + phase(sector) * single_layer(:, :, sector)
+                transformed = transformed + phase(sector) * datum(:, sector, :)
+            end do
+            rhs = 0.0_dp
+            call dgemm("N", "N", block, data, plasma_block, 1.0_dp, layer, &
+                block, transformed, plasma_block, 0.0_dp, rhs, count)
+            if (count > block) then
+                system(1:block, count) = 1.0_dp
+                system(count, 1:block) = real(sectors, dp) / real(total, dp)
+            end if
+            call dgesv(count, data, system, count, pivots, rhs, count, info)
+            if (info /= 0) return
+            do column = 1, data
+                do row = 1, data
+                    energy(row, column) = sum(transformed(:, row) &
+                        * area * rhs(1:plasma_block, column))
+                end do
+            end do
+        else
+            allocate (system_c(block, block), rhs_c(block, data), &
+                transformed_c(plasma_block, data), &
+                layer_c(block, plasma_block), pivots(block))
+            system_c = (0.0_dp, 0.0_dp)
+            layer_c = (0.0_dp, 0.0_dp)
+            transformed_c = (0.0_dp, 0.0_dp)
+            do sector = 1, sectors
+                system_c = system_c + rotation(sector) &
+                    * double_layer(:, :, sector)
+                layer_c = layer_c + rotation(sector) &
+                    * single_layer(:, :, sector)
+                transformed_c = transformed_c + conjg(rotation(sector)) &
+                    * datum(:, sector, :)
+            end do
+            call zgemm("N", "N", block, data, plasma_block, &
+                (1.0_dp, 0.0_dp), layer_c, block, transformed_c, &
+                plasma_block, (0.0_dp, 0.0_dp), rhs_c, block)
+            call zgesv(block, data, system_c, block, pivots, rhs_c, block, &
+                info)
+            if (info /= 0) return
+            do column = 1, data
+                do row = 1, data
+                    energy(row, column) = real(sum(conjg( &
+                        transformed_c(:, row)) * area &
+                        * rhs_c(1:plasma_block, column)), dp)
+                end do
+            end do
         end if
-    end subroutine assemble_system
+        info = 0
+    end subroutine solve_harmonic
+
+    ! Largest P dividing the toroidal node counts such that rotating every
+    ! node by 2 pi / P about the z axis (either sense) gives the node nv / P
+    ! toroidal indices on, on the edge and on the wall.
+    integer function rotational_sectors(plasma, wall) result(sectors)
+        real(dp), intent(in) :: plasma(:, :, :)
+        real(dp), intent(in), optional :: wall(:, :, :)
+        real(dp) :: sense
+        integer :: candidate, turn
+
+        sectors = 1
+        do candidate = size(plasma, 3), 2, -1
+            if (modulo(size(plasma, 3), candidate) /= 0) cycle
+            if (present(wall)) then
+                if (modulo(size(wall, 3), candidate) /= 0) cycle
+            end if
+            do turn = 1, 2
+                sense = real(3 - 2 * turn, dp)
+                if (.not. rotation_invariant(plasma, candidate, sense)) cycle
+                if (present(wall)) then
+                    if (.not. rotation_invariant(wall, candidate, sense)) cycle
+                end if
+                sectors = candidate
+                return
+            end do
+        end do
+    end function rotational_sectors
+
+    pure logical function rotation_invariant(surface, sectors, sense) &
+            result(invariant)
+        real(dp), intent(in) :: surface(:, :, :), sense
+        integer, intent(in) :: sectors
+        real(dp) :: angle, cosine, rotated(3), scale, sine
+        integer :: i, k, nv, shifted
+
+        nv = size(surface, 3)
+        angle = sense * 2.0_dp * pi / real(sectors, dp)
+        cosine = cos(angle)
+        sine = sin(angle)
+        scale = maxval(abs(surface))
+        invariant = .false.
+        do k = 1, nv
+            shifted = modulo(k - 1 + nv / sectors, nv) + 1
+            do i = 1, size(surface, 2)
+                rotated(1) = cosine * surface(1, i, k) - sine * surface(2, i, k)
+                rotated(2) = sine * surface(1, i, k) + cosine * surface(2, i, k)
+                rotated(3) = surface(3, i, k)
+                if (norm2(rotated - surface(:, i, shifted)) &
+                    > symmetry_tolerance * scale) return
+            end do
+        end do
+        invariant = .true.
+    end function rotation_invariant
 
     ! +1 when n_V agrees with the vertex-order normal of the triangle.
     pure real(dp) function orientation(vertices, normal_v) result(sign_value)
@@ -311,23 +548,28 @@ contains
         degenerate = norm2(product) <= 256.0_dp * epsilon(1.0_dp) * scale**2
     end function degenerate
 
-    function nested(plasma, wall, corners, wall_corners)
+    ! The meshes do not intersect, every edge node lies inside the wall and
+    ! no wall node inside the edge. With rotational symmetry the first of the
+    ! sectors decides for all of them.
+    function nested(plasma, wall, corners, wall_corners, sectors)
         real(dp), contiguous, intent(in) :: plasma(:, :, :), wall(:, :, :)
         real(dp), contiguous, intent(in) :: corners(:, :, :)
         real(dp), contiguous, intent(in) :: wall_corners(:, :, :)
+        integer, intent(in) :: sectors
         logical :: nested
         real(dp) :: point(3)
         integer :: i, k
 
         nested = .false.
-        if (meshes_intersect(corners, wall_corners)) return
-        do k = 1, size(plasma, 3)
+        if (meshes_intersect(corners(:, :, 1:size(corners, 3) / sectors), &
+            wall_corners)) return
+        do k = 1, size(plasma, 3) / sectors
             do i = 1, size(plasma, 2)
                 point = plasma(:, i, k)
                 if (.not. point_inside_mesh(point, wall_corners)) return
             end do
         end do
-        do k = 1, size(wall, 3)
+        do k = 1, size(wall, 3) / sectors
             do i = 1, size(wall, 2)
                 point = wall(:, i, k)
                 if (point_inside_mesh(point, corners)) return
