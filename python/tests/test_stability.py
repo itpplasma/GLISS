@@ -1,3 +1,4 @@
+import gc
 from dataclasses import replace
 
 import numpy as np
@@ -264,6 +265,20 @@ def contexts(monkeypatch, tmp_path):
     equilibrium = gliss.Equilibrium(export)
     yield library, equilibrium
     equilibrium.close()
+
+
+def test_unclosed_stability_problem_is_released_when_collected(contexts):
+    library, equilibrium = contexts
+    for _ in range(3):
+        StabilityProblem(equilibrium, modes=[(1, 1)])
+    gc.collect()
+    assert library.problem_creates == 3
+    assert library.problem_destroys == 3
+    problem = StabilityProblem(equilibrium, modes=[(1, 1)])
+    problem.close()
+    del problem
+    gc.collect()
+    assert library.problem_destroys == 4
 
 
 def test_stability_problem_lifecycle_and_results(contexts):

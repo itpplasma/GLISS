@@ -1,6 +1,7 @@
 """Fixed-boundary ideal-MHD stability problems backed by the GLISS C ABI."""
 
 import ctypes
+import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence, Tuple, TYPE_CHECKING
@@ -15,8 +16,10 @@ from .equilibrium import (
     _empty_float64,
     _error_buffer,
     _raise_for_status,
+    _release_handle,
     _stable_file_digest,
 )
+from ._schema_support import DISCRETIZATION_REVISION
 from ._stability_input import angular_grid, mode_integer, real_parameter, validate_modes
 from .solver import (
     SolverTolerances,
@@ -146,6 +149,8 @@ class SpectrumResult:
     normalization: str = "x.T @ M @ x = 1"
     coordinate_handedness: str = "left-handed"
     fourier_convention: str = "2*pi*(m*theta - n*zeta/N_T)"
+    # Operator revision that produced this result; see gliss.schema.
+    discretization_revision: int = DISCRETIZATION_REVISION
 
     @property
     def normal(self) -> np.ndarray:
@@ -282,6 +287,11 @@ class StabilityProblem:
         _raise_for_status(status, error, "gliss_stability_problem_create_v2")
         if self._handle.value is None:
             raise GlissInternalError("GLISS returned a null stability problem handle")
+        # Unclosed problems release their dense matrices when collected.
+        self._finalizer = weakref.finalize(
+            self, _release_handle, self._library.gliss_stability_problem_destroy,
+            self._handle,
+        )
 
     def _set_solver_tolerances(self) -> None:
         try:
@@ -308,6 +318,7 @@ class StabilityProblem:
         _raise_for_status(status, error, "gliss_stability_problem_destroy")
         if not self.closed:
             raise GlissInternalError("GLISS did not clear the stability problem handle")
+        self._finalizer.detach()
 
     def __enter__(self) -> "StabilityProblem":
         self._require_open()

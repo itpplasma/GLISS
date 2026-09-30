@@ -29,6 +29,13 @@
   evidence item to name a ctest-registered check or a collected test, and the
   installed-wheel check verifies parameter derivatives by central
   differences (#28).
+- Configuration, result and run schemas are at version 5 and record the
+  `discretization_revision` of the assembled operator. Older documents stay
+  readable, but replaying a configuration recorded with a different operator
+  (midpoint quadrature, or the pre-#16 FEEC space) raises "operator changed"
+  instead of silently assembling another operator. `Equilibrium` and
+  `StabilityProblem` release native memory through `weakref.finalize` when
+  they are not closed (#29).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 

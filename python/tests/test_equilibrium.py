@@ -1,4 +1,5 @@
 import ctypes
+import gc
 
 import numpy as np
 import pytest
@@ -112,6 +113,21 @@ def test_equilibrium_context_lifecycle(monkeypatch, tmp_path):
         _ = equilibrium.schema_version
     with pytest.raises(RuntimeError, match="closed"):
         equilibrium.write(tmp_path / "closed.nc")
+
+
+def test_unclosed_equilibrium_is_released_when_collected(monkeypatch, tmp_path):
+    library = FakeLibrary()
+    monkeypatch.setattr("gliss.equilibrium._load_library", lambda: library)
+    export = tmp_path / "equilibrium.nc"
+    export.touch()
+    Equilibrium(export)
+    gc.collect()
+    assert library.destroys == 1
+    closed = Equilibrium(export)
+    closed.close()
+    del closed
+    gc.collect()
+    assert library.destroys == 2
 
 
 def test_equilibrium_reports_numpy_allocation_failure(monkeypatch, tmp_path):

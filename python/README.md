@@ -463,7 +463,8 @@ with Equilibrium(Path("equilibrium_export.nc")) as equilibrium:
 ```
 
 `Equilibrium.close()` releases the native allocation and is safe to call more
-than once. The context manager calls it on exit. Operations on a closed object
+than once. The context manager calls it on exit, and an unclosed object is
+released when it is garbage collected. Operations on a closed object
 raise `RuntimeError`. Several contexts may coexist; calls using the same
 context must not overlap. Concurrent context creation also requires a
 thread-safe NetCDF C library.
@@ -713,7 +714,8 @@ quotients, only the others are refined individually, and every resolved gap is
 certified by a Sturm count on one congruent tridiagonal reduction. Use `solve()` or
 `solve_class()` when only the stability margin is needed. NumPy and native
 allocation failures raise typed GLISS exceptions. `StabilityProblem.close()`
-is idempotent. Calls on one problem must not overlap, but independently
+is idempotent; an unclosed problem releases its native matrices when it is
+garbage collected. Calls on one problem must not overlap, but independently
 constructed problems may coexist.
 
 ### Configuration, results, and run manifests
@@ -749,15 +751,16 @@ manifest = gliss.RunManifest.read("run.json")
 manifest.verify_equilibrium("equilibrium_export.nc")
 ```
 
-Configuration schema `gliss.stability.configuration`, version 4, records the
-fixed boundary, mode pairs, physical scalars, FEEC degree, and solver controls.
-Result schema `gliss.stability.result`, version 4, stores both parity classes with all
+Configuration schema `gliss.stability.configuration`, version 5, records the
+fixed boundary, mode pairs, physical scalars, FEEC degree, solver controls and
+the `discretization_revision` of the assembled operator.
+Result schema `gliss.stability.result`, version 5, stores both parity classes with all
 reported conventions, certificate terms and read-only eigenvectors. A round
 trip preserves every binary64 value. Rewriting an unchanged object produces
 the same bytes. This JSON schema stores the certified active pair only. It is
 unchanged by the separate full-spectrum format.
 
-Run schema `gliss.stability.run`, version 4, embeds the configuration and
+Run schema `gliss.stability.run`, version 5, embeds the configuration and
 result. It records the equilibrium export format, base filename, byte count
 and SHA-256, including equilibrium schema 0 or 1. It also records the GLISS
 Python/native versions and ABI, plus the NumPy and Python versions. Absolute
@@ -800,9 +803,17 @@ It is self-contained except for the checksummed NetCDF equilibrium. Use
 `StabilityProblem.write_full_manifest()` to reject an equilibrium file that
 changed after assembly.
 
-Writers always emit schema version 4. Readers also accept versions 1, 2 and 3,
+Writers always emit schema version 5. Readers also accept versions 1 to 4,
 map their `radial_quadrature="midpoint"` field to FEEC degree 1, and recover
-historical solver controls when they are absent. Full-spectrum readers require the
+historical solver controls when they are absent. Older documents record a
+different operator: revision 0 is the midpoint quadrature of versions 1 and
+2, revision 1 the Gauss FEEC operator of versions 3 and 4, and revision 2 the
+current axis-conforming FEEC space. They remain readable as records, but
+`create_problem()` raises `ValueError("operator changed ...")` for a
+configuration whose revision differs from the current one, and a run manifest
+requires the configuration and result revisions to agree. Accepting the new
+operator is explicit:
+`dataclasses.replace(configuration, discretization_revision=2)`. Full-spectrum readers require the
 exact entry set for the declared version, stored without compression or
 encryption. They reject invalid entry sets, malformed
 metadata, incompatible versions, wrong array types or shapes, inconsistent

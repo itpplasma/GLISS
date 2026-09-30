@@ -14,7 +14,10 @@ from ._result_schema import (
     stability_result_to_dict,
 )
 from ._schema_support import (
+    DISCRETIZATION_REVISION,
     SCHEMA_VERSION,
+    SCHEMA_VERSIONS,
+    discretization_revision,
     fields,
     integer,
     read_json,
@@ -55,6 +58,7 @@ class StabilityConfiguration:
     solver_tolerances: SolverTolerances = SolverTolerances()
     angular_theta: int = 64
     angular_zeta: int = 64
+    discretization_revision: int = DISCRETIZATION_REVISION
 
     def __post_init__(self) -> None:
         theta, zeta = angular_grid(self.angular_theta, self.angular_zeta)
@@ -81,9 +85,31 @@ class StabilityConfiguration:
         object.__setattr__(self, "zero_floor", floor)
         if not isinstance(self.solver_tolerances, SolverTolerances):
             raise TypeError("solver_tolerances must be a gliss.SolverTolerances")
+        revision = _mode_integer(
+            self.discretization_revision, "discretization_revision"
+        )
+        if not 0 <= revision <= DISCRETIZATION_REVISION:
+            raise ValueError(
+                f"discretization_revision must be between 0 and "
+                f"{DISCRETIZATION_REVISION}"
+            )
+        object.__setattr__(self, "discretization_revision", revision)
 
     def create_problem(self, equilibrium: Any) -> StabilityProblem:
-        """Create an assembled problem from this immutable configuration."""
+        """Create an assembled problem from this immutable configuration.
+
+        A configuration recorded with an earlier discretization revision is
+        rejected: this GLISS would assemble a different operator than the one
+        that produced its results.
+        """
+        if self.discretization_revision != DISCRETIZATION_REVISION:
+            raise ValueError(
+                "operator changed: this configuration was recorded with "
+                f"discretization revision {self.discretization_revision}, but "
+                f"this GLISS assembles revision {DISCRETIZATION_REVISION}; use "
+                "dataclasses.replace(configuration, discretization_revision="
+                f"{DISCRETIZATION_REVISION}) to accept the new operator"
+            )
         return StabilityProblem(
             equilibrium,
             self.modes,
@@ -110,6 +136,7 @@ class StabilityConfiguration:
             "angular_theta": self.angular_theta,
             "angular_zeta": self.angular_zeta,
             "solver_tolerances": self.solver_tolerances.to_dict(),
+            "discretization_revision": self.discretization_revision,
         }
         return document
 
@@ -128,25 +155,29 @@ class StabilityConfiguration:
         if not isinstance(document, dict):
             raise ValueError("configuration must be an object")
         version = document.get("schema_version")
-        schema(document, _CONFIGURATION_SCHEMA, "configuration", (1, 2, 3, 4))
+        schema(document, _CONFIGURATION_SCHEMA, "configuration", SCHEMA_VERSIONS)
         if version in (1, 2):
             expected = common | {"radial_quadrature"}
             if version == 2:
                 expected.add("solver_tolerances")
         else:
             expected = common | {"degree", "solver_tolerances"}
-        if version == 4:
+        if version >= 4:
             expected |= {"angular_theta", "angular_zeta"}
+        if version >= 5:
+            expected.add("discretization_revision")
         value = fields(document, expected, "configuration")
-        schema(value, _CONFIGURATION_SCHEMA, "configuration", (1, 2, 3, 4))
+        schema(value, _CONFIGURATION_SCHEMA, "configuration", SCHEMA_VERSIONS)
         if value["boundary_condition"] != "fixed":
             raise ValueError("configuration.boundary_condition must be 'fixed'")
         if version in (1, 2) and value["radial_quadrature"] != "midpoint":
             raise ValueError(
                 "configuration.radial_quadrature must be 'midpoint'"
             )
+        revision = discretization_revision(value, version, "configuration")
         try:
             return cls(
+                discretization_revision=revision,
                 modes=value["modes"],
                 angular_theta=value.get("angular_theta", 64),
                 angular_zeta=value.get("angular_zeta", 64),
@@ -160,7 +191,7 @@ class StabilityConfiguration:
                 ),
                 solver_tolerances=(
                     SolverTolerances.from_dict(value["solver_tolerances"])
-                    if version in (2, 3, 4)
+                    if version >= 2
                     else SolverTolerances.historical_defaults()
                 ),
             )
@@ -274,7 +305,7 @@ class RunManifest:
             "result",
         }
         value = fields(document, expected, "run")
-        run_version = schema(value, _RUN_SCHEMA, "run", (1, 2, 3, 4))
+        run_version = schema(value, _RUN_SCHEMA, "run", SCHEMA_VERSIONS)
         equilibrium = fields(
             value["equilibrium"],
             {"format", "schema_version", "filename", "size_bytes", "sha256"},
@@ -354,6 +385,7 @@ def _validate_result_configuration(
         "zero_floor",
         "degree",
         "solver_tolerances",
+        "discretization_revision",
     )
     for name in names:
         if getattr(reference, name) != getattr(configuration, name):

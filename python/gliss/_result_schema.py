@@ -6,6 +6,8 @@ import numpy as np
 
 from ._schema_support import (
     SCHEMA_VERSION,
+    SCHEMA_VERSIONS,
+    discretization_revision,
     fields,
     integer,
     read_json,
@@ -53,6 +55,7 @@ _SPECTRUM_FIELDS_OLD = (_SPECTRUM_FIELDS - {"degree"}) | {
 }
 _SPECTRUM_FIELDS_V2 = _SPECTRUM_FIELDS_OLD | {"solver_tolerances"}
 _SPECTRUM_FIELDS_V3 = _SPECTRUM_FIELDS | {"solver_tolerances"}
+_SPECTRUM_FIELDS_V5 = _SPECTRUM_FIELDS_V3 | {"discretization_revision"}
 
 
 def _spectrum_to_dict(result: SpectrumResult) -> Dict[str, Any]:
@@ -85,6 +88,7 @@ def _spectrum_to_dict(result: SpectrumResult) -> Dict[str, Any]:
         "fourier_convention": result.fourier_convention,
     }
     document["solver_tolerances"] = result.solver_tolerances.to_dict()
+    document["discretization_revision"] = result.discretization_revision
     return document
 
 
@@ -181,8 +185,10 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
         expected = _SPECTRUM_FIELDS_OLD
     elif version == 2:
         expected = _SPECTRUM_FIELDS_V2
-    else:
+    elif version in (3, 4):
         expected = _SPECTRUM_FIELDS_V3
+    else:
+        expected = _SPECTRUM_FIELDS_V5
     value = fields(document, expected, context)
     parity = integer(value["parity_class"], f"{context}.parity_class", 1)
     if parity not in (1, 2):
@@ -230,9 +236,10 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
         coordinate_handedness=value["coordinate_handedness"],
         solver_tolerances=(
             SolverTolerances.from_dict(value["solver_tolerances"])
-            if version in (2, 3, 4)
+            if version >= 2
             else SolverTolerances.historical_defaults()
         ),
+        discretization_revision=discretization_revision(value, version, context),
     )
 
 
@@ -255,7 +262,7 @@ def stability_result_to_dict(result: StabilityResult) -> Dict[str, Any]:
 def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
     """Validate and construct a versioned result document."""
     value = fields(document, {"schema", "schema_version", "classes"}, "result")
-    version = schema(value, RESULT_SCHEMA, "result", (1, 2, 3, 4))
+    version = schema(value, RESULT_SCHEMA, "result", SCHEMA_VERSIONS)
     classes = value["classes"]
     if not isinstance(classes, list) or len(classes) != 2:
         raise ValueError("result.classes must contain parity classes 1 then 2")
@@ -279,6 +286,7 @@ def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
             "zero_floor",
             "has_chart_metric",
             "solver_tolerances",
+            "discretization_revision",
         )
         if any(getattr(item, name) != getattr(reference, name) for name in shared):
             raise ValueError("result parity classes have inconsistent problem metadata")

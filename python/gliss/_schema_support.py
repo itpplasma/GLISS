@@ -10,7 +10,32 @@ from typing import Any, Dict, Mapping, Optional
 
 from .equilibrium import PathLike
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
+SCHEMA_VERSIONS = (1, 2, 3, 4, 5)
+
+# Revision of the assembled fixed-boundary operator. Documents record it so
+# that a configuration is never replayed on a different discretization:
+# 0 is the midpoint radial quadrature of schema versions 1 and 2, 1 the Gauss
+# FEEC operator of versions 3 and 4, and 2 the axis-conforming FEEC space
+# of #16 (tangential axis weight and the regular third unknown).
+DISCRETIZATION_REVISION = 2
+
+
+def discretization_revision(value: Mapping[str, Any], version: int, context: str) -> int:
+    """Return the operator revision recorded by a versioned document."""
+    if version in (1, 2):
+        return 0
+    if version in (3, 4):
+        return 1
+    revision = integer(
+        value["discretization_revision"], f"{context}.discretization_revision"
+    )
+    if revision > DISCRETIZATION_REVISION:
+        raise ValueError(
+            f"{context}.discretization_revision {revision} is newer than this "
+            f"GLISS ({DISCRETIZATION_REVISION})"
+        )
+    return revision
 
 
 def document_path(path: PathLike, operation: str) -> Path:

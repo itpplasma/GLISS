@@ -5,6 +5,7 @@ import hashlib
 import operator
 import os
 import tempfile
+import weakref
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union
 
@@ -233,8 +234,19 @@ def _raise_for_status(status: int, error: ctypes.Array, operation: str) -> None:
     raise exception(f"{operation} failed with status {status}: {message}")
 
 
+def _release_handle(destroy: Any, handle: ctypes.c_void_p) -> None:
+    # Finalizer for handles that were never closed: it references only the
+    # destroy function and the handle cell, never the owning object.
+    if handle.value is not None:
+        destroy(ctypes.byref(handle), None, 0)
+
+
 class Equilibrium:
-    """Loaded GVEC/CAS3D equilibrium with explicit native lifetime."""
+    """Loaded GVEC/CAS3D equilibrium with explicit native lifetime.
+
+    ``close()`` or a ``with`` block releases the native data deterministically;
+    an unclosed instance is released when it is garbage collected.
+    """
 
     def __init__(self, path: PathLike):
         self.path, encoded = _export_path(path)
@@ -264,6 +276,10 @@ class Equilibrium:
             self._library.gliss_equilibrium_destroy(ctypes.byref(self._handle), None, 0)
             raise GlissIOError("equilibrium export changed while loading")
         self._source_identity = source_identity
+        self._finalizer = weakref.finalize(
+            self, _release_handle, self._library.gliss_equilibrium_destroy,
+            self._handle,
+        )
 
     @property
     def closed(self) -> bool:
@@ -320,6 +336,7 @@ class Equilibrium:
         _raise_for_status(status, error, "gliss_equilibrium_destroy")
         if not self.closed:
             raise GlissInternalError("GLISS did not clear the equilibrium handle")
+        self._finalizer.detach()
 
     def __enter__(self) -> "Equilibrium":
         if self.closed:
