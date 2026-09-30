@@ -167,15 +167,43 @@ contains
         end do
     end subroutine copy_real_grid
 
+    ! Harmonic projection of a periodic grid, separated in theta and zeta:
+    ! cos(m theta - n zeta) = cos(m theta) cos(n zeta) + sin sin and the
+    ! matching sine identity reduce the double sum to two matrix products
+    ! over trigonometric tables.
     pure subroutine project_harmonic_grid(values, poloidal_modes, &
             toroidal_modes, theta, zeta_period, cosine, sine)
         real(dp), intent(in) :: values(:, :)
         integer, intent(in) :: poloidal_modes(:), toroidal_modes(:)
         real(dp), intent(in) :: theta(:), zeta_period(:)
         real(dp), intent(out) :: cosine(:, :), sine(:, :)
-        real(dp) :: phase, cosine_sum, sine_sum, weight
-        integer :: mode_m, mode_n, m, n, j, k
+        real(dp) :: theta_cosine(size(theta), size(poloidal_modes))
+        real(dp) :: theta_sine(size(theta), size(poloidal_modes))
+        real(dp) :: zeta_cosine(size(zeta_period), size(toroidal_modes))
+        real(dp) :: zeta_sine(size(zeta_period), size(toroidal_modes))
+        real(dp) :: cosine_part(size(zeta_period), size(poloidal_modes))
+        real(dp) :: sine_part(size(zeta_period), size(poloidal_modes))
+        real(dp) :: weight
+        integer :: j, k, m, mode_m, mode_n, n
 
+        do mode_m = 1, size(poloidal_modes)
+            do j = 1, size(theta)
+                theta_cosine(j, mode_m) = cos(two_pi &
+                    * real(poloidal_modes(mode_m), dp) * theta(j))
+                theta_sine(j, mode_m) = sin(two_pi &
+                    * real(poloidal_modes(mode_m), dp) * theta(j))
+            end do
+        end do
+        do mode_n = 1, size(toroidal_modes)
+            do k = 1, size(zeta_period)
+                zeta_cosine(k, mode_n) = cos(two_pi &
+                    * real(toroidal_modes(mode_n), dp) * zeta_period(k))
+                zeta_sine(k, mode_n) = sin(two_pi &
+                    * real(toroidal_modes(mode_n), dp) * zeta_period(k))
+            end do
+        end do
+        cosine_part = matmul(transpose(values), theta_cosine)
+        sine_part = matmul(transpose(values), theta_sine)
         do mode_n = 1, size(toroidal_modes)
             n = toroidal_modes(mode_n)
             do mode_m = 1, size(poloidal_modes)
@@ -183,21 +211,15 @@ contains
                 cosine(mode_m, mode_n) = 0.0_dp
                 sine(mode_m, mode_n) = 0.0_dp
                 if (m == 0 .and. n < 0) cycle
-                cosine_sum = 0.0_dp
-                sine_sum = 0.0_dp
-                do k = 1, size(zeta_period)
-                    do j = 1, size(theta)
-                        phase = two_pi * (real(m, dp) * theta(j) &
-                            - real(n, dp) * zeta_period(k))
-                        cosine_sum = cosine_sum + values(j, k) * cos(phase)
-                        sine_sum = sine_sum + values(j, k) * sin(phase)
-                    end do
-                end do
                 weight = 2.0_dp
                 if (m == 0 .and. n == 0) weight = 1.0_dp
                 weight = weight / real(size(theta) * size(zeta_period), dp)
-                cosine(mode_m, mode_n) = weight * cosine_sum
-                sine(mode_m, mode_n) = weight * sine_sum
+                cosine(mode_m, mode_n) = weight * (dot_product( &
+                    cosine_part(:, mode_m), zeta_cosine(:, mode_n)) &
+                    + dot_product(sine_part(:, mode_m), zeta_sine(:, mode_n)))
+                sine(mode_m, mode_n) = weight * (dot_product( &
+                    sine_part(:, mode_m), zeta_cosine(:, mode_n)) &
+                    - dot_product(cosine_part(:, mode_m), zeta_sine(:, mode_n)))
             end do
         end do
     end subroutine project_harmonic_grid
