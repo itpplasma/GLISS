@@ -753,6 +753,11 @@ if(BUILD_TESTING)
     add_test(NAME terpsichore_solution_fixture
         COMMAND test_terpsichore_solution_fixture)
 
+    add_executable(test_radial_feec_convergence
+        test/test_radial_feec_convergence.f90)
+    target_link_libraries(test_radial_feec_convergence PRIVATE gliss)
+    add_test(NAME radial_feec_convergence COMMAND test_radial_feec_convergence)
+
     add_executable(test_terpsichore_lowest
         test/test_terpsichore_lowest.f90)
     target_link_libraries(test_terpsichore_lowest PRIVATE gliss)

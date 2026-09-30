@@ -178,6 +178,14 @@ name = "terpsichore_solution_fixture"
 main = "test_terpsichore_solution_fixture.f90"
 
 [[test]]
+name = "compatible_radial_quadrature"
+main = "test_compatible_radial_quadrature.f90"
+
+[[test]]
+name = "radial_feec_convergence"
+main = "test_radial_feec_convergence.f90"
+
+[[test]]
 name = "terpsichore_lowest"
 main = "test_terpsichore_lowest.f90"
 

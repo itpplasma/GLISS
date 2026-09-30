@@ -54,6 +54,11 @@
   0/0 and returned NaN profiles without an error. `convert_vmec` rejects
   metric harmonics that are not positive definite, and `mercier_objective`
   raises on a non-finite profile (#34).
+- Certify the radial FEEC complex for degrees 1 to 4 with manufactured
+  solutions: L2 projections converge at the optimal rates p+1 (H1) and p (L2
+  and the mapped derivative) on three graded meshes, monomials up to the
+  space degree are reproduced to roundoff, and a corrupted derivative-map
+  entry is detected (#13).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 
