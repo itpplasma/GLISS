@@ -1,0 +1,87 @@
+
+--- a/python/gvec/fourier.py
++++ b/python/gvec/fourier.py
+@@ -207,11 +207,13 @@
+     c = 2 * xf.real
+     c[0, 0] /= 2  # no double counting for n = 0
+     c = np.roll(c, -1, axis=1)[:, ::-1]  # invert the toroidal indices
+-    c[0, -N:] = 0  # zero out the negative toroidal indices
++    if N > 0:  # c[0, -0:] would erase the whole m=0 row
++        c[0, -N:] = 0  # zero out the negative toroidal indices
+ 
+     s = -2 * xf.imag
+     s = np.roll(s, -1, axis=1)[:, ::-1]  # invert the toroidal indices
+-    s[0, -N:] = 0  # zero out the negative toroidal indices
++    if N > 0:  # c[0, -0:] would erase the whole m=0 row
++        s[0, -N:] = 0  # zero out the negative toroidal indices
+ 
+     if x.shape[1] % 2 == 0:
+         # remove the extra toroidal harmonic if the input has an even number of points
+
+--- a/python/gvec/scripts/cas3d.py
++++ b/python/gvec/scripts/cas3d.py
+@@ -154,8 +154,24 @@
+         else:
+             progress.update(1)
+             progress.set_description("computing geometric quantities...")
+-            state.compute(ev, "N_FP", "pos", *q_geo)
+-            surface.get_xyz_hat(ev, winding)
++            state.compute(ev, "N_FP", "pos", *q_geo, "e_rho_B", "e_theta_B", "e_zeta_B")
++            # radial chart metric g_rho,theta and g_rho,zeta in Boozer coordinates
++            ev["g_rt_B"] = xr.dot(ev.e_rho_B, ev.e_theta_B, dim="xyz")
++            ev["g_rz_B"] = xr.dot(ev.e_rho_B, ev.e_zeta_B, dim="xyz")
++            ev["g_rt_B"].attrs = dict(long_name="radial-poloidal metric", symbol="g_{rt}")
++            ev["g_rz_B"].attrs = dict(long_name="radial-toroidal metric", symbol="g_{rz}")
++            # rotate by the Boozer angle zeta_B (not the logical zeta), so that
++            # x = cos(w zeta_B) xhat - sin(w zeta_B) yhat reconstructs positions
++            x = ev.pos.sel(xyz="x")
++            y = ev.pos.sel(xyz="y")
++            zeta_B = ev.zeta_B
++            dims = ev.pos.sel(xyz="z").dims
++            ev["xhat"] = (np.cos(winding * zeta_B) * x + np.sin(winding * zeta_B) * y).transpose(*dims)
++            ev["yhat"] = (-np.sin(winding * zeta_B) * x + np.cos(winding * zeta_B) * y).transpose(*dims)
++            ev["zhat"] = ev.pos.sel(xyz="z")
++            ev["winding"] = xr.DataArray(winding, attrs=dict(long_name="signed winding number", symbol="w"))
++            for i in "xyz":
++                ev[f"{i}hat"].attrs = dict(long_name=f"field periodic {i}-coordinate", symbol=rf"\hat{{{i}}}")
+ 
+         # Quantities of interest (computed from equilibrium)
+         progress.update(1)
+@@ -180,7 +196,7 @@
+             ev = ev[q_vol]
+             ds = xr.merge([ev, surf])
+         else:
+-            ev = ev[q_vol + q_geo + q_surf]
++            ev = ev[q_vol + q_geo + q_surf + ["g_rt_B", "g_rz_B"]]
+             ds = ev
+ 
+         # change coordinate convention: (s,θ,ζ), left-handed, with s,θ,ζ ∈ [0,1) and ζ normalized to one field period
+@@ -220,6 +236,10 @@
+             long_name="toroidal component of the metric tensor",
+             symbol=r"g_{\zeta\zeta}",
+         )
++        out["g_st"] = drho ** (-1) * dtheta ** (-1) * ds.g_rt_B
++        out["g_st"].attrs = dict(long_name="radial-poloidal metric", symbol=r"g_{s\theta}")
++        out["g_sz"] = drho ** (-1) * dzeta ** (-1) * ds.g_rz_B
++        out["g_sz"].attrs = dict(long_name="radial-toroidal metric", symbol=r"g_{s\zeta}")
+         out["II_tt"] = dtheta ** (-2) * ds.II_tt_B
+         out["II_tt"].attrs = dict(
+             long_name="poloidal component of the second fundamental form",
+@@ -300,7 +320,7 @@
+ 
+         if stellsym:
+             radial = [var for var in ft.data_vars if "m" not in ft[var].dims]
+-            odd = ["yhat", "zhat"]
++            odd = ["yhat", "zhat", "g_st", "g_sz"]
+             even = [var for var in out.data_vars if var not in odd and var not in radial]
+             odd = [f"{var}_mns" for var in odd]
+             even = [f"{var}_mnc" for var in even]
+@@ -338,6 +358,8 @@
+             "θ is the poloidal angle and ζ is the toroidal angle, normalized to one field period. "
+         )
+         ft.attrs["stellarator_symmetry"] = str(stellsym)
++        if not reparam:
++            ft.attrs["position_frame"] = "xhat,yhat rotated by winding*zeta_B"
+ 
+         # Save to netCDF
+         progress.update(1)

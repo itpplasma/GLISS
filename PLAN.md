@@ -1,7 +1,9 @@
 # GLISS verification and development plan
 
-Updated September 9, 2026 after an independent Astra xhigh source and benchmark
-audit, parallel fixes, and fresh analytical and Solov'ev runs.
+Updated September 30, 2026 after a source audit and public-source DCON/GVEC
+reproduction of the Solov'ev benchmark (see the corrections section below);
+previously updated September 9, 2026 after an independent Astra xhigh source and
+benchmark audit, parallel fixes, and fresh analytical and Solov'ev runs.
 GLISS is a research-grade fixed-boundary ideal-MHD value evaluator.
 The complete differentiable equilibrium-to-spectrum optimization workflow is
 unfinished. A certificate for a discrete matrix eigenpair does not certify
@@ -50,6 +52,45 @@ of every external solver.
   masses, and a rejected indefinite-mass control.
 - Verify inverse-density scaling through the production constructor and solve:
   quadrupling density divides `omega^2` by four and preserves negative inertia.
+
+## Corrections from the September 30, 2026 audit
+
+- The DCON Solov'ev discrepancy was a GLISS discretization error
+  ([#16](https://github.com/itpplasma/GLISS/issues/16)). A regular displacement
+  has `eta ~ s^(-1/2)` for |m|=1, but eta used an unweighted L2 basis; the
+  compression term then diverged like `1/s`, hidden by reduced quadrature, and
+  a spurious mode with eigenvalue proportional to the mesh width gave count one
+  at every resolution. eta now carries the normal-component axis factor and the
+  third unknown is the regular `nu = mu - (FP'/FT') sqrt(g) eta`. GLISS now
+  reproduces the DCON bracket (1.039062 unstable, 1.039843 stable). A fresh
+  GPEC `f5595c06` DCON build confirmed the archived bracket; its converged
+  marginal q0 is 1.03956-1.03959.
+- Positive-spectrum solves used the midpoint of an unrefined inertia bracket
+  and could return a non-lowest eigenvalue
+  ([#17](https://github.com/itpplasma/GLISS/issues/17)); both paths now bisect.
+- `benchmarks/solovev/public` regenerates the benchmark from public GVEC 1.5.0
+  with a patch for five export defects, tracked for upstream reporting in
+  [#30](https://github.com/itpplasma/GLISS/issues/30).
+- Open findings with understood root causes:
+  [#18](https://github.com/itpplasma/GLISS/issues/18) inverted Python Mercier
+  sign, [#19](https://github.com/itpplasma/GLISS/issues/19) axis-regular spline
+  roundoff amplification, [#20](https://github.com/itpplasma/GLISS/issues/20)
+  truncated Pfirsch-Schlueter solve,
+  [#21](https://github.com/itpplasma/GLISS/issues/21)
+  handedness metadata, [#22](https://github.com/itpplasma/GLISS/issues/22) VMEC
+  truncation checks, [#23](https://github.com/itpplasma/GLISS/issues/23) block
+  inertia stability, [#24](https://github.com/itpplasma/GLISS/issues/24)
+  full-spectrum cost, [#25](https://github.com/itpplasma/GLISS/issues/25) path
+  truncation, [#26](https://github.com/itpplasma/GLISS/issues/26) certificate
+  semantics, [#27](https://github.com/itpplasma/GLISS/issues/27) scale-dependent
+  tolerances, [#28](https://github.com/itpplasma/GLISS/issues/28) Python test
+  evidence, [#29](https://github.com/itpplasma/GLISS/issues/29) configuration
+  replay and handle lifetimes.
+- Reduced quadrature of the compression terms keeps the scheme non-variational:
+  discrete eigenvalues are not upper bounds (p=1 cylinder fast modes fall
+  slightly below the exact values). The parallel-current and drive fields of
+  li383 are not yet convergent in the mode table near rational surfaces; the
+  cause is unresolved.
 
 ## Priority 0: deep source audit
 
@@ -116,12 +157,14 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
 - [x] Reject reconstructed volume folds: the signed Jacobian must retain either
   consistent handedness across angular and radial assembly nodes. Independent
   polynomial-map controls exercise folds, both signs, and zero determinants.
-- [ ] Repair high-mode axis-regular interpolation conditioning. A boundary-valid
+- [ ] Repair high-mode axis-regular interpolation conditioning
+  ([#19](https://github.com/itpplasma/GLISS/issues/19)). A boundary-valid
   M36 Solov'ev export produced volume folds through amplification of tiny
   harmonics by the fitted `s^(-m/2)` quotient. Admission now rejects the failed
-  map; no coefficient clipping or smoothing is used. M24/M28 provide separate
+  map; no coefficient clipping or smoothing is used. The spline amplifies node
+  roundoff by about 5e9 at m=24 and 2e12 at m=28, so M24/M28 are not reliable
   controls. Also replace fixed left-handed result metadata with actual chart
-  orientation; current admission allows either consistent handedness.
+  orientation ([#21](https://github.com/itpplasma/GLISS/issues/21)).
 - [ ] Complete production analytical coverage and public-API qualification.
   `benchmarks/analytic/run.sh` now runs an exact straight-cylinder case through
   current FEEC surface assembly for degrees 1–4, three meshes and both parities,
@@ -181,7 +224,7 @@ Related issues: [#12, MISHKA/CASTOR mode transfer](https://github.com/itpplasma/
 | QAS3 production FEEC | The 191-mode deck supplies a mode mask; ns64-to-ns128 lowest-eigenvalue drift is about 5.53%, with material force-balance residuals | Converge equilibrium and FEEC errors separately before claiming same-physics agreement |
 | W7-X / Nuehrenberg 1996 | The documented coefficient-normalized L10 result is about -0.88701 versus digitized -0.37148 in the report's scaled units | Resolve normalization, radial form functions, reference length, and unavailable deck details; finish quotient-aware L139 scaling under #11 |
 | MISHKA / CASTOR | Branch transfer is unresolved; the CASTOR low-beta stable control currently fails | Transfer compatible invariant subspaces across at least three meshes, distinguish continuum branches, compare mass and decomposed potential energy under #12 |
-| DCON / Solov'ev | Fresh two-component production runs place the sign change in `(1.05,1.10)`, versus archived DCON `(1.039062,1.039843)`; stable-endpoint disagreement persists at ns64/128/256, angular64/128 and export M24/M28 | Full-volume implicit-surface errors `7.77e-7,5.50e-7,1.73e-7` exceed the frozen `1e-7` bound; qualify interpolation and force balance before attributing the discrepancy to the stability operator |
+| DCON / Solov'ev | Resolved by [#16](https://github.com/itpplasma/GLISS/issues/16): GLISS now counts 1 at 1.039062 and 0 at 1.039843 (public GVEC, ns64, M24), matching archived and freshly rebuilt DCON; the earlier `(1.05,1.10)` interval was a spurious non-conforming |m|=1 mode | Extend to a converged q0 bisection and higher n; compare normalized energies; `test_solovev_axis_regularity` guards the sign on coarse public fixtures |
 | Moderate figure-8 | Research roadmap specifies a common VMEC reference, then GVEC reproduction | Qualify one canonical input, reproduce surfaces and profiles across representations, then compare converged stability and modes |
 
 - [ ] Regenerate each retained comparison at an exact current GLISS commit;

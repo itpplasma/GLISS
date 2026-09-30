@@ -37,3 +37,7 @@ and retain errors; a consistently signed sampled map does not prove injectivity
 or volume accuracy. Its fixed toroidal grid is intended for this axisymmetric
 case. Full-volume surface/profile/derivative qualification remains necessary
 even when boundary and orientation checks pass.
+
+`public/` under `solovev/` regenerates the same Solov'ev family from public
+GVEC 1.5.0 with a documented patch and needs no restricted data; use it to
+reproduce the current comparison on a clean machine.

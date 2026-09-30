@@ -1,5 +1,14 @@
 # Solov'ev comparison snapshot, September 9, 2026
 
+**Resolved September 30, 2026.** The disagreement below was a GLISS
+discretization error, not an equilibrium or DCON issue: the |m|=1 tangential
+trial space lacked the regular-displacement axis factor, and a spurious mode
+with eigenvalue proportional to the radial mesh width made the pencil count one
+negative eigenvalue at every tested resolution. With the corrected space GLISS
+reproduces the DCON bracket (1.039062 unstable, 1.039843 stable). The fresh
+public-source pipeline and results are in [`public/`](public/README.md); the
+snapshot below is retained unchanged as historical evidence.
+
 This is a dated snapshot of fresh GLISS two-component marginality FEEC runs
 against archived independent DCON Newcomb crossings. It records GLISS source
 `3b45902177e64c00e3b35908225e62a7a92218cd`, not the behavior of a future checkout.
