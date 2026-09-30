@@ -71,6 +71,7 @@ contains
         real(dp), allocatable :: plus(:, :), minus(:, :)
         real(dp), allocatable :: cosine_rows(:, :), sine_rows(:, :)
         real(dp) :: angular_weight, phase, theta, zeta
+        real(dp) :: trial_cosine(size(trial_m)), trial_sine(size(trial_m))
         logical :: mixed
         integer :: channel, chunk, column, columns, count, first, j, k
         integer :: point, points, trial, trials
@@ -109,13 +110,17 @@ contains
                     * abs(fields(j, k, 7))
                 theta = real(j - 1, dp) / real(size(fields, 1), dp)
                 zeta = real(k - 1, dp) / real(size(fields, 2), dp)
-                do column = 1, columns
-                    trial = modulo(column - 1, trials) + 1
+                do trial = 1, trials
                     phase = two_pi * (real(trial_m(trial), dp) * theta &
                         - real(trial_n(trial), dp) * zeta &
                         / real(field_periods, dp))
-                    cosine_phase(point, column) = cos(phase)
-                    sine_phase(point, column) = sin(phase)
+                    trial_cosine(trial) = cos(phase)
+                    trial_sine(trial) = sin(phase)
+                end do
+                do column = 1, columns
+                    trial = modulo(column - 1, trials) + 1
+                    cosine_phase(point, column) = trial_cosine(trial)
+                    sine_phase(point, column) = trial_sine(trial)
                     cosine_part(point, column, :) = cosine_rows(:, column)
                     sine_part(point, column, :) = sine_rows(:, column)
                 end do

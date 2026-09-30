@@ -101,6 +101,7 @@ contains
         real(dp), allocatable :: weight(:, :), term(:, :)
         real(dp) :: coefficients(5, 2, size(stiffness, 1)), factors(5)
         real(dp) :: angular_weight, phase, theta, zeta
+        real(dp) :: trial_cosine(size(trial_m)), trial_sine(size(trial_m))
         real(dp), allocatable :: plus(:, :), minus(:, :)
         logical :: mixed
         integer :: chunk, column, columns, component, count, first, j, k
@@ -137,13 +138,17 @@ contains
                 weight(point, :) = angular_weight * factors
                 theta = real(j - 1, dp) / real(size(fields, 1), dp)
                 zeta = real(k - 1, dp) / real(size(fields, 2), dp)
-                do column = 1, columns
-                    trial = modulo(column - 1, trials) + 1
+                do trial = 1, trials
                     phase = two_pi * (real(trial_m(trial), dp) * theta &
                         - real(trial_n(trial), dp) * zeta &
                         / real(field_periods, dp))
-                    cosine_phase(point, column) = cos(phase)
-                    sine_phase(point, column) = sin(phase)
+                    trial_cosine(trial) = cos(phase)
+                    trial_sine(trial) = sin(phase)
+                end do
+                do column = 1, columns
+                    trial = modulo(column - 1, trials) + 1
+                    cosine_phase(point, column) = trial_cosine(trial)
+                    sine_phase(point, column) = trial_sine(trial)
                     do component = 1, 5
                         cosine_part(point, column, component) = &
                             coefficients(component, phase_cosine, column)
