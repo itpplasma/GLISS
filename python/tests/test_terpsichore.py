@@ -138,8 +138,9 @@ def test_fixed_boundary_rejects_invalid_native_result(monkeypatch, tmp_path):
 
     def return_invalid(path, length, result, error, error_capacity):
         library.solve(path, length, result, error, error_capacity)
-        # A negative eigenvalue with a zero inertia count is inconsistent.
-        result._obj.negative_count = 0
+        # A positive inertia count with a nonnegative eigenvalue is
+        # inconsistent.
+        result._obj.eigenvalue = 1.0e-7
         return 0
 
     library.gliss_terpsichore_fixed_boundary = FakeFunction(return_invalid)

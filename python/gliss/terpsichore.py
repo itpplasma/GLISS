@@ -163,7 +163,9 @@ def _result(native: _TerpsichoreFixedBoundaryResult) -> TerpsichoreFixedBoundary
     values = tuple(getattr(native, name) for name, _ in native._fields_[3:])
     if (
         native.unknowns < 1
-        or (native.negative_count > 0) != (native.eigenvalue < 0.0)
+        # A zero count admits a lowest eigenvalue inside the native zero
+        # floor (-floor, 0]; only a positive count needs a negative value.
+        or (native.negative_count > 0 and native.eigenvalue >= 0.0)
         or native.certificate < 0.0
         or native.residual < 0.0
         or native.resolution < 0.0
@@ -198,7 +200,9 @@ def _pseudoplasma_result(
     values = tuple(getattr(native, name) for name, _ in native._fields_[3:])
     invalid = (
         native.unknowns < 1
-        or (native.negative_count > 0) != (native.eigenvalue < 0.0)
+        # A zero count admits a lowest eigenvalue inside the native zero
+        # floor (-floor, 0]; only a positive count needs a negative value.
+        or (native.negative_count > 0 and native.eigenvalue >= 0.0)
         or native.certificate < 0.0
         or native.residual < 0.0
         or native.resolution < 0.0
