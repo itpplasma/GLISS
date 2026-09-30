@@ -1,4 +1,5 @@
 module terpsichore_fixed_boundary_spectrum
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
         dynamic_family_layout_t, dynamic_layout_ok
@@ -49,7 +50,7 @@ module terpsichore_fixed_boundary_spectrum
     public :: pack_terpsichore_problem
     public :: read_terpsichore_reference
     public :: solve_terpsichore_fixed_boundary_file
-    public :: solve_terpsichore_lowest_negative
+    public :: solve_terpsichore_lowest
     public :: terpsichore_layouts_match
 
 contains
@@ -79,7 +80,7 @@ contains
         call pack_terpsichore_problem(stiffness_layout, stiffness, mass, &
             stiffness_blocks, mass_blocks, widths, permutation, info, message)
         if (info /= terpsichore_fixed_spectrum_ok) return
-        call solve_terpsichore_lowest_negative(stiffness_blocks, mass_blocks, &
+        call solve_terpsichore_lowest(stiffness_blocks, mass_blocks, &
             result%eigenvalue, vector, result%residual, result%resolution, &
             result%certificate, result%negative_count, info, message)
         if (info /= terpsichore_fixed_spectrum_ok) return
@@ -192,6 +193,14 @@ contains
         open (newunit=unit, file=trim(path), status="old", action="read", &
             access="sequential", form="unformatted", iostat=io_status)
         if (io_status /= 0) return
+        if (has_vacuum_records(unit)) then
+            close (unit, iostat=io_status)
+            info = terpsichore_fixed_spectrum_read_error
+            message = "TERPSICHORE FORT.23 has vacuum intervals (IVAC>0); " &
+                // "use the pseudoplasma solver"
+            return
+        end if
+        rewind (unit)
         call read_terpsichore_fixed_boundary_potential_fixture(unit, 0, &
             fixture, io_status)
         close (unit, iostat=info)
@@ -208,6 +217,27 @@ contains
         info = terpsichore_fixed_spectrum_ok
         message = ""
     end subroutine read_fixed_fixture
+
+    function has_vacuum_records(unit) result(vacuum)
+        ! The radial record of an IVAC=0 file holds exactly the plasma grid
+        ! and profiles. With IVAC>0 the grid extends into the vacuum, so the
+        ! record is longer and the fixed-boundary layout would misread every
+        ! later field (the parity first).
+        integer, intent(in) :: unit
+        logical :: vacuum
+        integer :: intervals, poloidal, toroidal, periods, field, modes
+        integer :: io_status
+        real(dp), allocatable :: probe(:)
+
+        vacuum = .false.
+        read (unit, iostat=io_status) intervals, poloidal, toroidal, periods, &
+            field, modes
+        if (io_status /= 0 .or. intervals < 1) return
+        allocate (probe(7 * intervals + 5), stat=io_status)
+        if (io_status /= 0) return
+        read (unit, iostat=io_status) probe
+        vacuum = io_status == 0
+    end function has_vacuum_records
 
     subroutine assemble_fixed_problem(fixture, stiffness, mass, &
             stiffness_layout, mass_layout, info, message)
@@ -286,7 +316,7 @@ contains
         message = ""
     end subroutine pack_terpsichore_problem
 
-    subroutine solve_terpsichore_lowest_negative(stiffness, mass, eigenvalue, &
+    subroutine solve_terpsichore_lowest(stiffness, mass, eigenvalue, &
             eigenvector, residual, resolution, certificate, negative_count, &
             info, message)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
@@ -305,13 +335,15 @@ contains
             call solve_failure("TERPSICHORE inertia failed", info, message)
             return
         end if
-        if (negative_count <= 0) then
-            call solve_failure("TERPSICHORE matrix has no negative eigenvalue", &
+        ! A stable pencil has no negative eigenvalue; its certified lowest
+        ! eigenpair is then the lowest one at or above -zero_floor.
+        if (negative_count > 0) then
+            call bracket_lowest(stiffness, mass, zero_floor, lower, upper, &
                 info, message)
-            return
+        else
+            call bracket_lowest_stable(stiffness, mass, zero_floor, lower, &
+                upper, info, message)
         end if
-        call bracket_lowest(stiffness, mass, zero_floor, lower, upper, info, &
-            message)
         if (info /= terpsichore_fixed_spectrum_ok) return
         do iteration = 1, 200
             middle = lower + 0.5_dp * (upper - lower)
@@ -349,7 +381,7 @@ contains
         end if
         info = terpsichore_fixed_spectrum_ok
         message = ""
-    end subroutine solve_terpsichore_lowest_negative
+    end subroutine solve_terpsichore_lowest
 
     subroutine bracket_lowest(stiffness, mass, zero_floor, lower, upper, &
             info, message)
@@ -378,6 +410,35 @@ contains
         info = terpsichore_fixed_spectrum_ok
         message = ""
     end subroutine bracket_lowest
+
+    subroutine bracket_lowest_stable(stiffness, mass, zero_floor, lower, &
+            upper, info, message)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), intent(in) :: zero_floor
+        real(dp), intent(out) :: lower, upper
+        integer, intent(out) :: info
+        character(len=*), intent(out) :: message
+        integer :: below, iteration
+
+        lower = -zero_floor
+        upper = 2.0_dp * zero_floor
+        do iteration = 1, 1100
+            call variable_generalized_inertia(stiffness, mass, upper, below, &
+                info)
+            if (info == variable_generalized_ok .and. below > 0) exit
+            if (info /= variable_generalized_ok) &
+                upper = nearest(upper, 1.0_dp)
+            upper = 2.0_dp * upper
+            if (.not. ieee_is_finite(upper)) exit
+        end do
+        if (iteration > 1100 .or. .not. ieee_is_finite(upper)) then
+            call solve_failure("TERPSICHORE cannot bracket lowest eigenvalue", &
+                info, message)
+            return
+        end if
+        info = terpsichore_fixed_spectrum_ok
+        message = ""
+    end subroutine bracket_lowest_stable
 
     subroutine solve_failure(text, info, message)
         character(len=*), intent(in) :: text

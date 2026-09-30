@@ -210,8 +210,10 @@ typedef struct gliss_cas3d_marginality_result {
     double zero_floor;
 } gliss_cas3d_marginality_result;
 
-/* Solve the lowest negative eigenpair represented by a TERPSICHORE FORT.23
- * file produced with IVAC=0 and MODELK=0. Set result->struct_size to
+/* Solve the lowest eigenpair represented by a TERPSICHORE FORT.23 file
+ * produced with IVAC=0 and MODELK=0. A stable file has negative_count 0 and
+ * reports its lowest nonnegative eigenpair; an IVAC>0 file is rejected with
+ * GLISS_STATUS_READ_ERROR. Set result->struct_size to
  * sizeof(*result). The file's Fourier table, reduced kinetic normalization,
  * and fixed-boundary radial topology are used without reinterpretation. The
  * The reference fields report the stored TERPSICHORE vector's WP/WK quotient,
@@ -226,8 +228,9 @@ gliss_status gliss_terpsichore_fixed_boundary(
     char *error,
     size_t error_capacity);
 
-/* Solve the lowest negative eigenpair represented by TERPSICHORE FORT.23 and
- * FORT.24 files produced with IVAC>0 and MODELK=0. vacuum_intervals must match
+/* Solve the lowest eigenpair represented by TERPSICHORE FORT.23 and FORT.24
+ * files produced with IVAC>0 and MODELK=0; growth_rate is negative (minus the
+ * oscillation frequency) for a stable pencil. vacuum_intervals must match
  * both files. The pressureless pseudo-plasma vacuum is eliminated by its Schur
  * complement. The reference fields report diagnostics of the TERPSICHORE
  * solution stored in FORT.23. Set result->struct_size to sizeof(*result). The

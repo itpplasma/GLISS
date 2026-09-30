@@ -16,7 +16,11 @@ PathLike = Union[str, os.PathLike]
 
 @dataclass(frozen=True)
 class TerpsichoreFixedBoundaryResult:
-    """Certified lowest negative eigenpair from an IVAC=0 FORT.23 file."""
+    """Certified lowest eigenpair from an IVAC=0 FORT.23 file.
+
+    ``negative_count`` is 0 for a stable pencil; ``eigenvalue`` is then the
+    certified lowest nonnegative eigenvalue.
+    """
 
     unknowns: int
     negative_count: int
@@ -35,7 +39,11 @@ class TerpsichoreFixedBoundaryResult:
 
 @dataclass(frozen=True)
 class TerpsichorePseudoplasmaResult:
-    """Certified IVAC>0 eigenpair and TERPSICHORE reference diagnostics."""
+    """Certified IVAC>0 eigenpair and TERPSICHORE reference diagnostics.
+
+    ``growth_rate`` is positive for an unstable pencil and minus the
+    oscillation frequency for a stable one.
+    """
 
     unknowns: int
     negative_count: int
@@ -155,8 +163,7 @@ def _result(native: _TerpsichoreFixedBoundaryResult) -> TerpsichoreFixedBoundary
     values = tuple(getattr(native, name) for name, _ in native._fields_[3:])
     if (
         native.unknowns < 1
-        or native.negative_count < 1
-        or native.eigenvalue >= 0.0
+        or (native.negative_count > 0) != (native.eigenvalue < 0.0)
         or native.certificate < 0.0
         or native.residual < 0.0
         or native.resolution < 0.0
@@ -191,12 +198,11 @@ def _pseudoplasma_result(
     values = tuple(getattr(native, name) for name, _ in native._fields_[3:])
     invalid = (
         native.unknowns < 1
-        or native.negative_count < 1
-        or native.eigenvalue >= 0.0
+        or (native.negative_count > 0) != (native.eigenvalue < 0.0)
         or native.certificate < 0.0
         or native.residual < 0.0
         or native.resolution < 0.0
-        or native.growth_rate <= 0.0
+        or (native.growth_rate > 0.0) != (native.eigenvalue < 0.0)
         or native.reference_kinetic <= 0.0
         or native.computed_kinetic <= 0.0
         or native.reference_residual < 0.0
@@ -229,7 +235,12 @@ def _pseudoplasma_result(
 def solve_terpsichore_fixed_boundary(
     path: PathLike,
 ) -> TerpsichoreFixedBoundaryResult:
-    """Solve the lowest negative IVAC=0, MODELK=0 TERPSICHORE eigenpair."""
+    """Solve the lowest IVAC=0, MODELK=0 TERPSICHORE eigenpair.
+
+    Stable files return ``negative_count == 0`` with the lowest nonnegative
+    eigenpair instead of raising. IVAC>0 files are rejected with a
+    ``GlissIOError`` that names the pseudoplasma solver.
+    """
 
     encoded = _fixture_path(path)
     library = _load_library()

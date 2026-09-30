@@ -6,7 +6,7 @@ module terpsichore_pseudoplasma_spectrum
         terpsichore_eigen_diagnostics_ok, terpsichore_eigen_diagnostics_t
     use terpsichore_fixed_boundary_spectrum, only: &
         pack_terpsichore_problem, read_terpsichore_reference, &
-        solve_terpsichore_lowest_negative, &
+        solve_terpsichore_lowest, &
         terpsichore_fixed_spectrum_compute_error, &
         terpsichore_fixed_spectrum_ok, terpsichore_fixed_spectrum_read_error, &
         terpsichore_layouts_match
@@ -90,7 +90,7 @@ contains
         call pack_terpsichore_problem(stiffness_layout, stiffness, mass, &
             stiffness_blocks, mass_blocks, widths, permutation, info, message)
         if (info /= terpsichore_pseudoplasma_spectrum_ok) return
-        call solve_terpsichore_lowest_negative(stiffness_blocks, mass_blocks, &
+        call solve_terpsichore_lowest(stiffness_blocks, mass_blocks, &
             result%eigenvalue, vector, result%residual, result%resolution, &
             result%certificate, result%negative_count, info, message)
         if (info /= terpsichore_pseudoplasma_spectrum_ok) return

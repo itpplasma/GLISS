@@ -97,6 +97,26 @@ def test_fixed_boundary_result(monkeypatch, tmp_path):
     assert result.mode_overlap == pytest.approx(0.99999999)
 
 
+def test_fixed_boundary_stable_result(monkeypatch, tmp_path):
+    library = FakeLibrary()
+
+    def return_stable(path, length, result, error, error_capacity):
+        library.solve(path, length, result, error, error_capacity)
+        result._obj.negative_count = 0
+        result._obj.eigenvalue = 5.956091213e-7
+        result._obj.reference_eigenvalue = 5.956134071e-7
+        return 0
+
+    library.gliss_terpsichore_fixed_boundary = FakeFunction(return_stable)
+    monkeypatch.setattr("gliss.terpsichore._load_library", lambda: library)
+    fixture = tmp_path / "fort.23"
+    fixture.touch()
+
+    result = gliss.solve_terpsichore_fixed_boundary(fixture)
+    assert result.negative_count == 0
+    assert result.eigenvalue == pytest.approx(5.956091213e-7)
+
+
 def test_fixed_boundary_native_error(monkeypatch, tmp_path):
     library = FakeLibrary()
 
@@ -117,9 +137,9 @@ def test_fixed_boundary_rejects_invalid_native_result(monkeypatch, tmp_path):
     library = FakeLibrary()
 
     def return_invalid(path, length, result, error, error_capacity):
-        result._obj.unknowns = 1
+        library.solve(path, length, result, error, error_capacity)
+        # A negative eigenvalue with a zero inertia count is inconsistent.
         result._obj.negative_count = 0
-        result._obj.eigenvalue = 1.0
         return 0
 
     library.gliss_terpsichore_fixed_boundary = FakeFunction(return_invalid)

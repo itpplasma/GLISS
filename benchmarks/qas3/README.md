@@ -1,0 +1,80 @@
+# QAS3: VMEC, TERPSICHORE and GLISS from public sources
+
+The TERPSICHORE 1.2 QAS3 benchmark family (nfp = 3, CURTOR = −75 kA) is used
+to compare GLISS with public reference codes:
+
+- VMEC's `DMerc*` Mercier terms against `gliss.mercier_profile` on an export
+  written by `gliss.convert_vmec`.
+- TERPSICHORE's fixed-boundary (IVAC = 0, MODELK = 0) lowest eigenvalue
+  against the certified GLISS replay of its FORT.23 matrices.
+- The TERPSICHORE inertia count against the independent GLISS FEEC
+  discretization, with sign and count compared only, because the
+  normalizations differ.
+
+## Reproduce
+
+```sh
+./build.sh                             # STELLOPT 2f181f0d VMEC2000, TERPSICHORE 04dcf9a
+export GLISS_LIB=$PWD/../../build/libgliss_c.so PYTHONPATH=$PWD/../../python
+./run_case.sh qas3_p100 1.0 1.0        # base case: pressure and current factor 1
+./run_case.sh qas3_c050 1.0 0.5        # half the net current
+INDEPENDENT=1 ./run_case.sh qas3_c075 1.0 0.75
+```
+
+`build.sh` needs gfortran, OpenBLAS, ScaLAPACK/OpenMPI and NetCDF-Fortran
+(Debian: `libopenblas-dev libscalapack-openmpi-dev libopenmpi-dev
+libnetcdff-dev`). TERPSICHORE is fetched from the GitHub mirror of the public
+EPFL GitLab release (`TERPSICHORE_URL` overrides it). Each VMEC run takes a
+few minutes, TERPSICHORE about 15 s, and the replay seconds. The independent
+GLISS path takes 15–35 min on four cores.
+
+## Results (68-mode N = 1 family, m ≤ 8, |n| ≤ 5, ns = 65)
+
+Mercier, median relative error over 0.1 < s < 0.9. The Mercier sign
+convention agrees: positive is stable.
+
+| Case | DShear | DCurr | DWell | DGeod | DMerc |
+|---|---|---|---|---|---|
+| DSHAPE tokamak | 0.00 % | 0.02 % | 0.02 % | 0.04 % | 0.01 % |
+| W7-X β = 5 % | 0.1 % | 2.7 % | 0.1 % | 0.3 % | 2.2 % |
+| QAS3 variants | ≤ 0.3 % | 1–1.4 % | ≤ 0.2 % | 0.4 % | 0.4 % |
+| li383 | 0.1 % | 18 % | 1.8 % | 3.2 % | 17 % |
+
+Fixed-boundary stability against the current fraction:
+
+| Current | TERPSICHORE λ | TERPSICHORE count | GLISS replay | GLISS independent |
+|---|---|---|---|---|
+| 1.00 | −7.03701e-7 | 5 | −7.0370098e-7, count 5 | 1 before #20, 12 after (#33) |
+| 0.75 | −8.7e-8 | 1 | agrees | stable (0) |
+| 0.50 | +5.956134e-7 | 0 | +5.956091e-7, count 0 | stable (0) |
+
+## Findings
+
+- The replay reproduces TERPSICHORE's eigenvalue to 1e-8 relative, with
+  mode overlap 0.99999999, in every unstable case, fixed and free boundary.
+- Before [#32](https://github.com/itpplasma/GLISS/issues/32) the replay
+  raised for stable cases and misreported IVAC > 0 input as a parity error.
+- The independent count at base current rose from 1 to 12 with the widened
+  magnetic-differential-equation table of #20; the near-resonant harmonics
+  it adds are tracked in [#33](https://github.com/itpplasma/GLISS/issues/33).
+- NaN Mercier terms on the zero-current case come from a truncated metric
+  that is not positive definite
+  ([#34](https://github.com/itpplasma/GLISS/issues/34)).
+- GLISS Mercier spikes at rational ι
+  ([#33](https://github.com/itpplasma/GLISS/issues/33)).
+- TERPSICHORE's shifted inverse iteration does not converge when the shift
+  AL0 is far from two close eigenvalues. At zero current and AL0 = −1e-5 it
+  stops at NITMAX with nonconverged components and reports −3.24e-8, while
+  the certified lowest is −3.54e-8 (overlap 0.58). `run_case.sh` warns when
+  this happens. This is a usage limit, not a TERPSICHORE defect.
+- Open, cause not established:
+  - The critical current fraction differs: TERPSICHORE is weakly unstable at
+    0.75, where its own sign flips with ns (33 stable, 65 and 129 unstable),
+    and GLISS is stable.
+  - D_curr differs by 10–20 % for li383 and QAS below s = 0.4.
+  - `convert_vmec` rejects converged VMEC 9.0 li383/QAS outputs in its |B|
+    consistency check (residual 1.3e-2 > 5e-3). Zeroing Nyquist-only |B|
+    harmonics brings it to 4e-3.
+  - The `convert_vmec` force-balance residual is 0.1–0.26 for QAS3 even at
+    zero pressure. It does not change from M = N = 8 to 16, and the N_FP
+    scaling of the poloidal-flux term is confirmed (removing it gives 0.52).

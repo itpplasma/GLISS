@@ -36,6 +36,12 @@
   instead of silently assembling another operator. `Equilibrium` and
   `StabilityProblem` release native memory through `weakref.finalize` when
   they are not closed (#29).
+- The TERPSICHORE replay returns `negative_count = 0` with the certified
+  lowest nonnegative eigenpair for stable files instead of raising, rejects
+  IVAC>0 FORT.23 files passed to the fixed-boundary API with an explicit
+  message instead of a misread parity, and PROVENANCE pins the fork revision
+  that writes the FORT.24 schema the reader accepts (#32). Add the public
+  QAS3 benchmark (`benchmarks/qas3`: STELLOPT VMEC, TERPSICHORE 1.2, GLISS).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 

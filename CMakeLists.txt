@@ -748,6 +748,11 @@ if(BUILD_TESTING)
     add_test(NAME terpsichore_solution_fixture
         COMMAND test_terpsichore_solution_fixture)
 
+    add_executable(test_terpsichore_lowest
+        test/test_terpsichore_lowest.f90)
+    target_link_libraries(test_terpsichore_lowest PRIVATE gliss)
+    add_test(NAME terpsichore_lowest COMMAND test_terpsichore_lowest)
+
     add_executable(test_terpsichore_eigen_diagnostics
         test/test_terpsichore_eigen_diagnostics.f90)
     target_link_libraries(test_terpsichore_eigen_diagnostics PRIVATE gliss)

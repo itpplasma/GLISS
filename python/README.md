@@ -120,8 +120,11 @@ print(result.eigenvalue, result.negative_count)
 ```
 
 The function returns a frozen `TerpsichoreFixedBoundaryResult`. `eigenvalue`
-is the lowest negative value of the TERPSICHORE generalized problem
-`K x = eigenvalue M x`. It uses the reduced kinetic normalization stored by
+is the lowest eigenvalue of the TERPSICHORE generalized problem
+`K x = eigenvalue M x`; it is negative for an unstable file, and a stable file
+returns `negative_count == 0` with its lowest nonnegative eigenvalue instead of
+raising. A FORT.23 written with IVAC>0 raises `GlissIOError` that names the
+pseudoplasma solver. It uses the reduced kinetic normalization stored by
 that format. `negative_count` is the inertia count below zero. `certificate`
 is the final inertia-bracket width. `residual` is the scaled eigenpair backward
 error, and `resolution` estimates roundoff in the quotient. `unknowns` is the
