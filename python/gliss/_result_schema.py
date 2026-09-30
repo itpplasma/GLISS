@@ -143,10 +143,16 @@ def _component_vector(value: Mapping[str, Any], context: str) -> tuple:
     return counts, has_vector, vector
 
 
-def _validate_conventions(value: Mapping[str, Any], context: str) -> None:
+def _validate_conventions(
+    value: Mapping[str, Any], context: str, version: int
+) -> None:
+    boundaries = ("fixed", "free") if version >= 6 else ("fixed",)
+    if value["boundary_condition"] not in boundaries:
+        raise ValueError(
+            f"{context}.boundary_condition must be one of {boundaries!r}"
+        )
     constants = {
         "eigenvalue_unit": "s^-2",
-        "boundary_condition": "fixed",
         "normalization": "x.T @ M @ x = 1",
         "fourier_convention": "2*pi*(m*theta - n*zeta/N_T)",
     }
@@ -207,7 +213,7 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
     chart_metric = value["has_chart_metric"]
     if not isinstance(chart_metric, bool):
         raise ValueError(f"{context}.has_chart_metric must be a boolean")
-    _validate_conventions(value, context)
+    _validate_conventions(value, context, version)
     components = _certificate_components(value, context)
     return SpectrumResult(
         parity_class=parity,
@@ -234,6 +240,7 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
         has_chart_metric=chart_metric,
         has_eigenvector=has_vector,
         coordinate_handedness=value["coordinate_handedness"],
+        boundary_condition=value["boundary_condition"],
         solver_tolerances=(
             SolverTolerances.from_dict(value["solver_tolerances"])
             if version >= 2
@@ -295,6 +302,7 @@ def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
             "has_chart_metric",
             "solver_tolerances",
             "discretization_revision",
+            "boundary_condition",
         )
         if any(getattr(item, name) != getattr(reference, name) for name in shared):
             raise ValueError("result parity classes have inconsistent problem metadata")

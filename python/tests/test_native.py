@@ -5,6 +5,8 @@ oracles are the GPEC/DCON Newcomb results for the public Solov'ev fixtures
 (benchmarks/solovev) and exact identities of the Rayleigh quotient.
 """
 
+import math
+
 import numpy as np
 import pytest
 
@@ -133,3 +135,86 @@ def test_native_coupled_axisymmetric_family(native_library, test_data):
     assert coupled.lowest_eigenvalue == pytest.approx(
         symmetric.lowest_eigenvalue, rel=1e-7
     )
+
+
+def test_native_free_boundary_kink_and_wall(native_library, test_data):
+    # q0 = 1.045 is fixed-boundary stable (DCON), but its edge carries current
+    # and pressure gradient: without a wall the n=1 external kink is unstable,
+    # and an ideal wall close to the edge restores stability. The fixed
+    # boundary is the free space with a vanishing edge and the vacuum energy
+    # grows as the wall approaches, so min-max orders the lowest eigenvalues.
+    modes = [(0, 1), (1, -1), (1, 1), (2, -1), (2, 1)]
+    options = dict(degree=2, angular_theta=24, angular_zeta=8)
+    theta = np.linspace(0.0, 2.0 * np.pi, 24, endpoint=False)
+    phi = np.linspace(0.0, 2.0 * np.pi, 12, endpoint=False)
+    # A circular shell of radius 0.75 m about R = 0.935 m encloses the
+    # R in [0.583, 1.288] m, |Z| < 0.565 m edge.
+    radius = np.broadcast_to(0.935 + 0.75 * np.cos(theta)[:, None], (24, 12))
+    shell = np.stack(
+        [
+            radius * np.cos(phi)[None, :],
+            radius * np.sin(phi)[None, :],
+            np.broadcast_to(0.75 * np.sin(theta)[:, None], radius.shape),
+        ]
+    )
+    with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
+        with gliss.StabilityProblem(equilibrium, modes, **options) as problem:
+            fixed = problem.solve_class(1)
+        lowest = {}
+        for name, wall in (("none", None), ("shell", shell), ("close", 0.03)):
+            vacuum = gliss.VacuumModel((24, 12), wall)
+            with gliss.StabilityProblem(
+                equilibrium, modes, vacuum=vacuum, **options
+            ) as problem:
+                assert problem.boundary_condition == "free"
+                result = problem.solve_class(1)
+                lowest[name] = result
+                if name == "none":
+                    energy = problem.energy(1, result.eigenvector)
+                    configuration = problem.configuration
+        document = configuration.to_dict()
+        assert document["boundary_condition"] == "free"
+        replayed = gliss.StabilityConfiguration.from_dict(document)
+        assert replayed == configuration
+        with replayed.create_problem(equilibrium) as problem:
+            again = problem.solve_class(1)
+    assert fixed.boundary_condition == "fixed"
+    assert lowest["none"].boundary_condition == "free"
+    assert fixed.negative_count == 0
+    assert lowest["none"].negative_count >= 1
+    assert lowest["close"].negative_count == 0
+    assert (
+        lowest["none"].lowest_eigenvalue
+        <= lowest["shell"].lowest_eigenvalue
+        <= lowest["close"].lowest_eigenvalue
+        <= fixed.lowest_eigenvalue * (1.0 + 1e-10)
+    )
+    assert lowest["none"].normal_unknowns > fixed.normal_unknowns
+    assert energy.vacuum_energy > 0.0
+    assert energy.pressure_drive < 0.0
+    assert energy.potential_energy == pytest.approx(math.fsum(energy.components))
+    assert again.lowest_eigenvalue == lowest["none"].lowest_eigenvalue
+
+
+def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
+    modes = [(1, 1), (2, 1)]
+    with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
+        with pytest.raises(gliss.GlissArgumentError, match="edge mesh"):
+            gliss.StabilityProblem(
+                equilibrium, modes, degree=1, angular_theta=24,
+                angular_zeta=8, vacuum=gliss.VacuumModel((4, 12)),
+            )
+        inside = np.zeros((3, 8, 8))
+        inside[0] = 0.9
+        inside[1] = np.linspace(-0.01, 0.01, 8)[None, :]
+        inside[2] = np.linspace(-0.01, 0.01, 8)[:, None]
+        with pytest.raises(gliss.GlissError):
+            gliss.StabilityProblem(
+                equilibrium, modes, degree=1, angular_theta=24,
+                angular_zeta=8,
+                vacuum=gliss.VacuumModel((24, 12), inside),
+            )
+    with pytest.raises(ValueError, match="positive"):
+        gliss.VacuumModel((24, 12), -0.1)
+    with pytest.raises(ValueError, match="shape"):
+        gliss.VacuumModel((24, 12), np.zeros((2, 4, 4)))

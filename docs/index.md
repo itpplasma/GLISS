@@ -16,8 +16,9 @@ api
 ## Scope
 
 Production
-: Fixed-boundary FEEC spectra of stellarator-symmetric equilibria
-  (`StabilityProblem`), the axisymmetric and CAS3D marginality families,
+: Fixed- and free-boundary FEEC spectra (`StabilityProblem`, with a
+  `VacuumModel` for the plasma-vacuum problem and an optional ideal wall),
+  the axisymmetric and CAS3D marginality families,
   Mercier profiles, persistence of configurations and results, and the
   conversion of VMEC `wout` and precomputed BOOZ_XFORM `boozmn` files.
 
@@ -26,9 +27,8 @@ Compatibility
   for validation. They are not a physical plasma-vacuum API.
 
 Unfinished
-: The free-boundary plasma-vacuum solve and the equilibrium-to-spectrum
-  derivative chain. Asymmetric equilibria are solved with the coupled parity
-  operator (parity class 0).
+: The equilibrium-to-spectrum derivative chain. Asymmetric equilibria are
+  solved with the coupled parity operator (parity class 0).
 
 Every code block in the quickstart is executed by the native test suite
 (`python/tests/test_docs.py`) against the Solov'ev fixtures in `test/data`.

@@ -1,4 +1,4 @@
-module starwall_mesh_geometry
+module boundary_mesh_geometry
     use, intrinsic :: iso_fortran_env, only: dp => real64
     implicit none
     private
@@ -234,4 +234,4 @@ contains
         value(3) = first(1) * second(2) - first(2) * second(1)
     end subroutine cross_product
 
-end module starwall_mesh_geometry
+end module boundary_mesh_geometry

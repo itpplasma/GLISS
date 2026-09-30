@@ -58,7 +58,24 @@ program test_gliss_spectrum_capi
         real(c_double) :: rayleigh_quotient
         real(c_double) :: closure_error
         real(c_double) :: closure_tolerance
+        real(c_double) :: vacuum_energy
     end type energy_terms_c
+
+    type, bind(c) :: energy_terms_v1_c
+        integer(c_size_t) :: struct_size
+        real(c_double) :: values(10)
+    end type energy_terms_v1_c
+
+    type, bind(c) :: vacuum_model_c
+        integer(c_size_t) :: struct_size
+        integer(c_int) :: edge_nu
+        integer(c_int) :: edge_nv
+        integer(c_int) :: wall_kind
+        real(c_double) :: wall_distance
+        integer(c_int) :: wall_nu
+        integer(c_int) :: wall_nv
+        type(c_ptr) :: wall_xyz
+    end type vacuum_model_c
 
     type, bind(c) :: solver_tolerances_c
         integer(c_size_t) :: struct_size
@@ -118,6 +135,30 @@ program test_gliss_spectrum_capi
             integer(c_int), value :: degree
             integer(c_int) :: result
         end function problem_create
+
+        function problem_create_free(equilibrium_handle, gamma, density, &
+                floor, mode_count, poloidal, toroidal, degree, theta, zeta, &
+                vacuum, handle, error_pointer, error_capacity) &
+                bind(c, name="gliss_stability_problem_create_free_boundary") &
+                result(result)
+            import c_double, c_int, c_ptr, c_size_t
+            type(c_ptr), value :: equilibrium_handle, poloidal, toroidal
+            type(c_ptr), value :: vacuum, handle, error_pointer
+            real(c_double), value :: gamma, density, floor
+            integer(c_size_t), value :: mode_count, error_capacity
+            integer(c_int), value :: degree, theta, zeta
+            integer(c_int) :: result
+        end function problem_create_free
+
+        function problem_free_boundary(handle, free, error_pointer, &
+                error_capacity) &
+                bind(c, name="gliss_stability_problem_free_boundary") &
+                result(result)
+            import c_int, c_ptr, c_size_t
+            type(c_ptr), value :: handle, free, error_pointer
+            integer(c_size_t), value :: error_capacity
+            integer(c_int) :: result
+        end function problem_free_boundary
 
         function problem_destroy(handle, error_pointer, error_capacity) &
                 bind(c, name="gliss_stability_problem_destroy") result(result)
@@ -243,6 +284,7 @@ program test_gliss_spectrum_capi
         int(size(error_buffer), c_size_t))
     call require(status == status_ok, "problem creation failed")
     call require(c_associated(problem), "problem handle is null")
+    call check_free_boundary_entry_points()
     tolerances%struct_size = c_sizeof(tolerances)
     tolerances%eigenvalue_relative = 1.0e-13_c_double
     tolerances%residual_relative = 1.0e-12_c_double
@@ -342,6 +384,9 @@ program test_gliss_spectrum_capi
         "C API energy quotient differs from the eigenvalue")
     call require(energy%closure_error <= energy%closure_tolerance, &
         "C API energy terms do not close")
+    call require(energy%vacuum_energy == 0.0_c_double, &
+        "a fixed boundary reported vacuum energy")
+    call check_legacy_energy_layout()
     status = problem_rayleigh_vjp(problem, 1_c_int, unknowns, &
         c_loc(eigenvector), 1.0_c_double, unknowns, c_loc(gradient), &
         c_loc(error_buffer), int(size(error_buffer), c_size_t))
@@ -552,6 +597,83 @@ program test_gliss_spectrum_capi
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_legacy_energy_layout()
+        ! Callers built before the vacuum term pass the shorter struct.
+        type(energy_terms_v1_c), target :: legacy(2)
+
+        legacy(1)%struct_size = c_sizeof(legacy(1))
+        legacy(2)%struct_size = 12345_c_size_t
+        legacy(2)%values = -7.0_c_double
+        status = problem_energy(problem, 1_c_int, unknowns, &
+            c_loc(eigenvector), c_loc(legacy(1)), c_loc(error_buffer), &
+            int(size(error_buffer), c_size_t))
+        call require(status == status_ok, "the legacy energy layout failed")
+        call require(legacy(1)%values(7) == energy%kinetic_energy &
+            .and. legacy(1)%values(10) == energy%closure_tolerance, &
+            "the legacy energy layout lost its fields")
+        call require(legacy(2)%struct_size == 12345_c_size_t &
+            .and. all(legacy(2)%values == -7.0_c_double), &
+            "the legacy energy layout was written past its end")
+    end subroutine check_legacy_energy_layout
+
+    subroutine check_free_boundary_entry_points()
+        type(vacuum_model_c), target :: vacuum
+        integer(c_int), target :: free
+
+        free = -1_c_int
+        status = problem_free_boundary(problem, c_loc(free), &
+            c_loc(error_buffer), int(size(error_buffer), c_size_t))
+        call require(status == status_ok .and. free == 0_c_int, &
+            "a fixed-boundary problem reported a free boundary")
+        status = problem_free_boundary(problem, c_null_ptr, &
+            c_loc(error_buffer), int(size(error_buffer), c_size_t))
+        call require(status == status_invalid_argument, &
+            "a null free-boundary output was accepted")
+        status = problem_create_free(equilibrium, 5.0_c_double / 3.0_c_double, &
+            2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
+            c_loc(mode_n), 1_c_int, 64_c_int, 64_c_int, c_null_ptr, &
+            c_loc(rejected), c_loc(error_buffer), &
+            int(size(error_buffer), c_size_t))
+        call require(status == status_invalid_argument, &
+            "a null vacuum model was accepted")
+        vacuum%struct_size = c_sizeof(vacuum) - 8_c_size_t
+        vacuum%edge_nu = 12_c_int
+        vacuum%edge_nv = 24_c_int
+        vacuum%wall_kind = 0_c_int
+        vacuum%wall_distance = 0.0_c_double
+        vacuum%wall_nu = 0_c_int
+        vacuum%wall_nv = 0_c_int
+        vacuum%wall_xyz = c_null_ptr
+        status = problem_create_free(equilibrium, 5.0_c_double / 3.0_c_double, &
+            2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
+            c_loc(mode_n), 1_c_int, 64_c_int, 64_c_int, c_loc(vacuum), &
+            c_loc(rejected), c_loc(error_buffer), &
+            int(size(error_buffer), c_size_t))
+        call require(status == status_invalid_argument, &
+            "an incompatible vacuum struct_size was accepted")
+        vacuum%struct_size = c_sizeof(vacuum)
+        vacuum%wall_kind = 2_c_int
+        status = problem_create_free(equilibrium, 5.0_c_double / 3.0_c_double, &
+            2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
+            c_loc(mode_n), 1_c_int, 64_c_int, 64_c_int, c_loc(vacuum), &
+            c_loc(rejected), c_loc(error_buffer), &
+            int(size(error_buffer), c_size_t))
+        call require(status == status_invalid_argument, &
+            "a surface wall without nodes was accepted")
+        ! The synthetic cylinder's frame traces its torus twice.
+        vacuum%wall_kind = 0_c_int
+        status = problem_create_free(equilibrium, 5.0_c_double / 3.0_c_double, &
+            2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
+            c_loc(mode_n), 1_c_int, 64_c_int, 64_c_int, c_loc(vacuum), &
+            c_loc(rejected), c_loc(error_buffer), &
+            int(size(error_buffer), c_size_t))
+        call require(status == status_compute_error, &
+            "a multiply covered edge was accepted")
+        call require(.not. c_associated(rejected), &
+            "a rejected free boundary returned a problem handle")
+    end subroutine check_free_boundary_entry_points
+
 
     subroutine copy_chars(source, destination)
         character(len=*), intent(in) :: source

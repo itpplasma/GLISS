@@ -106,6 +106,7 @@ from .equilibrium import (  # noqa: E402
 from .mercier import mercier_objective, mercier_profile  # noqa: E402
 from .energy import EnergyTerms  # noqa: E402
 from .solver import SolverTolerances  # noqa: E402
+from .vacuum import VacuumModel  # noqa: E402
 from .vmec import convert_boozer, convert_vmec  # noqa: E402
 from .stability import (  # noqa: E402
     SpectrumResult,
@@ -179,6 +180,7 @@ __all__ = [
     "StabilityResult",
     "TerpsichoreFixedBoundaryResult",
     "TerpsichorePseudoplasmaResult",
+    "VacuumModel",
     "solve_axisymmetric",
     "solve_cas3d_marginality",
     "solve_cas3d_phase_envelope",

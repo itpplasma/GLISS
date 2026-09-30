@@ -7,9 +7,8 @@ conversion. The Linux wheel
 contains the compiled Fortran library and uses a small, hand-written ISO C
 binding; no `f90wrap` dependency is required.
 
-The supported production scope is fixed-boundary FEEC. TERPSICHORE FORT.23/24
-solves are compatibility replays for validation. Selected free-boundary
-operators are not exposed as a production plasma-vacuum solve, and the public
+The supported production scope is fixed- and free-boundary FEEC. TERPSICHORE
+FORT.23/24 solves are compatibility replays for validation, and the public
 equilibrium-to-spectrum derivative chain is incomplete. Version 0.0.2 ships a
 manylinux x86-64 wheel and source distribution. macOS wheels remain future
 work. Asymmetric equilibria are solved with the coupled parity operator, and
@@ -113,8 +112,8 @@ midpoint grid assumed by the radial finite elements. Invalid counts are
 rejected before the transform runs or an output is created. The source and
 retained surface counts are stored in the output attributes.
 
-The generated file supports GLISS's fixed-boundary operators. It does not
-contain a vacuum-region mesh or conducting-wall model for free-boundary work.
+The generated file supports GLISS's fixed- and free-boundary operators; the
+vacuum and wall of a free-boundary problem are set by `gliss.VacuumModel`.
 
 Before writing, GLISS checks the chart orientation, surface metric, Boozer
 Jacobian, magnetic-field strength, flux identities, currents, symmetry and
@@ -760,6 +759,46 @@ allocation failures raise typed GLISS exceptions. `StabilityProblem.close()`
 is idempotent; an unclosed problem releases its native matrices when it is
 garbage collected. Calls on one problem must not overlap, but independently
 constructed problems may coexist.
+
+### Free boundary
+
+A `VacuumModel` makes the problem the physical plasma-vacuum problem. The
+normal displacement of the edge `s = 1` is kept, and the energy of the
+current-free vacuum field it drives is added to the stiffness. The vacuum
+is a Neumann problem for the scalar potential, solved with Green's identity
+on the triangulated full-torus edge and wall:
+
+```python
+from gliss import VacuumModel
+
+vacuum = VacuumModel(edge_resolution=(32, 16), wall=0.05)
+with Equilibrium(Path("equilibrium_export.nc")) as equilibrium:
+    with StabilityProblem(
+        equilibrium, modes=[(0, 1), (1, -1), (1, 1), (2, -1), (2, 1)],
+        zero_floor=1e-8, vacuum=vacuum,
+    ) as problem:
+        result = problem.solve_class(1)
+        energy = problem.energy(1, result.eigenvector)
+print(result.boundary_condition, result.negative_count, energy.vacuum_energy)
+```
+
+`edge_resolution` counts the poloidal and toroidal edge nodes; each must
+exceed twice the largest `|m|` and `|n|` of the mode table, and the vacuum
+costs dense `O((nu*nv)^2)` memory and `O((nu*nv)^3)` time, doubled with a
+wall; its energy converges at second order in the mesh spacing. `wall` is `None` (vacuum to infinity), a positive distance in metres of
+a conformal wall along the outward edge normal, or a `(3, nu, nv)` array of
+Cartesian wall nodes in metres, poloidal index first. Construction rejects a
+wall that does not enclose the plasma, an edge mesh that aliases the modes,
+and an edge frame that traces the torus more than once. In the stiffness
+`K = 2 delta W` the vacuum block is `E / mu0`, with `E` the quadratic form of
+the field energy integral of `|B|^2` over the vacuum region only. Pressure must vanish at the
+edge: tangential continuity of `B` then leaves no surface-current term. The
+eigenvector's `normal` view includes the edge coefficients, and
+`EnergyTerms.vacuum_energy` is the vacuum part of `potential_energy`.
+
+On the GPEC Solov'ev family at q0 = 1.5 the no-wall n = 1 kink is unstable
+and a conformal wall stabilizes it. `benchmarks/solovev/free_boundary`
+compares the critical wall distance with DCON's.
 
 ### Configuration, results, and run manifests
 

@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Solve the physical free-boundary problem (#8). `StabilityProblem(...,
+  vacuum=VacuumModel(edge_resolution, wall))` keeps the edge normal
+  displacement and adds the vacuum energy of the current-free field it drives,
+  with no wall, a conformal wall at a given distance or an explicit wall
+  surface. The vacuum is a scalar-potential Neumann problem solved with
+  Green's identity on flat triangles (exact single- and double-layer
+  integrals), converging at second order to exact toroidal-harmonic fields
+  outside a torus and inside a wall. The C ABI
+  gains `gliss_stability_problem_create_free_boundary`,
+  `gliss_stability_problem_free_boundary` and `gliss_vacuum_model`;
+  `gliss_energy_terms` and `EnergyTerms` report the vacuum term, which closes
+  the energy decomposition. Configurations (schema version 6) record the
+  vacuum model and results the boundary condition. Multiply covered edge
+  frames, walls that do not enclose the plasma and edge meshes that alias the
+  mode table are rejected before assembly. On the GPEC Solov'ev family at
+  q0 = 1.5 the critical conformal-wall distance is compared with DCON's
+  (`benchmarks/solovev/free_boundary`).
+- Remove the STARWALL current-potential vacuum (`starwall_ideal_vacuum`, its
+  Fourier coupling and `gliss_starwall_diagnostic`). The minimum-energy
+  current sheet it solved stores field energy on both sides of the edge, so
+  its form was the vacuum energy plus an interior-field energy: twice the
+  vacuum energy in a straight cylinder, which its tests halved, and 2.04
+  times the exact toroidal-harmonic value on an R/a = 3 torus.
+- The energy and marginality result structs grew within ABI version 3: a
+  caller passing the earlier `struct_size` still receives every earlier
+  field.
 - Publish versioned documentation (#15). The `docs` workflow builds the wheel,
   runs every quickstart block against the installed package, builds the
   Sphinx site from that package with `-W`, checks links and publishes it to

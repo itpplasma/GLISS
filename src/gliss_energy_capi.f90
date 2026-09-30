@@ -25,7 +25,28 @@ module gliss_energy_capi
         real(c_double) :: rayleigh_quotient
         real(c_double) :: closure_error
         real(c_double) :: closure_tolerance
+        real(c_double) :: vacuum_energy
     end type energy_terms_c
+
+    ! Layout before the vacuum term; callers built against it stay accepted
+    ! and receive every field but vacuum_energy.
+    type, bind(c) :: energy_terms_v1_c
+        integer(c_size_t) :: struct_size
+        real(c_double) :: field_line_bending
+        real(c_double) :: magnetic_shear
+        real(c_double) :: magnetic_compression
+        real(c_double) :: pressure_drive
+        real(c_double) :: plasma_compressibility
+        real(c_double) :: potential_energy
+        real(c_double) :: kinetic_energy
+        real(c_double) :: rayleigh_quotient
+        real(c_double) :: closure_error
+        real(c_double) :: closure_tolerance
+    end type energy_terms_v1_c
+
+    type, bind(c) :: struct_prefix_c
+        integer(c_size_t) :: struct_size
+    end type struct_prefix_c
 
     public :: gliss_stability_problem_energy_c
     public :: gliss_stability_problem_rayleigh_vjp_c
@@ -42,13 +63,13 @@ contains
         integer(c_size_t), value, intent(in) :: vector_count, error_capacity
         integer(c_int) :: status
         type(stability_problem_context_t), pointer :: context
-        type(energy_terms_c), pointer :: terms
         type(fixed_boundary_energy_terms_t) :: result
         real(c_double), pointer :: vector(:)
         integer :: count, info, pointer_shape(1)
+        logical :: legacy
 
         status = prepare_energy_output(terms_pointer, error_pointer, &
-            error_capacity, terms)
+            error_capacity, legacy)
         if (status /= status_ok) return
         if (.not. c_associated(handle)) then
             status = status_invalid_argument
@@ -85,7 +106,7 @@ contains
             call report_energy_error(info, status, error_pointer, error_capacity)
             return
         end if
-        call fill_energy_terms(result, terms)
+        call fill_energy_terms(result, terms_pointer, legacy)
         status = status_ok
     end function gliss_stability_problem_energy_c
 
@@ -166,13 +187,16 @@ contains
     end function gliss_stability_problem_rayleigh_vjp_c
 
     function prepare_energy_output(terms_pointer, error_pointer, &
-            error_capacity, terms) result(status)
+            error_capacity, legacy) result(status)
         type(c_ptr), value, intent(in) :: terms_pointer, error_pointer
         integer(c_size_t), value, intent(in) :: error_capacity
-        type(energy_terms_c), pointer, intent(out) :: terms
+        logical, intent(out) :: legacy
         integer(c_int) :: status
+        type(struct_prefix_c), pointer :: prefix
+        type(energy_terms_c) :: current_probe
+        type(energy_terms_v1_c) :: legacy_probe
 
-        nullify (terms)
+        legacy = .false.
         status = error_buffer_status(error_pointer, error_capacity)
         if (status /= status_ok) return
         call write_error(error_pointer, error_capacity, "")
@@ -182,8 +206,10 @@ contains
                 "energy terms pointer is null")
             return
         end if
-        call c_f_pointer(terms_pointer, terms)
-        if (terms%struct_size /= c_sizeof(terms)) then
+        call c_f_pointer(terms_pointer, prefix)
+        legacy = prefix%struct_size == c_sizeof(legacy_probe)
+        if (prefix%struct_size /= c_sizeof(current_probe) .and. .not. legacy) &
+                then
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
                 "energy terms struct_size is incompatible")
@@ -192,10 +218,29 @@ contains
         status = status_ok
     end function prepare_energy_output
 
-    subroutine fill_energy_terms(result, terms)
+    subroutine fill_energy_terms(result, terms_pointer, legacy)
         type(fixed_boundary_energy_terms_t), intent(in) :: result
-        type(energy_terms_c), intent(out) :: terms
+        type(c_ptr), value, intent(in) :: terms_pointer
+        logical, intent(in) :: legacy
+        type(energy_terms_c), pointer :: terms
+        type(energy_terms_v1_c), pointer :: old
 
+        if (legacy) then
+            call c_f_pointer(terms_pointer, old)
+            old%struct_size = c_sizeof(old)
+            old%field_line_bending = result%field_line_bending
+            old%magnetic_shear = result%magnetic_shear
+            old%magnetic_compression = result%magnetic_compression
+            old%pressure_drive = result%pressure_drive
+            old%plasma_compressibility = result%plasma_compressibility
+            old%potential_energy = result%potential_energy
+            old%kinetic_energy = result%kinetic_energy
+            old%rayleigh_quotient = result%rayleigh_quotient
+            old%closure_error = result%closure_error
+            old%closure_tolerance = result%closure_tolerance
+            return
+        end if
+        call c_f_pointer(terms_pointer, terms)
         terms%struct_size = c_sizeof(terms)
         terms%field_line_bending = result%field_line_bending
         terms%magnetic_shear = result%magnetic_shear
@@ -207,6 +252,7 @@ contains
         terms%rayleigh_quotient = result%rayleigh_quotient
         terms%closure_error = result%closure_error
         terms%closure_tolerance = result%closure_tolerance
+        terms%vacuum_energy = result%vacuum_energy
     end subroutine fill_energy_terms
 
     subroutine report_energy_error(info, status, error_pointer, error_capacity)

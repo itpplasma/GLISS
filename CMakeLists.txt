@@ -103,10 +103,9 @@ add_library(gliss
     src/terpsichore_pseudoplasma_spectrum.f90
     src/three_component_kernel.f90
     src/two_component_kernel.f90
-    src/boundary/starwall_cylinder_limit.f90
-    src/boundary/starwall_mesh_geometry.f90
-    src/boundary/starwall_ideal_vacuum.f90
-    src/boundary/starwall_fourier_coupling.f90
+    src/boundary/boundary_mesh_geometry.f90
+    src/boundary/scalar_potential_vacuum.f90
+    src/boundary/plasma_vacuum_boundary.f90
     src/vacuum_schur.f90
     src/variable_block_tridiagonal.f90
     src/compatible_axis_regularity.f90
@@ -198,12 +197,6 @@ add_executable(gliss_vacuum_schur_diagnostic
     app/gliss_vacuum_schur_diagnostic.f90)
 target_link_libraries(gliss_vacuum_schur_diagnostic PRIVATE gliss)
 set_target_properties(gliss_vacuum_schur_diagnostic PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
-
-add_executable(gliss_starwall_diagnostic
-    app/gliss_starwall_diagnostic.f90)
-target_link_libraries(gliss_starwall_diagnostic PRIVATE gliss)
-set_target_properties(gliss_starwall_diagnostic PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 add_executable(gliss_mercier app/gliss_mercier.f90)
@@ -349,20 +342,20 @@ if(BUILD_TESTING)
     add_test(NAME local_mode COMMAND test_local_mode)
     add_test(NAME local_mode_diagnostic COMMAND gliss_local_mode_diagnostic)
 
-    add_executable(test_starwall_ideal_vacuum
-        test/boundary/test_starwall_ideal_vacuum.f90)
-    target_link_libraries(test_starwall_ideal_vacuum PRIVATE gliss)
-    add_test(NAME starwall_ideal_vacuum COMMAND test_starwall_ideal_vacuum)
-    add_executable(test_starwall_fourier_coupling
-        test/boundary/test_starwall_fourier_coupling.f90)
-    target_link_libraries(test_starwall_fourier_coupling PRIVATE gliss)
-    add_test(NAME starwall_fourier_coupling
-        COMMAND test_starwall_fourier_coupling)
-    add_test(NAME starwall_diagnostic_cli_extra COMMAND ${CMAKE_COMMAND}
-        -DPROGRAM=$<TARGET_FILE:gliss_starwall_diagnostic>
-        "-DEXPECTED=gliss_starwall_diagnostic: no arguments are accepted"
-        "-DARGUMENTS=extra"
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
+    add_executable(test_plasma_vacuum_boundary
+        test/boundary/test_plasma_vacuum_boundary.f90)
+    target_link_libraries(test_plasma_vacuum_boundary PRIVATE
+        gliss_test_support)
+    add_test(NAME plasma_vacuum_boundary
+        COMMAND test_plasma_vacuum_boundary
+            ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
+    add_executable(test_scalar_potential_vacuum
+        test/boundary/test_scalar_potential_vacuum.f90)
+    target_link_libraries(test_scalar_potential_vacuum PRIVATE gliss)
+    add_test(NAME scalar_potential_vacuum
+        COMMAND test_scalar_potential_vacuum)
+    set_tests_properties(scalar_potential_vacuum plasma_vacuum_boundary
+        PROPERTIES LABELS boundary)
     add_test(NAME local_mode_diagnostic_cli_extra COMMAND ${CMAKE_COMMAND}
         -DPROGRAM=$<TARGET_FILE:gliss_local_mode_diagnostic>
         "-DEXPECTED=gliss_local_mode_diagnostic: no arguments are accepted"

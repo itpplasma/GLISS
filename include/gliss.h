@@ -127,6 +127,10 @@ typedef struct gliss_energy_terms {
     double rayleigh_quotient;
     double closure_error;
     double closure_tolerance;
+    /* Twice the vacuum energy of a free-boundary problem (zero for a fixed
+     * boundary); potential_energy includes it. Appended after 0.0.2: a
+     * caller passing the earlier struct_size receives every other field. */
+    double vacuum_energy;
 } gliss_energy_terms;
 
 typedef struct gliss_solver_tolerances {
@@ -388,6 +392,61 @@ gliss_status gliss_stability_problem_create_v2(
     int32_t angular_theta,
     int32_t angular_zeta,
     gliss_stability_problem **problem,
+    char *error,
+    size_t error_capacity);
+
+/* Conducting-wall models of the free-boundary vacuum. */
+enum {
+    GLISS_WALL_NONE = 0,
+    GLISS_WALL_CONFORMAL = 1,
+    GLISS_WALL_SURFACE = 2
+};
+
+/* Vacuum outside the plasma edge s = 1 for the physical free-boundary
+ * problem. edge_nu by edge_nv nodes sample the full-torus edge; each must
+ * exceed twice the largest |m| and |n| of the mode table. A conformal wall
+ * lies wall_distance metres along the outward edge normal; a surface wall
+ * gives wall_nu by wall_nv Cartesian nodes in metres, x fastest, then the
+ * poloidal and toroidal indices (3 * wall_nu * wall_nv doubles, copied). The
+ * wall must enclose the plasma without intersecting it. Set struct_size to
+ * sizeof(*vacuum). Added after 0.0.2 within ABI version 3. */
+typedef struct gliss_vacuum_model {
+    size_t struct_size;
+    int32_t edge_nu;
+    int32_t edge_nv;
+    int32_t wall_kind;
+    double wall_distance;
+    int32_t wall_nu;
+    int32_t wall_nv;
+    const double *wall_xyz;
+} gliss_vacuum_model;
+
+/* The physical free-boundary problem: the edge normal displacement is
+ * retained and the energy of the current-free vacuum field it drives, a
+ * scalar-potential boundary-integral solution, is added to the plasma
+ * stiffness. Class-indexed calls,
+ * spectra and energies are those of create_v2; the energy terms report the
+ * vacuum part separately. */
+gliss_status gliss_stability_problem_create_free_boundary(
+    const gliss_equilibrium *equilibrium,
+    double adiabatic_index,
+    double density_kg_m3,
+    double zero_floor,
+    size_t mode_count,
+    const int32_t *mode_m,
+    const int32_t *mode_n,
+    int32_t degree,
+    int32_t angular_theta,
+    int32_t angular_zeta,
+    const gliss_vacuum_model *vacuum,
+    gliss_stability_problem **problem,
+    char *error,
+    size_t error_capacity);
+
+/* Report whether the problem has a free boundary (1) or a fixed one (0). */
+gliss_status gliss_stability_problem_free_boundary(
+    const gliss_stability_problem *problem,
+    int32_t *free_boundary,
     char *error,
     size_t error_capacity);
 

@@ -39,6 +39,7 @@ from ._stability_input import real_parameter as _real_parameter
 from ._stability_input import validate_modes as _validate_modes
 from . import _ABI_VERSION
 from .stability import StabilityProblem, StabilityResult
+from .vacuum import VacuumModel
 from .solver import SolverTolerances
 
 _CONFIGURATION_SCHEMA = "gliss.stability.configuration"
@@ -48,7 +49,10 @@ _EQUILIBRIUM_FORMAT = "gvec-cas3d-netcdf"
 
 @dataclass(frozen=True)
 class StabilityConfiguration:
-    """Validated fixed-boundary problem inputs with JSON interchange."""
+    """Validated stability problem inputs with JSON interchange.
+
+    ``vacuum`` selects the free-boundary problem; ``None`` fixes the edge.
+    """
 
     modes: Tuple[Tuple[int, int], ...]
     adiabatic_index: float = 5.0 / 3.0
@@ -59,8 +63,11 @@ class StabilityConfiguration:
     angular_theta: int = 64
     angular_zeta: int = 64
     discretization_revision: int = DISCRETIZATION_REVISION
+    vacuum: Optional[VacuumModel] = None
 
     def __post_init__(self) -> None:
+        if self.vacuum is not None and not isinstance(self.vacuum, VacuumModel):
+            raise TypeError("vacuum must be a gliss.VacuumModel or None")
         theta, zeta = angular_grid(self.angular_theta, self.angular_zeta)
         object.__setattr__(self, "angular_theta", theta)
         object.__setattr__(self, "angular_zeta", zeta)
@@ -120,14 +127,20 @@ class StabilityConfiguration:
             self.solver_tolerances,
             self.angular_theta,
             self.angular_zeta,
+            self.vacuum,
         )
+
+    @property
+    def boundary_condition(self) -> str:
+        """``"free"`` with a vacuum model, otherwise ``"fixed"``."""
+        return "fixed" if self.vacuum is None else "free"
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the canonical versioned configuration document."""
         document = {
             "schema": _CONFIGURATION_SCHEMA,
             "schema_version": SCHEMA_VERSION,
-            "boundary_condition": "fixed",
+            "boundary_condition": self.boundary_condition,
             "modes": [list(mode) for mode in self.modes],
             "adiabatic_index": self.adiabatic_index,
             "density_kg_m3": self.density_kg_m3,
@@ -137,6 +150,7 @@ class StabilityConfiguration:
             "angular_zeta": self.angular_zeta,
             "solver_tolerances": self.solver_tolerances.to_dict(),
             "discretization_revision": self.discretization_revision,
+            "vacuum": None if self.vacuum is None else self.vacuum.to_dict(),
         }
         return document
 
@@ -166,10 +180,19 @@ class StabilityConfiguration:
             expected |= {"angular_theta", "angular_zeta"}
         if version >= 5:
             expected.add("discretization_revision")
+        if version >= 6:
+            expected.add("vacuum")
         value = fields(document, expected, "configuration")
         schema(value, _CONFIGURATION_SCHEMA, "configuration", SCHEMA_VERSIONS)
-        if value["boundary_condition"] != "fixed":
-            raise ValueError("configuration.boundary_condition must be 'fixed'")
+        vacuum = None
+        if value.get("vacuum") is not None:
+            vacuum = VacuumModel.from_dict(value["vacuum"])
+        boundary = "fixed" if vacuum is None else "free"
+        if value["boundary_condition"] != boundary:
+            raise ValueError(
+                f"configuration.boundary_condition must be {boundary!r} "
+                "for its vacuum model"
+            )
         if version in (1, 2) and value["radial_quadrature"] != "midpoint":
             raise ValueError(
                 "configuration.radial_quadrature must be 'midpoint'"
@@ -178,6 +201,7 @@ class StabilityConfiguration:
         try:
             return cls(
                 discretization_revision=revision,
+                vacuum=vacuum,
                 modes=value["modes"],
                 angular_theta=value.get("angular_theta", 64),
                 angular_zeta=value.get("angular_zeta", 64),

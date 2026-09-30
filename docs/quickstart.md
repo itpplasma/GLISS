@@ -78,6 +78,29 @@ assert abs(energy.rayleigh_quotient - lowest.lowest_eigenvalue) <= (
 )
 ```
 
+## Free-boundary spectra
+
+A `VacuumModel` frees the plasma edge: its normal displacement drives a
+current-free vacuum field, whose energy (a scalar-potential boundary integral
+over the edge and wall) enters the stiffness. The model sets the full-torus edge mesh and an optional
+ideal wall, here conformal at 3 cm. Without a wall this q0 = 1.045 Solov'ev
+edge is kink unstable; the close wall stabilizes it.
+
+```python
+free_modes = [(0, 1), (1, -1), (1, 1), (2, -1), (2, 1)]
+lowest_free = {}
+with gliss.Equilibrium(stable) as equilibrium:
+    for wall in (None, 0.03):
+        with gliss.StabilityProblem(
+            equilibrium, free_modes, degree=2, angular_theta=24,
+            angular_zeta=8, vacuum=gliss.VacuumModel((24, 12), wall),
+        ) as problem:
+            lowest_free[wall] = problem.solve_class(1)
+assert lowest_free[None].negative_count >= 1
+assert lowest_free[0.03].negative_count == 0
+assert lowest_free[None].boundary_condition == "free"
+```
+
 ## Persistence
 
 Configurations and results round-trip exactly through versioned JSON. A

@@ -1,10 +1,14 @@
-"""Fixed-boundary ideal-MHD stability problems backed by the GLISS C ABI."""
+"""Ideal-MHD stability problems backed by the GLISS C ABI.
+
+A problem holds the plasma edge fixed unless it is given a
+:class:`gliss.VacuumModel`, which makes it the physical free-boundary problem.
+"""
 
 import ctypes
 import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence, Tuple, TYPE_CHECKING
+from typing import Any, Optional, Sequence, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -26,6 +30,7 @@ from .solver import (
     bind_solver_tolerances,
     configure_solver_tolerances,
 )
+from .vacuum import VacuumModel, _VacuumModel
 from .derivatives import rayleigh_jvp as _rayleigh_jvp
 from .derivatives import rayleigh_vjp as _rayleigh_vjp
 
@@ -126,6 +131,41 @@ def _bind(library: Any) -> None:
     library.gliss_stability_problem_solve_class.restype = ctypes.c_int
 
 
+def _bind_free_boundary(library: Any) -> None:
+    _require_symbols(
+        library,
+        (
+            "gliss_stability_problem_create_free_boundary",
+            "gliss_stability_problem_free_boundary",
+        ),
+        "free-boundary stability problem",
+    )
+    library.gliss_stability_problem_create_free_boundary.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.POINTER(_VacuumModel),
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    )
+    library.gliss_stability_problem_create_free_boundary.restype = ctypes.c_int
+    library.gliss_stability_problem_free_boundary.argtypes = (
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    )
+    library.gliss_stability_problem_free_boundary.restype = ctypes.c_int
+
+
 @dataclass(frozen=True)
 class SpectrumResult:
     """Certified lowest eigenpair for one stellarator-symmetry parity class."""
@@ -162,7 +202,10 @@ class SpectrumResult:
 
     @property
     def normal(self) -> np.ndarray:
-        """Fixed-edge normal coefficients in dynamic-layout order."""
+        """Normal coefficients in dynamic-layout order.
+
+        A free-boundary result also holds the edge coefficients.
+        """
         return self.eigenvector[: self.normal_unknowns]
 
     @property
@@ -222,7 +265,13 @@ class StabilityResult:
 
 
 class StabilityProblem:
-    """Reusable assembled fixed-boundary ideal-MHD eigenproblem."""
+    """Reusable assembled ideal-MHD eigenproblem.
+
+    Without ``vacuum`` the plasma edge is held fixed. With a
+    :class:`gliss.VacuumModel` the edge normal displacement is free and its
+    vacuum energy, bounded by the model's ideal wall if any, enters the
+    stiffness: the physical free-boundary problem.
+    """
 
     def __init__(
         self,
@@ -235,6 +284,7 @@ class StabilityProblem:
         solver_tolerances: SolverTolerances = SolverTolerances(),
         angular_theta: int = 64,
         angular_zeta: int = 64,
+        vacuum: Optional[VacuumModel] = None,
     ):
         if not isinstance(equilibrium, Equilibrium):
             raise TypeError("equilibrium must be a gliss.Equilibrium")
@@ -260,6 +310,9 @@ class StabilityProblem:
         if not isinstance(solver_tolerances, SolverTolerances):
             raise TypeError("solver_tolerances must be a gliss.SolverTolerances")
         self.solver_tolerances = solver_tolerances
+        if vacuum is not None and not isinstance(vacuum, VacuumModel):
+            raise TypeError("vacuum must be a gliss.VacuumModel or None")
+        self.vacuum = vacuum
         self.equilibrium_path = Path(equilibrium.path)
         size, digest = _stable_file_digest(
             self.equilibrium_path, equilibrium._source_identity
@@ -268,10 +321,14 @@ class StabilityProblem:
         self.coordinate_handedness = equilibrium.coordinate_handedness
         self._library = _load_library()
         _bind(self._library)
+        if vacuum is not None:
+            _bind_free_boundary(self._library)
         self._handle = ctypes.c_void_p()
         self._create(equilibrium)
         self._set_solver_tolerances()
         self.coupled = self._query_coupled()
+        if vacuum is not None:
+            self._require_free_boundary()
 
     def _create(self, equilibrium: Equilibrium) -> None:
         count = len(self.modes)
@@ -279,7 +336,7 @@ class StabilityProblem:
         mode_m = integers(*(mode[0] for mode in self.modes))
         mode_n = integers(*(mode[1] for mode in self.modes))
         error = _error_buffer()
-        status = self._library.gliss_stability_problem_create_v2(
+        common = (
             equilibrium._handle,
             self.adiabatic_index,
             self.density_kg_m3,
@@ -290,15 +347,27 @@ class StabilityProblem:
             self.degree,
             self.angular_theta,
             self.angular_zeta,
-            ctypes.byref(self._handle),
-            error,
-            len(error),
         )
+        if self.vacuum is None:
+            function = "gliss_stability_problem_create_v2"
+            status = self._library.gliss_stability_problem_create_v2(
+                *common, ctypes.byref(self._handle), error, len(error)
+            )
+        else:
+            function = "gliss_stability_problem_create_free_boundary"
+            model, _wall = self.vacuum._native()
+            status = self._library.gliss_stability_problem_create_free_boundary(
+                *common,
+                ctypes.byref(model),
+                ctypes.byref(self._handle),
+                error,
+                len(error),
+            )
         if status != 0 and self._handle.value is not None:
             self._library.gliss_stability_problem_destroy(
                 ctypes.byref(self._handle), None, 0
             )
-        _raise_for_status(status, error, "gliss_stability_problem_create_v2")
+        _raise_for_status(status, error, function)
         if self._handle.value is None:
             raise GlissInternalError("GLISS returned a null stability problem handle")
         # Unclosed problems release their dense matrices when collected.
@@ -320,6 +389,24 @@ class StabilityProblem:
             self.close()
             raise GlissInternalError("GLISS returned an invalid coupling flag")
         return bool(coupled.value)
+
+    def _require_free_boundary(self) -> None:
+        free = ctypes.c_int32()
+        error = _error_buffer()
+        status = self._library.gliss_stability_problem_free_boundary(
+            self._handle, ctypes.byref(free), error, len(error)
+        )
+        if status != 0:
+            self.close()
+        _raise_for_status(status, error, "gliss_stability_problem_free_boundary")
+        if free.value != 1:
+            self.close()
+            raise GlissInternalError("GLISS did not assemble a free boundary")
+
+    @property
+    def boundary_condition(self) -> str:
+        """``"free"`` with a vacuum model, otherwise ``"fixed"``."""
+        return "fixed" if self.vacuum is None else "free"
 
     @property
     def parity_classes(self) -> Tuple[int, ...]:
@@ -378,7 +465,9 @@ class StabilityProblem:
         state = "closed" if self.closed else "open"
         return (
             f"<gliss.StabilityProblem(path={self.equilibrium_path.name!r}, "
-            f"modes={len(self.modes)}, state={state!r})>"
+            f"modes={len(self.modes)}, "
+            + ("boundary='free', " if self.vacuum is not None else "")
+            + f"state={state!r})>"
         )
 
     @property
@@ -395,6 +484,7 @@ class StabilityProblem:
             self.solver_tolerances,
             self.angular_theta,
             self.angular_zeta,
+            vacuum=self.vacuum,
         )
 
     def write_manifest(self, path: Any, result: StabilityResult) -> "RunManifest":
@@ -558,6 +648,7 @@ class StabilityProblem:
             has_eigenvector=bool(summary.has_eigenvector),
             solver_tolerances=self.solver_tolerances,
             coordinate_handedness=self.coordinate_handedness,
+            boundary_condition=self.boundary_condition,
         )
 
     def _require_open(self) -> None:

@@ -1,11 +1,14 @@
 module gliss_spectrum_capi
+    use, intrinsic :: iso_fortran_env, only: int64
     use, intrinsic :: iso_c_binding, only: c_associated, c_double, &
         c_f_pointer, c_int, c_int32_t, c_loc, c_null_ptr, c_ptr, c_size_t, &
         c_sizeof
     use fixed_boundary_spectrum, only: build_fixed_boundary_problem, &
         fixed_boundary_allocation_error, &
-        fixed_boundary_invalid, fixed_boundary_is_coupled, fixed_boundary_ok, &
-        fixed_boundary_problem_t, &
+        fixed_boundary_invalid, fixed_boundary_is_coupled, &
+        fixed_boundary_is_free, fixed_boundary_ok, &
+        fixed_boundary_problem_t, fixed_boundary_vacuum, &
+        fixed_boundary_vacuum_mesh, fixed_boundary_wall, &
         fixed_boundary_spectrum_result_t, fixed_boundary_unknown_count, &
         solve_fixed_boundary_class
     use gliss_c_abi_support, only: error_buffer_status, status_allocation_error, &
@@ -13,8 +16,21 @@ module gliss_spectrum_capi
         status_internal_error, status_ok, write_error
     use gliss_c_contexts, only: equilibrium_context_t, &
         stability_problem_context_t
+    use plasma_vacuum_boundary, only: plasma_vacuum_model_t, &
+        vacuum_wall_surface
     implicit none
     private
+
+    type, bind(c) :: vacuum_model_c
+        integer(c_size_t) :: struct_size
+        integer(c_int32_t) :: edge_nu
+        integer(c_int32_t) :: edge_nv
+        integer(c_int32_t) :: wall_kind
+        real(c_double) :: wall_distance
+        integer(c_int32_t) :: wall_nu
+        integer(c_int32_t) :: wall_nv
+        type(c_ptr) :: wall_xyz
+    end type vacuum_model_c
 
     type, bind(c) :: spectrum_summary_c
         integer(c_size_t) :: struct_size
@@ -44,6 +60,8 @@ module gliss_spectrum_capi
 
     public :: gliss_stability_problem_create_c
     public :: gliss_stability_problem_create_v2_c
+    public :: gliss_stability_problem_create_free_boundary_c
+    public :: gliss_stability_problem_free_boundary_c
     public :: gliss_stability_problem_destroy_c
     public :: gliss_stability_problem_unknown_count_c
     public :: gliss_stability_problem_solve_class_c
@@ -85,6 +103,114 @@ contains
         type(c_ptr), value, intent(in) :: handle_pointer, error_pointer
         integer(c_size_t), value, intent(in) :: error_capacity
         integer(c_int) :: status
+
+        status = create_problem(equilibrium_handle, adiabatic_index, &
+            density_kg_m3, zero_floor, mode_count, mode_m_pointer, &
+            mode_n_pointer, degree, angular_theta, angular_zeta, &
+            handle_pointer, error_pointer, error_capacity)
+    end function gliss_stability_problem_create_v2_c
+
+    function gliss_stability_problem_create_free_boundary_c( &
+            equilibrium_handle, adiabatic_index, density_kg_m3, zero_floor, &
+            mode_count, mode_m_pointer, mode_n_pointer, degree, &
+            angular_theta, angular_zeta, vacuum_pointer, handle_pointer, &
+            error_pointer, error_capacity) &
+            bind(c, name="gliss_stability_problem_create_free_boundary") &
+            result(status)
+        type(c_ptr), value, intent(in) :: equilibrium_handle
+        real(c_double), value, intent(in) :: adiabatic_index, density_kg_m3
+        real(c_double), value, intent(in) :: zero_floor
+        integer(c_size_t), value, intent(in) :: mode_count
+        type(c_ptr), value, intent(in) :: mode_m_pointer, mode_n_pointer
+        integer(c_int), value, intent(in) :: degree, angular_theta, angular_zeta
+        type(c_ptr), value, intent(in) :: vacuum_pointer
+        type(c_ptr), value, intent(in) :: handle_pointer, error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+        type(plasma_vacuum_model_t) :: vacuum
+
+        status = error_buffer_status(error_pointer, error_capacity)
+        if (status /= status_ok) return
+        status = decode_vacuum(vacuum_pointer, vacuum, error_pointer, &
+            error_capacity)
+        if (status /= status_ok) return
+        status = create_problem(equilibrium_handle, adiabatic_index, &
+            density_kg_m3, zero_floor, mode_count, mode_m_pointer, &
+            mode_n_pointer, degree, angular_theta, angular_zeta, &
+            handle_pointer, error_pointer, error_capacity, vacuum)
+    end function gliss_stability_problem_create_free_boundary_c
+
+    function decode_vacuum(vacuum_pointer, vacuum, error_pointer, &
+            error_capacity) result(status)
+        type(c_ptr), value, intent(in) :: vacuum_pointer, error_pointer
+        type(plasma_vacuum_model_t), intent(out) :: vacuum
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+        type(vacuum_model_c), pointer :: model
+        real(c_double), pointer :: wall(:, :, :)
+        integer :: allocation_status, extent(3)
+
+        status = status_invalid_argument
+        if (.not. c_associated(vacuum_pointer)) then
+            call write_error(error_pointer, error_capacity, &
+                "vacuum model pointer is null")
+            return
+        end if
+        call c_f_pointer(vacuum_pointer, model)
+        if (model%struct_size /= c_sizeof(model)) then
+            call write_error(error_pointer, error_capacity, &
+                "vacuum model struct_size is incompatible")
+            return
+        end if
+        vacuum%nu = int(model%edge_nu)
+        vacuum%nv = int(model%edge_nv)
+        vacuum%wall_kind = int(model%wall_kind)
+        vacuum%wall_distance = model%wall_distance
+        if (vacuum%wall_kind == vacuum_wall_surface) then
+            if (model%wall_nu < 3 .or. model%wall_nv < 3 &
+                .or. .not. c_associated(model%wall_xyz)) then
+                call write_error(error_pointer, error_capacity, &
+                    "wall surface needs at least 3 by 3 nodes")
+                return
+            end if
+            if (3_int64 * int(model%wall_nu, int64) &
+                * int(model%wall_nv, int64) > int(huge(1), int64)) then
+                call write_error(error_pointer, error_capacity, &
+                    "wall surface is too large")
+                return
+            end if
+            extent(1) = 3
+            extent(2) = int(model%wall_nu)
+            extent(3) = int(model%wall_nv)
+            call c_f_pointer(model%wall_xyz, wall, extent)
+            allocate (vacuum%wall(3, extent(2), extent(3)), &
+                stat=allocation_status)
+            if (allocation_status /= 0) then
+                status = status_allocation_error
+                call write_error(error_pointer, error_capacity, &
+                    "failed to allocate the wall surface")
+                return
+            end if
+            vacuum%wall = wall
+        end if
+        status = status_ok
+    end function decode_vacuum
+
+    function create_problem(equilibrium_handle, adiabatic_index, &
+            density_kg_m3, zero_floor, mode_count, mode_m_pointer, &
+            mode_n_pointer, degree, angular_theta, angular_zeta, &
+            handle_pointer, error_pointer, error_capacity, vacuum) &
+            result(status)
+        type(c_ptr), value, intent(in) :: equilibrium_handle
+        real(c_double), value, intent(in) :: adiabatic_index, density_kg_m3
+        real(c_double), value, intent(in) :: zero_floor
+        integer(c_size_t), value, intent(in) :: mode_count
+        type(c_ptr), value, intent(in) :: mode_m_pointer, mode_n_pointer
+        integer(c_int), value, intent(in) :: degree, angular_theta, angular_zeta
+        type(c_ptr), value, intent(in) :: handle_pointer, error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
+        integer(c_int) :: status
         type(equilibrium_context_t), pointer :: equilibrium
         type(stability_problem_context_t), pointer :: context
         type(c_ptr), pointer :: handle
@@ -122,7 +248,7 @@ contains
         call build_fixed_boundary_problem(equilibrium%equilibrium, &
             adiabatic_index, density_kg_m3, zero_floor, mode_m, mode_n, &
             int(degree), context%problem, info, &
-            int(angular_theta), int(angular_zeta))
+            int(angular_theta), int(angular_zeta), vacuum=vacuum)
         if (info /= fixed_boundary_ok) then
             deallocate (context)
             call report_problem_error(info, status, error_pointer, &
@@ -131,7 +257,7 @@ contains
         end if
         handle = c_loc(context)
         status = status_ok
-    end function gliss_stability_problem_create_v2_c
+    end function create_problem
 
     function prepare_output_handle(handle_pointer, error_pointer, &
             error_capacity, handle) result(status)
@@ -280,6 +406,32 @@ contains
         if (fixed_boundary_is_coupled(context%problem)) coupled = 1_c_int32_t
         status = status_ok
     end function gliss_stability_problem_coupled_c
+
+    function gliss_stability_problem_free_boundary_c(handle, free_pointer, &
+            error_pointer, error_capacity) &
+            bind(c, name="gliss_stability_problem_free_boundary") &
+            result(status)
+        type(c_ptr), value, intent(in) :: handle, free_pointer
+        type(c_ptr), value, intent(in) :: error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+        integer(c_int32_t), pointer :: free
+        type(stability_problem_context_t), pointer :: context
+
+        status = prepare_required_output(free_pointer, error_pointer, &
+            error_capacity, "free-boundary output pointer is null")
+        if (status /= status_ok) return
+        call c_f_pointer(free_pointer, free)
+        free = 0_c_int32_t
+        status = problem_from_handle(handle, context)
+        if (status /= status_ok) then
+            call write_error(error_pointer, error_capacity, &
+                "stability problem handle is null")
+            return
+        end if
+        if (fixed_boundary_is_free(context%problem)) free = 1_c_int32_t
+        status = status_ok
+    end function gliss_stability_problem_free_boundary_c
 
     function prepare_required_output(output_pointer, error_pointer, &
             error_capacity, message) result(status)
@@ -462,6 +614,19 @@ contains
             status = status_allocation_error
             call write_error(error_pointer, error_capacity, &
                 "failed to allocate fixed-boundary spectrum storage")
+        else if (info == fixed_boundary_vacuum_mesh) then
+            status = status_invalid_argument
+            call write_error(error_pointer, error_capacity, &
+                "vacuum edge mesh must exceed twice the largest |m| and |n|")
+        else if (info == fixed_boundary_wall) then
+            status = status_invalid_argument
+            call write_error(error_pointer, error_capacity, &
+                "wall must enclose the plasma without intersecting it")
+        else if (info == fixed_boundary_vacuum) then
+            status = status_compute_error
+            call write_error(error_pointer, error_capacity, &
+                "vacuum assembly failed: the plasma edge is degenerate or "// &
+                "multiply covered, or the inductance is singular")
         else
             status = status_compute_error
             call write_error(error_pointer, error_capacity, &

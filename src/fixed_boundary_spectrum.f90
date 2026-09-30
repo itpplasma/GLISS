@@ -7,24 +7,30 @@ module fixed_boundary_spectrum
         compatible_three_component_allocation_error, &
         compatible_three_component_asymmetric, &
         compatible_three_component_invalid, compatible_three_component_ok, &
-        compatible_three_component_problem_t
+        compatible_three_component_problem_t, &
+        compatible_three_component_vacuum, &
+        compatible_three_component_vacuum_mesh, &
+        compatible_three_component_wall
     use dense_spectrum_support, only: certify_dense_spectrum_inertia, &
         certify_dense_spectrum_orthogonality, dense_spectrum_allocation, &
         dense_spectrum_is_certified, dense_spectrum_ok, &
-        diagnose_dense_spectrum, refine_dense_spectrum
+        diagnose_dense_spectrum, refine_dense_spectrum, &
+        unpermute_dense_vectors
     use fixed_boundary_energy, only: diagnose_fixed_boundary_energy_store, &
         fixed_boundary_energy_allocation, fixed_boundary_energy_invalid, &
         fixed_boundary_energy_ok, fixed_boundary_energy_store_t, &
-        fixed_boundary_energy_terms_t, pack_fixed_boundary_energy_store, &
+        fixed_boundary_energy_term_count, fixed_boundary_energy_terms_t, &
         rayleigh_gradient_fixed_boundary_store
     use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
         fixed_boundary_bracket_ok, bracket_lowest_positive
     use fixed_boundary_solver_controls, only: &
         fixed_boundary_solver_controls_t, valid_fixed_boundary_solver_controls
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
+    use plasma_vacuum_boundary, only: plasma_vacuum_model_t, &
+        valid_plasma_vacuum_model
     use symmetric_eigensolver, only: solve_symmetric_generalized_allocated, &
         symmetric_eigensolver_allocation, symmetric_eigensolver_ok
-    use variable_block_tridiagonal, only: pack_variable_blocks, &
+    use variable_block_tridiagonal, only: &
         variable_block_allocation, variable_block_ok, &
         variable_block_to_dense, variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
@@ -42,6 +48,11 @@ module fixed_boundary_spectrum
     integer, parameter, public :: fixed_boundary_solver_error = -4
     integer, parameter, public :: fixed_boundary_allocation_error = -5
     integer, parameter, public :: fixed_boundary_asymmetric = -6
+    ! Free boundary: the edge mesh does not resolve the mode table, the
+    ! wall does not enclose the plasma, or the vacuum block is singular.
+    integer, parameter, public :: fixed_boundary_vacuum_mesh = -7
+    integer, parameter, public :: fixed_boundary_wall = -8
+    integer, parameter, public :: fixed_boundary_vacuum = -9
     integer, parameter, public :: fixed_boundary_n_theta = 64
     integer, parameter, public :: fixed_boundary_n_zeta = 64
 
@@ -74,6 +85,9 @@ module fixed_boundary_spectrum
         ! parities of every mode; its single class is parity class 0 and
         ! lives in classes(1).
         logical :: coupled = .false.
+        ! The plasma edge couples to the vacuum (and wall) instead of
+        ! being held fixed.
+        logical :: free_boundary = .false.
         type(fixed_boundary_class_problem_t) :: classes(2)
     end type fixed_boundary_problem_t
 
@@ -112,7 +126,7 @@ module fixed_boundary_spectrum
     end type fixed_boundary_full_spectrum_t
 
     public :: build_fixed_boundary_problem, diagnose_fixed_boundary_energy
-    public :: fixed_boundary_is_coupled
+    public :: fixed_boundary_is_coupled, fixed_boundary_is_free
     public :: fixed_boundary_energy_terms_t, fixed_boundary_unknown_count
     public :: fixed_boundary_rayleigh_gradient
     public :: set_fixed_boundary_solver_controls, solve_fixed_boundary_class
@@ -122,7 +136,7 @@ contains
 
     subroutine build_fixed_boundary_problem(equilibrium, adiabatic_index, &
             density_kg_m3, zero_floor, mode_m, mode_n, degree, problem, info, &
-            angular_theta, angular_zeta, coupled)
+            angular_theta, angular_zeta, coupled, vacuum)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3, zero_floor
         integer, intent(in) :: mode_m(:), mode_n(:), degree
@@ -132,6 +146,8 @@ contains
         ! Force the coupled operator for a symmetric equilibrium; it then
         ! contains both parity classes as one problem.
         logical, optional, intent(in) :: coupled
+        ! Present: the physical free-boundary problem with this vacuum model.
+        type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
         real(dp), allocatable :: stored_power(:)
         ! Default-initialized: holds no matrices.
         type(fixed_boundary_class_problem_t) :: empty_class
@@ -144,6 +160,10 @@ contains
         if (problem%n_theta > huge(1) / problem%n_zeta) return
         if (.not. valid_inputs(equilibrium, adiabatic_index, density_kg_m3, &
             zero_floor, mode_m, mode_n, degree, problem%n_theta, problem%n_zeta)) return
+        if (present(vacuum)) then
+            if (.not. valid_plasma_vacuum_model(vacuum)) return
+        end if
+        problem%free_boundary = present(vacuum)
         allocate (stored_power(size(mode_m)), problem%mode_m(size(mode_m)), &
             problem%mode_n(size(mode_n)), stat=allocation_status)
         if (allocation_status /= 0) then
@@ -168,7 +188,7 @@ contains
                 call assemble_class(equilibrium, adiabatic_index, &
                     density_kg_m3, mode_m, mode_n, stored_power, &
                     parity_class, degree, problem%classes(parity_class), &
-                    info, problem%n_theta, problem%n_zeta)
+                    info, problem%n_theta, problem%n_zeta, vacuum)
                 if (info == fixed_boundary_asymmetric) exit
                 if (info /= fixed_boundary_ok) return
             end do
@@ -179,7 +199,7 @@ contains
             problem%classes = empty_class
             call assemble_class(equilibrium, adiabatic_index, density_kg_m3, &
                 mode_m, mode_n, stored_power, 0, degree, problem%classes(1), &
-                info, problem%n_theta, problem%n_zeta)
+                info, problem%n_theta, problem%n_zeta, vacuum)
             if (info /= fixed_boundary_ok) return
         end if
         problem%has_chart_metric = equilibrium%has_chart_metric
@@ -194,7 +214,7 @@ contains
 
     subroutine assemble_class(equilibrium, adiabatic_index, density_kg_m3, &
             mode_m, mode_n, stored_power, parity_class, degree, &
-            class_problem, info, n_theta, n_zeta)
+            class_problem, info, n_theta, n_zeta, vacuum)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity_class, degree
@@ -203,12 +223,13 @@ contains
         integer, intent(out) :: info
         type(compatible_three_component_problem_t) :: compatible
         integer, intent(in) :: n_theta, n_zeta
+        type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
         integer :: compatible_info
 
         call build_compatible_three_component_problem(equilibrium, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, &
-            n_zeta, compatible, compatible_info)
+            n_zeta, compatible, compatible_info, vacuum, sparse_storage=.true.)
         if (compatible_info /= compatible_three_component_ok) then
             if (compatible_info == compatible_three_component_allocation_error) then
                 info = fixed_boundary_allocation_error
@@ -217,6 +238,13 @@ contains
             else if (compatible_info == compatible_three_component_asymmetric) &
                     then
                 info = fixed_boundary_asymmetric
+            else if (compatible_info == compatible_three_component_vacuum_mesh) &
+                    then
+                info = fixed_boundary_vacuum_mesh
+            else if (compatible_info == compatible_three_component_wall) then
+                info = fixed_boundary_wall
+            else if (compatible_info == compatible_three_component_vacuum) then
+                info = fixed_boundary_vacuum
             else
                 info = fixed_boundary_assembly_error
             end if
@@ -225,44 +253,46 @@ contains
         call pack_class_problem(compatible, class_problem, info)
     end subroutine assemble_class
 
+    ! The block pencil is adopted as assembled; permutation(p) is the
+    ! assembly-order unknown stored at block-order position p.
     subroutine pack_class_problem(compatible, class_problem, info)
         type(compatible_three_component_problem_t), intent(in) :: compatible
         type(fixed_boundary_class_problem_t), intent(out) :: class_problem
         integer, intent(out) :: info
-        integer :: allocation_status, index, local_info, width(1)
+        integer, allocatable :: start(:)
+        integer :: allocation_status, block, index, term, unknowns
 
         info = fixed_boundary_assembly_error
-        width(1) = size(compatible%stiffness, 1)
-        call pack_variable_blocks(compatible%stiffness, width, &
-            class_problem%stiffness, local_info)
-        if (local_info /= variable_block_ok) then
-            if (local_info == variable_block_allocation) &
-                info = fixed_boundary_allocation_error
-            return
-        end if
-        call pack_variable_blocks(compatible%mass, width, class_problem%mass, &
-            local_info)
-        if (local_info /= variable_block_ok) then
-            if (local_info == variable_block_allocation) &
-                info = fixed_boundary_allocation_error
-            return
-        end if
-        allocate (class_problem%permutation(width(1)), stat=allocation_status)
+        if (.not. compatible%has_sparse_storage) return
+        unknowns = size(compatible%sparse_block_index)
+        allocate (class_problem%permutation(unknowns), &
+            start(size(compatible%sparse_stiffness%widths)), &
+            stat=allocation_status)
         if (allocation_status /= 0) then
             info = fixed_boundary_allocation_error
             return
         end if
-        do index = 1, width(1)
-            class_problem%permutation(index) = index
+        start(1) = 0
+        do block = 2, size(start)
+            start(block) = start(block - 1) &
+                + compatible%sparse_stiffness%widths(block - 1)
         end do
-        call pack_fixed_boundary_energy_store(compatible%stiffness_terms, &
-            class_problem%permutation, width, class_problem%energy, local_info)
-        if (local_info /= fixed_boundary_energy_ok) then
-            if (local_info == fixed_boundary_energy_allocation) &
-                info = fixed_boundary_allocation_error
-            return
-        end if
-        class_problem%unknowns = width(1)
+        if (start(size(start)) + compatible%sparse_stiffness%widths( &
+            size(start)) /= unknowns) return
+        class_problem%permutation = 0
+        do index = 1, unknowns
+            class_problem%permutation(start(compatible%sparse_block_index( &
+                index)) + compatible%sparse_local_index(index)) = index
+        end do
+        if (any(class_problem%permutation == 0)) return
+        class_problem%stiffness = compatible%sparse_stiffness
+        class_problem%mass = compatible%sparse_mass
+        do term = 1, fixed_boundary_energy_term_count - 1
+            class_problem%energy%terms(term) = compatible%sparse_terms(term)
+        end do
+        class_problem%energy%terms(fixed_boundary_energy_term_count) = &
+            compatible%sparse_vacuum
+        class_problem%unknowns = unknowns
         class_problem%normal_unknowns = compatible%normal_unknowns
         class_problem%eta_unknowns = compatible%eta_unknowns
         class_problem%mu_unknowns = compatible%mu_unknowns
@@ -409,6 +439,12 @@ contains
         end if
     end function class_slot
 
+    pure logical function fixed_boundary_is_free(problem) result(free)
+        type(fixed_boundary_problem_t), intent(in) :: problem
+
+        free = problem%free_boundary
+    end function fixed_boundary_is_free
+
     pure logical function fixed_boundary_is_coupled(problem) result(coupled)
         type(fixed_boundary_problem_t), intent(in) :: problem
 
@@ -525,6 +561,13 @@ contains
             info = fixed_boundary_solver_error
             return
         end if
+        call unpermute_dense_vectors(result%eigenvectors, &
+            problem%classes(slot)%permutation, info)
+        if (info /= dense_spectrum_ok) then
+            info = merge(fixed_boundary_allocation_error, &
+                fixed_boundary_solver_error, info == dense_spectrum_allocation)
+            return
+        end if
         call solve_fixed_boundary_class(problem, parity_class, certified, info)
         if (info /= fixed_boundary_ok) return
         if (.not. dense_spectrum_is_certified(result%eigenvalues, &
@@ -546,7 +589,7 @@ contains
         integer, intent(out) :: info
         real(dp), allocatable :: solver_vector(:)
         real(dp) :: shift
-        integer :: allocation_status
+        integer :: allocation_status, index
 
         if (summary%negative_count == 0) then
             if (.not. summary%has_positive) then
@@ -600,7 +643,11 @@ contains
             info = fixed_boundary_allocation_error
             return
         end if
-        result%eigenvector = solver_vector
+        ! Report the eigenvector in assembly order.
+        do index = 1, size(solver_vector)
+            result%eigenvector(class_problem%permutation(index)) = &
+                solver_vector(index)
+        end do
         result%has_eigenvector = .true.
         info = fixed_boundary_ok
     end subroutine resolve_lowest

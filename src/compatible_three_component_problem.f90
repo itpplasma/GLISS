@@ -3,6 +3,10 @@ module compatible_three_component_problem
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use compatible_axis_regularity, only: axis_regularity_ok, axis_tie_t, &
         build_trial_axis_tie, tie_local_map
+    use compatible_block_storage, only: allocate_compatible_blocks, &
+        build_compatible_block_indices, compatible_block_allocation, &
+        compatible_block_ok, scatter_symmetric_compatible_block, &
+        symmetrize_compatible_blocks
     use compatible_compressible_stiffness_assembly, only: &
         assemble_compatible_compressible_stiffness_surface, &
         compatible_stiffness_term_count
@@ -21,12 +25,16 @@ module compatible_three_component_problem
     use export_surface_geometry, only: build_angular_grids
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use phase_assembly_policy, only: phase_assembly_transformed
+    use plasma_vacuum_boundary, only: build_vacuum_edge_block, &
+        plasma_vacuum_model_t, plasma_vacuum_ok, &
+        plasma_vacuum_underresolved, plasma_vacuum_wall_not_nested
     use primitive_equilibrium_spline, only: fit_primitive_equilibrium, &
         primitive_equilibrium_ok, primitive_equilibrium_spline_t
     use primitive_kernel_geometry, only: evaluate_primitive_kernel_surface, &
         primitive_kernel_ok
     use radial_feec_complex, only: build_radial_feec_complex, &
         evaluate_radial_feec_complex, radial_feec_complex_t, radial_feec_ok
+    use variable_block_tridiagonal, only: variable_block_tridiagonal_t
     use trial_space_topology, only: build_trial_space_topology, &
         trial_component_eta, trial_component_mu, trial_component_normal, &
         trial_space_topology_t, trial_topology_ok
@@ -40,6 +48,12 @@ module compatible_three_component_problem
     ! The equilibrium breaks the (theta,zeta)->(-theta,-zeta) symmetry that
     ! decouples the two parity classes; their operator does not apply.
     integer, parameter, public :: compatible_three_component_asymmetric = -4
+    ! Free-boundary vacuum failures: the edge mesh cannot resolve the mode
+    ! table, the wall does not enclose the plasma, or the vacuum
+    ! inductance is singular.
+    integer, parameter, public :: compatible_three_component_vacuum_mesh = -5
+    integer, parameter, public :: compatible_three_component_wall = -6
+    integer, parameter, public :: compatible_three_component_vacuum = -7
 
     type, public :: compatible_three_component_problem_t
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
@@ -56,6 +70,19 @@ module compatible_three_component_problem
         ! operator of an equilibrium without stellarator symmetry; its
         ! trials are the mode table with parity 1 followed by parity 2.
         logical :: coupled = .false.
+        ! A free-boundary problem retains the edge normal coefficient and
+        ! adds the vacuum stiffness, also stored alone for diagnostics.
+        logical :: free_boundary = .false.
+        real(dp), allocatable :: vacuum(:, :)
+        ! Block-tridiagonal storage by radial basis group: normal, eta and
+        ! mu unknowns of each group of degree consecutive functions. The
+        ! dense arrays above stay unallocated when it is used.
+        logical :: has_sparse_storage = .false.
+        type(variable_block_tridiagonal_t) :: sparse_stiffness, sparse_mass
+        type(variable_block_tridiagonal_t) :: sparse_vacuum
+        type(variable_block_tridiagonal_t) :: &
+            sparse_terms(compatible_stiffness_term_count)
+        integer, allocatable :: sparse_block_index(:), sparse_local_index(:)
         type(axis_tie_t) :: axis_tie
     end type compatible_three_component_problem_t
 
@@ -71,7 +98,8 @@ contains
 
     subroutine build_compatible_three_component_problem(equilibrium, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
-            parity_class, degree, n_theta, n_zeta, problem, info)
+            parity_class, degree, n_theta, n_zeta, problem, info, vacuum, &
+            sparse_storage)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:)
@@ -79,6 +107,10 @@ contains
         integer, intent(in) :: parity_class, degree, n_theta, n_zeta
         type(compatible_three_component_problem_t), intent(out) :: problem
         integer, intent(out) :: info
+        ! Present: free boundary with this vacuum and wall model.
+        type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
+        ! True: assemble block-tridiagonal storage instead of dense arrays.
+        logical, optional, intent(in) :: sparse_storage
         integer, allocatable :: parity(:), trial_m(:), trial_n(:)
         real(dp), allocatable :: trial_power(:)
         integer :: allocation_status, count
@@ -111,14 +143,16 @@ contains
             parity = parity_class
         end if
         problem%coupled = parity_class == 0
+        problem%free_boundary = present(vacuum)
+        if (present(sparse_storage)) problem%has_sparse_storage = sparse_storage
         call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             trial_m, trial_n, trial_power, parity, degree, n_theta, n_zeta, &
-            problem, info)
+            problem, info, vacuum)
     end subroutine build_compatible_three_component_problem
 
     subroutine build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             mode_m, mode_n, stored_power, parity, degree, n_theta, n_zeta, &
-            problem, info)
+            problem, info, vacuum)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
@@ -126,9 +160,11 @@ contains
         integer, intent(in) :: degree, n_theta, n_zeta
         type(compatible_three_component_problem_t), intent(inout) :: problem
         integer, intent(out) :: info
+        type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
+        real(dp), allocatable :: block(:, :)
         real(dp), allocatable :: breaks(:), theta(:), zeta(:)
         integer, allocatable :: ranks(:, :)
         integer :: allocation_status, intervals, local_info, unknowns
@@ -143,8 +179,8 @@ contains
         end if
         call build_uniform_breaks(intervals, breaks, local_info)
         if (local_info /= compatible_support_ok) return
-        call build_radial_feec_complex(breaks, degree, .true., .true., &
-            complex, local_info)
+        call build_radial_feec_complex(breaks, degree, .true., &
+            .not. present(vacuum), complex, local_info)
         if (local_info /= radial_feec_ok) return
         call build_trial_space_topology(mode_m, mode_n, parity, topology, &
             local_info)
@@ -164,6 +200,12 @@ contains
             info = compatible_three_component_assembly_error
             return
         end if
+        ! The vacuum block is checked before the costly plasma assembly.
+        if (present(vacuum)) then
+            call build_vacuum_block(spline, vacuum, topology, block, info)
+            if (info /= compatible_three_component_ok) return
+            info = compatible_three_component_invalid
+        end if
         call build_trial_axis_tie(spline, complex, mode_m, parity, &
             stored_power, ranks(trial_component_normal, :), &
             ranks(trial_component_eta, :), unknowns, .true., &
@@ -177,30 +219,195 @@ contains
         unknowns = problem%axis_tie%reduced_unknowns
         problem%axis_quadrature_points = axis_quadrature_points(degree, &
             maxval(mode_m))
-        allocate (problem%stiffness(unknowns, unknowns), &
-            problem%mass(unknowns, unknowns), &
-            problem%stiffness_terms(unknowns, unknowns, &
-            compatible_stiffness_term_count), stat=allocation_status)
-        if (allocation_status /= 0) then
-            info = compatible_three_component_allocation_error
-            return
+        if (problem%has_sparse_storage) then
+            call initialize_sparse_storage(complex, topology, degree, &
+                problem, info)
+            if (info /= compatible_three_component_ok) return
+            info = compatible_three_component_invalid
+        else
+            allocate (problem%stiffness(unknowns, unknowns), &
+                problem%mass(unknowns, unknowns), &
+                problem%stiffness_terms(unknowns, unknowns, &
+                compatible_stiffness_term_count), stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = compatible_three_component_allocation_error
+                return
+            end if
+            problem%stiffness = 0.0_dp
+            problem%mass = 0.0_dp
+            problem%stiffness_terms = 0.0_dp
         end if
-        problem%stiffness = 0.0_dp
-        problem%mass = 0.0_dp
-        problem%stiffness_terms = 0.0_dp
         call build_angular_grids(n_theta, n_zeta, theta, zeta)
         call assemble_problem(spline, complex, breaks, theta, zeta, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, parity, &
             stored_power, topology, ranks, problem, info)
         if (info /= compatible_three_component_ok) return
-        call symmetrize_matrix(problem%stiffness)
-        call symmetrize_matrix(problem%mass)
-        call symmetrize_tensor(problem%stiffness_terms)
+        if (present(vacuum)) then
+            call add_vacuum_edge(block, ranks, complex, problem, info)
+            if (info /= compatible_three_component_ok) return
+        end if
+        if (problem%has_sparse_storage) then
+            call finish_sparse_storage(problem, info)
+            if (info /= compatible_three_component_ok) return
+        else
+            call symmetrize_matrix(problem%stiffness)
+            call symmetrize_matrix(problem%mass)
+            call symmetrize_tensor(problem%stiffness_terms)
+        end if
         problem%degree = degree
         problem%quadrature_points = size(accurate_nodes)
         problem%h1_dofs = complex%h1_dofs
         problem%l2_dofs = complex%l2_dofs
     end subroutine build_trials
+
+    subroutine build_vacuum_block(spline, vacuum, topology, block, info)
+        type(primitive_equilibrium_spline_t), intent(in) :: spline
+        type(plasma_vacuum_model_t), intent(in) :: vacuum
+        type(trial_space_topology_t), intent(in) :: topology
+        real(dp), allocatable, intent(out) :: block(:, :)
+        integer, intent(out) :: info
+        integer :: local_info
+
+        call build_vacuum_edge_block(spline, vacuum, topology, block, &
+            local_info)
+        if (local_info == plasma_vacuum_ok) then
+            info = compatible_three_component_ok
+        else if (local_info == plasma_vacuum_underresolved) then
+            info = compatible_three_component_vacuum_mesh
+        else if (local_info == plasma_vacuum_wall_not_nested) then
+            info = compatible_three_component_wall
+        else
+            info = compatible_three_component_vacuum
+        end if
+    end subroutine build_vacuum_block
+
+    subroutine add_vacuum_edge(block, ranks, complex, problem, info)
+        real(dp), intent(in) :: block(:, :)
+        integer, intent(in) :: ranks(:, :)
+        type(radial_feec_complex_t), intent(in) :: complex
+        type(compatible_three_component_problem_t), intent(inout) :: problem
+        integer, intent(out) :: info
+        real(dp), allocatable :: local(:, :), scale(:)
+        integer, allocatable :: full_map(:), map(:)
+        integer :: a, allocation_status, b, local_info, normals, trials
+
+        trials = size(ranks, 2)
+        normals = count(ranks(trial_component_normal, :) > 0)
+        allocate (full_map(trials), map(trials), scale(trials), &
+            local(trials, trials), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_three_component_allocation_error
+            return
+        end if
+        ! The edge is the last H1 function, the only one nonzero at s = 1.
+        do a = 1, trials
+            full_map(a) = 0
+            if (ranks(trial_component_normal, a) > 0) full_map(a) = &
+                (complex%h1_dofs - 1) * normals &
+                + ranks(trial_component_normal, a)
+        end do
+        call tie_local_map(problem%axis_tie, full_map, map, scale)
+        do b = 1, trials
+            do a = 1, trials
+                local(a, b) = scale(a) * block(a, b) * scale(b)
+            end do
+        end do
+        if (problem%has_sparse_storage) then
+            call scatter_symmetric_compatible_block(map, local, 1.0_dp, &
+                problem%sparse_block_index, problem%sparse_local_index, &
+                problem%sparse_vacuum, local_info)
+            info = compatible_three_component_assembly_error
+            if (local_info /= compatible_block_ok) return
+            info = compatible_three_component_ok
+            return
+        end if
+        allocate (problem%vacuum(size(problem%stiffness, 1), &
+            size(problem%stiffness, 2)), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_three_component_allocation_error
+            return
+        end if
+        problem%vacuum = 0.0_dp
+        call scatter_matrix(map, local, 1.0_dp, problem%vacuum)
+        problem%stiffness = problem%stiffness + problem%vacuum
+        info = compatible_three_component_ok
+    end subroutine add_vacuum_edge
+
+    subroutine initialize_sparse_storage(complex, topology, degree, problem, &
+            info)
+        type(radial_feec_complex_t), intent(in) :: complex
+        type(trial_space_topology_t), intent(in) :: topology
+        integer, intent(in) :: degree
+        type(compatible_three_component_problem_t), intent(inout) :: problem
+        integer, intent(out) :: info
+        integer, allocatable :: widths(:)
+        integer :: local_info, term
+
+        info = compatible_three_component_assembly_error
+        call build_compatible_block_indices(complex%h1_dofs, &
+            complex%l2_dofs, count(topology%active(trial_component_normal, :)), &
+            count(topology%active(trial_component_eta, :)), degree, widths, &
+            problem%sparse_block_index, problem%sparse_local_index, &
+            local_info, problem%axis_tie%eliminated, &
+            count(topology%active(trial_component_mu, :)))
+        if (local_info /= compatible_block_ok) return
+        call allocate_sparse(widths, problem%sparse_stiffness, local_info)
+        if (local_info /= compatible_block_ok) return
+        call allocate_sparse(widths, problem%sparse_mass, local_info)
+        if (local_info /= compatible_block_ok) return
+        do term = 1, compatible_stiffness_term_count
+            call allocate_sparse(widths, problem%sparse_terms(term), local_info)
+            if (local_info /= compatible_block_ok) return
+        end do
+        call allocate_sparse(widths, problem%sparse_vacuum, local_info)
+        if (local_info /= compatible_block_ok) return
+        info = compatible_three_component_ok
+
+    contains
+
+        subroutine allocate_sparse(block_widths, blocks, status)
+            integer, intent(in) :: block_widths(:)
+            type(variable_block_tridiagonal_t), intent(out) :: blocks
+            integer, intent(out) :: status
+
+            call allocate_compatible_blocks(block_widths, blocks, status)
+            if (status == compatible_block_allocation) &
+                info = compatible_three_component_allocation_error
+        end subroutine allocate_sparse
+    end subroutine initialize_sparse_storage
+
+    ! Stiffness = sum of the terms and the vacuum; every block pencil is
+    ! symmetrized like the dense arrays.
+    subroutine finish_sparse_storage(problem, info)
+        type(compatible_three_component_problem_t), intent(inout) :: problem
+        integer, intent(out) :: info
+        integer :: block, term
+
+        do term = 1, compatible_stiffness_term_count
+            call symmetrize_compatible_blocks(problem%sparse_terms(term))
+        end do
+        call symmetrize_compatible_blocks(problem%sparse_vacuum)
+        call symmetrize_compatible_blocks(problem%sparse_mass)
+        do block = 1, size(problem%sparse_stiffness%diagonal)
+            problem%sparse_stiffness%diagonal(block)%values = &
+                problem%sparse_vacuum%diagonal(block)%values
+            do term = 1, compatible_stiffness_term_count
+                problem%sparse_stiffness%diagonal(block)%values = &
+                    problem%sparse_stiffness%diagonal(block)%values &
+                    + problem%sparse_terms(term)%diagonal(block)%values
+            end do
+        end do
+        do block = 1, size(problem%sparse_stiffness%lower)
+            problem%sparse_stiffness%lower(block)%values = &
+                problem%sparse_vacuum%lower(block)%values
+            do term = 1, compatible_stiffness_term_count
+                problem%sparse_stiffness%lower(block)%values = &
+                    problem%sparse_stiffness%lower(block)%values &
+                    + problem%sparse_terms(term)%lower(block)%values
+            end do
+        end do
+        info = compatible_three_component_ok
+    end subroutine finish_sparse_storage
 
     subroutine assemble_problem(spline, complex, breaks, theta, zeta, &
             adiabatic_index, density, mode_m, mode_n, parity, stored_power, &
@@ -260,7 +467,8 @@ contains
                 if (info /= compatible_three_component_ok) return
             end do
         end do
-        call sum_tensor(problem%stiffness_terms, problem%stiffness)
+        if (.not. problem%has_sparse_storage) &
+            call sum_tensor(problem%stiffness_terms, problem%stiffness)
         info = compatible_three_component_ok
     end subroutine assemble_problem
 
@@ -368,6 +576,20 @@ contains
         allocate (map(size(full_map)), tie_scale(size(full_map)))
         call tie_local_map(problem%axis_tie, full_map, map, tie_scale)
         call scale_local_tensor(tie_scale, local_terms)
+        if (problem%has_sparse_storage) then
+            if (assemble_mass) then
+                call scale_local_matrix(tie_scale, local_m)
+                call scatter_symmetric_compatible_block(map, local_m, 1.0_dp, &
+                    problem%sparse_block_index, problem%sparse_local_index, &
+                    problem%sparse_mass, local_info)
+                if (local_info /= compatible_block_ok) return
+            end if
+            call scatter_sparse_terms(map, local_terms, term_mask, problem, &
+                local_info)
+            if (local_info /= compatible_block_ok) return
+            info = compatible_three_component_ok
+            return
+        end if
         if (assemble_mass) then
             call scale_local_matrix(tie_scale, local_m)
             call scatter_matrix(map, local_m, 1.0_dp, problem%mass)
@@ -376,6 +598,24 @@ contains
             problem%stiffness_terms)
         info = compatible_three_component_ok
     end subroutine assemble_radial_point
+
+    subroutine scatter_sparse_terms(map, local, term_mask, problem, info)
+        integer, intent(in) :: map(:)
+        real(dp), intent(in) :: local(:, :, :)
+        logical, intent(in) :: term_mask(:)
+        type(compatible_three_component_problem_t), intent(inout) :: problem
+        integer, intent(out) :: info
+        integer :: term
+
+        info = compatible_block_ok
+        do term = 1, compatible_stiffness_term_count
+            if (.not. term_mask(term)) cycle
+            call scatter_symmetric_compatible_block(map, local(:, :, term), &
+                1.0_dp, problem%sparse_block_index, &
+                problem%sparse_local_index, problem%sparse_terms(term), info)
+            if (info /= compatible_block_ok) return
+        end do
+    end subroutine scatter_sparse_terms
 
     subroutine allocate_local_matrices(trials, h1_count, l2_count, &
             stiffness, mass, terms, status)

@@ -524,7 +524,7 @@ def test_stability_problem_exposes_energy_decomposition(contexts):
         energy = problem.energy(1, result.eigenvector)
 
     assert isinstance(energy, gliss.EnergyTerms)
-    assert energy.components == (2.0, 3.0, 4.0, -5.0, 1.0)
+    assert energy.components == (2.0, 3.0, 4.0, -5.0, 1.0, 0.0)
     assert energy.potential_energy == sum(energy.components)
     assert energy.kinetic_energy == 1.0
     assert energy.rayleigh_quotient == 5.0

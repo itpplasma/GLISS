@@ -8,7 +8,7 @@ module fixed_boundary_energy
     implicit none
     private
 
-    integer, parameter, public :: fixed_boundary_energy_term_count = 5
+    integer, parameter, public :: fixed_boundary_energy_term_count = 6
     integer, parameter, public :: fixed_boundary_energy_ok = 0
     integer, parameter, public :: fixed_boundary_energy_invalid = -1
     integer, parameter, public :: fixed_boundary_energy_allocation = -2
@@ -25,6 +25,8 @@ module fixed_boundary_energy
         real(dp) :: magnetic_compression = 0.0_dp
         real(dp) :: pressure_drive = 0.0_dp
         real(dp) :: plasma_compressibility = 0.0_dp
+        ! Twice the vacuum energy; zero for a fixed-boundary problem.
+        real(dp) :: vacuum_energy = 0.0_dp
         real(dp) :: potential_energy = 0.0_dp
         real(dp) :: kinetic_energy = 0.0_dp
         real(dp) :: rayleigh_quotient = 0.0_dp
@@ -39,16 +41,20 @@ module fixed_boundary_energy
 contains
 
     subroutine pack_fixed_boundary_energy_store(dense_terms, permutation, &
-            widths, store, info)
+            widths, store, info, vacuum)
+        ! The plasma terms, then the vacuum term (zero when absent).
         real(dp), intent(in) :: dense_terms(:, :, :)
         integer, intent(in) :: permutation(:), widths(:)
         type(fixed_boundary_energy_store_t), intent(out) :: store
         integer, intent(out) :: info
-        integer :: term
+        real(dp), optional, intent(in) :: vacuum(:, :)
+        real(dp), allocatable :: zero(:, :)
+        integer :: allocation_status, term
 
         info = fixed_boundary_energy_invalid
-        if (size(dense_terms, 3) /= fixed_boundary_energy_term_count) return
-        do term = 1, fixed_boundary_energy_term_count
+        if (size(dense_terms, 3) /= fixed_boundary_energy_term_count - 1) &
+            return
+        do term = 1, fixed_boundary_energy_term_count - 1
             call pack_permuted_variable_blocks(dense_terms(:, :, term), &
                 permutation, widths, store%terms(term), info)
             if (info /= variable_block_ok) then
@@ -56,6 +62,24 @@ contains
                 return
             end if
         end do
+        term = fixed_boundary_energy_term_count
+        if (present(vacuum)) then
+            call pack_permuted_variable_blocks(vacuum, permutation, widths, &
+                store%terms(term), info)
+        else
+            allocate (zero(size(dense_terms, 1), size(dense_terms, 2)), &
+                source=0.0_dp, stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = fixed_boundary_energy_allocation
+                return
+            end if
+            call pack_permuted_variable_blocks(zero, permutation, widths, &
+                store%terms(term), info)
+        end if
+        if (info /= variable_block_ok) then
+            info = fixed_boundary_energy_invalid
+            return
+        end if
         info = fixed_boundary_energy_ok
     end subroutine pack_fixed_boundary_energy_store
 
@@ -214,11 +238,12 @@ contains
         result%magnetic_compression = components(3)
         result%pressure_drive = components(4)
         result%plasma_compressibility = components(5)
+        result%vacuum_energy = components(6)
     end subroutine assign_components
 
     pure function valid_result(result) result(valid)
         type(fixed_boundary_energy_terms_t), intent(in) :: result
-        real(dp) :: values(10)
+        real(dp) :: values(11)
         logical :: valid
 
         values(1) = result%field_line_bending
@@ -231,6 +256,7 @@ contains
         values(8) = result%rayleigh_quotient
         values(9) = result%closure_error
         values(10) = result%closure_tolerance
+        values(11) = result%vacuum_energy
         valid = all(ieee_is_finite(values))
         if (.not. valid) return
         valid = result%closure_error <= result%closure_tolerance

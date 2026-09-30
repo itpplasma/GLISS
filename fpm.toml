@@ -22,12 +22,8 @@ name = "vacuum_schur"
 main = "test_vacuum_schur.f90"
 
 [[test]]
-name = "starwall_ideal_vacuum"
-main = "boundary/test_starwall_ideal_vacuum.f90"
-
-[[test]]
-name = "starwall_fourier_coupling"
-main = "boundary/test_starwall_fourier_coupling.f90"
+name = "scalar_potential_vacuum"
+main = "boundary/test_scalar_potential_vacuum.f90"
 
 [[test]]
 name = "helical_cylinder_limit"

@@ -1,4 +1,4 @@
-"""Physical energy decomposition for fixed-boundary displacement vectors."""
+"""Physical energy decomposition of stability displacement vectors."""
 
 import ctypes
 import math
@@ -33,6 +33,7 @@ class _EnergyTerms(ctypes.Structure):
         ("rayleigh_quotient", ctypes.c_double),
         ("closure_error", ctypes.c_double),
         ("closure_tolerance", ctypes.c_double),
+        ("vacuum_energy", ctypes.c_double),
     ]
 
 
@@ -50,18 +51,25 @@ class EnergyTerms:
     rayleigh_quotient: float
     closure_error: float
     closure_tolerance: float
+    # Twice the vacuum energy of a free-boundary problem; zero when fixed.
+    vacuum_energy: float = 0.0
     potential_form: str = "x.T @ K @ x"
     kinetic_form: str = "x.T @ M @ x"
 
     @property
-    def components(self) -> Tuple[float, float, float, float, float]:
-        """Terms in the order used by the native stiffness assembly."""
+    def components(self) -> Tuple[float, ...]:
+        """Terms in the order used by the native stiffness assembly.
+
+        The five plasma terms are followed by the vacuum term, which is zero
+        for a fixed boundary; together they sum to ``potential_energy``.
+        """
         return (
             self.field_line_bending,
             self.magnetic_shear,
             self.magnetic_compression,
             self.pressure_drive,
             self.plasma_compressibility,
+            self.vacuum_energy,
         )
 
 
@@ -148,6 +156,7 @@ def _validated_terms(native: _EnergyTerms) -> EnergyTerms:
         native.rayleigh_quotient,
         native.closure_error,
         native.closure_tolerance,
+        native.vacuum_energy,
     )
     scalars = (*result.components, result.potential_energy, result.kinetic_energy,
                result.rayleigh_quotient, result.closure_error,
@@ -171,9 +180,10 @@ def _validated_terms(native: _EnergyTerms) -> EnergyTerms:
         raise GlissInternalError("GLISS returned an inconsistent Rayleigh quotient")
     for name, value in zip(
         ("field-line bending", "magnetic shear", "magnetic compression",
-         "plasma compressibility"),
+         "plasma compressibility", "vacuum"),
         (result.field_line_bending, result.magnetic_shear,
-         result.magnetic_compression, result.plasma_compressibility),
+         result.magnetic_compression, result.plasma_compressibility,
+         result.vacuum_energy),
     ):
         if value < -result.closure_tolerance:
             raise GlissInternalError(f"GLISS returned negative {name} energy")
