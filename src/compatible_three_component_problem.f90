@@ -83,7 +83,6 @@ contains
         real(dp), allocatable :: trial_power(:)
         integer :: allocation_status, count
 
-        problem = compatible_three_component_problem_t()
         info = compatible_three_component_invalid
         if (.not. inputs_are_valid(equilibrium, adiabatic_index, &
             density_kg_m3, mode_m, mode_n, stored_power, parity_class, &

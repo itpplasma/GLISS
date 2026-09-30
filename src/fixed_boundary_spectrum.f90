@@ -133,6 +133,8 @@ contains
         ! contains both parity classes as one problem.
         logical, optional, intent(in) :: coupled
         real(dp), allocatable :: stored_power(:)
+        ! Default-initialized: holds no matrices.
+        type(fixed_boundary_class_problem_t) :: empty_class
         integer :: allocation_status, mode, parity_class
 
         info = fixed_boundary_invalid
@@ -173,7 +175,8 @@ contains
             problem%coupled = info == fixed_boundary_asymmetric
         end if
         if (problem%coupled) then
-            problem%classes = fixed_boundary_class_problem_t()
+            ! Discard the partial decoupled classes.
+            problem%classes = empty_class
             call assemble_class(equilibrium, adiabatic_index, density_kg_m3, &
                 mode_m, mode_n, stored_power, 0, degree, problem%classes(1), &
                 info, problem%n_theta, problem%n_zeta)
