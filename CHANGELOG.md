@@ -72,9 +72,9 @@
   transform), convert asymmetric VMEC files with both parities and
   `stellarator_symmetry="False"`, record `vmec_signgs` and
   `booz_xform_source`, and refuse asymmetric equilibria in the parity-class
-  operator with a named `GlissArgumentError`. The converter read the
-  half-grid `phip` as an average of neighbouring entries; it now takes the
-  surface's own entry (#10, parts A and B).
+  operator with a named `GlissArgumentError`. A restored `boozmn` file
+  carries a zeroed axis `phip`, which is now extrapolated before the
+  full-grid midpoint is taken (#10, parts A and B).
 - Add Sphinx documentation sources in `docs/` (`make -C docs html`) that
   separate production, compatibility and unfinished scope. Every quickstart
   example runs in the native test suite and the installed-wheel check
