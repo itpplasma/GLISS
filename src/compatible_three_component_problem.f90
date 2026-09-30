@@ -87,6 +87,7 @@ module compatible_three_component_problem
     end type compatible_three_component_problem_t
 
     public :: build_compatible_three_component_problem
+    public :: build_compatible_vacuum_energy
 
     logical, parameter :: accurate_term(5) = &
         [.true., .true., .false., .true., .false.]
@@ -99,7 +100,7 @@ contains
     subroutine build_compatible_three_component_problem(equilibrium, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, problem, info, vacuum, &
-            sparse_storage)
+            sparse_storage, vacuum_energy)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:)
@@ -111,6 +112,9 @@ contains
         type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
         ! True: assemble block-tridiagonal storage instead of dense arrays.
         logical, optional, intent(in) :: sparse_storage
+        ! With vacuum: the trial-by-trial vacuum energy of this problem's
+        ! trials (build_compatible_vacuum_energy), instead of solving it.
+        real(dp), optional, intent(in) :: vacuum_energy(:, :)
         integer, allocatable :: parity(:), trial_m(:), trial_n(:)
         real(dp), allocatable :: trial_power(:)
         integer :: allocation_status, count
@@ -147,12 +151,51 @@ contains
         if (present(sparse_storage)) problem%has_sparse_storage = sparse_storage
         call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             trial_m, trial_n, trial_power, parity, degree, n_theta, n_zeta, &
-            problem, info, vacuum)
+            problem, info, vacuum, vacuum_energy)
     end subroutine build_compatible_three_component_problem
+
+    ! Vacuum energy of the normal trials of both parity classes in the
+    ! coupled order: every mode with parity 1, then every mode with parity
+    ! 2. A trial's edge flux depends only on its own mode and parity, so the
+    ! problem of one parity class uses its principal sub-block, and the
+    ! vacuum solve, which depends only on the edge and the wall, serves
+    ! both classes.
+    subroutine build_compatible_vacuum_energy(equilibrium, mode_m, mode_n, &
+            vacuum, energy, info)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(in) :: mode_m(:), mode_n(:)
+        type(plasma_vacuum_model_t), intent(in) :: vacuum
+        real(dp), allocatable, intent(out) :: energy(:, :)
+        integer, intent(out) :: info
+        type(primitive_equilibrium_spline_t) :: spline
+        type(trial_space_topology_t) :: topology
+        integer, allocatable :: parity(:), trial_m(:), trial_n(:)
+        integer :: local_info, modes
+
+        info = compatible_three_component_invalid
+        modes = size(mode_m)
+        if (modes < 1 .or. size(mode_n) /= modes) return
+        allocate (parity(2 * modes), trial_m(2 * modes), trial_n(2 * modes))
+        trial_m(:modes) = mode_m
+        trial_m(modes + 1:) = mode_m
+        trial_n(:modes) = mode_n
+        trial_n(modes + 1:) = mode_n
+        parity(:modes) = 1
+        parity(modes + 1:) = 2
+        call build_trial_space_topology(trial_m, trial_n, parity, topology, &
+            local_info)
+        if (local_info /= trial_topology_ok) return
+        call fit_primitive_equilibrium(equilibrium, spline, local_info)
+        if (local_info /= primitive_equilibrium_ok) then
+            info = compatible_three_component_assembly_error
+            return
+        end if
+        call build_vacuum_block(spline, vacuum, topology, energy, info)
+    end subroutine build_compatible_vacuum_energy
 
     subroutine build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             mode_m, mode_n, stored_power, parity, degree, n_theta, n_zeta, &
-            problem, info, vacuum)
+            problem, info, vacuum, vacuum_energy)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
@@ -161,6 +204,7 @@ contains
         type(compatible_three_component_problem_t), intent(inout) :: problem
         integer, intent(out) :: info
         type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
+        real(dp), optional, intent(in) :: vacuum_energy(:, :)
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
@@ -202,9 +246,16 @@ contains
         end if
         ! The vacuum block is checked before the costly plasma assembly.
         if (present(vacuum)) then
-            call build_vacuum_block(spline, vacuum, topology, block, info)
-            if (info /= compatible_three_component_ok) return
-            info = compatible_three_component_invalid
+            if (present(vacuum_energy)) then
+                if (size(vacuum_energy, 1) /= size(mode_m) &
+                    .or. size(vacuum_energy, 2) /= size(mode_m)) return
+                if (.not. all(ieee_is_finite(vacuum_energy))) return
+                allocate (block, source=vacuum_energy)
+            else
+                call build_vacuum_block(spline, vacuum, topology, block, info)
+                if (info /= compatible_three_component_ok) return
+                info = compatible_three_component_invalid
+            end if
         end if
         call build_trial_axis_tie(spline, complex, mode_m, parity, &
             stored_power, ranks(trial_component_normal, :), &
