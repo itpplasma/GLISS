@@ -3,27 +3,11 @@
 import csv
 import os
 from pathlib import Path
-import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir))
-
-import gliss  # noqa: E402
-
-_DEFAULT_LIB = os.path.join(
-    os.path.dirname(__file__), os.pardir, os.pardir, "build", "libgliss_c.so"
-)
-
-
-def _ensure_library():
-    if os.environ.get("GLISS_LIB"):
-        return
-    if os.path.exists(_DEFAULT_LIB):
-        os.environ["GLISS_LIB"] = _DEFAULT_LIB
-    else:
-        pytest.fail("libgliss_c.so not found; set GLISS_LIB to the built library")
+import gliss
 
 
 def test_mercier_profile_nonexistent_path_raises():
@@ -58,12 +42,12 @@ def _load_golden(path):
     return np.array([[float(value) for value in row] for row in rows[1:]])
 
 
-def test_mercier_profile_matches_golden():
+def test_mercier_profile_matches_golden(request):
     fixture = os.environ.get("GLISS_MERCIER_FIXTURE")
     golden_path = os.environ.get("GLISS_MERCIER_GOLDEN")
     if not fixture or not golden_path:
         pytest.skip("GLISS_MERCIER_FIXTURE and GLISS_MERCIER_GOLDEN not set")
-    _ensure_library()
+    request.getfixturevalue("native_library")
 
     golden = _load_golden(golden_path)
     s, d_mercier = gliss.mercier_profile(fixture)

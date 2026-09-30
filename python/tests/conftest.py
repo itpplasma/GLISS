@@ -13,7 +13,15 @@ from pathlib import Path
 import pytest
 
 _REPOSITORY = Path(__file__).resolve().parents[2]
-_BUILD_LIBRARY = _REPOSITORY / "build" / "libgliss_c.so"
+
+
+def _build_library():
+    # The CMake build tree of a checkout; the suffix is platform specific.
+    for suffix in (".so", ".dylib"):
+        candidate = _REPOSITORY / "build" / f"libgliss_c{suffix}"
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def pytest_configure(config):
@@ -24,8 +32,9 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def native_library():
-    if not os.environ.get("GLISS_LIB") and _BUILD_LIBRARY.is_file():
-        os.environ["GLISS_LIB"] = str(_BUILD_LIBRARY)
+    library = _build_library()
+    if not os.environ.get("GLISS_LIB") and library is not None:
+        os.environ["GLISS_LIB"] = str(library)
     import gliss
 
     try:
