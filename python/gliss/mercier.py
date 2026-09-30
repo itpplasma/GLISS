@@ -20,8 +20,9 @@ def mercier_profile(
     Returns
     -------
     s, d_mercier : numpy.ndarray
-        One-dimensional ``float64`` arrays. Positive ``d_mercier`` is
-        Mercier-unstable.
+        One-dimensional ``float64`` arrays in the VMEC / Landreman-Jorge
+        ``D_Mercier`` convention: positive values are Mercier-stable and
+        negative values are unstable.
     """
     n_theta = _resolution(n_theta, "n_theta")
     n_zeta = _resolution(n_zeta, "n_zeta")
@@ -30,8 +31,12 @@ def mercier_profile(
 
 
 def mercier_objective(path: PathLike, n_theta: int = 64, n_zeta: int = 64) -> float:
-    """Return the most unstable Mercier discriminant in the profile."""
+    """Return the Mercier instability measure ``-min(d_mercier)``.
+
+    The value is positive exactly when some retained surface is
+    Mercier-unstable; smaller is more stable.
+    """
     _, d_mercier = mercier_profile(path, n_theta=n_theta, n_zeta=n_zeta)
     if d_mercier.size == 0:
         raise RuntimeError("GLISS returned an empty Mercier profile")
-    return float(np.max(d_mercier))
+    return float(-np.min(d_mercier))

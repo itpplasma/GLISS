@@ -428,9 +428,10 @@ worst = gliss.mercier_objective("equilibrium_export.nc")
 ```
 
 `s` and `d_mercier` are one-dimensional NumPy `float64` arrays with one entry
-per retained radial surface. GLISS uses the `D_Mercier` convention: positive
-values are unstable. `mercier_objective` returns `max(d_mercier)`, so a larger
-positive result is less stable.
+per retained radial surface. GLISS uses the VMEC / Landreman-Jorge
+`D_Mercier` convention: positive values are Mercier-stable, negative values
+unstable. `mercier_objective` returns `-min(d_mercier)`, which is positive
+exactly when some surface is unstable; smaller is more stable.
 
 The input must be a regular file in the GVEC/CAS3D export format. Angular
 quadrature sizes must be positive integers. Invalid Python arguments raise
@@ -814,7 +815,7 @@ python -m pip install "gliss[simsopt]"
 from gliss.simsopt import MercierPenalty
 
 penalty = MercierPenalty("equilibrium_export.nc")
-value = penalty.J()
+value = penalty.J()  # max(0, -min(D_Mercier)); zero when Mercier-stable
 ```
 
 `MercierPenalty` is a leaf `Optimizable`. It has no equilibrium degrees of

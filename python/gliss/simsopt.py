@@ -1,8 +1,9 @@
 """SIMSOPT integration for the GLISS Mercier stability objective.
 
 ``MercierPenalty`` wraps :func:`gliss.mercier.mercier_objective` as a
-``simsopt`` ``Optimizable`` leaf node, so GLISS's validated worst-case
-D_Mercier value can be used as a term in a SIMSOPT stellarator
+``simsopt`` ``Optimizable`` leaf node, so the Mercier instability of the
+least stable surface (zero when all are stable; positive D_Mercier is
+stable) can be used as a term in a SIMSOPT stellarator
 optimization problem (e.g. composed into a
 ``simsopt.objectives.LeastSquaresProblem``).
 
@@ -22,7 +23,7 @@ from .mercier import mercier_objective
 
 
 class MercierPenalty(Optimizable):
-    """Leaf SIMSOPT objective returning ``mercier_objective(export_path)``.
+    """Leaf SIMSOPT objective ``max(0, mercier_objective(export_path))``.
 
     Has no free DOFs: it is a value objective over an externally
     produced CAS3D/GVEC export, not a parameterized equilibrium model.
@@ -43,8 +44,11 @@ class MercierPenalty(Optimizable):
         self.set_recompute_flag()
 
     def J(self):
-        """Worst-case ``max(D_Mercier)`` for the current export path."""
-        return mercier_objective(self._export_path)
+        """Mercier instability penalty ``max(0, -min(D_Mercier))``.
+
+        Zero when every retained surface is Mercier-stable.
+        """
+        return max(0.0, mercier_objective(self._export_path))
 
     return_fn_map = {"J": J}
 
