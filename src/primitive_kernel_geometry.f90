@@ -310,7 +310,9 @@ contains
             do k = 1, size(nodes) - 2
                 if (coordinate < nodes(k + 1)) exit
             end do
-            points = [nodes(k), coordinate, nodes(k + 1)]
+            points(1) = nodes(k)
+            points(2) = coordinate
+            points(3) = nodes(k + 1)
         end associate
         do j = 1, 3
             call evaluate_radial_cubic_spline_field(spline%radial_grid, &

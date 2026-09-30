@@ -171,8 +171,10 @@ contains
         ! A grossly nonsymmetric matrix must be rejected at every scale, and
         ! the pencil roundoff floor must scale with the pencil.
         real(dp), parameter :: scales(3) = [1.0e-15_dp, 1.0_dp, 1.0e15_dp]
-        real(dp) :: nonsymmetric(2, 2), identity(2, 2), roundoff
+        real(dp) :: nonsymmetric(2, 2), symmetric(2, 2), identity(2, 2)
+        real(dp) :: roundoff
         real(dp), allocatable :: values(:), vectors(:, :)
+        integer, parameter :: one_block(1) = [2], two_blocks(2) = [1, 1]
         type(variable_block_tridiagonal_t) :: packed, packed_mass
         integer :: i, local_info
 
@@ -180,10 +182,11 @@ contains
         do i = 1, size(scales)
             nonsymmetric = scales(i) * reshape([2.0_dp, 1.0_dp, 0.0_dp, &
                 3.0_dp], [2, 2])
-            call pack_variable_blocks(nonsymmetric, [2], packed, local_info)
+            call pack_variable_blocks(nonsymmetric, one_block, packed, &
+                local_info)
             if (local_info == variable_block_ok) &
                 call fail("nonsymmetric dense input was symmetrized")
-            call pack_variable_blocks(nonsymmetric, [1, 1], packed, &
+            call pack_variable_blocks(nonsymmetric, two_blocks, packed, &
                 local_info)
             if (local_info == variable_block_ok) &
                 call fail("nonsymmetric block input was symmetrized")
@@ -192,17 +195,19 @@ contains
             if (local_info == symmetric_eigensolver_ok) &
                 call fail("nonsymmetric dense pencil was accepted")
             packed = variable_block_tridiagonal_t()
-            allocate (packed%widths(1), source=[2])
+            allocate (packed%widths, source=one_block)
             allocate (packed%diagonal(1), packed%lower(0))
             packed%diagonal(1)%values = nonsymmetric
             call validate_variable_blocks(packed, local_info)
             if (local_info == variable_block_ok) &
                 call fail("nonsymmetric diagonal block was accepted")
-            call pack_variable_blocks(scales(i) * reshape([2.0_dp, 1.0_dp, &
-                1.0_dp, 3.0_dp], [2, 2]), [2], packed, local_info)
+            symmetric = scales(i) * reshape([2.0_dp, 1.0_dp, 1.0_dp, &
+                3.0_dp], [2, 2])
+            call pack_variable_blocks(symmetric, one_block, packed, local_info)
             if (local_info /= variable_block_ok) &
                 call fail("scaled symmetric input was rejected")
-            call pack_variable_blocks(identity, [2], packed_mass, local_info)
+            call pack_variable_blocks(identity, one_block, packed_mass, &
+                local_info)
             if (local_info /= variable_block_ok) &
                 call fail("identity mass was rejected")
             roundoff = pencil_roundoff(packed, packed_mass)

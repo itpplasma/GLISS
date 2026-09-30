@@ -76,6 +76,7 @@ contains
         real(dp), allocatable :: pressure_slope(:), iota_slope(:)
         real(dp), allocatable :: flux_curvature(:), volume_curvature(:)
         real(dp), allocatable :: poloidal_slope(:)
+        real(dp), allocatable :: iota_ratio(:)
         real(dp) :: poloidal_flux_slope
         integer :: ns, i
 
@@ -135,6 +136,7 @@ contains
         call first_derivative_nonuniform(equilibrium%s, volume_slope, &
             volume_curvature)
 
+        iota_ratio = poloidal_slope / flux_slope
         do i = 1, ns
             call load_surface(equilibrium, i, theta, zeta, surface, info)
             if (info /= mercier_ok) return
@@ -148,7 +150,7 @@ contains
                 flux_slope(i), flux_curvature(i), volume_slope(i), &
                 volume_curvature(i), pressure_slope(i), iota_slope(i), &
                 beta_positions, result, info, &
-                surface_iota_spread(poloidal_slope / flux_slope, i))
+                surface_iota_spread(iota_ratio, i))
             if (info /= mercier_ok) return
         end do
         result%s = equilibrium%s

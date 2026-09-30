@@ -75,6 +75,7 @@ contains
         real(dp), allocatable :: covariant_zeta_slope(:)
         real(dp), allocatable :: pressure_slope(:)
         real(dp), allocatable :: flux_curvature(:), poloidal_curvature(:)
+        real(dp), allocatable :: iota_ratio(:)
         integer :: ns, i
 
         info = mercier_invalid_input
@@ -119,6 +120,7 @@ contains
         call first_derivative_nonuniform(equilibrium%s, poloidal_slope, &
             poloidal_curvature)
 
+        iota_ratio = poloidal_slope / flux_slope
         do i = 1, ns
             call load_surface(equilibrium, i, theta, zeta, surface, info)
             if (info /= mercier_ok) return
@@ -127,7 +129,7 @@ contains
                 poloidal_curvature(i), covariant_theta(i), &
                 covariant_zeta(i), covariant_theta_slope(i), &
                 covariant_zeta_slope(i), pressure_slope(i), &
-                surface_iota_spread(poloidal_slope / flux_slope, i))
+                surface_iota_spread(iota_ratio, i))
             call fill_surface_fields(equilibrium, surface, profiles, &
                 jacobian_slope, i, theta, zeta, fields(:, :, :, i), &
                 drive(:, :, i), info)
