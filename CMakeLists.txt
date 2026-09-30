@@ -108,6 +108,7 @@ add_library(gliss
     src/boundary/starwall_fourier_coupling.f90
     src/vacuum_schur.f90
     src/variable_block_tridiagonal.f90
+    src/compatible_axis_regularity.f90
     src/compatible_block_storage.f90
     src/variable_generalized_equilibration.f90
     src/stable_reduction.f90
@@ -492,6 +493,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_mercier_metric PRIVATE gliss)
     add_test(NAME mercier_metric
         COMMAND test_mercier_metric ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
+
+    add_executable(test_axis_regularity test/test_axis_regularity.f90)
+    target_link_libraries(test_axis_regularity PRIVATE gliss gliss_test_support)
+    add_test(NAME axis_regularity
+        COMMAND test_axis_regularity ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
 
     add_executable(test_solovev_axis_regularity
         test/test_solovev_axis_regularity.f90)

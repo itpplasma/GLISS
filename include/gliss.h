@@ -265,8 +265,9 @@ gliss_status gliss_axisymmetric_spectrum(
     size_t error_capacity);
 
 /* Evaluate the compatible two-component incompressible functional on an
- * explicit 3-D mode table. Its perpendicular normalization preserves the
- * inertia and marginal boundary but does not define a physical growth rate.
+ * explicit 3-D mode table. Its mass is the perpendicular kinetic form at
+ * unit mass density (omega^2 in s^-2 for perpendicular inertia); inertia and
+ * the marginal boundary do not depend on it.
  * The regular-axis factor s^(m/2) is derived from each nonnegative poloidal
  * mode. degree must be between 1 and 4. parity_class must be 1 or 2.
  * solve_eigenpair is 0 for inertia only or 1 for the certified lowest pair.

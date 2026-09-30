@@ -17,12 +17,13 @@ contains
 
     subroutine initialize_compatible_block_pencil(h1_dofs, l2_dofs, &
             normal_modes, eta_modes, degree, stiffness, mass, block_index, &
-            local_index, info)
+            local_index, info, eliminated)
         integer, intent(in) :: h1_dofs, l2_dofs, normal_modes, eta_modes
         integer, intent(in) :: degree
         type(variable_block_tridiagonal_t), intent(out) :: stiffness, mass
         integer, allocatable, intent(out) :: block_index(:), local_index(:)
         integer, intent(out) :: info
+        logical, optional, intent(in) :: eliminated(:)
         integer, allocatable :: widths(:)
         integer(int64) :: unknowns64
         integer :: allocation_status, basis, block, groups, local, mode
@@ -78,10 +79,70 @@ contains
                             + (basis - 1) * eta_modes + mode) = local
                     end do
                 end do
+                if (present(eliminated)) then
+                    ! Unknowns removed by a constraint keep the order of the
+                    ! rest; each block closes its local numbering over them.
+                    if (size(eliminated) /= unknowns) then
+                        info = compatible_block_invalid
+                        return
+                    end if
+                    call compact_block_indices(eliminated, widths, &
+                        block_index, local_index, info)
+                    if (info /= compatible_block_ok) return
+                end if
                 call allocate_blocks(widths, stiffness, info)
                 if (info /= compatible_block_ok) return
                 call allocate_blocks(widths, mass, info)
             end subroutine initialize_compatible_block_pencil
+
+            subroutine compact_block_indices(eliminated, widths, block_index, &
+                    local_index, info)
+                logical, intent(in) :: eliminated(:)
+                integer, intent(inout) :: widths(:)
+                integer, allocatable, intent(inout) :: block_index(:)
+                integer, allocatable, intent(inout) :: local_index(:)
+                integer, intent(out) :: info
+                integer, allocatable :: kept_block(:), kept_local(:)
+                integer, allocatable :: removed(:), start(:)
+                integer :: block, full, local, position, reduced
+
+                ! removed(start(b) + l) counts eliminated unknowns of block b
+                ! at local positions up to l, so kept locals shift down by it.
+                info = compatible_block_invalid
+                allocate (start(size(widths)), removed(sum(widths)), source=0)
+                do block = 2, size(widths)
+                    start(block) = start(block - 1) + widths(block - 1)
+                end do
+                do full = 1, size(eliminated)
+                    if (.not. eliminated(full)) cycle
+                    position = start(block_index(full)) + local_index(full)
+                    removed(position) = 1
+                end do
+                do block = 1, size(widths)
+                    do local = 2, widths(block)
+                        removed(start(block) + local) = &
+                            removed(start(block) + local) &
+                            + removed(start(block) + local - 1)
+                    end do
+                    widths(block) = widths(block) &
+                        - removed(start(block) + widths(block))
+                    if (widths(block) < 1) return
+                end do
+                allocate (kept_block(count(.not. eliminated)), &
+                    kept_local(count(.not. eliminated)))
+                reduced = 0
+                do full = 1, size(eliminated)
+                    if (eliminated(full)) cycle
+                    reduced = reduced + 1
+                    block = block_index(full)
+                    kept_block(reduced) = block
+                    kept_local(reduced) = local_index(full) &
+                        - removed(start(block) + local_index(full))
+                end do
+                call move_alloc(kept_block, block_index)
+                call move_alloc(kept_local, local_index)
+                info = compatible_block_ok
+            end subroutine compact_block_indices
 
             subroutine allocate_blocks(widths, blocks, info)
                 integer, intent(in) :: widths(:)

@@ -16,9 +16,11 @@ SCHEMA_VERSIONS = (1, 2, 3, 4, 5)
 # Revision of the assembled fixed-boundary operator. Documents record it so
 # that a configuration is never replayed on a different discretization:
 # 0 is the midpoint radial quadrature of schema versions 1 and 2, 1 the Gauss
-# FEEC operator of versions 3 and 4, and 2 the axis-conforming FEEC space
-# of #16 (tangential axis weight and the regular third unknown).
-DISCRETIZATION_REVISION = 2
+# FEEC operator of versions 3 and 4, 2 the axis-conforming FEEC space of #16
+# (tangential axis weight and the regular third unknown), and 3 the space of
+# #35 that ties the leading |m|=1 coefficients of xi^s and eta and integrates
+# the axis element in sqrt(s).
+DISCRETIZATION_REVISION = 3
 
 
 def discretization_revision(value: Mapping[str, Any], version: int, context: str) -> int:

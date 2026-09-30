@@ -90,7 +90,8 @@ program gliss_compatible_operator_trace
     call build_compatible_two_component_problem(equilibrium, mode_m, mode_n, &
         stored_power, parity, degree, n_theta, n_zeta, problem, info, &
         selected_cells, traces, &
-        radial_quadrature_policy=radial_quadrature_policy)
+        radial_quadrature_policy=radial_quadrature_policy, &
+        axis_conforming=.false.)
     if (info /= compatible_problem_ok) call fail("operator assembly", info)
     if (trace_eigenpair) then
         call solve_compatible_marginality_problem(problem, .true., spectrum, &

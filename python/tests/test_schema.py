@@ -64,7 +64,7 @@ def test_configuration_round_trip_is_deterministic(configuration, tmp_path):
     document = json.loads(first.read_text(encoding="utf-8"))
     assert document["schema"] == "gliss.stability.configuration"
     assert document["schema_version"] == 5
-    assert document["discretization_revision"] == 2
+    assert document["discretization_revision"] == 3
     assert document["boundary_condition"] == "fixed"
 
 
@@ -423,8 +423,8 @@ def test_custom_angular_configuration_round_trip(tmp_path):
     assert restored.discretization_revision == 1
     with pytest.raises(ValueError, match="operator changed.*revision 1"):
         restored.create_problem(object())
-    accepted = replace(restored, discretization_revision=2)
-    assert accepted.to_dict()["discretization_revision"] == 2
+    accepted = replace(restored, discretization_revision=3)
+    assert accepted.to_dict()["discretization_revision"] == 3
 
 
 @pytest.mark.parametrize("theta,zeta", [(0, 64), (-1, 64), (64, 0), (2**31, 1), (65536, 65536), (True, 64), (64.0, 64)])

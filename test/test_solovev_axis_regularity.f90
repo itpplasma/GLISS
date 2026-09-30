@@ -9,6 +9,12 @@
 ! tangential axis factor the |m|=1 space was non-conforming and reported a
 ! spurious unstable mode whose eigenvalue scaled like the radial mesh width,
 ! so both fixtures counted one negative eigenvalue.
+!
+! The conforming space ties the leading |m|=1 coefficients of xi^s and eta
+! at the axis (#35), so its eigenvalues bound the converged ones from above.
+! On 16 surfaces degree two is too coarse for this near-marginal mode
+! (lowest 1.7e2 at q0=1.035); degree three resolves it (-3.1e2, converged
+! near -3.46e2 in benchmarks/solovev/public/convergence.sh).
 program test_solovev_axis_regularity
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use axisymmetric_spectrum, only: axisymmetric_spectrum_ok, &
@@ -20,18 +26,18 @@ program test_solovev_axis_regularity
 
     call get_command_argument(1, directory)
     if (len_trim(directory) == 0) error stop 'supply the fixture directory'
-    call check(trim(directory) // '/solovev_q1.035.nc', 1, 6)
-    call check(trim(directory) // '/solovev_q1.045.nc', 0, 6)
+    call check(trim(directory) // '/solovev_q1.035.nc', 1, 6, 3)
+    call check(trim(directory) // '/solovev_q1.045.nc', 0, 6, 3)
     ! The wider table has near-null directions at the zero-shift inertia
     ! probe; a growth-free block factorization must still resolve it.
-    call check(trim(directory) // '/solovev_q1.045.nc', 0, 10)
+    call check(trim(directory) // '/solovev_q1.045.nc', 0, 10, 2)
     write (*, '(a)') 'Solov''ev axis-regularity regression passed'
 
 contains
 
-    subroutine check(path, expected, poloidal_max)
+    subroutine check(path, expected, poloidal_max, degree)
         character(len=*), intent(in) :: path
-        integer, intent(in) :: expected, poloidal_max
+        integer, intent(in) :: expected, poloidal_max, degree
         type(gvec_cas3d_equilibrium_t) :: equilibrium
         type(axisymmetric_spectrum_result_t) :: result
         character(len=256) :: message
@@ -39,7 +45,8 @@ contains
 
         call read_gvec_cas3d_file(path, equilibrium, info)
         if (info /= reader_ok) error stop 'Solov''ev fixture read failed'
-        call compute_axisymmetric_spectrum(equilibrium, 1, poloidal_max, 2, &
+        call compute_axisymmetric_spectrum(equilibrium, 1, poloidal_max, &
+            degree, &
             .true., &
             result, info, message)
         if (info /= axisymmetric_spectrum_ok) error stop 'spectrum failed'

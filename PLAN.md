@@ -95,9 +95,14 @@ of every external solver.
   and B; the coupled operator, part C, stays open), the FEEC convergence
   certification (#13), the native test harness without path hacks (#14,
   wheels stay with the release workflow) and documentation sources whose
-  quickstart runs in the suite (#15, hosting stays open). New finding:
-  [#35](https://github.com/itpplasma/GLISS/issues/35) first-order radial
-  convergence at the axis.
+  quickstart runs in the suite (#15, hosting stays open).
+- [#35](https://github.com/itpplasma/GLISS/issues/35) conforming axis space:
+  the leading |m|=1 coefficients of xi^s and eta are tied as a smooth
+  displacement requires, the axis element is integrated in sqrt(s), and the
+  marginality mass is the perpendicular kinetic form (the coefficient norm
+  was unbounded for regular |m|=1 fields). Degree 3 now converges at order
+  3.3 on the Solov'ev sweep; eigenvalues are upper bounds, so degree 1
+  converges from above at order 1.3-1.4 and needs ns > 128 for q0 = 1.035.
 - Upstream trackers stay open until the upstream reports are filed:
   [#30](https://github.com/itpplasma/GLISS/issues/30) GVEC CAS3D export and
   [#31](https://github.com/itpplasma/GLISS/issues/31) DCON default tolerances.
@@ -210,9 +215,10 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
   and p on three graded meshes with a monomial oracle and a corrupted-map
   control ([#13](https://github.com/itpplasma/GLISS/issues/13)); the exact
   cylinder covers both parity classes. The Solov'ev toroidal sweep converges
-  only O(h) in ns because the first radial element under-integrates
-  r-smooth integrands and hides a non-conforming |m| = 1 axis combination
-  ([#35](https://github.com/itpplasma/GLISS/issues/35)).
+  at order 3.3 for degree 3 after the conforming axis space of
+  [#35](https://github.com/itpplasma/GLISS/issues/35); before it, the axis
+  element under-integrated sqrt(s)-smooth integrands, hid a non-conforming
+  |m| = 1 combination and used a mass unbounded on regular fields.
   Use smooth manufactured solutions for optimal rates and state the separate
   behavior of singular or continuum solutions.
   The new cylinder slow-cluster diagnostic demonstrates ordering-dependent

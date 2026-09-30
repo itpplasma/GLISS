@@ -1,6 +1,8 @@
 module compatible_three_component_problem
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use compatible_axis_regularity, only: axis_regularity_ok, axis_tie_t, &
+        build_trial_axis_tie, tie_local_map
     use compatible_compressible_stiffness_assembly, only: &
         assemble_compatible_compressible_stiffness_surface, &
         compatible_stiffness_term_count
@@ -13,8 +15,8 @@ module compatible_three_component_problem
         mode_table_is_unique, replicate_indexed_values, scatter_matrix, &
         sum_tensor, symmetrize_matrix, symmetrize_tensor
     use compatible_radial_quadrature, only: accurate_nodes, &
-        accurate_weights, build_constraint_quadrature, &
-        compatible_quadrature_ok
+        accurate_weights, axis_quadrature_points, build_axis_quadrature, &
+        build_constraint_quadrature, compatible_quadrature_ok
     use export_surface_geometry, only: build_angular_grids
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use phase_assembly_policy, only: phase_assembly_transformed
@@ -48,6 +50,8 @@ module compatible_three_component_problem
         integer :: normal_unknowns = 0
         integer :: eta_unknowns = 0
         integer :: mu_unknowns = 0
+        integer :: axis_quadrature_points = 0
+        type(axis_tie_t) :: axis_tie
     end type compatible_three_component_problem_t
 
     public :: build_compatible_three_component_problem
@@ -56,6 +60,7 @@ module compatible_three_component_problem
         [.true., .true., .false., .true., .false.]
     logical, parameter :: constraint_term(5) = &
         [.false., .false., .true., .false., .true.]
+    logical, parameter :: all_terms(5) = .true.
 
 contains
 
@@ -107,6 +112,24 @@ contains
         unknowns = problem%normal_unknowns + problem%eta_unknowns &
             + problem%mu_unknowns
         if (unknowns < 1) return
+        call fit_primitive_equilibrium(equilibrium, spline, local_info)
+        if (local_info /= primitive_equilibrium_ok) then
+            info = compatible_three_component_assembly_error
+            return
+        end if
+        call build_trial_axis_tie(spline, complex, mode_m, parity, &
+            stored_power, ranks(trial_component_normal, :), &
+            ranks(trial_component_eta, :), unknowns, .true., &
+            problem%axis_tie, local_info)
+        if (local_info /= axis_regularity_ok) then
+            info = compatible_three_component_assembly_error
+            return
+        end if
+        problem%eta_unknowns = problem%eta_unknowns &
+            - problem%axis_tie%eliminated_count
+        unknowns = problem%axis_tie%reduced_unknowns
+        problem%axis_quadrature_points = axis_quadrature_points(degree, &
+            maxval(mode_m))
         allocate (problem%stiffness(unknowns, unknowns), &
             problem%mass(unknowns, unknowns), &
             problem%stiffness_terms(unknowns, unknowns, &
@@ -118,11 +141,6 @@ contains
         problem%stiffness = 0.0_dp
         problem%mass = 0.0_dp
         problem%stiffness_terms = 0.0_dp
-        call fit_primitive_equilibrium(equilibrium, spline, local_info)
-        if (local_info /= primitive_equilibrium_ok) then
-            info = compatible_three_component_assembly_error
-            return
-        end if
         call build_angular_grids(n_theta, n_zeta, theta, zeta)
         call assemble_problem(spline, complex, breaks, theta, zeta, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, parity, &
@@ -151,6 +169,7 @@ contains
         type(compatible_three_component_problem_t), intent(inout) :: problem
         integer, intent(out) :: info
         real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
+        real(dp), allocatable :: axis_nodes(:), axis_weights(:)
         real(dp) :: coordinate, half_width, midpoint, radial_weight
         integer :: cell, point, orientation
 
@@ -158,8 +177,21 @@ contains
         call build_constraint_quadrature(complex%h1_degree, &
             constraint_nodes, constraint_weights, info)
         if (info /= compatible_quadrature_ok) return
+        call build_axis_quadrature(breaks(2) - breaks(1), &
+            problem%axis_quadrature_points, axis_nodes, axis_weights, info)
+        if (info /= compatible_quadrature_ok) return
+        info = compatible_three_component_assembly_error
         orientation = 0
-        do cell = 1, size(breaks) - 1
+        ! The axis element takes every term at every point of the rule in
+        ! sqrt(s), which integrates the regular trial products exactly.
+        do point = 1, size(axis_nodes)
+            call assemble_radial_point(spline, complex, axis_nodes(point), &
+                axis_weights(point), theta, zeta, adiabatic_index, density, &
+                mode_m, mode_n, parity, stored_power, topology, ranks, &
+                problem, all_terms, .true., info, orientation)
+            if (info /= compatible_three_component_ok) return
+        end do
+        do cell = 2, size(breaks) - 1
             midpoint = 0.5_dp * (breaks(cell) + breaks(cell + 1))
             half_width = 0.5_dp * (breaks(cell + 1) - breaks(cell))
             do point = 1, size(accurate_nodes)
@@ -285,7 +317,8 @@ contains
         real(dp), allocatable :: local_dh1(:, :), local_l2(:, :)
         real(dp), allocatable :: local_eta(:, :)
         real(dp), allocatable :: local_k(:, :), local_m(:, :), local_terms(:, :, :)
-        integer, allocatable :: h1_index(:), l2_index(:), map(:)
+        real(dp), allocatable :: tie_scale(:)
+        integer, allocatable :: h1_index(:), l2_index(:), map(:), full_map(:)
         real(dp) :: pressure
         integer :: allocation_status, local_info, trials
 
@@ -359,9 +392,15 @@ contains
                 local_m, local_info)
             if (local_info /= 0) return
         end if
-        call build_local_map(complex, topology, ranks, h1_index, l2_index, map)
-        if (assemble_mass) call scatter_matrix(map, local_m, 1.0_dp, &
-            problem%mass)
+        call build_local_map(complex, topology, ranks, h1_index, l2_index, &
+            full_map)
+        allocate (map(size(full_map)), tie_scale(size(full_map)))
+        call tie_local_map(problem%axis_tie, full_map, map, tie_scale)
+        call scale_local_tensor(tie_scale, local_terms)
+        if (assemble_mass) then
+            call scale_local_matrix(tie_scale, local_m)
+            call scatter_matrix(map, local_m, 1.0_dp, problem%mass)
+        end if
         call scatter_terms(map, local_terms, term_mask, &
             problem%stiffness_terms)
         info = compatible_three_component_ok
@@ -422,6 +461,28 @@ contains
                 * count(ranks(component, :) > 0)
         end do
     end subroutine build_local_map
+
+    pure subroutine scale_local_matrix(scale, matrix)
+        real(dp), intent(in) :: scale(:)
+        real(dp), intent(inout) :: matrix(:, :)
+        integer :: a, b
+
+        do b = 1, size(matrix, 2)
+            do a = 1, size(matrix, 1)
+                matrix(a, b) = scale(a) * scale(b) * matrix(a, b)
+            end do
+        end do
+    end subroutine scale_local_matrix
+
+    pure subroutine scale_local_tensor(scale, tensor)
+        real(dp), intent(in) :: scale(:)
+        real(dp), intent(inout) :: tensor(:, :, :)
+        integer :: term
+
+        do term = 1, size(tensor, 3)
+            call scale_local_matrix(scale, tensor(:, :, term))
+        end do
+    end subroutine scale_local_tensor
 
     subroutine scatter_terms(map, local, term_mask, global)
         integer, intent(in) :: map(:)

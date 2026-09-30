@@ -313,9 +313,15 @@ with gliss.Equilibrium(Path("w7x.nc")) as equilibrium:
 
 These functions use the incompressible, two-component ideal-MHD functional
 on the same compatible radial FEEC complex used by the compressible solver.
-The mass matrix is the positive perpendicular L2 norm of the normal and
-tangential components. Its eigenvalue is not an SI frequency or physical
-growth rate. Matrix inertia and the zero crossing are independent of the
+The mass matrix is the physical perpendicular kinetic form at unit mass
+density, `integral |xi_perp|^2 dV` with rho = 1 kg/m^3, so the eigenvalue is
+omega^2 in s^-2 for perpendicular inertia only; it is not the physical growth
+rate of the compressible problem. The plain coefficient norm of `(xi^s, eta)`
+used before is unbounded for regular |m|=1 displacements, whose `eta` grows
+like `s^(-1/2)`, and made eigenvalue convergence depend on the axis
+quadrature. The trial space ties the leading |m|=1 coefficients of `xi^s`
+and `eta` as a smooth Cartesian displacement requires, and the axis element
+is integrated in `sqrt(s)`. Matrix inertia and the zero crossing are independent of the
 chosen positive norm. A finite numerical eigenvalue is comparable to CAS3D
 only when the equilibrium, Fourier table, radial space, boundary condition,
 and normalization are matched. `degree` selects FEEC degree 1 through 4 and
@@ -837,13 +843,15 @@ Writers always emit schema version 5. Readers also accept versions 1 to 4,
 map their `radial_quadrature="midpoint"` field to FEEC degree 1, and recover
 historical solver controls when they are absent. Older documents record a
 different operator: revision 0 is the midpoint quadrature of versions 1 and
-2, revision 1 the Gauss FEEC operator of versions 3 and 4, and revision 2 the
-current axis-conforming FEEC space. They remain readable as records, but
+2, revision 1 the Gauss FEEC operator of versions 3 and 4, revision 2 the
+axis-weighted FEEC space of #16, and revision 3 the current space with the
+|m|=1 axis tie and the axis element integrated in `sqrt(s)` (#35). They
+remain readable as records, but
 `create_problem()` raises `ValueError("operator changed ...")` for a
 configuration whose revision differs from the current one, and a run manifest
 requires the configuration and result revisions to agree. Accepting the new
 operator is explicit:
-`dataclasses.replace(configuration, discretization_revision=2)`. Full-spectrum readers require the
+`dataclasses.replace(configuration, discretization_revision=3)`. Full-spectrum readers require the
 exact entry set for the declared version, stored without compression or
 encryption. They reject invalid entry sets, malformed
 metadata, incompatible versions, wrong array types or shapes, inconsistent

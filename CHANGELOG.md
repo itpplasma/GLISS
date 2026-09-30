@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Make the compatible FEEC space conforming at the axis for |m|=1 (#35). A
+  smooth displacement ties the leading coefficients of `xi^s ~ s^(1/2)` and
+  `eta ~ s^(-1/2)`; the independent pair had a logarithmically divergent
+  compression energy, hidden by the Gauss rule in s. The first eta
+  coefficient of each |m|=1 trial is now eliminated (`eta_unknowns` drops by
+  one per |m|=1 trial), the axis element is integrated in `sqrt(s)`, and the
+  marginality mass is the perpendicular kinetic form at unit mass density
+  instead of a coefficient norm that is unbounded for regular |m|=1
+  displacements. Marginality eigenvalues are now omega^2 in s^-2 for
+  perpendicular inertia. On the Solov'ev q0 = 1.035 family degree 3
+  converges at order 3.3 in ns instead of first order, degrees 3 and 4 agree
+  to 1e-5 at ns = 128, and the degree-4 axis mode is gone; the DCON bracket
+  holds at the benchmark resolution. Eigenvalues are upper bounds, so 16
+  surfaces need degree 3 for this near-marginal kink. The CAS3D midpoint and
+  coefficient replays keep their historical space. The operator revision is
+  3.
 - Make the |m|=1 compatible FEEC trial space conforming at the magnetic axis:
   the tangential eta basis carries the regular-displacement axis factor of the
   normal component, and the third compressible unknown is the regular

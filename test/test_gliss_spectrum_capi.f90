@@ -16,7 +16,7 @@ program test_gliss_spectrum_capi
     ! oracle; physical agreement is checked in test_solovev_axis_regularity
     ! and test_axis_regular_displacement.
     real(c_double), parameter :: expected_lowest = &
-        1.1918438137928291e0_c_double
+        1.1925140189397123e0_c_double
     real(c_double), parameter :: reference_certificate_limit = 1.2e-3_c_double
     real(c_double), parameter :: reference_relative_limit = 1.0e-8_c_double
 
@@ -275,7 +275,7 @@ program test_gliss_spectrum_capi
     status = problem_unknown_count(problem, 1_c_int, c_loc(unknowns), &
         c_loc(error_buffer), int(size(error_buffer), c_size_t))
     call require(status == status_ok, "unknown-count query failed")
-    call require(unknowns == 196_c_size_t, "unknown count is wrong")
+    call require(unknowns == 195_c_size_t, "unknown count is wrong")
     allocate (eigenvector(unknowns), gradient(unknowns), sentinel(unknowns))
     sentinel = 7.0_c_double
     eigenvector = sentinel
@@ -309,7 +309,7 @@ program test_gliss_spectrum_capi
     call require(summary%unknowns == unknowns, "summary size is wrong")
     call require(summary%normal_unknowns == 64_c_size_t, &
         "summary normal size is wrong")
-    call require(summary%eta_unknowns == 66_c_size_t, &
+    call require(summary%eta_unknowns == 65_c_size_t, &
         "summary eta size is wrong")
     call require(summary%mu_unknowns == 66_c_size_t, &
         "summary mu size is wrong")

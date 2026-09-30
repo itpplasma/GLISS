@@ -44,12 +44,14 @@ assert gliss.mercier_objective(unstable) > 0.0
 ## The n = 1 axisymmetric family
 
 `solve_axisymmetric` counts negative directions of the two-component
-marginality operator and certifies the lowest eigenpair.
+marginality operator and certifies the lowest eigenpair. The trial space is
+conforming, so its eigenvalues approach the converged ones from above; on
+these 16-surface exports degree 3 resolves the near-marginal kink.
 
 ```python
 for path, expected in ((unstable, 1), (stable, 0)):
     with gliss.Equilibrium(path) as equilibrium:
-        result = gliss.solve_axisymmetric(equilibrium, poloidal_max=6, degree=2)
+        result = gliss.solve_axisymmetric(equilibrium, poloidal_max=6, degree=3)
     assert result.negative_count == expected
     assert result.certificate < abs(result.lowest_eigenvalue)
 ```

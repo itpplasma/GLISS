@@ -207,12 +207,29 @@ contains
             coefficient_n_theta, coefficient_n_zeta, reference_length, &
             radial_quadrature_policy, info, message)
         if (info /= marginality_spectrum_ok) return
-        call build_compatible_two_component_problem(equilibrium, mode_m, &
-            mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
-            problem, info, &
-            radial_quadrature_policy=radial_quadrature_policy, &
-            sparse_storage=normalization_policy == &
-            marginality_normalization_perpendicular_l2)
+        if (normalization_policy == marginality_normalization_cas3d2mn &
+            .or. radial_quadrature_policy &
+            == marginality_quadrature_cas3d_midpoint) then
+            ! The CAS3D coefficient and midpoint replays keep the historical
+            ! radial space and coefficient mass.
+            call build_compatible_two_component_problem(equilibrium, &
+                mode_m, mode_n, stored_power, parity_class, degree, n_theta, &
+                n_zeta, problem, info, &
+                radial_quadrature_policy=radial_quadrature_policy, &
+                sparse_storage=normalization_policy == &
+                marginality_normalization_perpendicular_l2, &
+                axis_conforming=.false.)
+        else
+            ! The positive norm is the physical perpendicular kinetic form
+            ! at unit mass density, bounded on the energy space; the plain
+            ! coefficient norm of (xi^s, eta) diverges for regular |m|=1
+            ! displacements because eta ~ s^(-1/2).
+            call build_compatible_two_component_problem(equilibrium, &
+                mode_m, mode_n, stored_power, parity_class, degree, n_theta, &
+                n_zeta, problem, info, density_kg_m3=1.0_dp, &
+                radial_quadrature_policy=radial_quadrature_policy, &
+                sparse_storage=.true.)
+        end if
         if (info /= compatible_problem_ok) then
             info = marginality_spectrum_compute_error
             message = "compatible FEEC marginality assembly failed"

@@ -384,8 +384,12 @@ contains
             call require(problem%h1_dofs == expected_h1 &
                 .and. problem%l2_dofs == expected_l2, &
                 "compatible problem dimensions differ")
+            ! The (1,0) trial has the regular-axis power 1/2; its first eta
+            ! coefficient is tied to the normal one at the axis.
+            call require(problem%axis_tie%eliminated_count == 1, &
+                "compatible axis tie count differs")
             call require(problem%normal_unknowns == 3 * expected_h1 &
-                .and. problem%eta_unknowns == 2 * expected_l2, &
+                .and. problem%eta_unknowns == 2 * expected_l2 - 1, &
                 "compatible component dimensions differ")
             scale = max(1.0_dp, maxval(abs(problem%stiffness)))
             call require(maxval(abs(problem%stiffness &
@@ -423,9 +427,12 @@ contains
             .and. all(problem%mass == reference_mass), &
             "operator tracing changed the assembled problem")
         call check_compatible_trace(traces)
+        ! The one-point constraint rule equals the midpoint rule in every
+        ! cell of the historical space; the conforming space integrates the
+        ! axis cell in sqrt(s) instead.
         call build_compatible_two_component_problem(equilibrium, &
             [0, 1, 2], [0, 0, 0], [0.0_dp, 0.0_dp, 0.0_dp], 1, 1, &
-            16, 16, problem, status)
+            16, 16, problem, status, axis_conforming=.false.)
         call require(status == compatible_problem_ok, &
             "degree-one Gauss reference problem failed")
         gauss_constraint = problem%stiffness_terms(:, :, 3)
@@ -513,13 +520,17 @@ contains
         type(compatible_cell_trace_t), intent(in) :: traces(:)
         integer, parameter :: expected_cells(3) = [1, 3, 6]
         integer, parameter :: expected_map_size(3) = [24, 27, 24]
+        ! Degree four and |m| <= 2: the axis cell takes the 13-point rule in
+        ! sqrt(s) (2 + 2*4 + 3), the others five accurate and four
+        ! constraint points.
+        integer, parameter :: expected_points(3) = [13, 9, 9]
         integer :: cell, point
 
         call require(size(traces) == 3, "compatible trace count differs")
         do cell = 1, size(traces)
             call require(traces(cell)%cell == expected_cells(cell), &
                 "compatible trace cell selection differs")
-            call require(size(traces(cell)%points) == 9, &
+            call require(size(traces(cell)%points) == expected_points(cell), &
                 "compatible trace quadrature count differs")
             do point = 1, size(traces(cell)%points)
                 call require(size(traces(cell)%points(point)%map) &
@@ -557,8 +568,10 @@ contains
             call require(problem%h1_dofs == expected_h1 &
                 .and. problem%l2_dofs == expected_l2, &
                 "compatible three-component dimensions differ")
+            call require(problem%axis_tie%eliminated_count == 1, &
+                "compatible three-component axis tie count differs")
             call require(problem%normal_unknowns == 3 * expected_h1 &
-                .and. problem%eta_unknowns == 2 * expected_l2 &
+                .and. problem%eta_unknowns == 2 * expected_l2 - 1 &
                 .and. problem%mu_unknowns == 2 * expected_l2, &
                 "compatible three-component activity differs")
             scale = max(1.0_dp, maxval(abs(problem%stiffness)))

@@ -4,6 +4,8 @@ module compatible_two_component_problem
     use compatible_family_point_assembly, only: &
         assemble_compatible_transformed_surface, &
         compatible_two_component_term_count
+    use compatible_axis_regularity, only: axis_regularity_ok, axis_tie_t, &
+        build_trial_axis_tie, tie_local_map
     use compatible_block_storage, only: compatible_block_allocation, &
         compatible_block_ok, initialize_compatible_block_pencil, &
         scatter_symmetric_compatible_block, symmetrize_compatible_blocks
@@ -19,8 +21,8 @@ module compatible_two_component_problem
         scale_tensor, scatter_matrix, sum_tensor, symmetrize_matrix, &
         symmetrize_tensor
     use compatible_radial_quadrature, only: accurate_nodes, &
-        accurate_weights, build_constraint_quadrature, &
-        compatible_quadrature_ok
+        accurate_weights, axis_quadrature_points, build_axis_quadrature, &
+        build_constraint_quadrature, compatible_quadrature_ok
     use export_surface_geometry, only: build_angular_grids
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use primitive_equilibrium_spline, only: fit_primitive_equilibrium, &
@@ -50,6 +52,9 @@ module compatible_two_component_problem
         real(dp), allocatable :: stiffness_terms(:, :, :)
         type(variable_block_tridiagonal_t) :: sparse_stiffness, sparse_mass
         integer, allocatable :: sparse_block_index(:), sparse_local_index(:)
+        type(axis_tie_t) :: axis_tie
+        logical :: axis_conforming = .false.
+        integer :: axis_quadrature_points = 0
         integer :: degree = 0
         integer :: quadrature_points = 0
         integer :: h1_dofs = 0
@@ -74,7 +79,7 @@ contains
     subroutine build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
             problem, info, trace_cells, trace, density_kg_m3, &
-            radial_quadrature_policy, sparse_storage)
+            radial_quadrature_policy, sparse_storage, axis_conforming)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
@@ -86,6 +91,10 @@ contains
         real(dp), optional, intent(in) :: density_kg_m3
         integer, optional, intent(in) :: radial_quadrature_policy
         logical, optional, intent(in) :: sparse_storage
+        ! Conforming axis space (default for the Gauss policy): the |m|=1
+        ! regularity tie and the axis-element rule in sqrt(s). The CAS3D
+        ! midpoint and coefficient replays keep the historical space.
+        logical, optional, intent(in) :: axis_conforming
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
@@ -93,7 +102,7 @@ contains
         integer, allocatable :: eta_rank(:), normal_rank(:), parity(:)
         integer :: allocation_status, intervals, local_info, quadrature_policy
         integer :: unknowns
-        logical :: use_sparse
+        logical :: use_sparse, conforming
 
         info = compatible_problem_invalid
         quadrature_policy = compatible_quadrature_gauss
@@ -101,6 +110,10 @@ contains
         if (present(radial_quadrature_policy)) &
             quadrature_policy = radial_quadrature_policy
         if (present(sparse_storage)) use_sparse = sparse_storage
+        conforming = quadrature_policy == compatible_quadrature_gauss
+        if (present(axis_conforming)) conforming = axis_conforming
+        if (conforming .and. &
+            quadrature_policy /= compatible_quadrature_gauss) return
         if (.not. inputs_are_valid(equilibrium, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, quadrature_policy)) return
         if (present(density_kg_m3)) then
@@ -140,6 +153,24 @@ contains
             * count(topology%active(trial_component_eta, :))
         unknowns = problem%normal_unknowns + problem%eta_unknowns
         if (unknowns < 1) return
+        call fit_primitive_equilibrium(equilibrium, spline, local_info)
+        if (local_info /= primitive_equilibrium_ok) then
+            info = compatible_problem_assembly_error
+            return
+        end if
+        call build_trial_axis_tie(spline, complex, mode_m, parity, &
+            stored_power, normal_rank, eta_rank, unknowns, conforming, &
+            problem%axis_tie, local_info)
+        if (local_info /= axis_regularity_ok) then
+            info = compatible_problem_assembly_error
+            return
+        end if
+        problem%axis_conforming = conforming
+        problem%eta_unknowns = problem%eta_unknowns &
+            - problem%axis_tie%eliminated_count
+        unknowns = problem%axis_tie%reduced_unknowns
+        if (conforming) problem%axis_quadrature_points = &
+            axis_quadrature_points(degree, maxval(mode_m))
         if (use_sparse) then
             call initialize_compatible_block_pencil(complex%h1_dofs, &
                 complex%l2_dofs, &
@@ -147,7 +178,7 @@ contains
                 count(topology%active(trial_component_eta, :)), degree, &
                 problem%sparse_stiffness, problem%sparse_mass, &
                 problem%sparse_block_index, problem%sparse_local_index, &
-                local_info)
+                local_info, problem%axis_tie%eliminated)
             if (local_info /= compatible_block_ok) then
                 if (local_info == compatible_block_allocation) &
                     info = compatible_problem_allocation_error
@@ -174,11 +205,6 @@ contains
                 info = compatible_problem_allocation_error
                 return
             end if
-        end if
-        call fit_primitive_equilibrium(equilibrium, spline, local_info)
-        if (local_info /= primitive_equilibrium_ok) then
-            info = compatible_problem_assembly_error
-            return
         end if
         call build_angular_grids(n_theta, n_zeta, theta, zeta)
         if (present(trace)) then
@@ -230,6 +256,7 @@ contains
         real(dp), optional, intent(in) :: density_kg_m3
         integer, optional, intent(in) :: quadrature_policy
         real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
+        real(dp), allocatable :: axis_nodes(:), axis_weights(:)
         real(dp) :: coordinate, half_width, midpoint, radial_weight
         integer :: cell, point, trace_index, trace_point, orientation
         integer :: policy
@@ -240,6 +267,12 @@ contains
         call build_constraint_quadrature(complex%h1_degree, &
             constraint_nodes, constraint_weights, info)
         if (info /= compatible_quadrature_ok) return
+        if (problem%axis_conforming) then
+            call build_axis_quadrature(breaks(2) - breaks(1), &
+                problem%axis_quadrature_points, axis_nodes, axis_weights, info)
+            if (info /= compatible_quadrature_ok) return
+        end if
+        info = compatible_problem_assembly_error
         orientation = 0
         do cell = 1, size(breaks) - 1
             trace_index = 0
@@ -247,7 +280,9 @@ contains
                 trace_index = findloc(trace_cells, cell, dim=1)
                 if (trace_index > 0) then
                     trace(trace_index)%cell = cell
-                    if (policy == compatible_quadrature_gauss) then
+                    if (cell == 1 .and. problem%axis_conforming) then
+                        allocate (trace(trace_index)%points(size(axis_nodes)))
+                    else if (policy == compatible_quadrature_gauss) then
                         allocate (trace(trace_index)%points( &
                             size(accurate_nodes) + size(constraint_nodes)))
                     else
@@ -257,6 +292,31 @@ contains
             end if
             midpoint = 0.5_dp * (breaks(cell) + breaks(cell + 1))
             half_width = 0.5_dp * (breaks(cell + 1) - breaks(cell))
+            if (cell == 1 .and. problem%axis_conforming) then
+                ! Every term at every axis point: the rule in sqrt(s) is exact
+                ! for the regular trial products, so no reduced pairing.
+                do point = 1, size(axis_nodes)
+                    if (trace_index > 0) then
+                        call assemble_radial_point(spline, complex, &
+                            axis_nodes(point), axis_weights(point), theta, &
+                            zeta, mode_m, mode_n, parity, stored_power, &
+                            topology, normal_rank, eta_rank, problem, &
+                            all_terms, .true., info, &
+                            trace(trace_index)%points(point), density_kg_m3, &
+                            orientation=orientation)
+                    else
+                        call assemble_radial_point(spline, complex, &
+                            axis_nodes(point), axis_weights(point), theta, &
+                            zeta, mode_m, mode_n, parity, stored_power, &
+                            topology, normal_rank, eta_rank, problem, &
+                            all_terms, .true., info, &
+                            density_kg_m3=density_kg_m3, &
+                            orientation=orientation)
+                    end if
+                    if (info /= compatible_problem_ok) return
+                end do
+                cycle
+            end if
             if (policy == compatible_quadrature_cas3d_midpoint) then
                 radial_weight = 2.0_dp * half_width
                 if (trace_index > 0) then
@@ -345,7 +405,8 @@ contains
         real(dp), allocatable :: l2(:), local(:, :), local_dh1(:, :)
         real(dp), allocatable :: local_mass(:, :), local_terms(:, :, :)
         real(dp), allocatable :: local_h1(:, :), local_l2(:, :)
-        integer, allocatable :: h1_index(:), l2_index(:), map(:)
+        real(dp), allocatable :: tie_scale(:)
+        integer, allocatable :: h1_index(:), l2_index(:), map(:), full_map(:)
         real(dp) :: stiffness_scale
         integer :: local_info, term, trials
 
@@ -417,7 +478,12 @@ contains
             if (local_info /= 0) return
         end if
         call build_local_map(complex, topology, normal_rank, eta_rank, &
-            h1_index, l2_index, map)
+            h1_index, l2_index, full_map)
+        allocate (map(size(full_map)), tie_scale(size(full_map)))
+        call tie_local_map(problem%axis_tie, full_map, map, tie_scale)
+        call scale_local_tensor(tie_scale, local_terms)
+        if (allocated(local_mass)) call scale_local_matrix(tie_scale, &
+            local_mass)
         if (present(point_trace)) then
             point_trace%coordinate = coordinate
             point_trace%weight = weight
@@ -443,6 +509,7 @@ contains
                 point_trace%stiffness_terms = local_terms
                 call build_trace_radial_mass(local_h1, local_l2, &
                     point_trace%mass)
+                call scale_local_matrix(tie_scale, point_trace%mass)
             end if
         end if
         stiffness_scale = weight
@@ -473,17 +540,17 @@ contains
                     call scatter_matrix(map, local_mass, 1.0_dp, problem%mass)
                 end if
             else
+                call build_local_radial_mass(local_h1, local_l2, weight, &
+                    local)
+                call scale_local_matrix(tie_scale, local)
                 if (problem%has_sparse_storage) then
-                    call build_local_radial_mass(local_h1, local_l2, weight, &
-                        local)
                     call scatter_symmetric_compatible_block(map, local, &
                         1.0_dp, problem%sparse_block_index, &
                         problem%sparse_local_index, problem%sparse_mass, &
                         local_info)
                     if (local_info /= compatible_block_ok) return
                 else
-                    call add_radial_mass(map, local_h1, local_l2, weight, &
-                        problem%mass)
+                    call scatter_matrix(map, local, 1.0_dp, problem%mass)
                 end if
             end if
         end if
@@ -521,38 +588,27 @@ contains
         end do
     end subroutine build_local_map
 
-    subroutine add_radial_mass(map, h1, l2, weight, mass)
-        integer, intent(in) :: map(:)
-        real(dp), intent(in) :: h1(:, :), l2(:, :), weight
-        real(dp), intent(inout) :: mass(:, :)
-        real(dp) :: basis(size(map))
-        integer :: a, b, basis_index, h1_columns, trial, trials
+    pure subroutine scale_local_matrix(scale, matrix)
+        real(dp), intent(in) :: scale(:)
+        real(dp), intent(inout) :: matrix(:, :)
+        integer :: a, b
 
-        trials = size(h1, 2)
-        h1_columns = size(h1, 1) * trials
-        do basis_index = 1, size(h1, 1)
-            do trial = 1, trials
-                basis((basis_index - 1) * trials + trial) = &
-                    h1(basis_index, trial)
+        do b = 1, size(matrix, 2)
+            do a = 1, size(matrix, 1)
+                matrix(a, b) = scale(a) * scale(b) * matrix(a, b)
             end do
         end do
-        do basis_index = 1, size(l2, 1)
-            do trial = 1, trials
-                basis(size(h1, 1) * trials + (basis_index - 1) * trials &
-                    + trial) = l2(basis_index, trial)
-            end do
+    end subroutine scale_local_matrix
+
+    pure subroutine scale_local_tensor(scale, tensor)
+        real(dp), intent(in) :: scale(:)
+        real(dp), intent(inout) :: tensor(:, :, :)
+        integer :: term
+
+        do term = 1, size(tensor, 3)
+            call scale_local_matrix(scale, tensor(:, :, term))
         end do
-        do b = 1, size(map)
-            if (map(b) == 0) cycle
-            do a = 1, size(map)
-                if (map(a) == 0) cycle
-                if (modulo(a - 1, trials) /= modulo(b - 1, trials)) cycle
-                if ((a <= h1_columns) .neqv. (b <= h1_columns)) cycle
-                mass(map(a), map(b)) = mass(map(a), map(b)) &
-                    + weight * basis(a) * basis(b)
-            end do
-        end do
-    end subroutine add_radial_mass
+    end subroutine scale_local_tensor
 
     subroutine build_local_radial_mass(h1, l2, weight, mass)
         real(dp), intent(in) :: h1(:, :), l2(:, :), weight

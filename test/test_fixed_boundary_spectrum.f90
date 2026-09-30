@@ -27,7 +27,7 @@ program test_fixed_boundary_spectrum
     ! oracle; physical agreement is checked in test_solovev_axis_regularity
     ! and test_axis_regular_displacement.
     real(dp), parameter :: reference_lowest(2) = &
-        [1.1918438137928291e0_dp, 1.1918438136655514e0_dp]
+        [1.1925140189397123e0_dp, 1.1925140188200489e0_dp]
     real(dp), parameter :: reference_certificate_limit = 1.2e-3_dp
     real(dp), parameter :: reference_relative_limit = 1.0e-8_dp
     type(gvec_cas3d_equilibrium_t) :: equilibrium
@@ -374,10 +374,10 @@ contains
         call require(result%field_periods == 1, &
             "result field-period count is wrong")
         call require(result%mode_count == 2, "result mode count is wrong")
-        call require(result%unknowns == 196, "result unknown count is wrong")
+        call require(result%unknowns == 195, "result unknown count is wrong")
         call require(result%normal_unknowns == 64, &
             "normal unknown count is wrong")
-        call require(result%eta_unknowns == 66, &
+        call require(result%eta_unknowns == 65, &
             "eta unknown count is wrong")
         call require(result%mu_unknowns == 66, &
             "mu unknown count is wrong")

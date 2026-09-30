@@ -67,18 +67,27 @@ The patch fixes 1, 2, 4 and 5; `run.sh` passes `--winding -1` for 3.
 
 ## Radial convergence
 
-`convergence.sh OUT 1.035` exports the same GVEC state at ns = 16, 32 and 64
-(M = 8) and solves the n = 1 family for FEEC degrees 1 to 4:
+`convergence.sh OUT 1.035` exports the same GVEC state at ns = 16, 32, 64 and
+128 (M = 8) and solves the n = 1 family (poloidal_max 6) for FEEC degrees 1
+to 4. The marginality mass is the perpendicular kinetic form at unit mass
+density, so eigenvalues are omega^2 in s^-2:
 
 | ns | degree 1 | degree 2 | degree 3 | degree 4 |
 |---|---|---|---|---|
-| 16 | +6.98e-3 (stable) | −2.338e-4 | −3.867e-4 | −3.912e-4 |
-| 32 | +1.83e-3 (stable) | −2.887e-4 | −3.056e-4 | −3.058e-4 |
-| 64 | +3.47e-4 (stable) | −2.589e-4 | −2.638e-4 | −2.640e-4 |
+| 16 | +6.880e3 (stable) | +1.713e2 (stable) | −3.1348e2 | −3.4398e2 |
+| 32 | +2.633e3 (stable) | −2.3985e2 | −3.4255e2 | −3.4470e2 |
+| 64 | +8.448e2 (stable) | −3.2886e2 | −3.4537e2 | −3.4548e2 |
+| 128 | +9.58e1 (stable) | −3.4389e2 | −3.45663e2 | −3.45659e2 |
 
-Degree convergence at fixed ns is fast, but mesh convergence is first order,
-and degree 1 misses the instability. The first radial element integrates
-integrands that are smooth in sqrt(s) with a Gauss rule in s, and that
-under-integration also hides an axis mode at degree 4
-([#35](https://github.com/itpplasma/GLISS/issues/35)).
-
+The conforming axis space ([#35](https://github.com/itpplasma/GLISS/issues/35))
+ties the leading |m|=1 coefficients of xi^s and eta and integrates the axis
+element in sqrt(s), so every degree converges monotonically from above.
+Richardson extrapolation of degree 3 gives -345.69; its successive
+differences fall by 10.3 and 9.8 (order 3.3), degree 2 approaches third
+order, and degree 1 converges at order 1.3 to 1.4 and resolves the
+instability only beyond ns = 128. Degrees 3 and 4 agree to 1e-5 at ns = 128.
+The earlier space left the |m|=1 leading coefficients independent (a
+logarithmically divergent compression energy hidden by the Gauss rule in s)
+and normalized with a coefficient norm that is unbounded for regular |m|=1
+displacements; its eigenvalues converged only at first order and, with an
+exact axis rule, showed a spurious high-m axis mode at degree 4.
