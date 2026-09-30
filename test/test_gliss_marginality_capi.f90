@@ -28,6 +28,7 @@ program test_gliss_marginality_capi
         real(c_double) :: certificate
         real(c_double) :: eigenpair_residual
         real(c_double) :: force_balance_residual
+        real(c_double) :: zero_floor
     end type marginality_result_c
 
     type, bind(c) :: axisymmetric_result_c
@@ -45,6 +46,7 @@ program test_gliss_marginality_capi
         real(c_double) :: certificate
         real(c_double) :: eigenpair_residual
         real(c_double) :: force_balance_residual
+        real(c_double) :: zero_floor
     end type axisymmetric_result_c
 
     integer(c_int), target :: mode_m(7) = &
@@ -398,6 +400,9 @@ contains
         call require(general_result%force_balance_residual == &
             axisymmetric_result%force_balance_residual, &
             "force residuals differ")
+        call require(general_result%zero_floor == &
+            axisymmetric_result%zero_floor .and. general_result%zero_floor &
+            > 0.0_c_double, "zero floors differ")
     end subroutine require_same_result
 
     subroutine require_same_marginality(first, second)
