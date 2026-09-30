@@ -32,6 +32,12 @@ contains
         count = -1
         call factorize_generalized_shift(stiffness, mass, shift, factor, info)
         if (info /= variable_generalized_ok) return
+        ! An unresolved block pivot makes the count unreliable at this shift;
+        ! callers probe a nearby shift exactly as for a singular factor.
+        if (.not. factor%count_reliable) then
+            info = variable_generalized_invalid
+            return
+        end if
         count = factor%negative_count
     end subroutine variable_generalized_inertia
 

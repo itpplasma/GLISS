@@ -113,10 +113,43 @@ program test_variable_block_factorization
         "partial singular factor was accepted for solve")
 
     call check_scaled_pivot_inertia()
+    call check_unresolved_block_pivot()
 
     write (*, "(a)") "PASS"
 
 contains
+
+    ! A well-conditioned matrix (eigenvalues about -1.16, 0.58, 1, 1) whose
+    ! first block has a tiny pivot: the per-block Bunch-Kaufman pivoting
+    ! cannot avoid it, the Schur update then carries rounding errors of order
+    ! eps/delta into the second block, and the count may be wrong.  The
+    ! factorization must report that its count is not reliable.
+    subroutine check_unresolved_block_pivot()
+        real(dp) :: matrix(4, 4)
+        type(variable_block_tridiagonal_t) :: split
+        type(variable_block_factor_t) :: split_factor
+
+        matrix = 0.0_dp
+        matrix(1, 1) = 1.0e-15_dp
+        matrix(2, 2) = 1.0_dp
+        matrix(3, 3) = 0.5_dp
+        matrix(4, 4) = 1.0_dp
+        matrix(3, 1) = 1.0_dp
+        matrix(1, 3) = 1.0_dp
+        matrix(4, 1) = 1.0_dp
+        matrix(1, 4) = 1.0_dp
+        call pack_variable_blocks(matrix, [2, 2], split, info)
+        call require(info == variable_block_ok, "split packing failed")
+        call factorize_variable_shifted(split, 0.0_dp, split_factor, info)
+        call require(info == variable_block_ok &
+            .and. .not. split_factor%count_reliable, &
+            "unresolved block pivot was not flagged")
+        call factorize_variable_shifted(split, -0.25_dp, split_factor, info)
+        call require(info == variable_block_ok &
+            .and. split_factor%count_reliable &
+            .and. split_factor%negative_count == 1, &
+            "resolved nearby shift lost the exact count")
+    end subroutine check_unresolved_block_pivot
 
     subroutine check_scaled_pivot_inertia()
         type(variable_block_tridiagonal_t) :: scaled_blocks

@@ -31,6 +31,11 @@ module variable_block_tridiagonal
         type(variable_integer_block_t), allocatable :: pivots(:)
         integer :: negative_count = 0
         logical :: complete = .false.
+        ! False when a pivot is not resolved above the rounding error that
+        ! the block Schur update carries into its diagonal block (a tiny
+        ! pivot in a previous block amplifies it); the Sylvester count may
+        ! then differ from the exact inertia.
+        logical :: count_reliable = .true.
     end type variable_block_factor_t
 
     public :: apply_variable_block_tridiagonal
@@ -86,7 +91,8 @@ contains
         real(dp), intent(in) :: shift
         type(variable_block_factor_t), intent(out) :: factor
         integer, intent(out) :: info
-        real(dp), allocatable :: coupled(:, :), work(:)
+        real(dp), allocatable :: coupled(:, :), work(:), before(:, :)
+        real(dp) :: update_scale
         integer :: block, current_width, j, maximum_width, previous_width
 
         call validate_variable_blocks(blocks, info)
@@ -105,12 +111,18 @@ contains
                 factor%schur(block)%values(j, j) = &
                     factor%schur(block)%values(j, j) - shift
             end do
+            update_scale = 0.0_dp
             if (block > 1) then
                 previous_width = blocks%widths(block - 1)
+                before = factor%schur(block)%values
                 call update_variable_schur(block, previous_width, &
                     current_width, factor, blocks%lower(block - 1)%values, &
                     coupled, info)
                 if (info /= variable_block_ok) return
+                ! Magnitude of the Schur term L S^(-1) L^T; its rounding
+                ! error, not the block's own scale, can flip small pivots.
+                update_scale = maxval(abs(factor%schur(block)%values &
+                    - before))
             end if
             call dsytrf("U", current_width, factor%schur(block)%values, &
                 current_width, factor%pivots(block)%values, work, size(work), &
@@ -126,10 +138,47 @@ contains
             factor%negative_count = factor%negative_count &
                 + pivot_negative_count(factor%schur(block)%values, &
                 factor%pivots(block)%values)
+            if (block > 1) then
+                if (smallest_pivot(factor%schur(block)%values, &
+                    factor%pivots(block)%values) <= 64.0_dp &
+                    * epsilon(1.0_dp) * real(current_width + previous_width, &
+                    dp) * update_scale) factor%count_reliable = .false.
+            end if
         end do
         factor%complete = .true.
         info = variable_block_ok
     end subroutine factorize_variable_shifted
+
+    ! Smallest magnitude among the 1x1 pivots and the 2x2 pivot eigenvalues.
+    pure function smallest_pivot(factored, pivots) result(smallest)
+        real(dp), intent(in) :: factored(:, :)
+        integer, intent(in) :: pivots(:)
+        real(dp) :: smallest, a, b, c, scale, root
+        integer :: j
+
+        smallest = huge(1.0_dp)
+        j = 1
+        do while (j <= size(pivots))
+            if (pivots(j) > 0) then
+                smallest = min(smallest, abs(factored(j, j)))
+                j = j + 1
+            else
+                scale = max(abs(factored(j, j)), abs(factored(j, j + 1)), &
+                    abs(factored(j + 1, j + 1)))
+                if (scale == 0.0_dp) then
+                    smallest = 0.0_dp
+                    return
+                end if
+                a = factored(j, j) / scale
+                b = factored(j, j + 1) / scale
+                c = factored(j + 1, j + 1) / scale
+                root = sqrt(0.25_dp * (a - c)**2 + b * b)
+                smallest = min(smallest, scale * min(abs(0.5_dp * (a + c) &
+                    + root), abs(0.5_dp * (a + c) - root)))
+                j = j + 2
+            end if
+        end do
+    end function smallest_pivot
 
     subroutine initialize_variable_factor(blocks, factor)
         type(variable_block_tridiagonal_t), intent(in) :: blocks
