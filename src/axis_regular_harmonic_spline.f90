@@ -49,7 +49,7 @@ contains
         end if
         field%poloidal_modes = poloidal_modes
         do column = 1, size(values, 2)
-            exponent = 0.5_dp * real(abs(poloidal_modes(column)), dp)
+            exponent = parity_exponent(poloidal_modes(column))
             quotient_values(:, column) = values(:, column) &
                 / grid%nodes**exponent
         end do
@@ -128,7 +128,7 @@ contains
         integer :: column
 
         do column = 1, size(poloidal_modes)
-            exponent = 0.5_dp * real(abs(poloidal_modes(column)), dp)
+            exponent = parity_exponent(poloidal_modes(column))
             factor = coordinate**exponent
             values(column) = factor * quotient(column)
             derivatives(column) = factor * (quotient_derivative(column) &
@@ -160,12 +160,11 @@ contains
                 values(column) = quotient(column)
                 derivatives(column) = quotient_derivative(column)
                 second_derivatives(column) = quotient_second(column)
-            case (2)
+            case default
+                ! Even |m| >= 2: value s q, derivative q, second 2 q'.
                 derivatives(column) = quotient(column)
                 second_derivatives(column) = 2.0_dp &
                     * quotient_derivative(column)
-            case (4)
-                second_derivatives(column) = 2.0_dp * quotient(column)
             end select
         end do
     end subroutine evaluate_axis_limits
@@ -194,9 +193,26 @@ contains
         integer, intent(in) :: poloidal_modes(:)
         logical :: singular
 
-        singular = any(abs(poloidal_modes) == 1) &
-            .or. any(abs(poloidal_modes) == 3)
+        singular = any(modulo(poloidal_modes, 2) == 1)
     end function axis_jet_is_singular
+
+    ! A regular harmonic behaves like s^(|m|/2) times a smooth function of s.
+    ! Only the parity factor s^(1/2) (odd m) or s (even m >= 2) is divided
+    ! out: s^(|m|/2)/s^e is then an integer power of s, so the quotient stays
+    ! smooth, while dividing by the full s^(|m|/2) amplified node roundoff by
+    ! about s_1^(-|m|/2) (1e17 at m=36 on 64 half-grid surfaces).
+    pure function parity_exponent(mode) result(exponent)
+        integer, intent(in) :: mode
+        real(dp) :: exponent
+
+        if (mode == 0) then
+            exponent = 0.0_dp
+        else if (modulo(mode, 2) == 1) then
+            exponent = 0.5_dp
+        else
+            exponent = 1.0_dp
+        end if
+    end function parity_exponent
 
     function field_is_valid(field) result(valid)
         type(axis_regular_harmonic_field_t), intent(in) :: field

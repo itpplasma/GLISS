@@ -157,13 +157,14 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
 - [x] Reject reconstructed volume folds: the signed Jacobian must retain either
   consistent handedness across angular and radial assembly nodes. Independent
   polynomial-map controls exercise folds, both signs, and zero determinants.
-- [ ] Repair high-mode axis-regular interpolation conditioning
-  ([#19](https://github.com/itpplasma/GLISS/issues/19)). A boundary-valid
-  M36 Solov'ev export produced volume folds through amplification of tiny
-  harmonics by the fitted `s^(-m/2)` quotient. Admission now rejects the failed
-  map; no coefficient clipping or smoothing is used. The spline amplifies node
-  roundoff by about 5e9 at m=24 and 2e12 at m=28, so M24/M28 are not reliable
-  controls. Also replace fixed left-handed result metadata with actual chart
+- [x] Repair high-mode axis-regular interpolation conditioning
+  ([#19](https://github.com/itpplasma/GLISS/issues/19)). The spline divided
+  harmonics by the full `s^(|m|/2)` and amplified node roundoff by about
+  `s_1^(-|m|/2)` (5e9 at m=24, 2e12 at m=28, 1e17 at m=36), which folded the
+  M36 Solov'ev export. Only the parity factor (`s^(1/2)` for odd m, `s` for
+  even m) is now divided out; an exact shaped torus gives the same Jacobian
+  error (2.5e-6 at 64 surfaces, set by edge extrapolation) for M16 through M36.
+- [ ] Replace fixed left-handed result metadata with the actual chart
   orientation ([#21](https://github.com/itpplasma/GLISS/issues/21)).
 - [ ] Complete production analytical coverage and public-API qualification.
   `benchmarks/analytic/run.sh` now runs an exact straight-cylinder case through

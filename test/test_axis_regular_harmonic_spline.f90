@@ -20,6 +20,7 @@ program test_axis_regular_harmonic_spline
     call check_axis_limits(grid)
     call check_mathematica_fixture(grid)
     call check_invalid_inputs(grid)
+    call check_high_mode_roundoff()
     write (*, "(a)") "PASS"
 
 contains
@@ -46,7 +47,7 @@ contains
             call require(status == axis_regular_harmonic_ok, &
                 "manufactured evaluation failed")
             do column = 1, size(modes)
-                exponent = 0.5_dp * real(abs(modes(column)), dp)
+                exponent = parity_exponent(modes(column))
                 expected = queries(query)**exponent &
                     * quotient(queries(query), column)
                 call require(close(values(column), expected), &
@@ -70,7 +71,7 @@ contains
 
     subroutine check_axis_limits(valid_grid)
         type(radial_cubic_spline_grid_t), intent(in) :: valid_grid
-        integer, parameter :: modes(4) = [0, -2, 4, 5]
+        integer, parameter :: modes(4) = [0, -2, 4, 6]
         type(axis_regular_harmonic_field_t) :: field
         real(dp) :: samples(size(nodes), size(modes))
         real(dp) :: values(size(modes)), slopes(size(modes))
@@ -94,11 +95,13 @@ contains
             "absolute m=2 axis slope differs")
         call require(close(seconds(2), 2.0_dp * quotient_s(0.0_dp, 2)), &
             "absolute m=2 axis second derivative differs")
-        call require(close(seconds(3), 2.0_dp * quotient(0.0_dp, 3)), &
-            "absolute m=4 axis second derivative differs")
-        call require(all(values(2:) == 0.0_dp) &
-            .and. all(slopes(3:) == 0.0_dp) &
-            .and. seconds(4) == 0.0_dp, "zero axis limits differ")
+        call require(close(slopes(3), quotient(0.0_dp, 3)) .and. &
+            close(seconds(3), 2.0_dp * quotient_s(0.0_dp, 3)), &
+            "m=4 axis jet differs")
+        call require(close(slopes(4), quotient(0.0_dp, 4)) .and. &
+            close(seconds(4), 2.0_dp * quotient_s(0.0_dp, 4)), &
+            "m=6 axis jet differs")
+        call require(all(values(2:) == 0.0_dp), "zero axis limits differ")
     end subroutine check_axis_limits
 
     subroutine check_mathematica_fixture(valid_grid)
@@ -175,7 +178,7 @@ contains
         integer :: column
 
         do column = 1, size(modes)
-            samples(:, column) = nodes**(0.5_dp * real(abs(modes(column)), dp)) &
+            samples(:, column) = nodes**parity_exponent(modes(column)) &
                 * quotient(nodes, column)
         end do
     end subroutine build_samples
@@ -209,6 +212,51 @@ contains
         value = 2.0_dp * (0.25_dp - 0.1_dp * column) &
             + 0.3_dp * column * s
     end function quotient_ss
+
+    ! Roundoff-sized node values of a high harmonic must stay roundoff-sized
+    ! between the knots.  Dividing by the full s^(|m|/2) amplified them by
+    ! about s_1^(-|m|/2), i.e. 1e17 at m=36 on 64 half-grid surfaces.
+    subroutine check_high_mode_roundoff()
+        integer, parameter :: surfaces = 64
+        type(radial_cubic_spline_grid_t) :: fine_grid
+        type(axis_regular_harmonic_field_t) :: field
+        real(dp) :: fine_nodes(surfaces), samples(surfaces, 1)
+        real(dp) :: values(1), slopes(1), seconds(1), largest, coordinate
+        integer :: node, query, status
+
+        do node = 1, surfaces
+            fine_nodes(node) = (real(node, dp) - 0.5_dp) / real(surfaces, dp)
+            samples(node, 1) = 1.0e-16_dp * sin(7.0_dp * real(node, dp))
+        end do
+        call build_radial_cubic_spline_grid(fine_nodes, 0.0_dp, 1.0_dp, &
+            fine_grid, status)
+        call require(status == radial_cubic_spline_ok, &
+            "fine grid construction failed")
+        call fit_axis_regular_harmonics(fine_grid, [36], samples, field, &
+            status)
+        call require(status == axis_regular_harmonic_ok, &
+            "high-mode fit failed")
+        largest = 0.0_dp
+        do query = 1, 1000
+            coordinate = real(query, dp) / 1000.0_dp
+            call evaluate_axis_regular_harmonics(fine_grid, field, &
+                coordinate, values, slopes, seconds, status)
+            call require(status == axis_regular_harmonic_ok, &
+                "high-mode evaluation failed")
+            largest = max(largest, abs(values(1)))
+        end do
+        call require(largest < 1.0e-15_dp, &
+            "high-mode roundoff is amplified between knots")
+    end subroutine check_high_mode_roundoff
+
+    pure function parity_exponent(mode) result(exponent)
+        integer, intent(in) :: mode
+        real(dp) :: exponent
+
+        exponent = 1.0_dp
+        if (mode == 0) exponent = 0.0_dp
+        if (modulo(mode, 2) == 1) exponent = 0.5_dp
+    end function parity_exponent
 
     function close(actual, expected) result(matches)
         real(dp), intent(in) :: actual, expected
