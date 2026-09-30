@@ -29,7 +29,7 @@ vmec = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/itpplasma/GLISS/tree/main/python"
+Documentation = "https://itpplasma.github.io/GLISS/latest/"
 Issues = "https://github.com/itpplasma/GLISS/issues"
 Repository = "https://github.com/itpplasma/GLISS"
 

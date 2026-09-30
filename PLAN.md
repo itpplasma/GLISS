@@ -96,7 +96,8 @@ of every external solver.
   class union of a shifted angle origin), the FEEC convergence
   certification (#13), the native test harness without path hacks (#14,
   wheels stay with the release workflow) and documentation sources whose
-  quickstart runs in the suite (#15, hosting stays open).
+  quickstart runs in the suite and a versioned site published from the
+  installed wheel (#15).
 - [#35](https://github.com/itpplasma/GLISS/issues/35) conforming axis space:
   the leading |m|=1 coefficients of xi^s and eta are tied as a smooth
   displacement requires, the axis element is integrated in sqrt(s), and the

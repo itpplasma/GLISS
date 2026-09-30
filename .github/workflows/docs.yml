@@ -1,0 +1,84 @@
+name: docs
+
+# Publishes the versioned documentation site to the gh-pages branch: the
+# default branch updates `latest`, a release tag vX.Y.Z adds its own
+# directory once. The site is built from the installed wheel, never from the
+# checkout, and every quickstart block runs against that wheel first. This
+# workflow deploys; it does not gate pull requests.
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran cmake ninja-build \
+            liblapack-dev libnetcdf-dev pkg-config
+          python -m pip install --upgrade pip build
+      - name: Build the wheel
+        run: python -m build --wheel
+      - name: Install the wheel and documentation tools
+        run: |
+          python -m venv /tmp/docs
+          /tmp/docs/bin/pip install dist/*.whl sphinx myst-parser pytest
+      - name: Run the documentation examples against the installed wheel
+        run: |
+          mkdir -p /tmp/docs-tests
+          cp python/tests/conftest.py python/tests/test_docs.py /tmp/docs-tests/
+          cd /tmp/docs-tests
+          export GLISS_LIB="$(/tmp/docs/bin/python -c \
+            'import gliss; print(gliss._load_library()._name)')"
+          GLISS_DOCS="$GITHUB_WORKSPACE/docs" \
+            GLISS_TEST_DATA="$GITHUB_WORKSPACE/test/data" \
+            /tmp/docs/bin/python -m pytest -q -p no:cacheprovider .
+      - name: Select the site version
+        id: version
+        run: |
+          installed="$(/tmp/docs/bin/python -c 'import gliss; print(gliss.__version__)')"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            [ "$GITHUB_REF_NAME" = "v$installed" ] || {
+              echo "tag $GITHUB_REF_NAME does not match package $installed"; exit 1; }
+            echo "name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=latest" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build HTML and check links from the installed package
+        run: |
+          cd /tmp
+          /tmp/docs/bin/sphinx-build -W -b html "$GITHUB_WORKSPACE/docs" /tmp/html
+          /tmp/docs/bin/sphinx-build -W -b linkcheck "$GITHUB_WORKSPACE/docs" \
+            /tmp/linkcheck
+      - name: Publish to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth=1 origin gh-pages; then
+            git worktree add /tmp/site FETCH_HEAD
+            git -C /tmp/site checkout -B gh-pages
+          else
+            git worktree add --detach /tmp/site
+            git -C /tmp/site checkout --orphan gh-pages
+            git -C /tmp/site rm -rf --quiet --ignore-unmatch .
+          fi
+          python ci/publish_docs.py /tmp/html "${{ steps.version.outputs.name }}" /tmp/site
+          git -C /tmp/site add -A
+          if git -C /tmp/site diff --cached --quiet; then
+            echo "documentation unchanged"
+          else
+            git -C /tmp/site commit -m "Publish ${{ steps.version.outputs.name }} documentation for $GITHUB_SHA"
+            git -C /tmp/site push origin gh-pages
+          fi

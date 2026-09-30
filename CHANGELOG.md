@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Publish versioned documentation (#15). The `docs` workflow builds the wheel,
+  runs every quickstart block against the installed package, builds the
+  Sphinx site from that package with `-W`, checks links and publishes it to
+  `gh-pages`: `latest` for the default branch and one immutable directory per
+  release tag, listed in `versions.json` and selected with a version menu
+  (`ci/publish_docs.py`). The workflow deploys and does not gate pull
+  requests.
 - `convert_vmec` measures the averaged radial force balance of a force-free
   (vacuum) field against 1e-3 of the magnetic scale `|Phi' B_zeta| +
   |chi' B_theta|` in addition to the individual terms. Every term vanishes

@@ -153,6 +153,8 @@ def main():
                 "tests",
                 # This module checks source registry files, not installed behavior.
                 "--ignore=tests/test_closure_registry.py",
+                # Site layout of ci/publish_docs.py, a repository script.
+                "--ignore=tests/test_publish_docs.py",
                 "-q",
                 "-rs",
             ],

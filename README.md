@@ -19,9 +19,14 @@ paths throughout the API and documentation.
 
 ## Documentation
 
-`docs/` holds the Sphinx sources (`make -C docs html`, with `sphinx` and
-`myst-parser` installed). The quickstart examples run in the native test
-suite against the Solov'ev fixtures in `test/data`.
+The documentation is published at <https://itpplasma.github.io/GLISS/>:
+`latest` follows the default branch and every release tag `vX.Y.Z` keeps its
+own directory, selected with the version menu. `docs/` holds the Sphinx
+sources (`make -C docs html`, with `sphinx` and `myst-parser` installed). The
+`docs` workflow builds the site from the installed wheel after running every
+quickstart block against it, checks links, and publishes it to the
+`gh-pages` branch with `ci/publish_docs.py`; GitHub Pages serves that branch
+once it is enabled in the repository settings.
 
 ## Python
 
