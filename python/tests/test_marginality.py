@@ -132,6 +132,9 @@ class FakeLibrary:
         result = base_arguments[-3]._obj
         if result.has_eigenpair:
             result.lowest_eigenvalue = -0.371
+        result.quotient_rank = 96
+        result.labeled_nullity = 0
+        result.peak_block_width = 6
         return status
 
 
@@ -176,8 +179,8 @@ def test_solve_cas3d_marginality_labels_artificial_normalization():
     assert result.lowest_eigenvalue == pytest.approx(-5.3e-4)
     assert result.certificate == pytest.approx(2.0e-10)
     assert result.eigenpair_residual == pytest.approx(4.0e-13)
-    assert "compatible" in result.normalization
-    assert "not a physical growth rate" in result.interpretation
+    assert "perpendicular kinetic form" in result.normalization
+    assert "perpendicular inertia" in result.interpretation
     assert result.boundary_condition == "fixed"
     assert result.coordinate_handedness == "left-handed"
     assert result.fourier_convention == "2*pi*(m*theta - n*zeta/N_T)"
@@ -238,6 +241,8 @@ def test_solve_cas3d_phase_envelope_selects_exact_coefficient_norm():
     assert result.coefficient_angular_resolution == (36, 24)
     assert result.reference_length == 10.0
     assert result.radial_quadrature == "cas3d_midpoint"
+    assert (result.quotient_rank, result.labeled_nullity) == (96, 0)
+    assert result.peak_block_width == 6
 
 
 @pytest.mark.parametrize(

@@ -9,6 +9,8 @@ module compatible_block_storage
     integer, parameter, public :: compatible_block_invalid = -1
     integer, parameter, public :: compatible_block_allocation = -2
 
+    public :: allocate_compatible_blocks
+    public :: build_compatible_block_indices
     public :: initialize_compatible_block_pencil
     public :: scatter_symmetric_compatible_block
     public :: symmetrize_compatible_blocks
@@ -17,24 +19,52 @@ contains
 
     subroutine initialize_compatible_block_pencil(h1_dofs, l2_dofs, &
             normal_modes, eta_modes, degree, stiffness, mass, block_index, &
-            local_index, info, eliminated)
+            local_index, info, eliminated, mu_modes)
         integer, intent(in) :: h1_dofs, l2_dofs, normal_modes, eta_modes
         integer, intent(in) :: degree
         type(variable_block_tridiagonal_t), intent(out) :: stiffness, mass
         integer, allocatable, intent(out) :: block_index(:), local_index(:)
         integer, intent(out) :: info
         logical, optional, intent(in) :: eliminated(:)
+        integer, optional, intent(in) :: mu_modes
         integer, allocatable :: widths(:)
+
+        call build_compatible_block_indices(h1_dofs, l2_dofs, normal_modes, &
+            eta_modes, degree, widths, block_index, local_index, info, &
+            eliminated, mu_modes)
+        if (info /= compatible_block_ok) return
+        call allocate_compatible_blocks(widths, stiffness, info)
+        if (info /= compatible_block_ok) return
+        call allocate_compatible_blocks(widths, mass, info)
+    end subroutine initialize_compatible_block_pencil
+
+    ! Block widths and the global -> (block, local) map of the compatible
+    ! pencil: group g holds H1 functions (g-1)p+1..gp (normal unknowns,
+    ! mode-minor) and the L2 functions of the same indices (eta unknowns,
+    ! then the mu unknowns of a three-component space, stored after all eta
+    ! unknowns in the global order).
+    subroutine build_compatible_block_indices(h1_dofs, l2_dofs, &
+            normal_modes, eta_modes, degree, widths, block_index, &
+            local_index, info, eliminated, mu_modes)
+        integer, intent(in) :: h1_dofs, l2_dofs, normal_modes, eta_modes
+        integer, intent(in) :: degree
+        integer, allocatable, intent(out) :: widths(:)
+        integer, allocatable, intent(out) :: block_index(:), local_index(:)
+        integer, intent(out) :: info
+        logical, optional, intent(in) :: eliminated(:)
+        integer, optional, intent(in) :: mu_modes
         integer(int64) :: unknowns64
-        integer :: allocation_status, basis, block, groups, local, mode
-        integer :: normal_width, unknowns
+        integer :: allocation_status, basis, block, global, groups, local
+        integer :: mode, mus, normal_width, unknowns
 
         info = compatible_block_invalid
+        mus = 0
+        if (present(mu_modes)) mus = mu_modes
         if (h1_dofs < 0 .or. l2_dofs < 0) return
-        if (normal_modes < 0 .or. eta_modes < 0) return
+        if (normal_modes < 0 .or. eta_modes < 0 .or. mus < 0) return
         if (degree < 1) return
         unknowns64 = int(h1_dofs, int64) * int(normal_modes, int64) &
-            + int(l2_dofs, int64) * int(eta_modes, int64)
+            + int(l2_dofs, int64) * int(eta_modes + mus, int64)
         if (unknowns64 < 1_int64) return
         if (unknowns64 > int(huge(unknowns), int64)) return
         unknowns = int(unknowns64)
@@ -49,7 +79,8 @@ contains
         do block = 1, groups
             widths(block) = group_basis_count(h1_dofs, degree, block) &
                 * normal_modes &
-                + group_basis_count(l2_dofs, degree, block) * eta_modes
+                + group_basis_count(l2_dofs, degree, block) &
+                * (eta_modes + mus)
             if (widths(block) < 1) return
         end do
         allocate (block_index(unknowns), local_index(unknowns), &
@@ -60,40 +91,46 @@ contains
         end if
         do basis = 1, h1_dofs
             block = (basis - 1) / degree + 1
-                do mode = 1, normal_modes
-                    local = modulo(basis - 1, degree) * normal_modes + mode
-                    block_index((basis - 1) * normal_modes + mode) = block
-                    local_index((basis - 1) * normal_modes + mode) = local
-                end do
+            do mode = 1, normal_modes
+                local = modulo(basis - 1, degree) * normal_modes + mode
+                block_index((basis - 1) * normal_modes + mode) = block
+                local_index((basis - 1) * normal_modes + mode) = local
             end do
-            do basis = 1, l2_dofs
-                block = (basis - 1) / degree + 1
-                    normal_width = group_basis_count(h1_dofs, degree, block) &
-                        * normal_modes
-                    do mode = 1, eta_modes
-                        local = normal_width &
-                            + modulo(basis - 1, degree) * eta_modes + mode
-                        block_index(h1_dofs * normal_modes &
-                            + (basis - 1) * eta_modes + mode) = block
-                        local_index(h1_dofs * normal_modes &
-                            + (basis - 1) * eta_modes + mode) = local
-                    end do
-                end do
-                if (present(eliminated)) then
-                    ! Unknowns removed by a constraint keep the order of the
-                    ! rest; each block closes its local numbering over them.
-                    if (size(eliminated) /= unknowns) then
-                        info = compatible_block_invalid
-                        return
-                    end if
-                    call compact_block_indices(eliminated, widths, &
-                        block_index, local_index, info)
-                    if (info /= compatible_block_ok) return
-                end if
-                call allocate_blocks(widths, stiffness, info)
-                if (info /= compatible_block_ok) return
-                call allocate_blocks(widths, mass, info)
-            end subroutine initialize_compatible_block_pencil
+        end do
+        do basis = 1, l2_dofs
+            block = (basis - 1) / degree + 1
+            normal_width = group_basis_count(h1_dofs, degree, block) &
+                * normal_modes
+            do mode = 1, eta_modes
+                local = normal_width &
+                    + modulo(basis - 1, degree) * eta_modes + mode
+                block_index(h1_dofs * normal_modes &
+                    + (basis - 1) * eta_modes + mode) = block
+                local_index(h1_dofs * normal_modes &
+                    + (basis - 1) * eta_modes + mode) = local
+            end do
+            do mode = 1, mus
+                local = normal_width &
+                    + group_basis_count(l2_dofs, degree, block) * eta_modes &
+                    + modulo(basis - 1, degree) * mus + mode
+                global = h1_dofs * normal_modes + l2_dofs * eta_modes &
+                    + (basis - 1) * mus + mode
+                block_index(global) = block
+                local_index(global) = local
+            end do
+        end do
+        info = compatible_block_ok
+        if (present(eliminated)) then
+            ! Unknowns removed by a constraint keep the order of the rest;
+            ! each block closes its local numbering over them.
+            if (size(eliminated) /= unknowns) then
+                info = compatible_block_invalid
+                return
+            end if
+            call compact_block_indices(eliminated, widths, block_index, &
+                local_index, info)
+        end if
+    end subroutine build_compatible_block_indices
 
             subroutine compact_block_indices(eliminated, widths, block_index, &
                     local_index, info)
@@ -144,7 +181,7 @@ contains
                 info = compatible_block_ok
             end subroutine compact_block_indices
 
-            subroutine allocate_blocks(widths, blocks, info)
+            subroutine allocate_compatible_blocks(widths, blocks, info)
                 integer, intent(in) :: widths(:)
                 type(variable_block_tridiagonal_t), intent(out) :: blocks
                 integer, intent(out) :: info
@@ -169,7 +206,7 @@ contains
                     end if
                 end do
                 info = compatible_block_ok
-            end subroutine allocate_blocks
+            end subroutine allocate_compatible_blocks
 
             subroutine scatter_symmetric_compatible_block(map, source, scale, &
                     block_index, local_index, target, info)

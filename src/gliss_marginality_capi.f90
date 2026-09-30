@@ -33,7 +33,33 @@ module gliss_marginality_capi
         real(c_double) :: eigenpair_residual
         real(c_double) :: force_balance_residual
         real(c_double) :: zero_floor
+        integer(c_size_t) :: quotient_rank
+        integer(c_size_t) :: labeled_nullity
+        integer(c_size_t) :: peak_block_width
     end type marginality_result_c
+
+    ! Layout before the CAS3D2MN quotient fields; callers built against it
+    ! stay accepted and receive every field they have.
+    type, bind(c) :: marginality_result_v1_c
+        integer(c_size_t) :: struct_size
+        integer(c_int) :: has_eigenpair
+        integer(c_int) :: field_periods
+        integer(c_size_t) :: mode_count
+        integer(c_size_t) :: radial_surfaces
+        integer(c_int) :: parity_class
+        integer(c_int) :: degree
+        integer(c_int) :: angular_theta
+        integer(c_int) :: angular_zeta
+        integer(c_size_t) :: negative_count
+        real(c_double) :: lowest_eigenvalue
+        real(c_double) :: certificate
+        real(c_double) :: eigenpair_residual
+        real(c_double) :: force_balance_residual
+        real(c_double) :: zero_floor
+    end type marginality_result_v1_c
+
+    type(marginality_result_c), save :: current_probe
+    type(marginality_result_v1_c), save :: legacy_probe
 
     public :: gliss_cas3d_marginality_c
     public :: gliss_cas3d_phase_envelope_c
@@ -56,7 +82,7 @@ contains
         integer(c_size_t), value, intent(in) :: error_capacity
         integer(c_int) :: status
         type(equilibrium_context_t), pointer :: equilibrium
-        type(marginality_result_c), pointer :: result
+        integer(c_size_t) :: result_size
         type(marginality_spectrum_result_t) :: native
         integer, allocatable :: mode_m(:), mode_n(:)
         real(dp), allocatable :: stored_power(:)
@@ -64,7 +90,7 @@ contains
         integer :: info
 
         status = prepare_call(equilibrium_handle, result_pointer, &
-            error_pointer, error_capacity, equilibrium, result)
+            error_pointer, error_capacity, equilibrium, result_size)
         if (status /= status_ok) return
         if (solve_eigenpair /= 0_c_int .and. solve_eigenpair /= 1_c_int) then
             status = status_invalid_argument
@@ -91,7 +117,7 @@ contains
         select case (info)
         case (marginality_spectrum_ok)
             call fill_result(native, int(angular_theta), int(angular_zeta), &
-                result)
+                result_pointer, result_size)
             status = status_ok
         case (marginality_spectrum_invalid, marginality_spectrum_asymmetric)
             status = status_invalid_argument
@@ -187,7 +213,7 @@ contains
         integer(c_size_t), value, intent(in) :: error_capacity
         integer(c_int) :: status
         type(equilibrium_context_t), pointer :: equilibrium
-        type(marginality_result_c), pointer :: result
+        integer(c_size_t) :: result_size
         type(marginality_spectrum_result_t) :: native
         integer, allocatable :: envelope_m(:), envelope_n(:)
         real(dp), allocatable :: unused_power(:)
@@ -195,7 +221,7 @@ contains
         integer :: info
 
         status = prepare_call(equilibrium_handle, result_pointer, &
-            error_pointer, error_capacity, equilibrium, result)
+            error_pointer, error_capacity, equilibrium, result_size)
         if (status /= status_ok) return
         if (solve_eigenpair /= 0_c_int .and. solve_eigenpair /= 1_c_int) then
             status = status_invalid_argument
@@ -225,7 +251,7 @@ contains
         select case (info)
         case (marginality_spectrum_ok)
             call fill_result(native, int(angular_theta), int(angular_zeta), &
-                result)
+                result_pointer, result_size)
             status = status_ok
         case (marginality_spectrum_invalid, marginality_spectrum_asymmetric)
             status = status_invalid_argument
@@ -241,15 +267,17 @@ contains
     end function phase_envelope_call
 
     function prepare_call(equilibrium_handle, result_pointer, error_pointer, &
-            error_capacity, equilibrium, result) result(status)
+            error_capacity, equilibrium, result_size) result(status)
         type(c_ptr), value, intent(in) :: equilibrium_handle, result_pointer
         type(c_ptr), value, intent(in) :: error_pointer
         integer(c_size_t), value, intent(in) :: error_capacity
         type(equilibrium_context_t), pointer, intent(out) :: equilibrium
-        type(marginality_result_c), pointer, intent(out) :: result
+        integer(c_size_t), intent(out) :: result_size
+        integer(c_size_t), pointer :: prefix
         integer(c_int) :: status
 
-        nullify (equilibrium, result)
+        nullify (equilibrium)
+        result_size = 0
         status = error_buffer_status(error_pointer, error_capacity)
         if (status /= status_ok) return
         call write_error(error_pointer, error_capacity, "")
@@ -266,14 +294,16 @@ contains
             return
         end if
         call c_f_pointer(equilibrium_handle, equilibrium)
-        call c_f_pointer(result_pointer, result)
+        call c_f_pointer(result_pointer, prefix)
+        result_size = prefix
         if (.not. associated(equilibrium)) then
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
                 "equilibrium handle is null")
             return
         end if
-        if (result%struct_size /= c_sizeof(result)) then
+        if (result_size /= c_sizeof(current_probe) &
+            .and. result_size /= c_sizeof(legacy_probe)) then
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
                 "marginality result struct_size is incompatible")
@@ -317,12 +347,37 @@ contains
         status = status_ok
     end function decode_mode_table
 
-    subroutine fill_result(native, angular_theta, angular_zeta, result)
+    subroutine fill_result(native, angular_theta, angular_zeta, &
+            result_pointer, result_size)
         type(marginality_spectrum_result_t), intent(in) :: native
         integer, intent(in) :: angular_theta, angular_zeta
-        type(marginality_result_c), intent(out) :: result
+        type(c_ptr), value, intent(in) :: result_pointer
+        integer(c_size_t), intent(in) :: result_size
+        type(marginality_result_c), pointer :: result
+        type(marginality_result_v1_c), pointer :: legacy
 
-        result%struct_size = c_sizeof(result)
+        if (result_size == c_sizeof(legacy_probe)) then
+            call c_f_pointer(result_pointer, legacy)
+            legacy%struct_size = result_size
+            legacy%has_eigenpair = merge(1_c_int, 0_c_int, &
+                native%has_eigenpair)
+            legacy%field_periods = int(native%field_periods, c_int)
+            legacy%mode_count = int(native%mode_count, c_size_t)
+            legacy%radial_surfaces = int(native%radial_surfaces, c_size_t)
+            legacy%parity_class = int(native%parity_class, c_int)
+            legacy%degree = int(native%degree, c_int)
+            legacy%angular_theta = int(angular_theta, c_int)
+            legacy%angular_zeta = int(angular_zeta, c_int)
+            legacy%negative_count = int(native%negative_count, c_size_t)
+            legacy%lowest_eigenvalue = native%lowest_eigenvalue
+            legacy%certificate = native%certificate
+            legacy%eigenpair_residual = native%eigenpair_residual
+            legacy%force_balance_residual = native%force_balance_residual
+            legacy%zero_floor = native%zero_floor
+            return
+        end if
+        call c_f_pointer(result_pointer, result)
+        result%struct_size = result_size
         result%has_eigenpair = merge(1_c_int, 0_c_int, native%has_eigenpair)
         result%field_periods = int(native%field_periods, c_int)
         result%mode_count = int(native%mode_count, c_size_t)
@@ -337,6 +392,9 @@ contains
         result%eigenpair_residual = native%eigenpair_residual
         result%force_balance_residual = native%force_balance_residual
         result%zero_floor = native%zero_floor
+        result%quotient_rank = int(native%quotient_rank, c_size_t)
+        result%labeled_nullity = int(native%labeled_nullity, c_size_t)
+        result%peak_block_width = int(native%peak_block_width, c_size_t)
     end subroutine fill_result
 
 end module gliss_marginality_capi

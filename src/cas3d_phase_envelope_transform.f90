@@ -2,6 +2,7 @@ module cas3d_phase_envelope_transform
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use fourier_phase_kind, only: phase_cosine, phase_sine
+    use variable_block_tridiagonal, only: variable_block_tridiagonal_t
     implicit none
     private
 
@@ -17,6 +18,22 @@ module cas3d_phase_envelope_transform
         real(dp), allocatable :: eta_weight(:, :)
     end type cas3d_phase_envelope_map_t
 
+    ! Dimensions of the labeled coefficient pencil. The envelope columns of
+    ! one radial basis function map onto the physical modes of the same
+    ! function (degree one), so the labeled pencil is the congruence of the
+    ! physical one by a block-diagonal C of full row rank: its rank per
+    ! component is the number of physical modes reached, the rest of the
+    ! labels span an exact null space, and the physical inertia is the
+    ! quotient inertia.
+    type, public :: cas3d_quotient_t
+        integer :: envelope_unknowns = 0
+        integer :: physical_unknowns = 0
+        integer :: quotient_rank = 0
+        integer :: nullity = 0
+        integer :: peak_block_width = 0
+    end type cas3d_quotient_t
+
+    public :: apply_cas3d_phase_envelope_block_congruence
     public :: apply_cas3d_phase_envelope_congruence
     public :: build_cas3d_phase_envelope_map
 
@@ -195,6 +212,202 @@ contains
         call move_alloc(transformed_mass, mass)
         info = cas3d_phase_transform_ok
     end subroutine apply_cas3d_phase_envelope_congruence
+
+
+    subroutine apply_cas3d_phase_envelope_block_congruence(map, h1_dofs, &
+            l2_dofs, mass_scale, stiffness, mass, quotient, info)
+        type(cas3d_phase_envelope_map_t), intent(in) :: map
+        integer, intent(in) :: h1_dofs, l2_dofs
+        real(dp), intent(in) :: mass_scale
+        type(variable_block_tridiagonal_t), intent(inout) :: stiffness, mass
+        type(cas3d_quotient_t), intent(out) :: quotient
+        integer, intent(out) :: info
+        type(variable_block_tridiagonal_t) :: labeled, labeled_mass
+        integer, allocatable :: rows(:, :, :)
+        real(dp), allocatable :: weights(:, :, :)
+        integer :: allocation_status, block, blocks, column, envelope, width
+
+        ! Degree-one block pencil of the physical problem: block b holds the
+        ! normal unknowns of H1 function b (b <= h1_dofs), mode-minor, then
+        ! the eta unknowns of L2 function b. The labeled pencil has the same
+        ! blocks with envelope columns; diagonal blocks map as C_b^T A_b C_b
+        ! and lower blocks as C_(b+1)^T L_b C_b. The coefficient mass is
+        ! mass_scale times the identity, never a congruence.
+        info = cas3d_phase_transform_invalid
+        if (.not. valid_map(map)) return
+        if (h1_dofs < 0 .or. l2_dofs /= h1_dofs + 1) return
+        if (.not. ieee_is_finite(mass_scale) .or. mass_scale <= 0.0_dp) return
+        blocks = l2_dofs
+        if (.not. allocated(stiffness%widths)) return
+        if (size(stiffness%widths) /= blocks) return
+        if (.not. allocated(mass%widths)) return
+        if (any(mass%widths /= stiffness%widths)) return
+        do block = 1, blocks
+            if (stiffness%widths(block) /= physical_width(block)) return
+        end do
+        envelope = map%envelope_mode_count
+        allocate (rows(2, 2 * envelope, blocks), &
+            weights(2, 2 * envelope, blocks), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = cas3d_phase_transform_allocation
+            return
+        end if
+        rows = 0
+        weights = 0.0_dp
+        allocate (labeled%widths(blocks), labeled%diagonal(blocks), &
+            labeled%lower(max(0, blocks - 1)), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = cas3d_phase_transform_allocation
+            return
+        end if
+        do block = 1, blocks
+            width = 0
+            if (block <= h1_dofs) then
+                do column = 1, envelope
+                    rows(:, width + column, block) = map%physical_row(:, column)
+                    weights(:, width + column, block) = &
+                        map%normal_weight(:, column)
+                end do
+                width = envelope
+            end if
+            do column = 1, envelope
+                where (map%physical_row(:, column) > 0)
+                    rows(:, width + column, block) = &
+                        physical_normal_width(block) &
+                        + map%physical_row(:, column)
+                end where
+                weights(:, width + column, block) = map%eta_weight(:, column)
+            end do
+            labeled%widths(block) = width + envelope
+        end do
+        do block = 1, blocks
+            allocate (labeled%diagonal(block)%values(labeled%widths(block), &
+                labeled%widths(block)), stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = cas3d_phase_transform_allocation
+                return
+            end if
+            call block_congruence(rows(:, :labeled%widths(block), block), &
+                weights(:, :labeled%widths(block), block), &
+                rows(:, :labeled%widths(block), block), &
+                weights(:, :labeled%widths(block), block), &
+                stiffness%diagonal(block)%values, &
+                labeled%diagonal(block)%values)
+            if (block == blocks) cycle
+            allocate (labeled%lower(block)%values(labeled%widths(block + 1), &
+                labeled%widths(block)), stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = cas3d_phase_transform_allocation
+                return
+            end if
+            call block_congruence( &
+                rows(:, :labeled%widths(block + 1), block + 1), &
+                weights(:, :labeled%widths(block + 1), block + 1), &
+                rows(:, :labeled%widths(block), block), &
+                weights(:, :labeled%widths(block), block), &
+                stiffness%lower(block)%values, labeled%lower(block)%values)
+        end do
+        call identity_blocks(labeled%widths, mass_scale, labeled_mass, info)
+        if (info /= cas3d_phase_transform_ok) return
+        quotient%physical_unknowns = sum(stiffness%widths)
+        quotient%envelope_unknowns = sum(labeled%widths)
+        quotient%quotient_rank = (h1_dofs + l2_dofs) &
+            * reached_rows(map)
+        quotient%nullity = quotient%envelope_unknowns - quotient%quotient_rank
+        quotient%peak_block_width = maxval(labeled%widths)
+        info = cas3d_phase_transform_invalid
+        if (quotient%quotient_rank /= quotient%physical_unknowns) return
+        call move_alloc(labeled%widths, stiffness%widths)
+        call move_alloc(labeled%diagonal, stiffness%diagonal)
+        call move_alloc(labeled%lower, stiffness%lower)
+        mass = labeled_mass
+        info = cas3d_phase_transform_ok
+    contains
+        pure integer function physical_normal_width(index) result(count)
+            integer, intent(in) :: index
+
+            count = 0
+            if (index <= h1_dofs) count = map%physical_mode_count
+        end function physical_normal_width
+
+        pure integer function physical_width(index) result(count)
+            integer, intent(in) :: index
+
+            count = physical_normal_width(index) + map%physical_mode_count
+        end function physical_width
+    end subroutine apply_cas3d_phase_envelope_block_congruence
+
+    ! Rank of the per-component map: the number of physical modes reached by
+    ! a label with a nonzero weight. Each pair of labels spans its two
+    ! modes and a single-support label spans its mode, so this integer count
+    ! is the exact rank; valid_map requires every mode to be reached.
+    pure integer function reached_rows(map) result(count)
+        type(cas3d_phase_envelope_map_t), intent(in) :: map
+        integer :: row
+
+        count = 0
+        do row = 1, map%physical_mode_count
+            if (any(map%physical_row == row .and. map%normal_weight /= 0.0_dp) &
+                .and. any(map%physical_row == row &
+                .and. map%eta_weight /= 0.0_dp)) count = count + 1
+        end do
+    end function reached_rows
+
+    pure subroutine block_congruence(left_rows, left_weights, right_rows, &
+            right_weights, source, target)
+        integer, intent(in) :: left_rows(:, :), right_rows(:, :)
+        real(dp), intent(in) :: left_weights(:, :), right_weights(:, :)
+        real(dp), intent(in) :: source(:, :)
+        real(dp), intent(out) :: target(:, :)
+        integer :: first, left, right, second
+
+        ! target = C_left^T source C_right with at most two supports per
+        ! column of C.
+        target = 0.0_dp
+        do second = 1, size(target, 2)
+            do first = 1, size(target, 1)
+                do right = 1, 2
+                    if (right_rows(right, second) == 0) cycle
+                    do left = 1, 2
+                        if (left_rows(left, first) == 0) cycle
+                        target(first, second) = target(first, second) &
+                            + left_weights(left, first) &
+                            * right_weights(right, second) &
+                            * source(left_rows(left, first), &
+                            right_rows(right, second))
+                    end do
+                end do
+            end do
+        end do
+    end subroutine block_congruence
+
+    subroutine identity_blocks(widths, scale, blocks, info)
+        integer, intent(in) :: widths(:)
+        real(dp), intent(in) :: scale
+        type(variable_block_tridiagonal_t), intent(out) :: blocks
+        integer, intent(out) :: info
+        integer :: allocation_status, block, column
+
+        info = cas3d_phase_transform_allocation
+        allocate (blocks%widths, source=widths, stat=allocation_status)
+        if (allocation_status /= 0) return
+        allocate (blocks%diagonal(size(widths)), &
+            blocks%lower(max(0, size(widths) - 1)), stat=allocation_status)
+        if (allocation_status /= 0) return
+        do block = 1, size(widths)
+            allocate (blocks%diagonal(block)%values(widths(block), &
+                widths(block)), source=0.0_dp, stat=allocation_status)
+            if (allocation_status /= 0) return
+            do column = 1, widths(block)
+                blocks%diagonal(block)%values(column, column) = scale
+            end do
+            if (block == size(widths)) cycle
+            allocate (blocks%lower(block)%values(widths(block + 1), &
+                widths(block)), source=0.0_dp, stat=allocation_status)
+            if (allocation_status /= 0) return
+        end do
+        info = cas3d_phase_transform_ok
+    end subroutine identity_blocks
 
     subroutine sparse_congruence(row, weight, source, source_terms, &
             target, target_terms)

@@ -495,6 +495,11 @@ if(BUILD_TESTING)
     add_test(NAME mercier_metric
         COMMAND test_mercier_metric ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
 
+    add_executable(test_cas3d_block_congruence
+        test/test_cas3d_block_congruence.f90)
+    target_link_libraries(test_cas3d_block_congruence PRIVATE gliss)
+    add_test(NAME cas3d_block_congruence COMMAND test_cas3d_block_congruence)
+
     add_executable(test_axis_regularity test/test_axis_regularity.f90)
     target_link_libraries(test_axis_regularity PRIVATE gliss gliss_test_support)
     add_test(NAME axis_regularity

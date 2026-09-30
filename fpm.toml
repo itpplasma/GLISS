@@ -224,3 +224,7 @@ main = "test_axis_regular_displacement.f90"
 [[test]]
 name = "magnetic_differential_equation"
 main = "test_magnetic_differential_equation.f90"
+
+[[test]]
+name = "cas3d_block_congruence"
+main = "test_cas3d_block_congruence.f90"

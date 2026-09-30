@@ -10,10 +10,12 @@ module marginality_spectrum
         compatible_two_component_problem_t
     use cas3d_coefficient_mass, only: &
         cas3d2mn_envelope_mass_scale
+    use compatible_block_storage, only: build_compatible_block_indices, &
+        compatible_block_ok
     use cas3d_phase_envelope_transform, only: &
-        apply_cas3d_phase_envelope_congruence, &
+        apply_cas3d_phase_envelope_block_congruence, &
         build_cas3d_phase_envelope_map, cas3d_phase_envelope_map_t, &
-        cas3d_phase_transform_ok
+        cas3d_phase_transform_ok, cas3d_quotient_t
     use dense_spectrum_support, only: dense_spectrum_ok, &
         refine_dense_eigenpair
     use field_profile_identities, only: compute_field_profile_identities, &
@@ -67,6 +69,12 @@ module marginality_spectrum
         real(dp) :: eigenpair_residual = 0.0_dp
         real(dp) :: force_balance_residual = 0.0_dp
         real(dp) :: zero_floor = 0.0_dp
+        ! CAS3D2MN coefficient normalization only: rank of the labeled
+        ! pencil (the physical unknown count), its exact null space from
+        ! coincident labels, and the widest block of the labeled pencil.
+        integer :: quotient_rank = 0
+        integer :: labeled_nullity = 0
+        integer :: peak_block_width = 0
     end type marginality_spectrum_result_t
 
     public :: compute_marginality_spectrum
@@ -202,6 +210,8 @@ contains
         type(compatible_two_component_problem_t) :: problem
         type(field_profile_identity_result_t) :: identities
         type(marginality_spectrum_result_t) :: quotient_result
+        type(cas3d_quotient_t) :: quotient
+        integer, allocatable :: labeled_widths(:)
         real(dp) :: coefficient_scale
         integer :: quotient_negative_count
 
@@ -220,9 +230,7 @@ contains
                 mode_m, mode_n, stored_power, parity_class, degree, n_theta, &
                 n_zeta, problem, info, &
                 radial_quadrature_policy=radial_quadrature_policy, &
-                sparse_storage=normalization_policy == &
-                marginality_normalization_perpendicular_l2, &
-                axis_conforming=.false.)
+                sparse_storage=.true., axis_conforming=.false.)
         else
             ! The positive norm is the physical perpendicular kinetic form
             ! at unit mass density, bounded on the energy space; the plain
@@ -261,9 +269,12 @@ contains
                 return
             end if
             quotient_negative_count = quotient_result%negative_count
-            call apply_cas3d_phase_envelope_congruence(coefficient_map, &
-                problem%h1_dofs, problem%l2_dofs, coefficient_scale, &
-                problem%stiffness, problem%stiffness_terms, problem%mass, info)
+            ! Blockwise congruence of the sparse pencil: no dense global
+            ! matrix at physical or labeled size (#11).
+            call apply_cas3d_phase_envelope_block_congruence( &
+                coefficient_map, problem%h1_dofs, problem%l2_dofs, &
+                coefficient_scale, problem%sparse_stiffness, &
+                problem%sparse_mass, quotient, info)
             if (info /= cas3d_phase_transform_ok) then
                 info = marginality_spectrum_compute_error
                 message = "CAS3D2MN coefficient congruence failed"
@@ -273,14 +284,34 @@ contains
                 * coefficient_map%envelope_mode_count
             problem%eta_unknowns = problem%l2_dofs &
                 * coefficient_map%envelope_mode_count
+            call build_compatible_block_indices(problem%h1_dofs, &
+                problem%l2_dofs, coefficient_map%envelope_mode_count, &
+                coefficient_map%envelope_mode_count, 1, labeled_widths, &
+                problem%sparse_block_index, problem%sparse_local_index, info)
+            if (info /= compatible_block_ok) then
+                info = marginality_spectrum_compute_error
+                message = "CAS3D2MN labeled block layout failed"
+                return
+            end if
+            if (any(labeled_widths /= problem%sparse_stiffness%widths)) then
+                info = marginality_spectrum_compute_error
+                message = "CAS3D2MN labeled block layout is inconsistent"
+                return
+            end if
         end if
         if (normalization_policy == marginality_normalization_cas3d2mn) then
             call solve_compatible_marginality_problem(problem, &
                 solve_eigenpair, result, info, message, &
                 negative_count_override=quotient_negative_count)
-            ! The count, and hence its floor, is that of the quotient pencil.
-            if (info == marginality_spectrum_ok) &
+            ! The count, and hence its floor, is that of the quotient pencil;
+            ! the labeled null directions lie in the floor band and are never
+            ! reported as the lowest eigenvalue.
+            if (info == marginality_spectrum_ok) then
                 result%zero_floor = quotient_result%zero_floor
+                result%quotient_rank = quotient%quotient_rank
+                result%labeled_nullity = quotient%nullity
+                result%peak_block_width = quotient%peak_block_width
+            end if
         else
             call solve_compatible_marginality_problem(problem, &
                 solve_eigenpair, result, info, message)

@@ -208,6 +208,14 @@ typedef struct gliss_cas3d_marginality_result {
     double eigenpair_residual;
     double force_balance_residual;
     double zero_floor;
+    /* CAS3D2MN coefficient normalization only (zero otherwise): rank of the
+     * labeled pencil, which equals the physical unknown count, the exact
+     * null space of coincident labels, and the widest block of the sparse
+     * labeled pencil. Appended after 0.0.2: a caller passing the earlier
+     * struct_size receives every other field. */
+    size_t quotient_rank;
+    size_t labeled_nullity;
+    size_t peak_block_width;
 } gliss_cas3d_marginality_result;
 
 /* Solve the lowest eigenpair represented by a TERPSICHORE FORT.23 file

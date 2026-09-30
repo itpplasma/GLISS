@@ -20,7 +20,9 @@ _PERPENDICULAR_L2 = "perpendicular_l2"
 _CAS3D2MN_COEFFICIENT = "cas3d2mn_coefficient"
 _RADIAL_QUADRATURES = {"gauss5": 1, "cas3d_midpoint": 2}
 _NORMALIZATION_LABELS = {
-    _PERPENDICULAR_L2: "compatible perpendicular L2 norm on physical modes",
+    _PERPENDICULAR_L2: (
+        "perpendicular kinetic form at unit mass density on physical modes"
+    ),
     _CAS3D2MN_COEFFICIENT: (
         "Schwab CAS3D2MN labeled-envelope coefficient norm: half identity, "
         "physical-sideband stiffness pullback, f_l=1"
@@ -46,9 +48,13 @@ class Cas3dMarginalityResult:
     force_balance_residual: float
     inertia_zero_floor: float
     normalization: str = (
-        "compatible perpendicular L2 norm of normal and tangential components"
+        "perpendicular kinetic form at unit mass density on the compatible "
+        "FEEC space"
     )
-    interpretation: str = "stability and marginality only; not a physical growth rate"
+    interpretation: str = (
+        "omega^2 in s^-2 with perpendicular inertia; not the growth rate of "
+        "the compressible problem"
+    )
     boundary_condition: str = "fixed"
     coordinate_handedness: str = "left-handed"
     fourier_convention: str = "2*pi*(m*theta - n*zeta/N_T)"
@@ -76,7 +82,15 @@ class Cas3dPhaseEnvelopeResult:
     coefficient_angular_resolution: Optional[Tuple[int, int]] = None
     reference_length: Optional[float] = None
     radial_quadrature: str = "gauss5"
-    normalization: str = "compatible perpendicular L2 norm on physical modes"
+    # CAS3D2MN coefficient normalization only: rank of the labeled pencil
+    # (the physical unknown count), its exact null space from coincident
+    # labels, and the widest block of the sparse labeled pencil.
+    quotient_rank: Optional[int] = None
+    labeled_nullity: Optional[int] = None
+    peak_block_width: Optional[int] = None
+    normalization: str = (
+        "perpendicular kinetic form at unit mass density on physical modes"
+    )
     interpretation: str = "stability and marginality only; not a physical growth rate"
     boundary_condition: str = "fixed"
     coordinate_handedness: str = "left-handed"
@@ -101,6 +115,9 @@ class _Cas3dMarginalityResult(ctypes.Structure):
         ("eigenpair_residual", ctypes.c_double),
         ("force_balance_residual", ctypes.c_double),
         ("zero_floor", ctypes.c_double),
+        ("quotient_rank", ctypes.c_size_t),
+        ("labeled_nullity", ctypes.c_size_t),
+        ("peak_block_width", ctypes.c_size_t),
     ]
 
 
@@ -402,6 +419,16 @@ def _phase_envelope_result(
         and math.isfinite(native.zero_floor)
         and native.zero_floor > 0.0
     )
+    coefficient = normalization == _CAS3D2MN_COEFFICIENT
+    if coefficient:
+        metadata_valid = metadata_valid and native.quotient_rank > 0 and (
+            native.peak_block_width > 0
+        )
+    else:
+        metadata_valid = metadata_valid and (
+            native.quotient_rank == native.labeled_nullity
+            == native.peak_block_width == 0
+        )
     eigenpair = (
         native.lowest_eigenvalue,
         native.certificate,
@@ -437,6 +464,9 @@ def _phase_envelope_result(
         coefficient_angular_resolution=coefficient_resolution,
         reference_length=reference_length,
         radial_quadrature=radial_quadrature,
+        quotient_rank=native.quotient_rank if coefficient else None,
+        labeled_nullity=native.labeled_nullity if coefficient else None,
+        peak_block_width=native.peak_block_width if coefficient else None,
     )
 
 
