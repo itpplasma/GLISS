@@ -247,6 +247,7 @@ class StabilityProblem:
             self.equilibrium_path, equilibrium._source_identity
         )
         self._equilibrium_metadata = (equilibrium.schema_version, size, digest)
+        self.coordinate_handedness = equilibrium.coordinate_handedness
         self._library = _load_library()
         _bind(self._library)
         self._handle = ctypes.c_void_p()
@@ -498,6 +499,7 @@ class StabilityProblem:
             has_chart_metric=bool(summary.has_chart_metric),
             has_eigenvector=bool(summary.has_eigenvector),
             solver_tolerances=self.solver_tolerances,
+            coordinate_handedness=self.coordinate_handedness,
         )
 
     def _require_open(self) -> None:

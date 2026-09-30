@@ -27,6 +27,14 @@ class FakeLibrary:
         self.gliss_cas3d2mn_phase_envelope = FakeFunction(
             self.solve_envelope_coefficient
         )
+        self.gliss_equilibrium_chart_orientation = FakeFunction(
+            self.chart_orientation
+        )
+
+    def chart_orientation(self, handle, orientation, error, error_capacity):
+        orientation._obj.value = -1
+        error.value = b""
+        return 0
 
     def solve(
         self,

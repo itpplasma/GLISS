@@ -154,6 +154,7 @@ def _bind(library: Any) -> None:
             "gliss_equilibrium_destroy",
             "gliss_equilibrium_surface_count",
             "gliss_equilibrium_schema_version",
+            "gliss_equilibrium_chart_orientation",
             "gliss_equilibrium_write",
             "gliss_mercier_profile_context",
         ),
@@ -187,6 +188,13 @@ def _bind(library: Any) -> None:
         ctypes.c_size_t,
     )
     library.gliss_equilibrium_schema_version.restype = ctypes.c_int
+    library.gliss_equilibrium_chart_orientation.argtypes = (
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    )
+    library.gliss_equilibrium_chart_orientation.restype = ctypes.c_int
     library.gliss_equilibrium_write.argtypes = (
         ctypes.c_void_p,
         ctypes.c_char_p,
@@ -273,6 +281,29 @@ class Equilibrium:
                 f"GLISS returned unsupported equilibrium schema {version.value}"
             )
         return version.value
+
+    @property
+    def coordinate_handedness(self) -> str:
+        """Orientation of the reconstructed ``(s, theta, zeta)`` chart.
+
+        ``"right-handed"`` for a positive signed Jacobian and
+        ``"left-handed"`` for a negative one; GVEC CAS3D exports with the
+        poloidal flip are left-handed.
+        """
+        self._require_open()
+        orientation = ctypes.c_int32()
+        error = _error_buffer()
+        status = self._library.gliss_equilibrium_chart_orientation(
+            self._handle, ctypes.byref(orientation), error, len(error)
+        )
+        _raise_for_status(status, error, "gliss_equilibrium_chart_orientation")
+        if orientation.value == 1:
+            return "right-handed"
+        if orientation.value == -1:
+            return "left-handed"
+        raise GlissInternalError(
+            f"GLISS returned invalid chart orientation {orientation.value}"
+        )
 
     def close(self) -> None:
         """Release the native equilibrium; repeated calls are safe."""

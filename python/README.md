@@ -544,9 +544,11 @@ Production assembly also requires a single nonzero Jacobian orientation across
 all its radial and angular quadrature points. Either consistent handedness is
 admitted; sampled angular or radial folds are rejected. This is a sampled
 admission check, not a proof of invertibility between quadrature points.
-High-mode axis-regular quotient interpolation can amplify near-axis export
-roundoff; this check rejects resulting sampled folds but does not repair that
-representation or alter exported Fourier coefficients.
+`Equilibrium.coordinate_handedness` reports the orientation of the
+reconstructed chart (`"left-handed"` for GVEC CAS3D exports with the poloidal
+flip), and results carry it in `coordinate_handedness`. Axis-regular position
+harmonics divide out only their parity factor (`s^(1/2)` or `s`), so high-mode
+exports do not amplify near-axis roundoff.
 
 This bandwidth admission rule does not bound nonlinear geometry quadrature error;
 check convergence by increasing both counts. Configuration schema v4 stores the
@@ -825,7 +827,7 @@ an external equilibrium solve before evaluating it again.
 ## Native library and ABI
 
 `gliss.version()` reports the loaded native version. The Python package checks
-ABI version 2 before every native call and rejects an incompatible library.
+ABI version 3 before every native call and rejects an incompatible library.
 Platform wheels load their bundled library automatically. Developers can test
 a local build explicitly:
 
@@ -841,7 +843,7 @@ and debugging facility, not required for normal use.
 
 The installed C header is `gliss.h`. `gliss.get_include()` returns its directory
 in a wheel installation; CMake source installs place it under the configured
-include prefix. ABI version 2 defines fixed numeric status values, opaque
+include prefix. ABI version 3 defines fixed numeric status values, opaque
 equilibrium and stability-problem handles, caller-owned output arrays, `size_t`
 capacities, and caller-provided error buffers. An error buffer may be omitted
 only by passing both a null pointer and zero capacity. Destroy accepts a null

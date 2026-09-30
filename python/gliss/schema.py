@@ -34,6 +34,7 @@ from ._stability_input import angular_grid
 from ._stability_input import mode_integer as _mode_integer
 from ._stability_input import real_parameter as _real_parameter
 from ._stability_input import validate_modes as _validate_modes
+from . import _ABI_VERSION
 from .stability import StabilityProblem, StabilityResult
 from .solver import SolverTolerances
 
@@ -214,8 +215,8 @@ class RunManifest:
         string(self.gliss_python_version, "gliss_python_version")
         string(self.gliss_native_version, "gliss_native_version")
         abi = integer(self.gliss_abi_version, "gliss_abi_version", 1)
-        if abi not in (1, 2):
-            raise ValueError("gliss_abi_version must be 1 or 2")
+        if abi not in (1, 2, 3):
+            raise ValueError("gliss_abi_version must be 1, 2 or 3")
         string(self.numpy_version, "numpy_version")
         string(self.python_version, "python_version")
         stability_result_to_dict(self.result)
@@ -295,8 +296,8 @@ class RunManifest:
             "run.software",
         )
         abi = integer(software["gliss_abi"], "run.software.gliss_abi", 1)
-        if abi not in (1, 2):
-            raise ValueError("run.software.gliss_abi must be 1 or 2")
+        if abi not in (1, 2, 3):
+            raise ValueError("run.software.gliss_abi must be 1, 2 or 3")
         configuration = StabilityConfiguration.from_dict(value["configuration"])
         result = stability_result_from_dict(value["result"])
         nested_versions = {
@@ -424,7 +425,7 @@ def _create_run_manifest(
         result=result,
         gliss_python_version=__version__,
         gliss_native_version=_native_version(),
-        gliss_abi_version=2,
+        gliss_abi_version=_ABI_VERSION,
         numpy_version=np.__version__,
         python_version=platform.python_version(),
     )

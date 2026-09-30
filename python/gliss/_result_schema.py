@@ -144,12 +144,16 @@ def _validate_conventions(value: Mapping[str, Any], context: str) -> None:
         "eigenvalue_unit": "s^-2",
         "boundary_condition": "fixed",
         "normalization": "x.T @ M @ x = 1",
-        "coordinate_handedness": "left-handed",
         "fourier_convention": "2*pi*(m*theta - n*zeta/N_T)",
     }
     for name, expected in constants.items():
         if value[name] != expected:
             raise ValueError(f"{context}.{name} must be {expected!r}")
+    if value["coordinate_handedness"] not in ("left-handed", "right-handed"):
+        raise ValueError(
+            f"{context}.coordinate_handedness must be 'left-handed' or "
+            "'right-handed'"
+        )
 
 
 def _certificate_components(value: Mapping[str, Any], context: str) -> Dict[str, float]:
@@ -223,6 +227,7 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
         mu_unknowns=counts[2],
         has_chart_metric=chart_metric,
         has_eigenvector=has_vector,
+        coordinate_handedness=value["coordinate_handedness"],
         solver_tolerances=(
             SolverTolerances.from_dict(value["solver_tolerances"])
             if version in (2, 3, 4)

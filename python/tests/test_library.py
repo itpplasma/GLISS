@@ -28,7 +28,7 @@ def test_incompatible_abi_is_rejected(monkeypatch):
         gliss_abi_version = Function()
 
     monkeypatch.setattr(gliss, "_open_library", lambda: Library())
-    with pytest.raises(OSError, match="ABI version 1.*requires 2"):
+    with pytest.raises(OSError, match="ABI version 1.*requires 3"):
         gliss._load_library()
 
 

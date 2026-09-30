@@ -4,8 +4,10 @@ module primitive_kernel_geometry
     use export_surface_geometry, only: build_surface_kernel_fields, &
         mercier_ok, solve_beta_derivatives_modes, surface_data_t, &
         surface_profiles_t
+    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use primitive_equilibrium_spline, only: evaluate_primitive_equilibrium, &
-        primitive_equilibrium_ok, primitive_equilibrium_spline_t
+        fit_primitive_equilibrium, primitive_equilibrium_ok, &
+        primitive_equilibrium_spline_t
     use primitive_geometry_grid, only: primitive_geometry_grid_t
     implicit none
     private
@@ -15,6 +17,7 @@ module primitive_kernel_geometry
     integer, parameter, public :: primitive_kernel_allocation_error = -2
 
     public :: evaluate_primitive_kernel_surface
+    public :: primitive_chart_orientation
 
 contains
 
@@ -284,5 +287,45 @@ contains
             .and. ieee_is_finite(profiles%covariant_zeta_slope) &
             .and. ieee_is_finite(profiles%pressure_slope)
     end function profiles_are_finite
+
+    ! Orientation of the reconstructed (s, theta, zeta) chart: +1 when the
+    ! signed Jacobian is positive (right-handed), -1 when negative.  The
+    ! sign must agree on interior sample surfaces; assembly separately
+    ! rejects any sign change at its own quadrature nodes.
+    subroutine primitive_chart_orientation(equilibrium, orientation, info)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(out) :: orientation, info
+        type(primitive_equilibrium_spline_t) :: spline
+        type(primitive_geometry_grid_t) :: geometry
+        real(dp), parameter :: surfaces(3) = [0.25_dp, 0.5_dp, 0.75_dp]
+        real(dp) :: theta(16), zeta(8), pressure, pressure_slope
+        integer :: j, surface, local_info, sign_here
+
+        orientation = 0
+        info = primitive_kernel_invalid
+        call fit_primitive_equilibrium(equilibrium, spline, local_info)
+        if (local_info /= primitive_equilibrium_ok) return
+        do j = 1, size(theta)
+            theta(j) = real(j - 1, dp) / real(size(theta), dp)
+        end do
+        do j = 1, size(zeta)
+            zeta(j) = real(j - 1, dp) / real(size(zeta), dp)
+        end do
+        do surface = 1, size(surfaces)
+            call evaluate_primitive_equilibrium(spline, surfaces(surface), &
+                theta, zeta, geometry, pressure, pressure_slope, local_info)
+            if (local_info /= primitive_equilibrium_ok) return
+            if (all(geometry%signed_jacobian > 0.0_dp)) then
+                sign_here = 1
+            else if (all(geometry%signed_jacobian < 0.0_dp)) then
+                sign_here = -1
+            else
+                return
+            end if
+            if (orientation /= 0 .and. orientation /= sign_here) return
+            orientation = sign_here
+        end do
+        info = primitive_kernel_ok
+    end subroutine primitive_chart_orientation
 
 end module primitive_kernel_geometry

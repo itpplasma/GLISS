@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define GLISS_ABI_VERSION 2
+#define GLISS_ABI_VERSION 3
 
 typedef struct gliss_equilibrium gliss_equilibrium;
 typedef struct gliss_stability_problem gliss_stability_problem;
@@ -49,6 +49,14 @@ gliss_status gliss_equilibrium_destroy(
 gliss_status gliss_equilibrium_surface_count(
     const gliss_equilibrium *equilibrium,
     size_t *surface_count,
+    char *error,
+    size_t error_capacity);
+
+/* Orientation of the reconstructed (s, theta, zeta) chart: +1 right-handed
+ * (positive signed Jacobian), -1 left-handed. Added in ABI version 3. */
+gliss_status gliss_equilibrium_chart_orientation(
+    const gliss_equilibrium *equilibrium,
+    int32_t *orientation,
     char *error,
     size_t error_capacity);
 

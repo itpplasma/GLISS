@@ -496,6 +496,11 @@ if(BUILD_TESTING)
     add_test(NAME magnetic_differential_equation
         COMMAND test_magnetic_differential_equation)
 
+    add_executable(test_chart_orientation test/test_chart_orientation.f90)
+    target_link_libraries(test_chart_orientation PRIVATE gliss)
+    add_test(NAME chart_orientation
+        COMMAND test_chart_orientation ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
+
     add_executable(test_radial_cubic_spline
         test/test_radial_cubic_spline.f90)
     target_link_libraries(test_radial_cubic_spline PRIVATE gliss)

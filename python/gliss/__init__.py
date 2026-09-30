@@ -14,7 +14,7 @@ from importlib.resources import as_file, files
 
 __version__ = "0.0.2"
 
-_ABI_VERSION = 2
+_ABI_VERSION = 3
 _LIBRARY_NAME = "gliss_c"
 _RESOURCE_STACK = ExitStack()
 atexit.register(_RESOURCE_STACK.close)

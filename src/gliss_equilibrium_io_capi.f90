@@ -7,10 +7,14 @@ module gliss_equilibrium_io_capi
     use gliss_c_contexts, only: equilibrium_context_t
     use gvec_cas3d_writer, only: write_gvec_cas3d_file, writer_invalid, &
         writer_netcdf_error, writer_ok, writer_open_error
+    use gliss_c_abi_support, only: status_compute_error
+    use primitive_kernel_geometry, only: primitive_chart_orientation, &
+        primitive_kernel_ok
     implicit none
     private
 
     public :: gliss_equilibrium_schema_version_c
+    public :: gliss_equilibrium_chart_orientation_c
     public :: gliss_equilibrium_write_c
 
 contains
@@ -43,6 +47,44 @@ contains
         end if
         version = int(context%equilibrium%schema_version, c_int)
     end function gliss_equilibrium_schema_version_c
+
+    function gliss_equilibrium_chart_orientation_c(handle, &
+            orientation_pointer, error_pointer, error_capacity) bind(c, &
+            name="gliss_equilibrium_chart_orientation") result(status)
+        type(c_ptr), value, intent(in) :: handle, orientation_pointer
+        type(c_ptr), value, intent(in) :: error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+        integer(c_int), pointer :: orientation
+        type(equilibrium_context_t), pointer :: context
+        integer :: info, sign_value
+
+        status = error_buffer_status(error_pointer, error_capacity)
+        if (status /= status_ok) return
+        call write_error(error_pointer, error_capacity, "")
+        if (.not. c_associated(orientation_pointer)) then
+            status = status_invalid_argument
+            call write_error(error_pointer, error_capacity, &
+                "orientation output pointer is null")
+            return
+        end if
+        call c_f_pointer(orientation_pointer, orientation)
+        orientation = 0_c_int
+        status = context_from_handle(handle, context)
+        if (status /= status_ok) then
+            call write_error(error_pointer, error_capacity, &
+                "equilibrium handle is null")
+            return
+        end if
+        call primitive_chart_orientation(context%equilibrium, sign_value, info)
+        if (info /= primitive_kernel_ok) then
+            status = status_compute_error
+            call write_error(error_pointer, error_capacity, &
+                "equilibrium chart has no consistent orientation")
+            return
+        end if
+        orientation = int(sign_value, c_int)
+    end function gliss_equilibrium_chart_orientation_c
 
     function gliss_equilibrium_write_c(handle, path_pointer, path_length, &
             error_pointer, error_capacity) bind(c, &

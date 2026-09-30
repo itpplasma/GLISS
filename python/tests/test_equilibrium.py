@@ -25,6 +25,9 @@ class FakeLibrary:
         self.gliss_equilibrium_destroy = FakeFunction(self.destroy)
         self.gliss_equilibrium_surface_count = FakeFunction(self.surface_count)
         self.gliss_equilibrium_schema_version = FakeFunction(self.schema_version)
+        self.gliss_equilibrium_chart_orientation = FakeFunction(
+            self.chart_orientation
+        )
         self.gliss_equilibrium_write = FakeFunction(self.write)
         self.gliss_mercier_profile_context = FakeFunction(self.mercier_profile)
 
@@ -48,6 +51,11 @@ class FakeLibrary:
 
     def schema_version(self, handle, version, error, error_capacity):
         version._obj.value = 0
+        error.value = b""
+        return 0
+
+    def chart_orientation(self, handle, orientation, error, error_capacity):
+        orientation._obj.value = -1
         error.value = b""
         return 0
 

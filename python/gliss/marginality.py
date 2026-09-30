@@ -4,7 +4,7 @@ import ctypes
 import math
 import numbers
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Optional, Sequence, Tuple
 
 from . import _require_symbols
@@ -316,7 +316,7 @@ def _calculate(
         len(error),
     )
     _raise_for_status(status, error, "gliss_cas3d_marginality")
-    return _result(
+    result = _result(
         native,
         validated_modes,
         validated_parity,
@@ -324,6 +324,7 @@ def _calculate(
         resolution,
         solve_eigenpair,
     )
+    return replace(result, coordinate_handedness=equilibrium.coordinate_handedness)
 
 
 def _mode_pair(value: Any, name: str) -> Tuple[int, int]:
@@ -512,7 +513,7 @@ def _calculate_phase_envelope(
     arguments.extend([int(solve_eigenpair), ctypes.byref(native), error, len(error)])
     status = getattr(equilibrium._library, symbol)(*arguments)
     _raise_for_status(status, error, symbol)
-    return _phase_envelope_result(
+    result = _phase_envelope_result(
         native,
         base,
         envelopes,
@@ -525,6 +526,7 @@ def _calculate_phase_envelope(
         length_scale,
         quadrature_name,
     )
+    return replace(result, coordinate_handedness=equilibrium.coordinate_handedness)
 
 
 def cas3d_phase_envelope_inertia(

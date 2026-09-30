@@ -15,7 +15,7 @@ module gliss_capi
     private
 
     character(len=*), parameter :: version_string = "0.0.2"
-    integer(c_int), parameter :: abi_version_number = 2
+    integer(c_int), parameter :: abi_version_number = 3
     public :: gliss_version_c
     public :: gliss_abi_version_c
     public :: gliss_mercier_profile_c

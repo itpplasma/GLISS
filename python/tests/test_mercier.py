@@ -96,3 +96,9 @@ def test_solovev_mercier_sign_matches_dcon():
     assert 0.1 < crossing < 0.3
     assert gliss.mercier_objective(_SOLOVEV) == pytest.approx(-d_mercier.min())
     assert gliss.mercier_objective(_SOLOVEV) > 0.0
+
+
+def test_gvec_export_reports_left_handed_chart():
+    _ensure_library()
+    with gliss.Equilibrium(_SOLOVEV) as equilibrium:
+        assert equilibrium.coordinate_handedness == "left-handed"
