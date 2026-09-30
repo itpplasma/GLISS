@@ -69,10 +69,14 @@ cylindrical angle `zeta_B-nu` without reflecting the Cartesian `y` coordinate.
 The importer currently accepts fixed-boundary, stellarator-symmetric VMEC
 files with `signgs=-1` and a successful `ier_flag`. It rejects asymmetric and
 reversed-field-pinch files instead of applying the symmetric GLISS operator to
-an incompatible chart. Mode limits are integers from 0 through 64. The
-default 7 by 7 truncation is deliberate: higher modes can amplify radial
-noise in a surface-by-surface Boozer transform. Increase them only after a
-convergence check.
+an incompatible chart. Mode limits are integers from 0 through 64. GLISS
+rebuilds the Jacobian, metric and field from the truncated position harmonics
+alone, so the conversion measures that reconstruction against the untruncated
+Boozer geometry and records it as `conversion_residual_truncated_jacobian`.
+A relative maximum above `truncation_tolerance` (default 0.05) is rejected.
+The default 7 by 7 truncation reproduces booz_xform's li383 test equilibrium
+only to 0.17 and needs about 16 by 12 (0.024); increase the limits and check
+the spectrum for convergence.
 
 By default, conversion retains every VMEC half-grid surface. The optional
 `radial_surfaces` argument performs centered subsampling without interpolation.

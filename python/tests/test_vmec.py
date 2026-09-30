@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from scipy.io import netcdf_file
 
+import gliss._vmec_geometry as _vmec_geometry
 import gliss.vmec as vmec
 from gliss._vmec_geometry import (
     ConvertedGeometry,
@@ -257,3 +258,51 @@ def test_convert_vmec_removes_partial_output_after_write_failure(tmp_path, monke
         vmec.convert_vmec(source, destination)
     assert not destination.exists()
     assert not list(tmp_path.glob(".converted.nc.*.tmp"))
+
+
+def test_convert_vmec_rejects_inaccurate_position_truncation(tmp_path, monkeypatch):
+    source = tmp_path / "wout.nc"
+    source.write_bytes(b"not read")
+    geometry = _geometry()
+    geometry.residuals["truncated_jacobian"] = 0.2
+    monkeypatch.setattr(vmec, "_dependencies", lambda: (_BoozModule, netcdf_file))
+    monkeypatch.setattr(vmec, "_metadata", lambda path, reader: 0.02)
+    monkeypatch.setattr(vmec, "convert_geometry", lambda *args: geometry)
+    with pytest.raises(ValueError, match="increase poloidal_max"):
+        vmec.convert_vmec(source, tmp_path / "out.nc", poloidal_max=2, toroidal_max=1)
+    assert not (tmp_path / "out.nc").exists()
+    with pytest.raises(ValueError, match="truncation_tolerance"):
+        vmec.convert_vmec(source, tmp_path / "out.nc", truncation_tolerance=0.0)
+
+
+def test_truncated_jacobian_residual_detects_missing_harmonics():
+    # A shaped torus whose radius needs m=2: truncating the export to m<=1
+    # must be visible in the Jacobian that GLISS reconstructs.
+    s = (np.arange(8) + 0.5) / 8
+    theta = np.linspace(0.0, 2.0 * np.pi, 32, endpoint=False)
+    zeta = np.linspace(0.0, 2.0 * np.pi, 8, endpoint=False)
+    rho = np.sqrt(s)[:, None, None]
+    t = theta[None, :, None] + 0.0 * zeta[None, None, :]
+    radius = 3.0 + 0.5 * rho * np.cos(t) + 0.2 * rho**2 * np.cos(2 * t)
+    radius_t = -0.5 * rho * np.sin(t) - 0.4 * rho**2 * np.sin(2 * t)
+    height = 0.6 * rho * np.sin(t)
+    height_t = 0.6 * rho * np.cos(t)
+    zero = np.zeros_like(radius)
+    exact = (
+        np.stack((radius, zero, height)),
+        np.stack((radius_t, zero, height_t)),
+        np.stack((zero, zero, zero)),
+    )
+    residuals = []
+    for m_max in (1, 2):
+        harmonics = {
+            name: _vmec_geometry._project(values, theta, zeta, 1, m_max, 0)
+            for name, values in (("xhat", radius), ("yhat", zero), ("zhat", height))
+        }
+        residuals.append(
+            _vmec_geometry._truncated_jacobian_residual(
+                harmonics, exact, s, theta, zeta, 1
+            )
+        )
+    assert residuals[0] > 0.1
+    assert residuals[1] < 1e-12

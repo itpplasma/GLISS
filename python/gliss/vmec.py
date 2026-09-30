@@ -180,6 +180,7 @@ def convert_vmec(
     transform_factor: int = 4,
     radial_surfaces: Optional[int] = None,
     force_balance_policy: str = "error",
+    truncation_tolerance: float = 0.05,
     overwrite: bool = False,
 ) -> Path:
     """Convert a stellarator-symmetric VMEC ``wout`` file for GLISS.
@@ -189,7 +190,11 @@ def convert_vmec(
     centered uniform subset of the VMEC half grid. A failed pointwise
     force-balance closure rejects the conversion by default; the explicit
     ``force_balance_policy="warn"`` option retains the diagnostic export for
-    convergence studies. Existing outputs are preserved unless
+    convergence studies. GLISS rebuilds the geometry from the truncated
+    ``xhat, yhat, zhat`` harmonics only; the conversion therefore rejects a
+    maximum relative Jacobian error of that truncated reconstruction above
+    ``truncation_tolerance``, which usually calls for larger ``poloidal_max``
+    and ``toroidal_max``. Existing outputs are preserved unless
     ``overwrite=True``.
     """
     source_path = _path(input_path, "input_path", True)
@@ -200,6 +205,13 @@ def convert_vmec(
     if radial_surfaces is not None:
         radial_surfaces = _integer(radial_surfaces, "radial_surfaces", 5, 1_000_000)
     force_balance_policy = _force_balance_policy(force_balance_policy)
+    if isinstance(truncation_tolerance, bool) or not isinstance(
+        truncation_tolerance, (int, float)
+    ):
+        raise TypeError("truncation_tolerance must be a real number")
+    truncation_tolerance = float(truncation_tolerance)
+    if not 0.0 < truncation_tolerance < float("inf"):
+        raise ValueError("truncation_tolerance must be positive and finite")
     if not isinstance(overwrite, bool):
         raise TypeError("overwrite must be a bool")
     if destination.exists() and not overwrite:
@@ -228,6 +240,14 @@ def convert_vmec(
     if bool(transform.asym):
         raise ValueError("booz_xform reported asymmetric geometry")
     converted = convert_geometry(transform, beta_average, poloidal_max, toroidal_max)
+    truncation = converted.residuals.get("truncated_jacobian", 0.0)
+    if truncation > truncation_tolerance:
+        raise ValueError(
+            "the exported position harmonics reproduce the Jacobian only to "
+            f"{truncation:.3g} (relative maximum); increase poloidal_max and "
+            f"toroidal_max (now {poloidal_max}, {toroidal_max}) or raise "
+            "truncation_tolerance"
+        )
     force_balance = converted.residuals["force_balance"]
     if force_balance > 1.0e-1:
         message = (

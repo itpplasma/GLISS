@@ -33,4 +33,5 @@ sign change 2.615 -> -2.515 interpolates between its endpoints. The
 classification needs a step-size independent test, for example bisection of
 the interpolated interval until |crit| clearly tends to zero or to infinity.
 Tighter tolerances hide the defect here, but they do not remove it. GLISS
-tracks the report in its issue tracker; it has not been filed upstream yet.
+tracks the upstream report in [#31](https://github.com/itpplasma/GLISS/issues/31);
+it has not been filed upstream yet.

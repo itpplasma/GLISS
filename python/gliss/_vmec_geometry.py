@@ -227,6 +227,54 @@ def _reconstruct(
     return values, theta_derivative, zeta_derivative
 
 
+def _frame_jacobian(
+    position: np.ndarray,
+    position_theta: np.ndarray,
+    position_zeta: np.ndarray,
+    s: np.ndarray,
+) -> np.ndarray:
+    """Jacobian of (xhat, yhat, zhat) in the frame rotating with zeta.
+
+    Angular derivatives are in radians; the radial derivative uses the same
+    second-order differences for every input, so differences between two
+    evaluations isolate their angular representation.
+    """
+    radial = np.gradient(position, s, axis=1, edge_order=2)
+    x, y, _ = position
+    toroidal = np.stack(
+        (position_zeta[0] - y, position_zeta[1] + x, position_zeta[2])
+    )
+    cross = np.cross(position_theta, toroidal, axis=0)
+    return np.einsum("i...,i...->...", radial, cross)
+
+
+def _truncated_jacobian_residual(
+    harmonics: Dict[str, Tuple[np.ndarray, np.ndarray]],
+    exact: Tuple[np.ndarray, np.ndarray, np.ndarray],
+    s: np.ndarray,
+    theta: np.ndarray,
+    zeta: np.ndarray,
+    nfp: int,
+) -> float:
+    """Relative Jacobian error of the truncated position harmonics.
+
+    GLISS rebuilds the geometry from the exported ``xhat, yhat, zhat``
+    harmonics only, so their truncation, not the untruncated Boozer fields,
+    determines the Jacobian and metric the solver uses.
+    """
+    names = ("xhat", "yhat", "zhat")
+    reconstructed = [_reconstruct(harmonics[name], theta, zeta, nfp) for name in names]
+    position = np.stack([values[0] for values in reconstructed])
+    # _reconstruct differentiates in the exported normalized angles.
+    position_theta = np.stack([values[1] for values in reconstructed]) / -_TWO_PI
+    position_zeta = np.stack([values[2] for values in reconstructed]) / (
+        -_TWO_PI / nfp
+    )
+    truncated = _frame_jacobian(position, position_theta, position_zeta, s)
+    reference = _frame_jacobian(*exact, s)
+    return _relative_max(truncated, reference)
+
+
 def _force_balance_residual(
     harmonics: Dict[str, Tuple[np.ndarray, np.ndarray]],
     profiles: Dict[str, np.ndarray],
@@ -451,6 +499,15 @@ def convert_geometry(
     }
     residuals["force_balance"] = _force_balance_residual(
         harmonics, profiles, s, theta, zeta, nfp
+    )
+    cos_p, sin_p = np.cos(p), np.sin(p)
+    exact_position = (
+        np.stack((xhat, yhat, z)),
+        np.stack((rt * cos_p - r * sin_p * pt, -rt * sin_p - r * cos_p * pt, zt)),
+        np.stack((rz * cos_p - r * sin_p * pz, -rz * sin_p - r * cos_p * pz, zz)),
+    )
+    residuals["truncated_jacobian"] = _truncated_jacobian_residual(
+        harmonics, exact_position, s, theta, zeta, nfp
     )
     if (
         residuals["toroidal_flux"] > 1.0e-2
