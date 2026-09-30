@@ -3,3 +3,4 @@ build*/
 dist/
 .cache/
 __pycache__/
+docs/_build/

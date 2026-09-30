@@ -1,0 +1,9 @@
+# API reference
+
+```{eval-rst}
+.. automodule:: gliss
+   :members: Equilibrium, StabilityProblem, StabilityConfiguration,
+      StabilityResult, SpectrumResult, solve_axisymmetric, mercier_profile,
+      mercier_objective, convert_vmec, convert_boozer,
+      solve_terpsichore_fixed_boundary, solve_terpsichore_pseudoplasma
+```

@@ -75,6 +75,11 @@
   operator with a named `GlissArgumentError`. The converter read the
   half-grid `phip` as an average of neighbouring entries; it now takes the
   surface's own entry (#10, parts A and B).
+- Add Sphinx documentation sources in `docs/` (`make -C docs html`) that
+  separate production, compatibility and unfinished scope. Every quickstart
+  example runs in the native test suite and the installed-wheel check
+  against the Solov'ev fixtures (#15; hosting is left to the release
+  workflow).
 - Add a public-source Solov'ev pipeline (GVEC 1.5.0 plus a documented export
   patch) and small toroidal and exact-displacement regression tests.
 

@@ -17,6 +17,12 @@ physical plasma-vacuum API. The TERPSICHORE FORT.23/24 entry points reproduce
 that code's stored discretization for validation and are labeled compatibility
 paths throughout the API and documentation.
 
+## Documentation
+
+`docs/` holds the Sphinx sources (`make -C docs html`, with `sphinx` and
+`myst-parser` installed). The quickstart examples run in the native test
+suite against the Solov'ev fixtures in `test/data`.
+
 ## Python
 
 The Python package is the primary user interface. Install it with

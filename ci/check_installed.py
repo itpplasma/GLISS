@@ -144,6 +144,7 @@ def main():
         environment.pop("PYTHONPATH", None)
         environment["GLISS_LIB"] = str(library)
         environment["GLISS_TEST_DATA"] = str(tests.parents[1] / "test" / "data")
+        environment["GLISS_DOCS"] = str(tests.parents[1] / "docs")
         subprocess.run(
             [
                 sys.executable,
