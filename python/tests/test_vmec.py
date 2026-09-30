@@ -465,3 +465,18 @@ def test_convert_boozer_requires_beta(tmp_path, monkeypatch, options, error, mat
     _stub_dependencies(monkeypatch, _Transform())
     with pytest.raises(error, match=match):
         vmec.convert_boozer(source, tmp_path / "out.nc", **options)
+
+
+def test_half_grid_flux_slope_matches_full_grid_midpoints():
+    # A linear full-grid dPhi/ds: half-grid values are exact midpoints, and
+    # the axis entry zeroed by write_boozmn is recovered by extrapolation.
+    full = 0.5 + 0.2 * np.linspace(0.0, 1.0, 9)
+    midpoints = 0.5 * (full[:-1] + full[1:])
+    np.testing.assert_allclose(
+        _vmec_geometry._half_grid_flux_slope(full), midpoints, rtol=1e-15
+    )
+    restored = full.copy()
+    restored[0] = 0.0
+    np.testing.assert_allclose(
+        _vmec_geometry._half_grid_flux_slope(restored), midpoints, rtol=1e-14
+    )

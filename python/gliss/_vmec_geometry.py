@@ -192,6 +192,20 @@ def _relative_max(actual: np.ndarray, expected: np.ndarray) -> float:
     return float(np.max(np.abs(actual - expected)) / scale)
 
 
+def _half_grid_flux_slope(phip: np.ndarray) -> np.ndarray:
+    """dPhi/ds on the VMEC half-grid surfaces from booz_xform's ``phip``.
+
+    ``read_wout`` fills ``phip`` from VMEC's full-grid ``phipf``, so half-grid
+    surface j lies midway between entries j and j + 1. ``write_boozmn`` zeroes
+    the axis entry, which a restored transform then carries; it is
+    extrapolated linearly from the next two full-grid entries.
+    """
+    full = np.array(phip, dtype=np.float64)
+    if full.size >= 3 and full[0] == 0.0 and full[1] != 0.0:
+        full[0] = 2.0 * full[1] - full[2]
+    return 0.5 * (full[:-1] + full[1:])
+
+
 def _boozer_current(
     source: Any, name: str, indices: np.ndarray, surfaces: int
 ) -> np.ndarray:
@@ -459,11 +473,7 @@ def convert_geometry(
     phip = _array(source, "phip")
     if phip.shape != (available + 1,):
         raise ValueError("booz_xform returned phip on an unsupported radial grid")
-    # phip is booz_xform's VMEC half-grid dPhi/ds with an unused axis entry,
-    # laid out like pres: computed surface j is entry j + 1. Averaging entries
-    # j and j + 1 mixed neighbouring surfaces and, for a restored boozmn file
-    # whose axis entry is zero, halved the first surface.
-    phip_half = phip[indices + 1][:, None, None]
+    phip_half = _half_grid_flux_slope(phip)[indices][:, None, None]
     gm_values = ev(gm)
     jacobian = phip_half * gm_values
     geometry_jacobian_residual = _relative_max(geometry_jacobian, jacobian)
