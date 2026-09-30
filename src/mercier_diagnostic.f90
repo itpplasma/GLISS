@@ -472,18 +472,20 @@ contains
                     d_pair%cosine(1, idx_m, idx_n) = 0.0_dp
                     d_pair%sine(1, idx_m, idx_n) = 0.0_dp
                 else
-                    ! beta = F D / (D^2 + w^2) with the cell width w fixed,
-                    ! so d beta / d D = beta (w^2 - D^2) / (D (D^2 + w^2)).
+                    ! beta = F D / (D^2 + w^2) with D = (m chi' - n Phi')/scale
+                    ! and w = |m| |Phi'| spread / (2 scale), so w scales with
+                    ! |Phi'| at fixed spread:
+                    ! d beta = beta [(w^2 - D^2) dD / D - 2 w dw] / (D^2 + w^2).
                     d_denominator = (poloidal_weight * mode_m &
                         - toroidal_weight * mode_n)
-                    factor = (width**2 - denominator**2) &
-                        / (denominator * (denominator**2 + width**2))
+                    factor = ((width**2 - denominator**2) / denominator &
+                        * (d_denominator / scale) - 2.0_dp * width**2 &
+                        * toroidal_weight / toroidal_flux_slope) &
+                        / (denominator**2 + width**2)
                     d_pair%cosine(1, idx_m, idx_n) = &
-                        beta_harmonics%cosine(1, idx_m, idx_n) &
-                        * (d_denominator / scale) * factor
+                        beta_harmonics%cosine(1, idx_m, idx_n) * factor
                     d_pair%sine(1, idx_m, idx_n) = &
-                        beta_harmonics%sine(1, idx_m, idx_n) &
-                        * (d_denominator / scale) * factor
+                        beta_harmonics%sine(1, idx_m, idx_n) * factor
                 end if
             end do
         end do

@@ -297,7 +297,10 @@ contains
     ! rejects any sign change at its own quadrature nodes.
     function cell_iota_spread(spline, coordinate) result(spread)
         ! Variation of chi'/Phi' over the equilibrium data interval that
-        ! contains coordinate, from the flux-profile spline.
+        ! contains coordinate, from the flux-profile spline. The profiles
+        ! give the full rotational transform dchi/dPhi, while the magnetic
+        ! differential equation uses the field averages chi'/Phi' of one
+        ! field period, which are smaller by the number of field periods.
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         real(dp), intent(in) :: coordinate
         real(dp) :: spread
@@ -321,7 +324,8 @@ contains
                 return
             ratio(j) = slopes(2) / slopes(1)
         end do
-        if (all(ieee_is_finite(ratio))) spread = maxval(ratio) - minval(ratio)
+        if (all(ieee_is_finite(ratio))) spread = (maxval(ratio) &
+            - minval(ratio)) / real(spline%field_periods, dp)
     end function cell_iota_spread
 
     subroutine primitive_chart_orientation(equilibrium, orientation, info)

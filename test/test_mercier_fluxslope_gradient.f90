@@ -26,17 +26,25 @@ program test_mercier_fluxslope_gradient
     real(dp) :: full, poloidal_base
     real(dp) :: analytic_toroidal, analytic_poloidal
     real(dp) :: fd_toroidal, fd_poloidal, h, rel_err
+    ! The cell-averaged Pfirsch-Schlueter response has a width that scales
+    ! with Phi'; the gradients must include that dependence.
+    real(dp), parameter :: spreads(2) = [0.0_dp, 0.3_dp]
+    real(dp) :: spread
+    integer :: case
 
     call build_fixture(equilibrium, surface, theta, zeta)
     poloidal_base = sum(surface%jacobian * surface%b_theta) &
         / real(size(surface%jacobian), dp)
+    do case = 1, size(spreads)
+    spread = spreads(case)
+    write (*, "(a, f6.3)") "iota spread               = ", spread
 
     call mercier_surface_terms(equilibrium, surface, theta, zeta, &
         covariant_theta, covariant_zeta, covariant_theta_slope, &
         covariant_zeta_slope, flux_slope, flux_curvature, volume_slope, &
         volume_curvature, pressure_slope, iota_slope, d_terms, grad, &
         full, beta_values, analytic_toroidal, analytic_poloidal, &
-        poloidal_flux_slope_override=poloidal_base)
+        poloidal_flux_slope_override=poloidal_base, iota_spread=spread)
 
     ! Toroidal flux slope: re-run grad_psi, the beta solve, and the
     ! integrals at the perturbed toroidal slope while holding the poloidal
@@ -67,6 +75,7 @@ program test_mercier_fluxslope_gradient
         "poloidal_flux_slope gradient disagrees with finite difference")
     call require(abs(analytic_poloidal) > 1.0e-9_dp, &
         "poloidal gradient must resolve a nonzero beta-implicit response")
+    end do
 
     write (*, "(a)") "PASS"
 
@@ -85,7 +94,8 @@ contains
             covariant_zeta_slope, phi_t, flux_curvature, volume_slope, &
             volume_curvature, pressure_slope, iota_slope, local_terms, &
             local_grad, local_full, local_beta, local_toroidal, &
-            local_poloidal, poloidal_flux_slope_override=poloidal_base)
+            local_poloidal, poloidal_flux_slope_override=poloidal_base, &
+            iota_spread=spread)
         value = local_terms%mercier
     end function d_mercier_toroidal
 
@@ -102,7 +112,8 @@ contains
             covariant_zeta_slope, flux_slope, flux_curvature, volume_slope, &
             volume_curvature, pressure_slope, iota_slope, local_terms, &
             local_grad, local_full, local_beta, local_toroidal, &
-            local_poloidal, poloidal_flux_slope_override=phi_p)
+            local_poloidal, poloidal_flux_slope_override=phi_p, &
+            iota_spread=spread)
         value = local_terms%mercier
     end function d_mercier_poloidal
 
