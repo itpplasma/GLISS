@@ -77,7 +77,29 @@ Fixed-boundary stability against the current fraction:
   - The critical current fraction differs: TERPSICHORE is weakly unstable at
     0.75, where its own sign flips with ns (33 stable, 65 and 129 unstable),
     and GLISS is stable.
-  - D_curr differs by 10–20 % for li383 and QAS below s = 0.4.
+  - The QAS D_curr difference below s = 0.4 (see li383 below for the
+    mechanism) is not rechecked: its export needs Boozer resolution above
+    M = N = 24 (Jacobian truncation 0.073), beyond this VM's memory on all
+    127 surfaces.
+- The li383 D_curr difference was VMEC's, not GLISS's. VMEC evaluates
+  D_curr = −shear (⟨J·B/|∇φ|³⟩ − I′⟨B²/|∇φ|³⟩) with J·B from the curl of
+  its Fourier-truncated field, while GLISS takes the parallel current from
+  the magnetic differential equation of the force-balanced Boozer field.
+  Raising the VMEC angular resolution of the same li383 input moves VMEC
+  onto GLISS; GLISS is converged in Boozer harmonics (M = N = 16 and 24
+  agree to four digits) and in radial surfaces (66 and 198):
+
+  | VMEC mpol, ntor | VMEC D_curr at s = 0.25 | GLISS | median GLISS/VMEC D_curr | median D_Mercier |
+  |---|---|---|---|---|
+  | 9, 5 (input) | 0.0566 | 0.0685 | 1.102 | 1.098 |
+  | 12, 8 | 0.0677 | 0.0672 | 0.985 | 1.018 |
+  | 16, 10 | 0.0664 | 0.0679 | 0.999 | 1.025 |
+
+  Close to the axis (s < 0.1) VMEC's D_curr also changes sign between
+  ns = 99 and 199, while GLISS's does not. A 10 % local difference at
+  s ≈ 0.66 persists at every resolution next to a low-order rational
+  surface, where the ideal Pfirsch-Schlueter current is singular and each
+  code regularizes it differently.
 - `convert_vmec` used to reject converged VMEC 9.0 li383 and QAS outputs.
   Its |B| and current identities now share the Boozer Jacobian tolerance,
   and the averaged radial force balance is gated instead of the pointwise
