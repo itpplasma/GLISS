@@ -29,6 +29,22 @@ module scalar_potential_vacuum
     real(dp), parameter :: pi = acos(-1.0_dp)
     ! Relative node mismatch below which a rotation is a mesh symmetry.
     real(dp), parameter :: symmetry_tolerance = 1.0e-10_dp
+    ! Panels farther than far_ratio diameters from a collocation point use
+    ! the 7-point degree-5 rule (Dunavant) instead of the exact integrals.
+    real(dp), parameter :: far_ratio = 4.0_dp
+    integer, parameter :: far_points = 7
+    real(dp), parameter :: far_weights(far_points) = [0.225_dp, &
+        0.132394152788506_dp, 0.132394152788506_dp, 0.132394152788506_dp, &
+        0.125939180544827_dp, 0.125939180544827_dp, 0.125939180544827_dp]
+    real(dp), parameter :: far_barycentric(3, far_points) = reshape([ &
+        1.0_dp / 3.0_dp, 1.0_dp / 3.0_dp, 1.0_dp / 3.0_dp, &
+        0.059715871789770_dp, 0.470142064105115_dp, 0.470142064105115_dp, &
+        0.470142064105115_dp, 0.059715871789770_dp, 0.470142064105115_dp, &
+        0.470142064105115_dp, 0.470142064105115_dp, 0.059715871789770_dp, &
+        0.797426985353087_dp, 0.101286507323456_dp, 0.101286507323456_dp, &
+        0.101286507323456_dp, 0.797426985353087_dp, 0.101286507323456_dp, &
+        0.101286507323456_dp, 0.101286507323456_dp, 0.797426985353087_dp], &
+        [3, far_points])
     ! Relative amplitude below which a sector harmonic carries no data.
     real(dp), parameter :: excitation_tolerance = 1.0e-12_dp
 
@@ -241,12 +257,15 @@ contains
         integer, intent(in) :: order(:, :), plasma_count, plasma_block
         real(dp), intent(out) :: double_layer(:, :, :), single_layer(:, :, :)
         real(dp) :: direction(3), jump, point(3), sense, vertices(3, 3)
-        integer :: block, column, index, row, sector, sectors
+        real(dp) :: area, far_squared, nodes(3, far_points), offset(3)
+        real(dp) :: distance_squared, flux, potential, unit_normal(3)
+        integer :: block, column, index, node, row, sector, sectors
 
         block = size(order, 1)
         sectors = size(order, 2)
-        !$omp parallel do collapse(2) private(direction, index, point, &
-        !$omp sense, vertices, row)
+        !$omp parallel do collapse(2) private(area, direction, &
+        !$omp distance_squared, far_squared, flux, index, node, nodes, &
+        !$omp offset, point, potential, sense, unit_normal, vertices, row)
         do sector = 1, sectors
             do column = 1, block
                 index = order(column, sector)
@@ -257,17 +276,44 @@ contains
                 end if
                 direction = normal(:, index)
                 sense = orientation(vertices, direction) / (4.0_dp * pi)
+                call far_rule(vertices, nodes, area, unit_normal, far_squared)
                 do row = 1, block
                     point = centre(:, order(row, 1))
+                    offset = point - centre(:, index)
+                    distance_squared = dot_product(offset, offset)
                     if (index == order(row, 1)) then
                         double_layer(row, column, sector) = 0.0_dp
+                        single_layer_entry: if (column <= plasma_block) then
+                            single_layer(row, column, sector) = &
+                                triangle_potential(vertices, point) &
+                                / (4.0_dp * pi)
+                        end if single_layer_entry
+                    else if (distance_squared > far_squared) then
+                        ! Far panels: the degree-5 rule, whose error falls
+                        ! as (diameter / distance)^6.
+                        flux = 0.0_dp
+                        potential = 0.0_dp
+                        do node = 1, far_points
+                            offset = nodes(:, node) - point
+                            distance_squared = dot_product(offset, offset)
+                            potential = potential + far_weights(node) &
+                                / sqrt(distance_squared)
+                            flux = flux + far_weights(node) &
+                                * dot_product(unit_normal, offset) &
+                                / (distance_squared * sqrt(distance_squared))
+                        end do
+                        double_layer(row, column, sector) = -area * flux &
+                            * sense
+                        if (column <= plasma_block) &
+                            single_layer(row, column, sector) = area &
+                            * potential / (4.0_dp * pi)
                     else
                         double_layer(row, column, sector) = &
                             -solid_angle(vertices, point) * sense
+                        if (column <= plasma_block) &
+                            single_layer(row, column, sector) = &
+                            triangle_potential(vertices, point) / (4.0_dp * pi)
                     end if
-                    if (column <= plasma_block) &
-                        single_layer(row, column, sector) = &
-                        triangle_potential(vertices, point) / (4.0_dp * pi)
                 end do
             end do
         end do
@@ -455,6 +501,30 @@ contains
         end do
         invariant = .true.
     end function rotation_invariant
+
+    ! Nodes of the far-panel rule, the area, the vertex-order unit normal
+    ! and the squared distance beyond which a point is far.
+    pure subroutine far_rule(vertices, nodes, area, unit_normal, far_squared)
+        real(dp), intent(in) :: vertices(3, 3)
+        real(dp), intent(out) :: nodes(3, far_points), area, unit_normal(3)
+        real(dp), intent(out) :: far_squared
+        real(dp) :: diameter, edge12(3), edge13(3), edge23(3), product(3)
+        integer :: node
+
+        edge12 = vertices(:, 2) - vertices(:, 1)
+        edge13 = vertices(:, 3) - vertices(:, 1)
+        edge23 = vertices(:, 3) - vertices(:, 2)
+        call cross_product(edge12, edge13, product)
+        area = 0.5_dp * norm2(product)
+        unit_normal = product / norm2(product)
+        diameter = max(norm2(edge12), norm2(edge13), norm2(edge23))
+        far_squared = (far_ratio * diameter)**2
+        do node = 1, far_points
+            nodes(:, node) = far_barycentric(1, node) * vertices(:, 1) &
+                + far_barycentric(2, node) * vertices(:, 2) &
+                + far_barycentric(3, node) * vertices(:, 3)
+        end do
+    end subroutine far_rule
 
     ! +1 when n_V agrees with the vertex-order normal of the triangle.
     pure real(dp) function orientation(vertices, normal_v) result(sign_value)
