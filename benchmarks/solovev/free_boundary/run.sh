@@ -4,16 +4,16 @@
 # and GLISS on a GVEC export of the same analytic equilibrium.
 # usage: benchmarks/solovev/free_boundary/run.sh OUTPUT_DIRECTORY
 # Environment: GVEC_VENV (OUTPUT/venv), GLISS_LIB (bundled library),
-# THREADS (4), MMAX (4), EDGE ("48 24"). Needs what
+# THREADS (4), MMAX (8), EDGE ("128 128"). Needs what
 # benchmarks/solovev/dcon/run.sh and benchmarks/solovev/public/run.sh need.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
 out=$(mkdir -p "${1:?usage: run.sh OUTPUT_DIRECTORY}" && cd "$1" && pwd)
 q0=1.5
-threads=${THREADS:-4}; mmax=${MMAX:-4}
+threads=${THREADS:-4}; mmax=${MMAX:-8}
 walls_dcon=(0.10 0.12 0.14 0.15 0.16 0.17 0.18 0.20)
-edge=${EDGE:-48 24}
+edge=${EDGE:-128 128}
 
 # DCON: build GPEC once through the fixed-boundary script, then rerun the
 # regression example with the vacuum on and a conformal wall at distance
