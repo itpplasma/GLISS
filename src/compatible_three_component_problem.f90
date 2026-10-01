@@ -38,6 +38,7 @@ module compatible_three_component_problem
     use trial_space_topology, only: build_trial_space_topology, &
         trial_component_eta, trial_component_mu, trial_component_normal, &
         trial_space_topology_t, trial_topology_ok
+    !$ use omp_lib, only: omp_get_max_threads
     implicit none
     private
 
@@ -94,6 +95,19 @@ module compatible_three_component_problem
     logical, parameter :: constraint_term(5) = &
         [.false., .false., .true., .false., .true.]
     logical, parameter :: all_terms(5) = .true.
+    ! Kinds of radial quadrature points.
+    integer, parameter :: point_axis = 1, point_accurate = 2
+    integer, parameter :: point_constraint = 3
+
+    ! Local matrices of one radial point, tied to the axis constraint, and
+    ! their map onto the global unknowns.
+    type :: radial_contribution_t
+        integer, allocatable :: map(:)
+        real(dp), allocatable :: mass(:, :), terms(:, :, :)
+        logical :: has_mass = .false.
+        integer :: orientation = 0
+        integer :: info = compatible_three_component_assembly_error
+    end type radial_contribution_t
 
 contains
 
@@ -473,10 +487,14 @@ contains
         integer, intent(in) :: ranks(:, :)
         type(compatible_three_component_problem_t), intent(inout) :: problem
         integer, intent(out) :: info
+        type(radial_contribution_t), allocatable :: batch(:)
         real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
         real(dp), allocatable :: axis_nodes(:), axis_weights(:)
-        real(dp) :: coordinate, half_width, midpoint, radial_weight
-        integer :: cell, point, orientation
+        real(dp), allocatable :: coordinates(:), weights(:)
+        integer, allocatable :: kinds(:)
+        real(dp) :: half_width, midpoint
+        integer :: batch_size, cell, count, entry, first, last, orientation
+        integer :: point, threads
 
         info = compatible_three_component_assembly_error
         call build_constraint_quadrature(complex%h1_degree, &
@@ -485,48 +503,88 @@ contains
         call build_axis_quadrature(breaks(2) - breaks(1), &
             problem%axis_quadrature_points, axis_nodes, axis_weights, info)
         if (info /= compatible_quadrature_ok) return
-        info = compatible_three_component_assembly_error
-        orientation = 0
-        ! The axis element takes every term at every point of the rule in
-        ! sqrt(s), which integrates the regular trial products exactly.
-        do point = 1, size(axis_nodes)
-            call assemble_radial_point(spline, complex, axis_nodes(point), &
-                axis_weights(point), theta, zeta, adiabatic_index, density, &
-                mode_m, mode_n, parity, stored_power, topology, ranks, &
-                problem, all_terms, .true., info, orientation)
-            if (info /= compatible_three_component_ok) return
-        end do
+        ! Radial points in assembly order. The axis element takes every term
+        ! at every point of the rule in sqrt(s), which integrates the regular
+        ! trial products exactly; each later cell takes the accurate terms
+        ! and the mass at the accurate nodes and the constraint terms at the
+        ! constraint nodes.
+        count = size(axis_nodes) + (size(breaks) - 2) &
+            * (size(accurate_nodes) + size(constraint_nodes))
+        allocate (coordinates(count), weights(count), kinds(count))
+        coordinates(:size(axis_nodes)) = axis_nodes
+        weights(:size(axis_nodes)) = axis_weights
+        kinds(:size(axis_nodes)) = point_axis
+        entry = size(axis_nodes)
         do cell = 2, size(breaks) - 1
             midpoint = 0.5_dp * (breaks(cell) + breaks(cell + 1))
             half_width = 0.5_dp * (breaks(cell + 1) - breaks(cell))
             do point = 1, size(accurate_nodes)
-                coordinate = midpoint + half_width * accurate_nodes(point)
-                radial_weight = half_width * accurate_weights(point)
-                call assemble_radial_point(spline, complex, coordinate, &
-                    radial_weight, theta, zeta, adiabatic_index, density, &
-                    mode_m, mode_n, parity, stored_power, topology, ranks, &
-                    problem, accurate_term, .true., info, orientation)
-                if (info /= compatible_three_component_ok) return
+                entry = entry + 1
+                coordinates(entry) = midpoint + half_width * accurate_nodes(point)
+                weights(entry) = half_width * accurate_weights(point)
+                kinds(entry) = point_accurate
             end do
             do point = 1, size(constraint_nodes)
-                coordinate = midpoint + half_width * constraint_nodes(point)
-                radial_weight = half_width * constraint_weights(point)
-                call assemble_radial_point(spline, complex, coordinate, &
-                    radial_weight, theta, zeta, adiabatic_index, density, &
+                entry = entry + 1
+                coordinates(entry) = midpoint &
+                    + half_width * constraint_nodes(point)
+                weights(entry) = half_width * constraint_weights(point)
+                kinds(entry) = point_constraint
+            end do
+        end do
+        ! The local matrices of a batch of points are computed in parallel
+        ! and scattered in assembly order, so the sums are those of the
+        ! serial loop. The first point fixes the chart orientation that the
+        ! others check.
+        threads = 1
+        !$ threads = omp_get_max_threads()
+        batch_size = 2 * threads
+        allocate (batch(batch_size))
+        orientation = 0
+        first = 1
+        do while (first <= count)
+            last = min(count, first + batch_size - 1)
+            if (first == 1) last = 1
+            !$omp parallel do schedule(dynamic) firstprivate(orientation) &
+            !$omp if (last > first)
+            do entry = first, last
+                call compute_radial_point(spline, complex, coordinates(entry), &
+                    weights(entry), theta, zeta, adiabatic_index, density, &
                     mode_m, mode_n, parity, stored_power, topology, ranks, &
-                    problem, constraint_term, .false., info, orientation)
+                    problem, kinds(entry) /= point_constraint, orientation, &
+                    batch(entry - first + 1))
+            end do
+            !$omp end parallel do
+            if (first == 1) orientation = batch(1)%orientation
+            do entry = first, last
+                info = batch(entry - first + 1)%info
+                if (info /= compatible_three_component_ok) return
+                select case (kinds(entry))
+                case (point_axis)
+                    call scatter_radial_point(batch(entry - first + 1), &
+                        all_terms, problem, info)
+                case (point_accurate)
+                    call scatter_radial_point(batch(entry - first + 1), &
+                        accurate_term, problem, info)
+                case default
+                    call scatter_radial_point(batch(entry - first + 1), &
+                        constraint_term, problem, info)
+                end select
                 if (info /= compatible_three_component_ok) return
             end do
+            first = last + 1
         end do
         if (.not. problem%has_sparse_storage) &
             call sum_tensor(problem%stiffness_terms, problem%stiffness)
         info = compatible_three_component_ok
     end subroutine assemble_problem
 
-    subroutine assemble_radial_point(spline, complex, coordinate, weight, &
+    ! Local matrices of one radial quadrature point, tied to the axis
+    ! constraint, with the map onto the global unknowns.
+    subroutine compute_radial_point(spline, complex, coordinate, weight, &
             theta, zeta, adiabatic_index, density, mode_m, mode_n, parity, &
-            stored_power, topology, ranks, problem, term_mask, assemble_mass, &
-            info, orientation)
+            stored_power, topology, ranks, problem, assemble_mass, &
+            orientation, contribution)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: coordinate, weight, theta(:), zeta(:)
@@ -535,120 +593,138 @@ contains
         real(dp), intent(in) :: stored_power(:)
         type(trial_space_topology_t), intent(in) :: topology
         integer, intent(in) :: ranks(:, :)
-        type(compatible_three_component_problem_t), intent(inout) :: problem
-        logical, intent(in) :: term_mask(:), assemble_mass
-        integer, intent(out) :: info
+        type(compatible_three_component_problem_t), intent(in) :: problem
+        logical, intent(in) :: assemble_mass
         integer, intent(inout) :: orientation
-        real(dp), allocatable :: fields(:, :, :), drive(:, :), jacobian_s(:, :)
-        real(dp), allocatable :: jacobian_t(:, :), jacobian_z(:, :), gamma_p(:, :)
-        real(dp), allocatable :: h1(:), dh1(:), l2(:), local_h1(:, :)
-        real(dp), allocatable :: local_dh1(:, :), local_l2(:, :)
-        real(dp), allocatable :: local_eta(:, :)
-        real(dp), allocatable :: local_k(:, :), local_m(:, :), local_terms(:, :, :)
-        real(dp), allocatable :: tie_scale(:)
-        integer, allocatable :: h1_index(:), l2_index(:), map(:), full_map(:)
-        real(dp) :: pressure
-        integer :: allocation_status, local_info, trials
+        type(radial_contribution_t), intent(out) :: contribution
 
-        info = compatible_three_component_assembly_error
-        call evaluate_radial_feec_complex(complex, coordinate, h1, dh1, l2, &
-            local_info)
-        if (local_info /= radial_feec_ok) return
-        call build_active_indices(h1, h1_index, local_info, dh1)
-        if (local_info == compatible_support_allocation) then
-            info = compatible_three_component_allocation_error
-            return
-        else if (local_info /= compatible_support_ok) then
-            return
-        end if
-        call build_active_indices(l2, l2_index, local_info)
-        if (local_info == compatible_support_allocation) then
-            info = compatible_three_component_allocation_error
-            return
-        else if (local_info /= compatible_support_ok) then
-            return
-        end if
-        if (size(h1_index) < 1 .or. size(l2_index) < 1) return
-        trials = size(mode_m)
-        allocate (local_h1(size(h1_index), trials), &
-            local_dh1(size(h1_index), trials), &
-            local_l2(size(l2_index), trials), &
-            local_eta(size(l2_index), trials), stat=allocation_status)
-        if (allocation_status /= 0) then
-            info = compatible_three_component_allocation_error
-            return
-        end if
-        call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
-            local_h1, local_dh1, local_info)
-        if (local_info /= compatible_support_ok) return
-        call apply_tangential_axis_weight(coordinate, stored_power, l2, &
-            l2_index, local_eta, local_info)
-        if (local_info /= compatible_support_ok) return
-        call replicate_indexed_values(l2, l2_index, local_l2, local_info)
-        if (local_info /= compatible_support_ok) return
-        call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
-            zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
-            jacobian_z, pressure, orientation=orientation)
-        if (local_info /= primitive_kernel_ok) return
-        if (.not. problem%coupled) then
-            if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
-                jacobian_t, jacobian_z)) then
-                info = compatible_three_component_asymmetric
+        call compute_local_matrices(contribution%info)
+        contribution%orientation = orientation
+    contains
+        subroutine compute_local_matrices(info)
+            integer, intent(out) :: info
+            real(dp), allocatable :: fields(:, :, :), drive(:, :)
+            real(dp), allocatable :: jacobian_s(:, :), jacobian_t(:, :)
+            real(dp), allocatable :: jacobian_z(:, :), gamma_p(:, :)
+            real(dp), allocatable :: h1(:), dh1(:), l2(:), local_h1(:, :)
+            real(dp), allocatable :: local_dh1(:, :), local_l2(:, :)
+            real(dp), allocatable :: local_eta(:, :), local_k(:, :)
+            real(dp), allocatable :: tie_scale(:)
+            integer, allocatable :: h1_index(:), l2_index(:), full_map(:)
+            real(dp) :: pressure
+            integer :: allocation_status, local_info, trials
+
+            info = compatible_three_component_assembly_error
+            call evaluate_radial_feec_complex(complex, coordinate, h1, dh1, l2, &
+                local_info)
+            if (local_info /= radial_feec_ok) return
+            call build_active_indices(h1, h1_index, local_info, dh1)
+            if (local_info == compatible_support_allocation) then
+                info = compatible_three_component_allocation_error
+                return
+            else if (local_info /= compatible_support_ok) then
                 return
             end if
-        end if
-        allocate (gamma_p(size(theta), size(zeta)), &
-            source=adiabatic_index * pressure, stat=allocation_status)
-        if (allocation_status /= 0) then
-            info = compatible_three_component_allocation_error
-            return
-        end if
-        call allocate_local_matrices(trials, size(h1_index), size(l2_index), &
-            local_k, local_m, local_terms, allocation_status)
-        if (allocation_status /= 0) then
-            info = compatible_three_component_allocation_error
-            return
-        end if
-        call assemble_compatible_compressible_stiffness_surface(fields, &
-            drive, jacobian_s, jacobian_t, jacobian_z, gamma_p, mode_m, &
-            mode_n, parity, spline%field_periods, local_h1, local_dh1, &
-            local_eta, local_l2, weight, phase_assembly_transformed, local_k, &
-            local_info, local_terms)
-        if (local_info /= 0) return
-        if (assemble_mass) then
-            call assemble_compatible_physical_mass_surface(fields, density, &
-                mode_m, mode_n, parity, spline%field_periods, local_h1, &
-                local_eta, local_l2, weight, phase_assembly_transformed, &
-                local_m, local_info)
+            call build_active_indices(l2, l2_index, local_info)
+            if (local_info == compatible_support_allocation) then
+                info = compatible_three_component_allocation_error
+                return
+            else if (local_info /= compatible_support_ok) then
+                return
+            end if
+            if (size(h1_index) < 1 .or. size(l2_index) < 1) return
+            trials = size(mode_m)
+            allocate (local_h1(size(h1_index), trials), &
+                local_dh1(size(h1_index), trials), &
+                local_l2(size(l2_index), trials), &
+                local_eta(size(l2_index), trials), stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = compatible_three_component_allocation_error
+                return
+            end if
+            call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
+                local_h1, local_dh1, local_info)
+            if (local_info /= compatible_support_ok) return
+            call apply_tangential_axis_weight(coordinate, stored_power, l2, &
+                l2_index, local_eta, local_info)
+            if (local_info /= compatible_support_ok) return
+            call replicate_indexed_values(l2, l2_index, local_l2, local_info)
+            if (local_info /= compatible_support_ok) return
+            call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
+                zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
+                jacobian_z, pressure, orientation=orientation)
+            if (local_info /= primitive_kernel_ok) return
+            if (.not. problem%coupled) then
+                if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
+                    jacobian_t, jacobian_z)) then
+                    info = compatible_three_component_asymmetric
+                    return
+                end if
+            end if
+            allocate (gamma_p(size(theta), size(zeta)), &
+                source=adiabatic_index * pressure, stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = compatible_three_component_allocation_error
+                return
+            end if
+            call allocate_local_matrices(trials, size(h1_index), size(l2_index), &
+                local_k, contribution%mass, contribution%terms, allocation_status)
+            if (allocation_status /= 0) then
+                info = compatible_three_component_allocation_error
+                return
+            end if
+            call assemble_compatible_compressible_stiffness_surface(fields, &
+                drive, jacobian_s, jacobian_t, jacobian_z, gamma_p, mode_m, &
+                mode_n, parity, spline%field_periods, local_h1, local_dh1, &
+                local_eta, local_l2, weight, phase_assembly_transformed, local_k, &
+                local_info, contribution%terms)
             if (local_info /= 0) return
-        end if
-        call build_local_map(complex, topology, ranks, h1_index, l2_index, &
-            full_map)
-        allocate (map(size(full_map)), tie_scale(size(full_map)))
-        call tie_local_map(problem%axis_tie, full_map, map, tie_scale)
-        call scale_local_tensor(tie_scale, local_terms)
-        if (problem%has_sparse_storage) then
             if (assemble_mass) then
-                call scale_local_matrix(tie_scale, local_m)
-                call scatter_symmetric_compatible_block(map, local_m, 1.0_dp, &
-                    problem%sparse_block_index, problem%sparse_local_index, &
-                    problem%sparse_mass, local_info)
+                call assemble_compatible_physical_mass_surface(fields, density, &
+                    mode_m, mode_n, parity, spline%field_periods, local_h1, &
+                    local_eta, local_l2, weight, phase_assembly_transformed, &
+                    contribution%mass, local_info)
+                if (local_info /= 0) return
+            end if
+            call build_local_map(complex, topology, ranks, h1_index, l2_index, &
+                full_map)
+            allocate (contribution%map(size(full_map)), tie_scale(size(full_map)))
+            call tie_local_map(problem%axis_tie, full_map, contribution%map, &
+                tie_scale)
+            call scale_local_tensor(tie_scale, contribution%terms)
+            if (assemble_mass) call scale_local_matrix(tie_scale, contribution%mass)
+            contribution%has_mass = assemble_mass
+            info = compatible_three_component_ok
+        end subroutine compute_local_matrices
+    end subroutine compute_radial_point
+
+    subroutine scatter_radial_point(contribution, term_mask, problem, info)
+        type(radial_contribution_t), intent(in) :: contribution
+        logical, intent(in) :: term_mask(:)
+        type(compatible_three_component_problem_t), intent(inout) :: problem
+        integer, intent(out) :: info
+        integer :: local_info
+
+        info = compatible_three_component_assembly_error
+        if (problem%has_sparse_storage) then
+            if (contribution%has_mass) then
+                call scatter_symmetric_compatible_block(contribution%map, &
+                    contribution%mass, 1.0_dp, problem%sparse_block_index, &
+                    problem%sparse_local_index, problem%sparse_mass, &
+                    local_info)
                 if (local_info /= compatible_block_ok) return
             end if
-            call scatter_sparse_terms(map, local_terms, term_mask, problem, &
-                local_info)
+            call scatter_sparse_terms(contribution%map, contribution%terms, &
+                term_mask, problem, local_info)
             if (local_info /= compatible_block_ok) return
-            info = compatible_three_component_ok
-            return
+        else
+            if (contribution%has_mass) call scatter_matrix(contribution%map, &
+                contribution%mass, 1.0_dp, problem%mass)
+            call scatter_terms(contribution%map, contribution%terms, &
+                term_mask, problem%stiffness_terms)
         end if
-        if (assemble_mass) then
-            call scale_local_matrix(tie_scale, local_m)
-            call scatter_matrix(map, local_m, 1.0_dp, problem%mass)
-        end if
-        call scatter_terms(map, local_terms, term_mask, &
-            problem%stiffness_terms)
         info = compatible_three_component_ok
-    end subroutine assemble_radial_point
+    end subroutine scatter_radial_point
 
     subroutine scatter_sparse_terms(map, local, term_mask, problem, info)
         integer, intent(in) :: map(:)
