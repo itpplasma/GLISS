@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Keep the refined eigenvectors of a degenerate cluster mass orthogonal in
+  the full-spectrum solve. With reference BLAS/LAPACK, inverse iteration in
+  the roundoff-split parity pairs of a coupled axisymmetric operator could
+  drift onto an accepted partner and fail the orthogonality certificate.
+- Benchmarks: the li383 D_curr difference from VMEC came from VMEC's
+  angular truncation of J.B (raising VMEC mpol/ntor brings it to GLISS),
+  and the QAS3 critical current agrees with TERPSICHORE once the VMEC and
+  stability radial resolutions are resolved (`benchmarks/qas3`).
 - Solve the CAS3D2MN coefficient-normalized phase envelope blockwise on
   sparse storage (#11): the labeled pencil is formed block by block, never
   densely, and the result reports the quotient rank, the labeled null space
