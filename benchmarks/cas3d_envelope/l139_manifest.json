@@ -1,0 +1,82 @@
+{
+  "export": "cd_w7x.nc",
+  "export_sha256": "acb730ebcecdebac4247265700cbf04d8bb27ef7f6cbbec7f2f595a29807e012",
+  "gliss_commit": "00d7d48890ea859714a27a8d9753f61ab5709ba3",
+  "omp_num_threads": "2",
+  "machine": "Intel Xeon @ 2.10GHz, 4 vCPU",
+  "base_mode": [
+    1,
+    1
+  ],
+  "angular_resolution": [
+    64,
+    64
+  ],
+  "runs": [
+    {
+      "envelope_entries": 3,
+      "labeled_sidebands": 5,
+      "radial_surfaces": 100,
+      "quotient_rank": 995,
+      "labeled_nullity": 0,
+      "peak_block_width": 10,
+      "negative_count": 0,
+      "lowest_eigenvalue": 0.2795582805494804,
+      "certificate": 8.806541082328038e-06,
+      "peak_resident_mib": 85.21875,
+      "wall_seconds": 7.263170808999348
+    },
+    {
+      "envelope_entries": 10,
+      "labeled_sidebands": 19,
+      "radial_surfaces": 100,
+      "quotient_rank": 3781,
+      "labeled_nullity": 0,
+      "peak_block_width": 38,
+      "negative_count": 0,
+      "lowest_eigenvalue": 0.27198062704692044,
+      "certificate": 2.792913229055859e-05,
+      "peak_resident_mib": 90.74609375,
+      "wall_seconds": 20.65214067999932
+    },
+    {
+      "envelope_entries": 20,
+      "labeled_sidebands": 39,
+      "radial_surfaces": 100,
+      "quotient_rank": 7761,
+      "labeled_nullity": 0,
+      "peak_block_width": 78,
+      "negative_count": 0,
+      "lowest_eigenvalue": 0.2616818063899805,
+      "certificate": 5.45876730612546e-05,
+      "peak_resident_mib": 106.57421875,
+      "wall_seconds": 57.04777078799998
+    },
+    {
+      "envelope_entries": 35,
+      "labeled_sidebands": 69,
+      "radial_surfaces": 100,
+      "quotient_rank": 13731,
+      "labeled_nullity": 0,
+      "peak_block_width": 138,
+      "negative_count": 0,
+      "lowest_eigenvalue": 0.2589966882704847,
+      "certificate": 9.446811458759557e-05,
+      "peak_resident_mib": 169.39453125,
+      "wall_seconds": 132.138210481
+    },
+    {
+      "envelope_entries": 70,
+      "labeled_sidebands": 139,
+      "radial_surfaces": 100,
+      "quotient_rank": 27661,
+      "labeled_nullity": 0,
+      "peak_block_width": 278,
+      "negative_count": 0,
+      "lowest_eigenvalue": 0.25476727878969035,
+      "certificate": 0.00018859456828465506,
+      "peak_resident_mib": 522.7890625,
+      "wall_seconds": 382.24600081300014
+    }
+  ]
+}

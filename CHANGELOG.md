@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Solve the CAS3D2MN coefficient-normalized phase envelope blockwise on
+  sparse storage (#11): the labeled pencil is formed block by block, never
+  densely, and the result reports the quotient rank, the labeled null space
+  and the widest block. `benchmarks/cas3d_envelope` runs the W7-X table
+  through L139 (139 labels, 27661 quotient unknowns) in 523 MiB and 382 s
+  on two threads; a dense pencil would need 6.1 GB per matrix.
+- Faster assembly and solves without changing results beyond rounding:
+  period-averaged angular products as symmetric rank-k updates with
+  trial-level masks, trial phases evaluated once per point, radial points
+  assembled in parallel and scattered in order (thread-count independent),
+  each generalized pencil validated once per solve, and the lowest
+  eigenvalue certified from the inverse iterate with two inertia probes
+  instead of bisection to the bracket tolerance. The public Solov'ev
+  marginality case takes 5 s instead of three minutes, and the CAS3D2MN
+  L139 3-entry case 7 s instead of 115 s.
 - Solve the physical free-boundary problem (#8). `StabilityProblem(...,
   vacuum=VacuumModel(edge_resolution, wall))` keeps the edge normal
   displacement and adds the vacuum energy of the current-free field it drives,

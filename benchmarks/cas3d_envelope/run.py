@@ -1,6 +1,6 @@
 """Memory and quotient scaling of the sparse CAS3D2MN coefficient solve (#11).
 
-usage: python run.py EXPORT OUTPUT.json [--entries 10 20 35 70]
+usage: python run.py EXPORT OUTPUT.json [--entries 3 10 20 35 70]
        [--base M N] [--angular 64 64] [--surfaces STRIDE]
 
 Solves the CAS3D2MN labeled phase envelope with the coefficient
@@ -16,11 +16,15 @@ entries (139 labels) reproduce its size, not its sidebands.
 """
 
 import argparse
+import hashlib
 import json
+import os
+import platform
 import resource
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 
 def envelope_table(entries):
@@ -74,7 +78,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("export")
     parser.add_argument("output")
-    parser.add_argument("--entries", type=int, nargs="+", default=[10, 20, 35, 70])
+    parser.add_argument("--entries", type=int, nargs="+",
+                        default=[3, 10, 20, 35, 70])
     parser.add_argument("--base", type=int, nargs=2, default=[1, 1])
     parser.add_argument("--angular", type=int, nargs=2, default=[64, 64])
     parser.add_argument("--single", action="store_true", help=argparse.SUPPRESS)
@@ -84,7 +89,16 @@ def main():
         print(json.dumps(solve(arguments.export, entries, arguments.base,
                                arguments.angular)))
         return
-    manifest = {"export": arguments.export, "base_mode": arguments.base,
+    repository = Path(__file__).resolve().parents[2]
+    commit = subprocess.run(["git", "-C", str(repository), "rev-parse", "HEAD"],
+                            capture_output=True, text=True).stdout.strip()
+    with open(arguments.export, "rb") as handle:
+        digest = hashlib.sha256(handle.read()).hexdigest()
+    manifest = {"export": Path(arguments.export).name, "export_sha256": digest,
+                "gliss_commit": commit or None,
+                "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
+                "machine": platform.processor() or platform.machine(),
+                "base_mode": arguments.base,
                 "angular_resolution": arguments.angular, "runs": []}
     for entries in arguments.entries:
         # A fresh process per table so that peak memory is per run.

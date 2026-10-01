@@ -262,9 +262,9 @@ Related issues: [#12, MISHKA/CASTOR mode transfer](https://github.com/itpplasma/
 | --- | --- | --- |
 | TERPSICHORE FORT.23/24 | Useful same-discretization compatibility replay | Run the independent production FEEC operator on the same qualified equilibrium; match boundary condition, normalization, modes, and energy terms |
 | QAS3 production FEEC | The 191-mode deck supplies a mode mask; ns64-to-ns128 lowest-eigenvalue drift is about 5.53%, with material force-balance residuals | Converge equilibrium and FEEC errors separately before claiming same-physics agreement |
-| W7-X / Nuehrenberg 1996 | The documented coefficient-normalized L10 result is about -0.88701 versus digitized -0.37148 in the report's scaled units | Resolve normalization, radial form functions, reference length, and unavailable deck details; finish quotient-aware L139 scaling under #11 |
+| W7-X / Nuehrenberg 1996 | The documented coefficient-normalized L10 result is about -0.88701 versus digitized -0.37148 in the report's scaled units. The sparse quotient-aware solve now runs the L139 table size (139 labels) in 523 MiB (`benchmarks/cas3d_envelope`) | Resolve normalization, radial form functions, reference length, and unavailable deck details; these are not public |
 | MISHKA / CASTOR | Branch transfer is unresolved; the CASTOR low-beta stable control currently fails | Transfer compatible invariant subspaces across at least three meshes, distinguish continuum branches, compare mass and decomposed potential energy under #12 |
-| DCON / Solov'ev | Resolved by [#16](https://github.com/itpplasma/GLISS/issues/16): GLISS now counts 1 at 1.039062 and 0 at 1.039843 (public GVEC, ns64, M24), matching archived and freshly rebuilt DCON; the earlier `(1.05,1.10)` interval was a spurious non-conforming |m|=1 mode | Extend to a converged q0 bisection and higher n; compare normalized energies; `test_solovev_axis_regularity` guards the sign on coarse public fixtures |
+| DCON / Solov'ev | Resolved by [#16](https://github.com/itpplasma/GLISS/issues/16): GLISS now counts 1 at 1.039062 and 0 at 1.039843 (public GVEC, ns64, M24), matching archived and freshly rebuilt DCON; the earlier `(1.05,1.10)` interval was a spurious non-conforming |m|=1 mode. Free boundary: the q0=1.5 critical conformal wall is 0.1519-0.1525 half-widths on refined edge meshes (m<=8) against DCON's 0.15249 | Extend to a converged q0 bisection and higher n; compare normalized energies; `test_solovev_axis_regularity` guards the sign on coarse public fixtures |
 | Moderate figure-8 | Research roadmap specifies a common VMEC reference, then GVEC reproduction | Qualify one canonical input, reproduce surfaces and profiles across representations, then compare converged stability and modes |
 
 - [ ] Regenerate each retained comparison at an exact current GLISS commit;
@@ -353,9 +353,13 @@ Related issue: [#15, executable versioned documentation](https://github.com/itpp
 
 ## Priority 5: extend the supported scope
 
-- [ ] [#8: physical free-boundary plasma-vacuum Python solve](https://github.com/itpplasma/GLISS/issues/8):
-  verify wall-distance/angular convergence, energy balance, analytical or
-  independent-code controls, and derivatives before optimization use.
+- [x] [#8: physical free-boundary plasma-vacuum Python solve](https://github.com/itpplasma/GLISS/issues/8):
+  `StabilityProblem(vacuum=VacuumModel(...))` adds the scalar-potential
+  vacuum energy (exact toroidal-harmonic oracle at second order, with and
+  without a wall); the energy decomposition closes; the q0=1.5 Solov'ev
+  critical conformal wall converges into DCON's bracket
+  (`benchmarks/solovev/free_boundary`). Derivatives of the vacuum block
+  remain part of #9.
 - [ ] [#10: asymmetric VMEC and precomputed BOOZ_XFORM](https://github.com/itpplasma/GLISS/issues/10):
   implement full parity coupling and convention-complete round trips after the
   immediate input-admission work in Priority 1.
