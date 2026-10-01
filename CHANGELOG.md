@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Replay TERPSICHORE FORT.23 fixed-boundary files without dense matrices:
+  the stiffness and mass are scattered interval by interval into the
+  block-tridiagonal storage of the solver, bit-identical to the packed
+  dense assembly. The QAS3 ns = 257 file (order 34,748), refused before,
+  replays in 8.4 s and 434 MiB. The potential-data guard of the reader
+  rises from 2e7 values to 2 GiB; the dense-order limit now applies only
+  to the dense free-boundary assemblies.
 - Refine the radial finite-element mesh independently of the equilibrium
   surfaces: `radial_cells` on `StabilityProblem`, `StabilityConfiguration`
   (schema version 7), the CAS3D marginality and phase-envelope solves and

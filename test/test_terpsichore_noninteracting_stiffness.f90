@@ -1,5 +1,6 @@
 program test_terpsichore_noninteracting_stiffness
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use dynamic_block_scatter, only: dynamic_block_map_t
     use dynamic_family_layout, only: dynamic_family_layout_t
     use terpsichore_matrix_fixture, only: terpsichore_matrix_fixture_t
     use terpsichore_noninteracting_coefficients, only: &
@@ -7,9 +8,12 @@ program test_terpsichore_noninteracting_stiffness
         build_terpsichore_noninteracting_coefficients_direct, &
         terpsichore_coefficients_ok
     use terpsichore_noninteracting_stiffness, only: &
+        assemble_terpsichore_noninteracting_fixed_boundary_blocks, &
         assemble_terpsichore_noninteracting_fixed_boundary_stiffness, &
         assemble_terpsichore_noninteracting_free_boundary_stiffness, &
         terpsichore_noninteracting_ok
+    use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
+        variable_block_ok, variable_block_tridiagonal_t
     implicit none
 
     type(terpsichore_matrix_fixture_t) :: fixture
@@ -29,6 +33,7 @@ program test_terpsichore_noninteracting_stiffness
     call require(maxval(abs(stiffness - expected)) < 2.0e-12_dp, &
         "non-interacting analytical matrix is wrong")
     call check_free_boundary(fixture, stiffness)
+    call check_blocks(fixture, stiffness)
     call build_terpsichore_noninteracting_coefficients(fixture, fast, &
         info)
     call require(info == terpsichore_coefficients_ok, &
@@ -67,6 +72,35 @@ program test_terpsichore_noninteracting_stiffness
     write (*, "(a)") "PASS"
 
 contains
+
+    ! The block assembly equals the packed dense assembly bit for bit.
+    subroutine check_blocks(value, dense)
+        type(terpsichore_matrix_fixture_t), intent(in) :: value
+        real(dp), intent(in) :: dense(:, :)
+        type(dynamic_family_layout_t) :: block_layout
+        type(dynamic_block_map_t) :: map
+        type(variable_block_tridiagonal_t) :: blocks, packed
+        integer :: block, status
+
+        call assemble_terpsichore_noninteracting_fixed_boundary_blocks(value, &
+            blocks, block_layout, map, status)
+        call require(status == terpsichore_noninteracting_ok, &
+            "block non-interacting stiffness failed")
+        call require(block_layout%total_unknowns == size(dense, 1), &
+            "block stiffness layout differs")
+        call pack_permuted_variable_blocks(dense, map%permutation, &
+            map%widths, packed, status)
+        call require(status == variable_block_ok, "dense packing failed")
+        do block = 1, size(blocks%widths)
+            call require(all(blocks%diagonal(block)%values &
+                == packed%diagonal(block)%values), &
+                "block stiffness diagonal differs")
+            if (block == size(blocks%widths)) cycle
+            call require(all(blocks%lower(block)%values &
+                == packed%lower(block)%values), &
+                "block stiffness coupling differs")
+        end do
+    end subroutine check_blocks
 
     subroutine check_free_boundary(value, fixed)
         type(terpsichore_matrix_fixture_t), intent(in) :: value

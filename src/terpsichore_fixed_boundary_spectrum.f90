@@ -1,6 +1,7 @@
 module terpsichore_fixed_boundary_spectrum
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use dynamic_block_scatter, only: dynamic_block_map_t
     use dynamic_family_layout, only: build_dynamic_block_permutation, &
         dynamic_family_layout_t, dynamic_layout_ok
     use terpsichore_eigen_diagnostics, only: &
@@ -10,10 +11,10 @@ module terpsichore_fixed_boundary_spectrum
         read_terpsichore_fixed_boundary_potential_fixture, &
         terpsichore_matrix_fixture_ok, terpsichore_matrix_fixture_t
     use terpsichore_noninteracting_stiffness, only: &
-        assemble_terpsichore_noninteracting_fixed_boundary_stiffness, &
+        assemble_terpsichore_noninteracting_fixed_boundary_blocks, &
         terpsichore_noninteracting_ok
     use terpsichore_reduced_mass_adapter, only: &
-        assemble_terpsichore_fixture_reduced_mass, &
+        assemble_terpsichore_fixture_reduced_mass_blocks, &
         terpsichore_reduced_adapter_ok
     use terpsichore_solution_fixture, only: &
         build_terpsichore_plasma_solution, &
@@ -62,30 +63,26 @@ contains
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
         type(terpsichore_matrix_fixture_t) :: fixture
-        type(dynamic_family_layout_t) :: stiffness_layout, mass_layout
+        type(dynamic_family_layout_t) :: layout
+        type(dynamic_block_map_t) :: map
         type(variable_block_tridiagonal_t) :: stiffness_blocks, mass_blocks
         type(terpsichore_eigen_diagnostics_t) :: diagnostics
         type(terpsichore_solution_fixture_t) :: solution
-        real(dp), allocatable :: stiffness(:, :), mass(:, :), vector(:)
-        real(dp), allocatable :: reference(:)
-        integer, allocatable :: permutation(:), widths(:)
+        real(dp), allocatable :: vector(:), reference(:)
 
         result = terpsichore_fixed_boundary_result_t()
         call read_fixed_fixture(path, fixture, info, message)
         if (info /= terpsichore_fixed_spectrum_ok) return
-        call assemble_fixed_problem(fixture, stiffness, mass, &
-            stiffness_layout, mass_layout, info, message)
+        call assemble_fixed_problem(fixture, stiffness_blocks, mass_blocks, &
+            layout, map, info, message)
         if (info /= terpsichore_fixed_spectrum_ok) return
-        result%unknowns = stiffness_layout%total_unknowns
-        call pack_terpsichore_problem(stiffness_layout, stiffness, mass, &
-            stiffness_blocks, mass_blocks, widths, permutation, info, message)
-        if (info /= terpsichore_fixed_spectrum_ok) return
+        result%unknowns = layout%total_unknowns
         call solve_terpsichore_lowest(stiffness_blocks, mass_blocks, &
             result%eigenvalue, vector, result%residual, result%resolution, &
             result%certificate, result%negative_count, info, message)
         if (info /= terpsichore_fixed_spectrum_ok) return
-        call read_terpsichore_reference(path, 0, fixture, stiffness_layout, &
-            permutation, solution, reference, info, message)
+        call read_terpsichore_reference(path, 0, fixture, layout, &
+            map%permutation, solution, reference, info, message)
         if (info /= terpsichore_fixed_spectrum_ok) return
         call compute_terpsichore_eigen_diagnostics(stiffness_blocks, mass_blocks, &
             result%eigenvalue, vector, reference, solution%potential_energy, &
@@ -239,14 +236,18 @@ contains
         vacuum = io_status == 0
     end function has_vacuum_records
 
-    subroutine assemble_fixed_problem(fixture, stiffness, mass, &
-            stiffness_layout, mass_layout, info, message)
+    ! Stiffness and mass in block-tridiagonal storage, assembled interval
+    ! by interval: no dense matrix of the problem order is formed.
+    subroutine assemble_fixed_problem(fixture, stiffness, mass, layout, map, &
+            info, message)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture
-        real(dp), allocatable, intent(out) :: stiffness(:, :), mass(:, :)
-        type(dynamic_family_layout_t), intent(out) :: stiffness_layout
-        type(dynamic_family_layout_t), intent(out) :: mass_layout
+        type(variable_block_tridiagonal_t), intent(out) :: stiffness, mass
+        type(dynamic_family_layout_t), intent(out) :: layout
+        type(dynamic_block_map_t), intent(out) :: map
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
+        type(dynamic_family_layout_t) :: mass_layout
+        type(dynamic_block_map_t) :: mass_map
 
         info = terpsichore_fixed_spectrum_compute_error
         if (fixture%legacy_modelk /= 0) then
@@ -257,21 +258,22 @@ contains
             message = "TERPSICHORE fixed-boundary solve requires sine parity"
             return
         end if
-        call assemble_terpsichore_noninteracting_fixed_boundary_stiffness( &
-            fixture, stiffness, stiffness_layout, info)
+        call assemble_terpsichore_noninteracting_fixed_boundary_blocks( &
+            fixture, stiffness, layout, map, info)
         if (info /= terpsichore_noninteracting_ok) then
             message = "TERPSICHORE stiffness assembly failed"
             info = terpsichore_fixed_spectrum_compute_error
             return
         end if
-        call assemble_terpsichore_fixture_reduced_mass(fixture, mass, &
-            mass_layout, info)
+        call assemble_terpsichore_fixture_reduced_mass_blocks(fixture, mass, &
+            mass_layout, mass_map, info)
         if (info /= terpsichore_reduced_adapter_ok) then
             message = "TERPSICHORE reduced mass assembly failed"
             info = terpsichore_fixed_spectrum_compute_error
             return
         end if
-        if (.not. terpsichore_layouts_match(stiffness_layout, mass_layout)) then
+        if (.not. terpsichore_layouts_match(layout, mass_layout) &
+            .or. any(map%permutation /= mass_map%permutation)) then
             message = "TERPSICHORE stiffness and mass layouts differ"
             info = terpsichore_fixed_spectrum_compute_error
             return

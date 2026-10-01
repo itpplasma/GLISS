@@ -57,6 +57,7 @@ add_library(gliss
     src/compressible_stiffness_validation.f90
     src/compatible_compressible_stiffness_assembly.f90
     src/dynamic_family_layout.f90
+    src/dynamic_block_scatter.f90
     src/helical_cylinder_limit.f90
     src/local_mode_model.f90
     src/phase_assembly_policy.f90

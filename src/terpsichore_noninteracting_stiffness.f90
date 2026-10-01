@@ -1,10 +1,14 @@
 module terpsichore_noninteracting_stiffness
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use dynamic_block_scatter, only: add_mapped_block_element, &
+        allocate_dynamic_blocks, build_dynamic_block_map, &
+        complete_dynamic_blocks, dynamic_block_map_t, dynamic_block_scatter_ok
     use dynamic_family_layout, only: add_mapped_dynamic_element, &
         dynamic_family_layout_t, dynamic_layout_ok
     use fourier_phase_kind, only: phase_sine
-    use terpsichore_matrix_fixture, only: terpsichore_matrix_fixture_t
+    use terpsichore_matrix_fixture, only: terpsichore_dense_order_is_valid, &
+        terpsichore_matrix_fixture_t
     use terpsichore_noninteracting_coefficients, only: &
         build_terpsichore_noninteracting_coefficients, &
         terpsichore_coefficients_ok
@@ -12,6 +16,7 @@ module terpsichore_noninteracting_stiffness
         build_terpsichore_reduced_fixed_boundary_layout, &
         build_terpsichore_reduced_free_boundary_layout, &
         terpsichore_reduced_layout_ok
+    use variable_block_tridiagonal, only: variable_block_tridiagonal_t
     implicit none
     private
 
@@ -30,6 +35,7 @@ module terpsichore_noninteracting_stiffness
 
     public :: assemble_terpsichore_noninteracting_fixed_boundary_stiffness
     public :: assemble_terpsichore_noninteracting_free_boundary_stiffness
+    public :: assemble_terpsichore_noninteracting_fixed_boundary_blocks
 
 contains
 
@@ -40,8 +46,22 @@ contains
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
         call assemble_terpsichore_noninteracting_stiffness(fixture, .false., &
-            stiffness, layout, info)
+            layout, info, stiffness=stiffness)
     end subroutine assemble_terpsichore_noninteracting_fixed_boundary_stiffness
+
+    ! The fixed-boundary stiffness in the block-tridiagonal storage of map,
+    ! assembled interval by interval without the dense matrix.
+    subroutine assemble_terpsichore_noninteracting_fixed_boundary_blocks( &
+            fixture, blocks, layout, map, info)
+        type(terpsichore_matrix_fixture_t), intent(in) :: fixture
+        type(variable_block_tridiagonal_t), intent(out) :: blocks
+        type(dynamic_family_layout_t), intent(out) :: layout
+        type(dynamic_block_map_t), intent(out) :: map
+        integer, intent(out) :: info
+
+        call assemble_terpsichore_noninteracting_stiffness(fixture, .false., &
+            layout, info, blocks=blocks, map=map)
+    end subroutine assemble_terpsichore_noninteracting_fixed_boundary_blocks
 
     subroutine assemble_terpsichore_noninteracting_free_boundary_stiffness( &
             fixture, stiffness, layout, info)
@@ -51,16 +71,19 @@ contains
         integer, intent(out) :: info
 
         call assemble_terpsichore_noninteracting_stiffness(fixture, .true., &
-            stiffness, layout, info)
+            layout, info, stiffness=stiffness)
     end subroutine assemble_terpsichore_noninteracting_free_boundary_stiffness
 
+    ! Dense stiffness, or blocks and their map: exactly one of the two.
     subroutine assemble_terpsichore_noninteracting_stiffness(fixture, &
-            retain_outer_normal, stiffness, layout, info)
+            retain_outer_normal, layout, info, stiffness, blocks, map)
         type(terpsichore_matrix_fixture_t), intent(in) :: fixture
         logical, intent(in) :: retain_outer_normal
-        real(dp), allocatable, intent(out) :: stiffness(:, :)
         type(dynamic_family_layout_t), intent(out) :: layout
         integer, intent(out) :: info
+        real(dp), allocatable, optional, intent(out) :: stiffness(:, :)
+        type(variable_block_tridiagonal_t), optional, intent(out) :: blocks
+        type(dynamic_block_map_t), optional, intent(out) :: map
         real(dp), allocatable :: coefficients(:, :, :, :), element(:, :)
         integer, allocatable :: element_to_global(:, :), parity(:)
         integer :: allocation_status, interval
@@ -82,9 +105,20 @@ contains
                 layout, element_to_global, info)
         end if
         if (info /= terpsichore_reduced_layout_ok) return
-        allocate (stiffness(layout%total_unknowns, layout%total_unknowns), &
-            source=0.0_dp, stat=allocation_status)
-        if (allocation_status /= 0) return
+        info = terpsichore_noninteracting_invalid
+        if (present(stiffness)) then
+            if (.not. terpsichore_dense_order_is_valid(layout%total_unknowns)) &
+                return
+            allocate (stiffness(layout%total_unknowns, &
+                layout%total_unknowns), source=0.0_dp, stat=allocation_status)
+            if (allocation_status /= 0) return
+        else
+            call build_dynamic_block_map(layout, map, info)
+            if (info /= dynamic_block_scatter_ok) return
+            call allocate_dynamic_blocks(map, blocks, info)
+            if (info /= dynamic_block_scatter_ok) return
+            info = terpsichore_noninteracting_invalid
+        end if
         allocate (element(3 * fixture%modes, 3 * fixture%modes), &
             stat=allocation_status)
         if (allocation_status /= 0) return
@@ -92,14 +126,27 @@ contains
             call build_local_element(fixture, coefficients(:, :, :, interval), &
                 interval, element)
             if (.not. all(ieee_is_finite(element))) return
-            call add_mapped_dynamic_element(element_to_global(:, interval), &
-                element, stiffness, info)
-            if (info /= dynamic_layout_ok) then
-                info = terpsichore_noninteracting_invalid
-                return
+            if (present(stiffness)) then
+                call add_mapped_dynamic_element(element_to_global(:, &
+                    interval), element, stiffness, info)
+                if (info /= dynamic_layout_ok) then
+                    info = terpsichore_noninteracting_invalid
+                    return
+                end if
+            else
+                call add_mapped_block_element(element_to_global(:, &
+                    interval), element, map, blocks, info)
+                if (info /= dynamic_block_scatter_ok) then
+                    info = terpsichore_noninteracting_invalid
+                    return
+                end if
             end if
         end do
-        if (.not. all(ieee_is_finite(stiffness))) return
+        if (present(stiffness)) then
+            if (.not. all(ieee_is_finite(stiffness))) return
+        else
+            call complete_dynamic_blocks(blocks)
+        end if
         info = terpsichore_noninteracting_ok
     end subroutine assemble_terpsichore_noninteracting_stiffness
 

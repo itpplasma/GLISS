@@ -12,11 +12,15 @@ module terpsichore_matrix_fixture
     integer, parameter :: maximum_angular_points = 999
     integer, parameter :: maximum_modes = 10000
     integer, parameter :: maximum_fixture_values = 50000000
-    ! the shipped 191-mode QAS3 deck needs 2.3e8 phase values (1.8 GB)
-    ! and dense order 34399; both stay below the int32 index ceiling.
+    ! the shipped 191-mode QAS3 deck needs 2.3e8 phase values (1.8 GB);
+    ! that stays below the int32 index ceiling.
     integer, parameter :: maximum_phase_values = 300000000
+    ! Dense assemblies index order**2 entries in int32; the fixed-boundary
+    ! replay assembles blocks and is not bound by it.
     integer, parameter :: maximum_dense_order = 40000
-    integer, parameter :: maximum_potential_values = 20000000
+    ! 2 GiB of the 13 potential profiles; each profile array also stays
+    ! within maximum_fixture_values. The ns = 257 QAS3 file needs 2.2e7.
+    integer, parameter :: maximum_potential_values = 268435456
 
     type, public :: terpsichore_matrix_fixture_t
         integer :: intervals = 0
@@ -52,6 +56,7 @@ module terpsichore_matrix_fixture
     public :: read_terpsichore_fixed_boundary_fixture
     public :: read_terpsichore_fixed_boundary_potential_fixture
     public :: read_terpsichore_potential_fixture
+    public :: terpsichore_dense_order_is_valid
     public :: terpsichore_fixed_fixture_is_valid
     public :: terpsichore_potential_metadata_is_valid
     public :: terpsichore_potential_fixture_is_valid
@@ -162,10 +167,14 @@ contains
         valid = fixture%modes <= maximum_phase_values &
             / fixture%poloidal_points / fixture%toroidal_points &
             / fixture%intervals / 2
-        if (.not. valid) return
-        valid = fixture%modes <= maximum_dense_order &
-            / (2 * fixture%intervals - 1)
     end function valid_sizes
+
+    pure logical function terpsichore_dense_order_is_valid(order) &
+            result(valid)
+        integer, intent(in) :: order
+
+        valid = order >= 1 .and. order <= maximum_dense_order
+    end function terpsichore_dense_order_is_valid
 
     subroutine allocate_record_arrays(fixture, vacuum_intervals, radial_grid, &
             flux_t_slope, radial_power, bjac, allocation_status)

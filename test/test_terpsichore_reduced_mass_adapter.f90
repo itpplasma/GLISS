@@ -1,26 +1,32 @@
 program test_terpsichore_reduced_mass_adapter
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use dynamic_block_scatter, only: dynamic_block_map_t
     use dynamic_family_layout, only: dynamic_family_layout_t
     use fourier_phase_kind, only: phase_sine
     use terpsichore_matrix_fixture, only: &
         read_terpsichore_fixed_boundary_fixture, &
         read_terpsichore_fixed_boundary_potential_fixture, &
         read_terpsichore_potential_fixture, &
+        terpsichore_dense_order_is_valid, &
         terpsichore_matrix_fixture_invalid, terpsichore_matrix_fixture_ok, &
         terpsichore_matrix_fixture_t, &
         terpsichore_potential_metadata_is_valid
     use terpsichore_reduced_mass_adapter, only: &
         assemble_terpsichore_fixture_reduced_mass, &
+        assemble_terpsichore_fixture_reduced_mass_blocks, &
         assemble_terpsichore_fixture_reduced_mass_free_boundary, &
         terpsichore_reduced_adapter_ok
     use terpsichore_reduced_mass_family_assembly, only: &
         assemble_terpsichore_reduced_fixed_boundary_mass
+    use variable_block_tridiagonal, only: pack_permuted_variable_blocks, &
+        variable_block_ok, variable_block_tridiagonal_t
     implicit none
 
     call test_fixture_reader()
     call test_potential_fixture_reader()
     call test_vacuum_potential_fixture_reader()
     call test_fixture_adapter()
+    call test_block_adapter()
     call test_free_boundary_adapter()
     call test_fixture_rejections()
     write (*, "(a)") "PASS"
@@ -216,6 +222,42 @@ contains
             "TERPSICHORE fixture adapter matrix is wrong")
     end subroutine test_fixture_adapter
 
+    ! The block assembly equals the packed dense assembly bit for bit.
+    subroutine test_block_adapter()
+        type(terpsichore_matrix_fixture_t) :: fixture
+        type(dynamic_family_layout_t) :: dense_layout, block_layout
+        type(dynamic_block_map_t) :: map
+        type(variable_block_tridiagonal_t) :: packed, blocks
+        real(dp), allocatable :: dense(:, :)
+        integer :: block, info
+
+        call build_adapter_fixture(fixture)
+        call assemble_terpsichore_fixture_reduced_mass(fixture, dense, &
+            dense_layout, info)
+        call require(info == terpsichore_reduced_adapter_ok, &
+            "dense reduced mass failed")
+        call assemble_terpsichore_fixture_reduced_mass_blocks(fixture, &
+            blocks, block_layout, map, info)
+        call require(info == terpsichore_reduced_adapter_ok, &
+            "block reduced mass failed")
+        call require(block_layout%total_unknowns &
+            == dense_layout%total_unknowns, "block layout differs")
+        call pack_permuted_variable_blocks(dense, map%permutation, &
+            map%widths, packed, info)
+        call require(info == variable_block_ok, "dense packing failed")
+        call require(all(blocks%widths == packed%widths), &
+            "block widths differ")
+        do block = 1, size(blocks%widths)
+            call require(all(blocks%diagonal(block)%values &
+                == packed%diagonal(block)%values), &
+                "block reduced mass diagonal differs")
+            if (block == size(blocks%widths)) cycle
+            call require(all(blocks%lower(block)%values &
+                == packed%lower(block)%values), &
+                "block reduced mass coupling differs")
+        end do
+    end subroutine test_block_adapter
+
     subroutine test_free_boundary_adapter()
         type(terpsichore_matrix_fixture_t) :: fixture
         type(dynamic_family_layout_t) :: fixed_layout, free_layout
@@ -261,10 +303,16 @@ contains
             "oversized external dimensions were accepted")
         call require_header_rejected([2, 999, 999, 1, 1, 3], &
             "oversized phase storage was accepted")
-        call require_header_rejected([996, 1, 1, 1, 1, 3], &
-            "oversized dense matrix was accepted")
-        fixture = terpsichore_matrix_fixture_t(intervals=64, &
-            poloidal_points=300, toroidal_points=100, stability_periods=1, &
+        ! Dense assemblies are bounded by their order; the block replay is
+        ! not, so the reader no longer bounds it.
+        call require(terpsichore_dense_order_is_valid(40000) &
+            .and. .not. terpsichore_dense_order_is_valid(40001) &
+            .and. .not. terpsichore_dense_order_is_valid(0), &
+            "the dense order bound is wrong")
+        ! 2.9e8 potential values: above the 2 GiB bound, while each profile
+        ! array stays within the per-array bound.
+        fixture = terpsichore_matrix_fixture_t(intervals=499, &
+            poloidal_points=300, toroidal_points=150, stability_periods=1, &
             field_periods=1, modes=2)
         call require(.not. terpsichore_potential_metadata_is_valid(fixture), &
             "oversized aggregate potential storage was accepted")

@@ -102,7 +102,13 @@ Fixed-boundary stability against the current fraction:
   Boozer table of M = 16, |N| = 12 there: a loop over the VMEC modes indexes
   the Boozer-table array, which overflows for mnmax_nyq = 326 with the
   benchmark's 14 x 10 table). The GLISS FORT.23 replay of the ns = 257 case
-  is refused: it assembles dense matrices of order 34,748, beyond this VM.
+  (order 34,748, 287 MB FORT.23) assembles TERPSICHORE's matrices directly
+  in block-tridiagonal storage and runs in 8.4 s and 434 MiB on four
+  threads (dense storage would need 9.6 GB). TERPSICHORE's eigenvector has
+  the quotient −2.82906511e-8 in GLISS, its own WP/WK to all printed
+  digits; the certified lowest eigenvalue is −2.8365e-8 (overlap 0.9989),
+  and the inertia counts two unstable modes, of which inverse iteration
+  from one shift reports one.
   - The QAS D_curr difference below s = 0.4 (see li383 below for the
     mechanism) is not rechecked: its export needs Boozer resolution above
     M = N = 24 (Jacobian truncation 0.073), beyond this VM's memory on all
