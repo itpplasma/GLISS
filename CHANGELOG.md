@@ -12,9 +12,11 @@
   period-averaged angular products as symmetric rank-k updates with
   trial-level masks, trial phases evaluated once per point, radial points
   assembled in parallel and scattered in order (thread-count independent),
-  each generalized pencil validated once per solve, and the lowest
-  eigenvalue certified from the inverse iterate with two inertia probes
-  instead of bisection to the bracket tolerance. The public Solov'ev
+  both parity classes from one pass of angular products, each generalized
+  pencil validated once per solve, the first positive eigenvalue bracketed
+  only when it is the lowest, and the lowest eigenvalue certified from the
+  inverse iterate with two inertia probes instead of bisection to the
+  bracket tolerance. The public Solov'ev
   marginality case takes 5 s instead of three minutes, and the CAS3D2MN
   L139 3-entry case 7 s instead of 115 s.
 - Solve the physical free-boundary problem (#8). `StabilityProblem(...,
@@ -31,9 +33,13 @@
   the energy decomposition. Configurations (schema version 6) record the
   vacuum model and results the boundary condition. Multiply covered edge
   frames, walls that do not enclose the plasma and edge meshes that alias the
-  mode table are rejected before assembly. On the GPEC Solov'ev family at
-  q0 = 1.5 the critical conformal-wall distance is compared with DCON's
-  (`benchmarks/solovev/free_boundary`).
+  mode table are rejected before assembly. A mesh invariant under rotation
+  by 2 pi / P splits into P block-circulant sector systems, of which only
+  those the edge data excite are solved, and far panels use a degree-5
+  rule. On the GPEC Solov'ev family at q0 = 1.5 the critical conformal wall
+  converges at second order in the edge mesh to 0.15255 plasma half-widths
+  against DCON's 0.15249 (`benchmarks/solovev/free_boundary`), at 4 s per
+  wall distance on four threads of a 4-vCPU VM (DCON 6.3 s).
 - Remove the STARWALL current-potential vacuum (`starwall_ideal_vacuum`, its
   Fourier coupling and `gliss_starwall_diagnostic`). The minimum-energy
   current sheet it solved stores field energy on both sides of the edge, so
