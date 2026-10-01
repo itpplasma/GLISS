@@ -23,7 +23,8 @@ module fixed_boundary_spectrum
         fixed_boundary_energy_term_count, fixed_boundary_energy_terms_t, &
         rayleigh_gradient_fixed_boundary_store
     use fixed_boundary_eigen_bracket, only: bracket_lowest_negative, &
-        fixed_boundary_bracket_ok, bracket_lowest_positive
+        fixed_boundary_bracket_ok, bracket_lowest_positive, &
+        certify_lowest_bracket
     use fixed_boundary_solver_controls, only: &
         fixed_boundary_solver_controls_t, valid_fixed_boundary_solver_controls
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
@@ -621,61 +622,59 @@ contains
         info = fixed_boundary_ok
     end subroutine solve_fixed_boundary_full_spectrum
 
+    ! The lowest eigenvalue above the floor band, or the lowest negative
+    ! one. Bisection stops once the inertia bracket isolates it to
+    ! isolation_relative; inverse iteration from the lower end converges to
+    ! it, and two inertia probes around the iterate certify a bracket no
+    ! wider than full bisection to the solver controls would give. Should the
+    ! probes fail, the bracket is bisected to the controls instead.
     subroutine resolve_lowest(class_problem, summary, controls, result, info)
         type(fixed_boundary_class_problem_t), intent(in) :: class_problem
         type(variable_spectrum_summary_t), intent(in) :: summary
         type(fixed_boundary_solver_controls_t), intent(in) :: controls
         type(fixed_boundary_spectrum_result_t), intent(inout) :: result
         integer, intent(out) :: info
+        real(dp), parameter :: isolation_relative = 1.0e-3_dp
+        type(fixed_boundary_solver_controls_t) :: coarse
         real(dp), allocatable :: solver_vector(:)
-        real(dp) :: shift
-        integer :: allocation_status, index
+        real(dp) :: interval, lower, margin, shift, upper
+        integer :: allocation_status, base_count, index
 
-        if (summary%negative_count == 0) then
-            if (.not. summary%has_positive) then
-                allocate (result%eigenvector(0), stat=allocation_status)
-                if (allocation_status /= 0) then
-                    info = fixed_boundary_allocation_error
-                    return
-                end if
-                result%inertia_interval = summary%zero_floor
-                info = fixed_boundary_ok
+        if (summary%negative_count == 0 .and. .not. summary%has_positive) then
+            allocate (result%eigenvector(0), stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = fixed_boundary_allocation_error
                 return
             end if
-            call bracket_lowest_positive(class_problem%stiffness, &
-                class_problem%mass, summary%first_positive_lower, &
-                summary%first_positive_upper, shift, &
-                result%inertia_interval, info, controls)
-            if (info /= fixed_boundary_bracket_ok) then
-                info = fixed_boundary_solver_error
-                return
-            end if
+            result%inertia_interval = summary%zero_floor
+            info = fixed_boundary_ok
+            return
+        end if
+        base_count = 0
+        if (summary%negative_count == 0) base_count = summary%zero_count
+        coarse = controls
+        coarse%negative_bracket_relative = max(isolation_relative, &
+            controls%negative_bracket_relative)
+        call bracket(coarse, shift, interval, info)
+        if (info /= fixed_boundary_ok) return
+        call iterate(shift, info)
+        if (info /= fixed_boundary_ok) return
+        ! Half the width at which full bisection would stop.
+        margin = 0.5_dp * controls%negative_bracket_relative &
+            * abs(result%lowest_eigenvalue)
+        if (base_count == 0) margin = margin + 0.5_dp &
+            * controls%negative_bracket_floor * summary%zero_floor
+        margin = max(margin, result%eigenpair_residual)
+        call certify_lowest_bracket(class_problem%stiffness, &
+            class_problem%mass, base_count, result%lowest_eigenvalue, margin, &
+            lower, upper, info)
+        if (info == fixed_boundary_bracket_ok) then
+            result%inertia_interval = min(interval, upper - lower)
         else
-            call bracket_lowest_negative(class_problem%stiffness, &
-                class_problem%mass, summary%zero_floor, shift, &
-                result%inertia_interval, info, controls)
-            if (info /= fixed_boundary_bracket_ok) then
-                info = fixed_boundary_solver_error
-                return
-            end if
-        end if
-        call iterate_variable_generalized_eigenvalue( &
-            class_problem%stiffness, class_problem%mass, shift, &
-            result%lowest_eigenvalue, solver_vector, &
-            result%eigenpair_residual, result%eigenpair_resolution, info, &
-            controls, validated=.true.)
-        if (info /= variable_generalized_ok) then
-            info = fixed_boundary_solver_error
-            return
-        end if
-        ! Report the rigorous M^-1-norm residual bound rather than the
-        ! iteration's convergence metric.
-        call variable_eigenvalue_bound(class_problem%stiffness, &
-            class_problem%mass, solver_vector, result%lowest_eigenvalue, &
-            result%eigenpair_residual, info)
-        if (info /= variable_generalized_ok) then
-            info = fixed_boundary_solver_error
-            return
+            call bracket(controls, shift, result%inertia_interval, info)
+            if (info /= fixed_boundary_ok) return
+            call iterate(shift, info)
+            if (info /= fixed_boundary_ok) return
         end if
         allocate (result%eigenvector(size(solver_vector)), &
             stat=allocation_status)
@@ -690,6 +689,48 @@ contains
         end do
         result%has_eigenvector = .true.
         info = fixed_boundary_ok
+    contains
+        subroutine bracket(stopping, lower_end, width, status)
+            type(fixed_boundary_solver_controls_t), intent(in) :: stopping
+            real(dp), intent(out) :: lower_end, width
+            integer, intent(out) :: status
+
+            if (summary%negative_count == 0) then
+                call bracket_lowest_positive(class_problem%stiffness, &
+                    class_problem%mass, summary%first_positive_lower, &
+                    summary%first_positive_upper, lower_end, width, status, &
+                    stopping)
+            else
+                call bracket_lowest_negative(class_problem%stiffness, &
+                    class_problem%mass, summary%zero_floor, lower_end, &
+                    width, status, stopping)
+            end if
+            status = merge(fixed_boundary_ok, fixed_boundary_solver_error, &
+                status == fixed_boundary_bracket_ok)
+        end subroutine bracket
+
+        ! Inverse iteration from the lower end of an isolating bracket, then
+        ! the rigorous M^-1-norm residual bound rather than the iteration's
+        ! convergence metric.
+        subroutine iterate(lower_end, status)
+            real(dp), intent(in) :: lower_end
+            integer, intent(out) :: status
+
+            call iterate_variable_generalized_eigenvalue( &
+                class_problem%stiffness, class_problem%mass, lower_end, &
+                result%lowest_eigenvalue, solver_vector, &
+                result%eigenpair_residual, result%eigenpair_resolution, &
+                status, controls, validated=.true.)
+            if (status /= variable_generalized_ok) then
+                status = fixed_boundary_solver_error
+                return
+            end if
+            call variable_eigenvalue_bound(class_problem%stiffness, &
+                class_problem%mass, solver_vector, result%lowest_eigenvalue, &
+                result%eigenpair_residual, status)
+            status = merge(fixed_boundary_ok, fixed_boundary_solver_error, &
+                status == variable_generalized_ok)
+        end subroutine iterate
     end subroutine resolve_lowest
 
 end module fixed_boundary_spectrum

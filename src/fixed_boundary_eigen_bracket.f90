@@ -15,7 +15,9 @@ module fixed_boundary_eigen_bracket
     integer, parameter, public :: fixed_boundary_bracket_refinement_error = -14
 
     public :: bracket_lowest_negative, bounded_inertia_probe
-    public :: bracket_lowest_positive
+    public :: bracket_lowest_positive, certify_lowest_bracket
+
+    real(dp), parameter :: expansion_factor = 16.0_dp
 
 contains
 
@@ -38,22 +40,23 @@ contains
             info = fixed_boundary_bracket_error
             return
         end if
+        ! Expand geometrically by a factor of 16 per probe; the last probe
+        ! with negative eigenvalues below it is the upper end of the bracket.
+        upper = -zero_floor
         lower = -2.0_dp * zero_floor
         do iteration = 1, stopping%bracket_iteration_limit
             call variable_generalized_inertia(stiffness, mass, lower, count, &
                 info, validated=.true.)
-            if (info /= variable_generalized_ok) then
-                lower = 2.0_dp * lower
-                cycle
+            if (info == variable_generalized_ok) then
+                if (count == 0) exit
+                upper = lower
             end if
-            if (count == 0) exit
-            lower = 2.0_dp * lower
+            lower = expansion_factor * lower
         end do
         if (iteration > stopping%bracket_iteration_limit) then
             info = fixed_boundary_bracket_expansion_error
             return
         end if
-        upper = -zero_floor
         do iteration = 1, stopping%bracket_iteration_limit
             middle = 0.5_dp * (lower + upper)
             if (upper - lower <= stopping%negative_bracket_relative &
@@ -160,5 +163,38 @@ contains
         end do
         info = fixed_boundary_bracket_probe_error
     end subroutine bounded_inertia_probe
+
+    ! Inertia bracket [lower, upper] = [eigenvalue - margin, eigenvalue +
+    ! margin] of the eigenvalue above base_count others: base_count
+    ! eigenvalues lie below lower and at least one more below upper. Two
+    ! factorizations certify an inverse-iteration eigenvalue whose residual
+    ! bound is below margin, instead of bisecting to that width.
+    subroutine certify_lowest_bracket(stiffness, mass, base_count, &
+            eigenvalue, margin, lower, upper, info)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        integer, intent(in) :: base_count
+        real(dp), intent(in) :: eigenvalue, margin
+        real(dp), intent(out) :: lower, upper
+        integer, intent(out) :: info
+        integer :: count
+
+        info = fixed_boundary_bracket_error
+        lower = eigenvalue - margin
+        upper = eigenvalue + margin
+        if (.not. (margin > 0.0_dp) .or. .not. (upper > lower)) return
+        call variable_generalized_inertia(stiffness, mass, lower, count, &
+            info, validated=.true.)
+        if (info /= variable_generalized_ok .or. count /= base_count) then
+            info = fixed_boundary_bracket_error
+            return
+        end if
+        call variable_generalized_inertia(stiffness, mass, upper, count, &
+            info, validated=.true.)
+        if (info /= variable_generalized_ok .or. count <= base_count) then
+            info = fixed_boundary_bracket_error
+            return
+        end if
+        info = fixed_boundary_bracket_ok
+    end subroutine certify_lowest_bracket
 
 end module fixed_boundary_eigen_bracket
