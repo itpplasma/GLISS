@@ -3,6 +3,7 @@ module fixed_boundary_spectrum
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use compatible_problem_assembly_support, only: angular_grid_aliases
     use compatible_three_component_problem, only: &
+        build_compatible_three_component_classes, &
         build_compatible_three_component_problem, &
         build_compatible_vacuum_energy, &
         compatible_three_component_allocation_error, &
@@ -154,8 +155,7 @@ contains
         ! Default-initialized: holds no matrices.
         type(fixed_boundary_class_problem_t) :: empty_class
         real(dp), allocatable :: vacuum_energy(:, :)
-        integer :: allocation_status, compatible_info, mode, modes
-        integer :: parity_class
+        integer :: allocation_status, compatible_info, mode
 
         info = fixed_boundary_invalid
         if (present(angular_theta)) problem%n_theta = angular_theta
@@ -197,26 +197,14 @@ contains
                 return
             end if
         end if
-        modes = size(mode_m)
         if (.not. problem%coupled) then
-            do parity_class = 1, 2
-                if (present(vacuum)) then
-                    call assemble_class(equilibrium, adiabatic_index, &
-                        density_kg_m3, mode_m, mode_n, stored_power, &
-                        parity_class, degree, problem%classes(parity_class), &
-                        info, problem%n_theta, problem%n_zeta, vacuum, &
-                        vacuum_energy((parity_class - 1) * modes + 1: &
-                        parity_class * modes, (parity_class - 1) * modes + 1: &
-                        parity_class * modes))
-                else
-                    call assemble_class(equilibrium, adiabatic_index, &
-                        density_kg_m3, mode_m, mode_n, stored_power, &
-                        parity_class, degree, problem%classes(parity_class), &
-                        info, problem%n_theta, problem%n_zeta)
-                end if
-                if (info == fixed_boundary_asymmetric) exit
-                if (info /= fixed_boundary_ok) return
-            end do
+            ! Both parity classes come from one pass over the radial points.
+            call assemble_classes(equilibrium, adiabatic_index, &
+                density_kg_m3, mode_m, mode_n, stored_power, degree, &
+                problem%classes, info, problem%n_theta, problem%n_zeta, &
+                vacuum, vacuum_energy)
+            if (info /= fixed_boundary_ok .and. &
+                info /= fixed_boundary_asymmetric) return
             problem%coupled = info == fixed_boundary_asymmetric
         end if
         if (problem%coupled) then
@@ -270,6 +258,40 @@ contains
         end if
         call pack_class_problem(compatible, class_problem, info)
     end subroutine assemble_class
+
+    subroutine assemble_classes(equilibrium, adiabatic_index, &
+            density_kg_m3, mode_m, mode_n, stored_power, degree, classes, &
+            info, n_theta, n_zeta, vacuum, vacuum_energy)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        real(dp), intent(in) :: adiabatic_index, density_kg_m3
+        integer, intent(in) :: mode_m(:), mode_n(:), degree
+        real(dp), intent(in) :: stored_power(:)
+        type(fixed_boundary_class_problem_t), intent(inout) :: classes(2)
+        integer, intent(out) :: info
+        integer, intent(in) :: n_theta, n_zeta
+        type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
+        real(dp), allocatable, intent(in) :: vacuum_energy(:, :)
+        type(compatible_three_component_problem_t) :: cosine, sine
+        integer :: compatible_info
+
+        if (allocated(vacuum_energy)) then
+            call build_compatible_three_component_classes(equilibrium, &
+                adiabatic_index, density_kg_m3, mode_m, mode_n, &
+                stored_power, degree, n_theta, n_zeta, cosine, sine, &
+                compatible_info, vacuum, sparse_storage=.true., &
+                vacuum_energy=vacuum_energy)
+        else
+            call build_compatible_three_component_classes(equilibrium, &
+                adiabatic_index, density_kg_m3, mode_m, mode_n, &
+                stored_power, degree, n_theta, n_zeta, cosine, sine, &
+                compatible_info, vacuum, sparse_storage=.true.)
+        end if
+        info = class_status(compatible_info)
+        if (info /= fixed_boundary_ok) return
+        call pack_class_problem(cosine, classes(1), info)
+        if (info /= fixed_boundary_ok) return
+        call pack_class_problem(sine, classes(2), info)
+    end subroutine assemble_classes
 
     pure integer function class_status(compatible_info) result(info)
         integer, intent(in) :: compatible_info

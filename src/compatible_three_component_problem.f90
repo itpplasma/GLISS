@@ -25,6 +25,7 @@ module compatible_three_component_problem
     use export_surface_geometry, only: build_angular_grids
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use phase_assembly_policy, only: phase_assembly_transformed
+    use phase_factor_topology, only: phase_cosine, phase_sine
     use plasma_vacuum_boundary, only: build_vacuum_edge_block, &
         plasma_vacuum_model_t, plasma_vacuum_ok, &
         plasma_vacuum_underresolved, plasma_vacuum_wall_not_nested
@@ -88,6 +89,7 @@ module compatible_three_component_problem
     end type compatible_three_component_problem_t
 
     public :: build_compatible_three_component_problem
+    public :: build_compatible_three_component_classes
     public :: build_compatible_vacuum_energy
 
     logical, parameter :: accurate_term(5) = &
@@ -99,15 +101,28 @@ module compatible_three_component_problem
     integer, parameter :: point_axis = 1, point_accurate = 2
     integer, parameter :: point_constraint = 3
 
-    ! Local matrices of one radial point, tied to the axis constraint, and
-    ! their map onto the global unknowns.
-    type :: radial_contribution_t
+    ! Local matrices of one radial point for one problem, tied to its axis
+    ! constraint, and their map onto its global unknowns.
+    type :: local_matrices_t
         integer, allocatable :: map(:)
         real(dp), allocatable :: mass(:, :), terms(:, :, :)
         logical :: has_mass = .false.
+    end type local_matrices_t
+
+    ! One radial point: the cosine-parity (or single) problem and, when
+    ! assembled in pairs, the sine-parity problem.
+    type :: radial_contribution_t
+        type(local_matrices_t) :: cosine, sine
         integer :: orientation = 0
         integer :: info = compatible_three_component_assembly_error
     end type radial_contribution_t
+
+    ! Per-problem data of an assembly pass.
+    type :: class_setup_t
+        type(trial_space_topology_t) :: topology
+        integer, allocatable :: ranks(:, :)
+        real(dp), allocatable :: block(:, :)
+    end type class_setup_t
 
 contains
 
@@ -168,6 +183,60 @@ contains
             problem, info, vacuum, vacuum_energy)
     end subroutine build_compatible_three_component_problem
 
+    ! Both parity classes of a stellarator-symmetric problem in one pass:
+    ! the sine-parity forms come from the angular products of the
+    ! cosine-parity ones. vacuum_energy is the block of
+    ! build_compatible_vacuum_energy (every mode with parity 1, then 2).
+    ! An equilibrium that breaks the parity symmetry returns
+    ! compatible_three_component_asymmetric.
+    subroutine build_compatible_three_component_classes(equilibrium, &
+            adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
+            degree, n_theta, n_zeta, cosine_problem, sine_problem, info, &
+            vacuum, sparse_storage, vacuum_energy)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        real(dp), intent(in) :: adiabatic_index, density_kg_m3
+        integer, intent(in) :: mode_m(:), mode_n(:)
+        real(dp), intent(in) :: stored_power(:)
+        integer, intent(in) :: degree, n_theta, n_zeta
+        type(compatible_three_component_problem_t), intent(out) :: &
+            cosine_problem, sine_problem
+        integer, intent(out) :: info
+        type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
+        logical, optional, intent(in) :: sparse_storage
+        real(dp), optional, intent(in) :: vacuum_energy(:, :)
+        integer, allocatable :: parity(:)
+        integer :: modes
+
+        info = compatible_three_component_invalid
+        if (.not. inputs_are_valid(equilibrium, adiabatic_index, &
+            density_kg_m3, mode_m, mode_n, stored_power, 1, degree, n_theta, &
+            n_zeta)) return
+        modes = size(mode_m)
+        if (present(vacuum) .and. present(vacuum_energy)) then
+            if (size(vacuum_energy, 1) /= 2 * modes &
+                .or. size(vacuum_energy, 2) /= 2 * modes) return
+        end if
+        allocate (parity(modes), source=phase_cosine)
+        cosine_problem%free_boundary = present(vacuum)
+        sine_problem%free_boundary = present(vacuum)
+        if (present(sparse_storage)) then
+            cosine_problem%has_sparse_storage = sparse_storage
+            sine_problem%has_sparse_storage = sparse_storage
+        end if
+        if (present(vacuum) .and. present(vacuum_energy)) then
+            call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
+                mode_m, mode_n, stored_power, parity, degree, n_theta, &
+                n_zeta, cosine_problem, info, vacuum, &
+                vacuum_energy(:modes, :modes), sine_problem, &
+                vacuum_energy(modes + 1:, modes + 1:))
+        else
+            call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
+                mode_m, mode_n, stored_power, parity, degree, n_theta, &
+                n_zeta, cosine_problem, info, vacuum, &
+                sine_problem=sine_problem)
+        end if
+    end subroutine build_compatible_three_component_classes
+
     ! Vacuum energy of the normal trials of both parity classes in the
     ! coupled order: every mode with parity 1, then every mode with parity
     ! 2. A trial's edge flux depends only on its own mode and parity, so the
@@ -207,9 +276,12 @@ contains
         call build_vacuum_block(spline, vacuum, topology, energy, info)
     end subroutine build_compatible_vacuum_energy
 
+    ! sine_problem, with cosine-parity trials: the same modes with sine
+    ! parity, assembled from the same angular products in the same pass.
     subroutine build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             mode_m, mode_n, stored_power, parity, degree, n_theta, n_zeta, &
-            problem, info, vacuum, vacuum_energy)
+            problem, info, vacuum, vacuum_energy, sine_problem, &
+            sine_vacuum_energy)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
@@ -219,18 +291,19 @@ contains
         integer, intent(out) :: info
         type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
         real(dp), optional, intent(in) :: vacuum_energy(:, :)
+        type(compatible_three_component_problem_t), optional, &
+            intent(inout) :: sine_problem
+        real(dp), optional, intent(in) :: sine_vacuum_energy(:, :)
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
-        type(trial_space_topology_t) :: topology
-        real(dp), allocatable :: block(:, :)
+        type(class_setup_t) :: setup, sine_setup
         real(dp), allocatable :: breaks(:), theta(:), zeta(:)
-        integer, allocatable :: ranks(:, :)
-        integer :: allocation_status, intervals, local_info, unknowns
+        integer, allocatable :: sine_parity(:)
+        integer :: allocation_status, intervals, local_info
 
         info = compatible_three_component_invalid
         intervals = size(equilibrium%s)
-        allocate (breaks(intervals + 1), ranks(3, size(mode_m)), &
-            stat=allocation_status)
+        allocate (breaks(intervals + 1), stat=allocation_status)
         if (allocation_status /= 0) then
             info = compatible_three_component_allocation_error
             return
@@ -240,40 +313,92 @@ contains
         call build_radial_feec_complex(breaks, degree, .true., &
             .not. present(vacuum), complex, local_info)
         if (local_info /= radial_feec_ok) return
-        call build_trial_space_topology(mode_m, mode_n, parity, topology, &
-            local_info)
-        if (local_info /= trial_topology_ok) return
-        call build_component_ranks(topology, ranks)
-        problem%normal_unknowns = complex%h1_dofs &
-            * count(topology%active(trial_component_normal, :))
-        problem%eta_unknowns = complex%l2_dofs &
-            * count(topology%active(trial_component_eta, :))
-        problem%mu_unknowns = complex%l2_dofs &
-            * count(topology%active(trial_component_mu, :))
-        unknowns = problem%normal_unknowns + problem%eta_unknowns &
-            + problem%mu_unknowns
-        if (unknowns < 1) return
+        if (present(sine_problem)) then
+            if (any(parity /= phase_cosine)) return
+        end if
         call fit_primitive_equilibrium(equilibrium, spline, local_info)
         if (local_info /= primitive_equilibrium_ok) then
             info = compatible_three_component_assembly_error
             return
         end if
-        ! The vacuum block is checked before the costly plasma assembly.
+        call prepare_class(spline, complex, mode_m, mode_n, parity, &
+            stored_power, degree, problem, setup, info, vacuum, vacuum_energy)
+        if (info /= compatible_three_component_ok) return
+        if (present(sine_problem)) then
+            allocate (sine_parity(size(parity)), source=phase_sine)
+            call prepare_class(spline, complex, mode_m, mode_n, sine_parity, &
+                stored_power, degree, sine_problem, sine_setup, info, vacuum, &
+                sine_vacuum_energy)
+            if (info /= compatible_three_component_ok) return
+        end if
+        call build_angular_grids(n_theta, n_zeta, theta, zeta)
+        if (present(sine_problem)) then
+            call assemble_problem(spline, complex, breaks, theta, zeta, &
+                adiabatic_index, density_kg_m3, mode_m, mode_n, parity, &
+                stored_power, setup, problem, info, sine_setup, sine_problem)
+        else
+            call assemble_problem(spline, complex, breaks, theta, zeta, &
+                adiabatic_index, density_kg_m3, mode_m, mode_n, parity, &
+                stored_power, setup, problem, info)
+        end if
+        if (info /= compatible_three_component_ok) return
+        call finish_class(complex, degree, setup, problem, info)
+        if (info /= compatible_three_component_ok) return
+        if (present(sine_problem)) call finish_class(complex, degree, &
+            sine_setup, sine_problem, info)
+    end subroutine build_trials
+
+    ! Trial topology, unknown counts, vacuum block, axis tie and empty
+    ! storage of one problem; the vacuum block is checked before the
+    ! costly plasma assembly.
+    subroutine prepare_class(spline, complex, mode_m, mode_n, parity, &
+            stored_power, degree, problem, setup, info, vacuum, vacuum_energy)
+        type(primitive_equilibrium_spline_t), intent(in) :: spline
+        type(radial_feec_complex_t), intent(in) :: complex
+        integer, intent(in) :: mode_m(:), mode_n(:), parity(:), degree
+        real(dp), intent(in) :: stored_power(:)
+        type(compatible_three_component_problem_t), intent(inout) :: problem
+        type(class_setup_t), intent(out) :: setup
+        integer, intent(out) :: info
+        type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
+        real(dp), optional, intent(in) :: vacuum_energy(:, :)
+        integer :: allocation_status, local_info, unknowns
+
+        info = compatible_three_component_invalid
+        call build_trial_space_topology(mode_m, mode_n, parity, &
+            setup%topology, local_info)
+        if (local_info /= trial_topology_ok) return
+        allocate (setup%ranks(3, size(mode_m)), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_three_component_allocation_error
+            return
+        end if
+        call build_component_ranks(setup%topology, setup%ranks)
+        problem%normal_unknowns = complex%h1_dofs &
+            * count(setup%topology%active(trial_component_normal, :))
+        problem%eta_unknowns = complex%l2_dofs &
+            * count(setup%topology%active(trial_component_eta, :))
+        problem%mu_unknowns = complex%l2_dofs &
+            * count(setup%topology%active(trial_component_mu, :))
+        unknowns = problem%normal_unknowns + problem%eta_unknowns &
+            + problem%mu_unknowns
+        if (unknowns < 1) return
         if (present(vacuum)) then
             if (present(vacuum_energy)) then
                 if (size(vacuum_energy, 1) /= size(mode_m) &
                     .or. size(vacuum_energy, 2) /= size(mode_m)) return
                 if (.not. all(ieee_is_finite(vacuum_energy))) return
-                allocate (block, source=vacuum_energy)
+                allocate (setup%block, source=vacuum_energy)
             else
-                call build_vacuum_block(spline, vacuum, topology, block, info)
+                call build_vacuum_block(spline, vacuum, setup%topology, &
+                    setup%block, info)
                 if (info /= compatible_three_component_ok) return
                 info = compatible_three_component_invalid
             end if
         end if
         call build_trial_axis_tie(spline, complex, mode_m, parity, &
-            stored_power, ranks(trial_component_normal, :), &
-            ranks(trial_component_eta, :), unknowns, .true., &
+            stored_power, setup%ranks(trial_component_normal, :), &
+            setup%ranks(trial_component_eta, :), unknowns, .true., &
             problem%axis_tie, local_info)
         if (local_info /= axis_regularity_ok) then
             info = compatible_three_component_assembly_error
@@ -285,10 +410,9 @@ contains
         problem%axis_quadrature_points = axis_quadrature_points(degree, &
             maxval(mode_m))
         if (problem%has_sparse_storage) then
-            call initialize_sparse_storage(complex, topology, degree, &
+            call initialize_sparse_storage(complex, setup%topology, degree, &
                 problem, info)
             if (info /= compatible_three_component_ok) return
-            info = compatible_three_component_invalid
         else
             allocate (problem%stiffness(unknowns, unknowns), &
                 problem%mass(unknowns, unknowns), &
@@ -302,13 +426,23 @@ contains
             problem%mass = 0.0_dp
             problem%stiffness_terms = 0.0_dp
         end if
-        call build_angular_grids(n_theta, n_zeta, theta, zeta)
-        call assemble_problem(spline, complex, breaks, theta, zeta, &
-            adiabatic_index, density_kg_m3, mode_m, mode_n, parity, &
-            stored_power, topology, ranks, problem, info)
-        if (info /= compatible_three_component_ok) return
-        if (present(vacuum)) then
-            call add_vacuum_edge(block, ranks, complex, problem, info)
+        info = compatible_three_component_ok
+    end subroutine prepare_class
+
+    subroutine finish_class(complex, degree, setup, problem, info)
+        type(radial_feec_complex_t), intent(in) :: complex
+        integer, intent(in) :: degree
+        type(class_setup_t), intent(in) :: setup
+        type(compatible_three_component_problem_t), intent(inout) :: problem
+        integer, intent(out) :: info
+
+        ! Dense storage sums the terms before the vacuum is added; sparse
+        ! storage adds the vacuum when it sums them.
+        if (.not. problem%has_sparse_storage) &
+            call sum_tensor(problem%stiffness_terms, problem%stiffness)
+        if (allocated(setup%block)) then
+            call add_vacuum_edge(setup%block, setup%ranks, complex, problem, &
+                info)
             if (info /= compatible_three_component_ok) return
         end if
         if (problem%has_sparse_storage) then
@@ -323,7 +457,8 @@ contains
         problem%quadrature_points = size(accurate_nodes)
         problem%h1_dofs = complex%h1_dofs
         problem%l2_dofs = complex%l2_dofs
-    end subroutine build_trials
+        info = compatible_three_component_ok
+    end subroutine finish_class
 
     subroutine build_vacuum_block(spline, vacuum, topology, block, info)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
@@ -476,17 +611,19 @@ contains
 
     subroutine assemble_problem(spline, complex, breaks, theta, zeta, &
             adiabatic_index, density, mode_m, mode_n, parity, stored_power, &
-            topology, ranks, problem, info)
+            setup, problem, info, sine_setup, sine_problem)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: breaks(:), theta(:), zeta(:)
         real(dp), intent(in) :: adiabatic_index, density
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
         real(dp), intent(in) :: stored_power(:)
-        type(trial_space_topology_t), intent(in) :: topology
-        integer, intent(in) :: ranks(:, :)
+        type(class_setup_t), intent(in) :: setup
         type(compatible_three_component_problem_t), intent(inout) :: problem
         integer, intent(out) :: info
+        type(class_setup_t), optional, intent(in) :: sine_setup
+        type(compatible_three_component_problem_t), optional, &
+            intent(inout) :: sine_problem
         type(radial_contribution_t), allocatable :: batch(:)
         real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
         real(dp), allocatable :: axis_nodes(:), axis_weights(:)
@@ -548,158 +685,216 @@ contains
             !$omp parallel do schedule(dynamic) firstprivate(orientation) &
             !$omp if (last > first)
             do entry = first, last
-                call compute_radial_point(spline, complex, coordinates(entry), &
-                    weights(entry), theta, zeta, adiabatic_index, density, &
-                    mode_m, mode_n, parity, stored_power, topology, ranks, &
-                    problem, kinds(entry) /= point_constraint, orientation, &
-                    batch(entry - first + 1))
+                if (present(sine_setup)) then
+                    call compute_radial_point(spline, complex, &
+                        coordinates(entry), weights(entry), theta, zeta, &
+                        adiabatic_index, density, mode_m, mode_n, parity, &
+                        stored_power, setup, problem, &
+                        kinds(entry) /= point_constraint, orientation, &
+                        batch(entry - first + 1), sine_setup, sine_problem)
+                else
+                    call compute_radial_point(spline, complex, &
+                        coordinates(entry), weights(entry), theta, zeta, &
+                        adiabatic_index, density, mode_m, mode_n, parity, &
+                        stored_power, setup, problem, &
+                        kinds(entry) /= point_constraint, orientation, &
+                        batch(entry - first + 1))
+                end if
             end do
             !$omp end parallel do
             if (first == 1) orientation = batch(1)%orientation
             do entry = first, last
                 info = batch(entry - first + 1)%info
                 if (info /= compatible_three_component_ok) return
-                select case (kinds(entry))
-                case (point_axis)
-                    call scatter_radial_point(batch(entry - first + 1), &
-                        all_terms, problem, info)
-                case (point_accurate)
-                    call scatter_radial_point(batch(entry - first + 1), &
-                        accurate_term, problem, info)
-                case default
-                    call scatter_radial_point(batch(entry - first + 1), &
-                        constraint_term, problem, info)
-                end select
+                call scatter_point(batch(entry - first + 1)%cosine, &
+                    kinds(entry), problem, info)
                 if (info /= compatible_three_component_ok) return
+                if (present(sine_problem)) then
+                    call scatter_point(batch(entry - first + 1)%sine, &
+                        kinds(entry), sine_problem, info)
+                    if (info /= compatible_three_component_ok) return
+                end if
             end do
             first = last + 1
         end do
-        if (.not. problem%has_sparse_storage) &
-            call sum_tensor(problem%stiffness_terms, problem%stiffness)
         info = compatible_three_component_ok
     end subroutine assemble_problem
 
     ! Local matrices of one radial quadrature point, tied to the axis
-    ! constraint, with the map onto the global unknowns.
+    ! constraint, with the map onto the global unknowns; with sine_setup,
+    ! also those of the sine-parity problem from the same products.
     subroutine compute_radial_point(spline, complex, coordinate, weight, &
             theta, zeta, adiabatic_index, density, mode_m, mode_n, parity, &
-            stored_power, topology, ranks, problem, assemble_mass, &
-            orientation, contribution)
+            stored_power, setup, problem, assemble_mass, orientation, &
+            contribution, sine_setup, sine_problem)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: coordinate, weight, theta(:), zeta(:)
         real(dp), intent(in) :: adiabatic_index, density
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
         real(dp), intent(in) :: stored_power(:)
-        type(trial_space_topology_t), intent(in) :: topology
-        integer, intent(in) :: ranks(:, :)
+        type(class_setup_t), intent(in) :: setup
         type(compatible_three_component_problem_t), intent(in) :: problem
         logical, intent(in) :: assemble_mass
         integer, intent(inout) :: orientation
         type(radial_contribution_t), intent(out) :: contribution
+        type(class_setup_t), optional, intent(in) :: sine_setup
+        type(compatible_three_component_problem_t), optional, intent(in) :: &
+            sine_problem
+        real(dp), allocatable :: fields(:, :, :), drive(:, :)
+        real(dp), allocatable :: jacobian_s(:, :), jacobian_t(:, :)
+        real(dp), allocatable :: jacobian_z(:, :), gamma_p(:, :)
+        real(dp), allocatable :: h1(:), dh1(:), l2(:), local_h1(:, :)
+        real(dp), allocatable :: local_dh1(:, :), local_l2(:, :)
+        real(dp), allocatable :: local_eta(:, :), local_k(:, :), sine_k(:, :)
+        integer, allocatable :: h1_index(:), l2_index(:)
+        real(dp) :: pressure
+        integer :: allocation_status, local_info, trials
 
-        call compute_local_matrices(contribution%info)
+        contribution%info = compatible_three_component_assembly_error
+        call evaluate_radial_feec_complex(complex, coordinate, h1, dh1, l2, &
+            local_info)
+        if (local_info /= radial_feec_ok) return
+        call build_active_indices(h1, h1_index, local_info, dh1)
+        if (local_info == compatible_support_allocation) then
+            contribution%info = compatible_three_component_allocation_error
+            return
+        else if (local_info /= compatible_support_ok) then
+            return
+        end if
+        call build_active_indices(l2, l2_index, local_info)
+        if (local_info == compatible_support_allocation) then
+            contribution%info = compatible_three_component_allocation_error
+            return
+        else if (local_info /= compatible_support_ok) then
+            return
+        end if
+        if (size(h1_index) < 1 .or. size(l2_index) < 1) return
+        trials = size(mode_m)
+        allocate (local_h1(size(h1_index), trials), &
+            local_dh1(size(h1_index), trials), &
+            local_l2(size(l2_index), trials), &
+            local_eta(size(l2_index), trials), stat=allocation_status)
+        if (allocation_status /= 0) then
+            contribution%info = compatible_three_component_allocation_error
+            return
+        end if
+        call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
+            local_h1, local_dh1, local_info)
+        if (local_info /= compatible_support_ok) return
+        call apply_tangential_axis_weight(coordinate, stored_power, l2, &
+            l2_index, local_eta, local_info)
+        if (local_info /= compatible_support_ok) return
+        call replicate_indexed_values(l2, l2_index, local_l2, local_info)
+        if (local_info /= compatible_support_ok) return
+        call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
+            zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
+            jacobian_z, pressure, orientation=orientation)
         contribution%orientation = orientation
-    contains
-        subroutine compute_local_matrices(info)
-            integer, intent(out) :: info
-            real(dp), allocatable :: fields(:, :, :), drive(:, :)
-            real(dp), allocatable :: jacobian_s(:, :), jacobian_t(:, :)
-            real(dp), allocatable :: jacobian_z(:, :), gamma_p(:, :)
-            real(dp), allocatable :: h1(:), dh1(:), l2(:), local_h1(:, :)
-            real(dp), allocatable :: local_dh1(:, :), local_l2(:, :)
-            real(dp), allocatable :: local_eta(:, :), local_k(:, :)
-            real(dp), allocatable :: tie_scale(:)
-            integer, allocatable :: h1_index(:), l2_index(:), full_map(:)
-            real(dp) :: pressure
-            integer :: allocation_status, local_info, trials
-
-            info = compatible_three_component_assembly_error
-            call evaluate_radial_feec_complex(complex, coordinate, h1, dh1, l2, &
-                local_info)
-            if (local_info /= radial_feec_ok) return
-            call build_active_indices(h1, h1_index, local_info, dh1)
-            if (local_info == compatible_support_allocation) then
-                info = compatible_three_component_allocation_error
-                return
-            else if (local_info /= compatible_support_ok) then
+        if (local_info /= primitive_kernel_ok) return
+        if (.not. problem%coupled) then
+            if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
+                jacobian_t, jacobian_z)) then
+                contribution%info = compatible_three_component_asymmetric
                 return
             end if
-            call build_active_indices(l2, l2_index, local_info)
-            if (local_info == compatible_support_allocation) then
-                info = compatible_three_component_allocation_error
-                return
-            else if (local_info /= compatible_support_ok) then
-                return
-            end if
-            if (size(h1_index) < 1 .or. size(l2_index) < 1) return
-            trials = size(mode_m)
-            allocate (local_h1(size(h1_index), trials), &
-                local_dh1(size(h1_index), trials), &
-                local_l2(size(l2_index), trials), &
-                local_eta(size(l2_index), trials), stat=allocation_status)
-            if (allocation_status /= 0) then
-                info = compatible_three_component_allocation_error
-                return
-            end if
-            call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
-                local_h1, local_dh1, local_info)
-            if (local_info /= compatible_support_ok) return
-            call apply_tangential_axis_weight(coordinate, stored_power, l2, &
-                l2_index, local_eta, local_info)
-            if (local_info /= compatible_support_ok) return
-            call replicate_indexed_values(l2, l2_index, local_l2, local_info)
-            if (local_info /= compatible_support_ok) return
-            call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
-                zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
-                jacobian_z, pressure, orientation=orientation)
-            if (local_info /= primitive_kernel_ok) return
-            if (.not. problem%coupled) then
-                if (.not. surface_preserves_parity(fields, drive, jacobian_s, &
-                    jacobian_t, jacobian_z)) then
-                    info = compatible_three_component_asymmetric
-                    return
-                end if
-            end if
-            allocate (gamma_p(size(theta), size(zeta)), &
-                source=adiabatic_index * pressure, stat=allocation_status)
-            if (allocation_status /= 0) then
-                info = compatible_three_component_allocation_error
-                return
-            end if
-            call allocate_local_matrices(trials, size(h1_index), size(l2_index), &
-                local_k, contribution%mass, contribution%terms, allocation_status)
-            if (allocation_status /= 0) then
-                info = compatible_three_component_allocation_error
-                return
-            end if
+        end if
+        allocate (gamma_p(size(theta), size(zeta)), &
+            source=adiabatic_index * pressure, stat=allocation_status)
+        if (allocation_status /= 0) then
+            contribution%info = compatible_three_component_allocation_error
+            return
+        end if
+        call allocate_local_matrices(trials, size(h1_index), size(l2_index), &
+            local_k, contribution%cosine%mass, contribution%cosine%terms, &
+            allocation_status)
+        if (allocation_status == 0 .and. present(sine_setup)) &
+            call allocate_local_matrices(trials, size(h1_index), &
+            size(l2_index), sine_k, contribution%sine%mass, &
+            contribution%sine%terms, allocation_status)
+        if (allocation_status /= 0) then
+            contribution%info = compatible_three_component_allocation_error
+            return
+        end if
+        if (present(sine_setup)) then
             call assemble_compatible_compressible_stiffness_surface(fields, &
                 drive, jacobian_s, jacobian_t, jacobian_z, gamma_p, mode_m, &
                 mode_n, parity, spline%field_periods, local_h1, local_dh1, &
-                local_eta, local_l2, weight, phase_assembly_transformed, local_k, &
-                local_info, contribution%terms)
-            if (local_info /= 0) return
-            if (assemble_mass) then
-                call assemble_compatible_physical_mass_surface(fields, density, &
-                    mode_m, mode_n, parity, spline%field_periods, local_h1, &
-                    local_eta, local_l2, weight, phase_assembly_transformed, &
-                    contribution%mass, local_info)
-                if (local_info /= 0) return
+                local_eta, local_l2, weight, phase_assembly_transformed, &
+                local_k, local_info, contribution%cosine%terms, sine_k, &
+                contribution%sine%terms)
+        else
+            call assemble_compatible_compressible_stiffness_surface(fields, &
+                drive, jacobian_s, jacobian_t, jacobian_z, gamma_p, mode_m, &
+                mode_n, parity, spline%field_periods, local_h1, local_dh1, &
+                local_eta, local_l2, weight, phase_assembly_transformed, &
+                local_k, local_info, contribution%cosine%terms)
+        end if
+        if (local_info /= 0) return
+        if (assemble_mass) then
+            if (present(sine_setup)) then
+                call assemble_compatible_physical_mass_surface(fields, &
+                    density, mode_m, mode_n, parity, spline%field_periods, &
+                    local_h1, local_eta, local_l2, weight, &
+                    phase_assembly_transformed, contribution%cosine%mass, &
+                    local_info, contribution%sine%mass)
+            else
+                call assemble_compatible_physical_mass_surface(fields, &
+                    density, mode_m, mode_n, parity, spline%field_periods, &
+                    local_h1, local_eta, local_l2, weight, &
+                    phase_assembly_transformed, contribution%cosine%mass, &
+                    local_info)
             end if
-            call build_local_map(complex, topology, ranks, h1_index, l2_index, &
-                full_map)
-            allocate (contribution%map(size(full_map)), tie_scale(size(full_map)))
-            call tie_local_map(problem%axis_tie, full_map, contribution%map, &
-                tie_scale)
-            call scale_local_tensor(tie_scale, contribution%terms)
-            if (assemble_mass) call scale_local_matrix(tie_scale, contribution%mass)
-            contribution%has_mass = assemble_mass
-            info = compatible_three_component_ok
-        end subroutine compute_local_matrices
+            if (local_info /= 0) return
+        end if
+        call tie_local_matrices(complex, setup, problem%axis_tie, h1_index, &
+            l2_index, assemble_mass, contribution%cosine)
+        if (present(sine_setup)) call tie_local_matrices(complex, &
+            sine_setup, sine_problem%axis_tie, h1_index, l2_index, &
+            assemble_mass, contribution%sine)
+        contribution%info = compatible_three_component_ok
     end subroutine compute_radial_point
 
-    subroutine scatter_radial_point(contribution, term_mask, problem, info)
-        type(radial_contribution_t), intent(in) :: contribution
+    ! Map the local matrices onto the global unknowns of one problem and
+    ! tie them to its axis constraint.
+    subroutine tie_local_matrices(complex, setup, axis_tie, h1_index, &
+            l2_index, assemble_mass, local)
+        type(radial_feec_complex_t), intent(in) :: complex
+        type(class_setup_t), intent(in) :: setup
+        type(axis_tie_t), intent(in) :: axis_tie
+        integer, intent(in) :: h1_index(:), l2_index(:)
+        logical, intent(in) :: assemble_mass
+        type(local_matrices_t), intent(inout) :: local
+        real(dp), allocatable :: tie_scale(:)
+        integer, allocatable :: full_map(:)
+
+        call build_local_map(complex, setup%topology, setup%ranks, h1_index, &
+            l2_index, full_map)
+        allocate (local%map(size(full_map)), tie_scale(size(full_map)))
+        call tie_local_map(axis_tie, full_map, local%map, tie_scale)
+        call scale_local_tensor(tie_scale, local%terms)
+        if (assemble_mass) call scale_local_matrix(tie_scale, local%mass)
+        local%has_mass = assemble_mass
+    end subroutine tie_local_matrices
+
+    subroutine scatter_point(local, kind, problem, info)
+        type(local_matrices_t), intent(in) :: local
+        integer, intent(in) :: kind
+        type(compatible_three_component_problem_t), intent(inout) :: problem
+        integer, intent(out) :: info
+
+        select case (kind)
+        case (point_axis)
+            call scatter_local(local, all_terms, problem, info)
+        case (point_accurate)
+            call scatter_local(local, accurate_term, problem, info)
+        case default
+            call scatter_local(local, constraint_term, problem, info)
+        end select
+    end subroutine scatter_point
+
+    subroutine scatter_local(local, term_mask, problem, info)
+        type(local_matrices_t), intent(in) :: local
         logical, intent(in) :: term_mask(:)
         type(compatible_three_component_problem_t), intent(inout) :: problem
         integer, intent(out) :: info
@@ -707,24 +902,24 @@ contains
 
         info = compatible_three_component_assembly_error
         if (problem%has_sparse_storage) then
-            if (contribution%has_mass) then
-                call scatter_symmetric_compatible_block(contribution%map, &
-                    contribution%mass, 1.0_dp, problem%sparse_block_index, &
+            if (local%has_mass) then
+                call scatter_symmetric_compatible_block(local%map, &
+                    local%mass, 1.0_dp, problem%sparse_block_index, &
                     problem%sparse_local_index, problem%sparse_mass, &
                     local_info)
                 if (local_info /= compatible_block_ok) return
             end if
-            call scatter_sparse_terms(contribution%map, contribution%terms, &
-                term_mask, problem, local_info)
+            call scatter_sparse_terms(local%map, local%terms, term_mask, &
+                problem, local_info)
             if (local_info /= compatible_block_ok) return
         else
-            if (contribution%has_mass) call scatter_matrix(contribution%map, &
-                contribution%mass, 1.0_dp, problem%mass)
-            call scatter_terms(contribution%map, contribution%terms, &
-                term_mask, problem%stiffness_terms)
+            if (local%has_mass) call scatter_matrix(local%map, local%mass, &
+                1.0_dp, problem%mass)
+            call scatter_terms(local%map, local%terms, term_mask, &
+                problem%stiffness_terms)
         end if
         info = compatible_three_component_ok
-    end subroutine scatter_radial_point
+    end subroutine scatter_local
 
     subroutine scatter_sparse_terms(map, local, term_mask, problem, info)
         integer, intent(in) :: map(:)
