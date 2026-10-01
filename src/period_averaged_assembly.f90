@@ -61,14 +61,22 @@ contains
     ! cosine_phase(p, a), sine_phase(p, a): cos and sin of phi_a;
     ! weight(p): the signed quadrature weight of this channel.
     ! target(a, b) += sum_p weight(p) <R_a R_b>_periods.
+    !
+    ! rotated_target, with rotation_sign: the same sum for the columns whose
+    ! trial basis is turned a quarter period, U' = -i s U with s = +-1 per
+    ! column. Then X' = s Y and Y' = -s X, so the rotated form is
+    ! s_a s_b [plus Y^T W Y + minus X^T W X](a, b) from the same products.
     subroutine accumulate_period_averaged(cosine_part, sine_part, &
-            cosine_phase, sine_phase, weight, plus, minus, mixed, target)
+            cosine_phase, sine_phase, weight, plus, minus, mixed, target, &
+            rotated_target, rotation_sign)
         real(dp), contiguous, intent(in) :: cosine_part(:, :), sine_part(:, :)
         real(dp), contiguous, intent(in) :: cosine_phase(:, :)
         real(dp), contiguous, intent(in) :: sine_phase(:, :), weight(:)
         real(dp), intent(in) :: plus(:, :), minus(:, :)
         logical, intent(in) :: mixed
         real(dp), intent(inout) :: target(:, :)
+        real(dp), intent(inout), optional :: rotated_target(:, :)
+        real(dp), intent(in), optional :: rotation_sign(:)
         real(dp), allocatable :: scaled(:, :), product(:, :)
         integer :: column_trial(size(cosine_part, 2))
         integer :: order(size(weight))
@@ -102,10 +110,14 @@ contains
         call real_rows(.true.)
         call weighted_gram(positive, negative, columns, scaled, product)
         call add_masked(plus, product, column_trial, target)
-        if (.not. mixed) return
+        if (present(rotated_target)) call add_masked(minus, product, &
+            column_trial, rotated_target, rotation_sign)
+        if (.not. mixed .and. .not. present(rotated_target)) return
         call real_rows(.false.)
         call weighted_gram(positive, negative, columns, scaled, product)
         call add_masked(minus, product, column_trial, target)
+        if (present(rotated_target)) call add_masked(plus, product, &
+            column_trial, rotated_target, rotation_sign)
     contains
         ! X = Re(U) = C cos + S sin, or Y = Im(U) = C sin - S cos, at the
         ! ordered points, scaled by sqrt|w|.
@@ -152,18 +164,20 @@ contains
             scaled(positive + 1, 1), rows, 1.0_dp, product, columns)
     end subroutine weighted_gram
 
-    ! target(a, b) += mask(trial a, trial b) product(a, b) from the upper
-    ! triangle of the symmetric product.
-    pure subroutine add_masked(mask, product, column_trial, target)
+    ! target(a, b) += sign(a) sign(b) mask(trial a, trial b) product(a, b)
+    ! from the upper triangle of the symmetric product.
+    pure subroutine add_masked(mask, product, column_trial, target, sign)
         real(dp), intent(in) :: mask(:, :), product(:, :)
         integer, intent(in) :: column_trial(:)
         real(dp), intent(inout) :: target(:, :)
+        real(dp), intent(in), optional :: sign(:)
         real(dp) :: value
         integer :: a, b
 
         do b = 1, size(product, 2)
             do a = 1, b - 1
                 value = mask(column_trial(a), column_trial(b)) * product(a, b)
+                if (present(sign)) value = sign(a) * sign(b) * value
                 target(a, b) = target(a, b) + value
                 target(b, a) = target(b, a) + value
             end do

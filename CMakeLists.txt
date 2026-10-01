@@ -488,6 +488,11 @@ if(BUILD_TESTING)
     add_test(NAME mercier_metric
         COMMAND test_mercier_metric ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
 
+    add_executable(test_sine_parity_pairing test/test_sine_parity_pairing.f90)
+    target_link_libraries(test_sine_parity_pairing PRIVATE gliss)
+    add_test(NAME sine_parity_pairing
+        COMMAND test_sine_parity_pairing ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
+
     add_executable(test_cas3d_block_congruence
         test/test_cas3d_block_congruence.f90)
     target_link_libraries(test_cas3d_block_congruence PRIVATE gliss)

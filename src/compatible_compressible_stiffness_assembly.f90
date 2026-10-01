@@ -28,7 +28,8 @@ contains
             drive, jacobian_radial, jacobian_theta, jacobian_zeta, &
             gamma_pressure, trial_m, trial_n, trial_parity, field_periods, &
             h1_values, h1_derivatives, eta_values, l2_values, radial_weight, &
-            phase_assembly, stiffness, info, stiffness_terms)
+            phase_assembly, stiffness, info, stiffness_terms, sine_stiffness, &
+            sine_terms)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         real(dp), intent(in) :: jacobian_radial(:, :), jacobian_theta(:, :)
         real(dp), intent(in) :: jacobian_zeta(:, :), gamma_pressure(:, :)
@@ -40,6 +41,10 @@ contains
         real(dp), intent(inout) :: stiffness(:, :)
         integer, intent(out) :: info
         real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
+        ! Cosine-parity trials only: also the stiffness and terms of the same
+        ! modes with sine parity, from the same angular products.
+        real(dp), optional, intent(inout) :: sine_stiffness(:, :)
+        real(dp), optional, intent(inout) :: sine_terms(:, :, :)
         real(dp) :: angular_weight
         integer :: j, k, period
 
@@ -51,6 +56,14 @@ contains
         info = -1
         if (any(shape(eta_values) /= shape(l2_values))) return
         if (.not. all(ieee_is_finite(eta_values))) return
+        if (present(sine_stiffness) .neqv. present(sine_terms)) return
+        if (present(sine_stiffness)) then
+            if (phase_assembly /= phase_assembly_transformed) return
+            if (.not. present(stiffness_terms)) return
+            if (any(trial_parity /= phase_cosine)) return
+            if (any(shape(sine_stiffness) /= shape(stiffness))) return
+            if (any(shape(sine_terms) /= shape(stiffness_terms))) return
+        end if
         if (phase_assembly == phase_assembly_direct) then
             angular_weight = radial_weight / real(size(fields, 1) &
                 * size(fields, 2) * field_periods, dp)
@@ -75,7 +88,7 @@ contains
                 jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, &
                 trial_n, trial_parity, field_periods, h1_values, &
                 h1_derivatives, eta_values, l2_values, radial_weight, &
-                stiffness, stiffness_terms)
+                stiffness, stiffness_terms, sine_stiffness, sine_terms)
         end if
         info = 0
     end subroutine assemble_compatible_compressible_stiffness_surface
@@ -85,7 +98,7 @@ contains
     subroutine assemble_transformed(fields, drive, jacobian_radial, &
             jacobian_theta, jacobian_zeta, gamma_pressure, trial_m, trial_n, &
             parity, field_periods, h1, dh1, eta, l2, radial_weight, &
-            stiffness, stiffness_terms)
+            stiffness, stiffness_terms, sine_stiffness, sine_terms)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         real(dp), intent(in) :: jacobian_radial(:, :), jacobian_theta(:, :)
         real(dp), intent(in) :: jacobian_zeta(:, :), gamma_pressure(:, :)
@@ -95,13 +108,16 @@ contains
         real(dp), intent(in) :: radial_weight
         real(dp), intent(inout) :: stiffness(:, :)
         real(dp), optional, intent(inout) :: stiffness_terms(:, :, :)
+        real(dp), optional, intent(inout) :: sine_stiffness(:, :)
+        real(dp), optional, intent(inout) :: sine_terms(:, :, :)
         integer, parameter :: chunk_limit = 256
         real(dp), allocatable :: cosine_part(:, :, :), sine_part(:, :, :)
         real(dp), allocatable :: cosine_phase(:, :), sine_phase(:, :)
-        real(dp), allocatable :: weight(:, :), term(:, :)
+        real(dp), allocatable :: weight(:, :), term(:, :), sine_term(:, :)
         real(dp) :: coefficients(5, 2, size(stiffness, 1)), factors(5)
         real(dp) :: angular_weight, phase, theta, zeta
         real(dp) :: trial_cosine(size(trial_m)), trial_sine(size(trial_m))
+        real(dp) :: rotation(size(stiffness, 1))
         real(dp), allocatable :: plus(:, :), minus(:, :)
         logical :: mixed
         integer :: chunk, column, columns, component, count, first, j, k
@@ -115,8 +131,13 @@ contains
         allocate (cosine_part(chunk, columns, 5), sine_part(chunk, columns, 5), &
             cosine_phase(chunk, columns), sine_phase(chunk, columns), &
             weight(chunk, 5), term(columns, columns), &
-            plus(trials, trials), minus(trials, trials))
+            sine_term(columns, columns), plus(trials, trials), &
+            minus(trials, trials))
         call period_masks(trial_n, field_periods, plus, minus, mixed)
+        ! The sine-parity basis turns the normal component a quarter period
+        ! forward and the tangential ones a quarter period back.
+        rotation = -1.0_dp
+        rotation(:size(h1, 1) * trials) = 1.0_dp
         do first = 1, points, chunk
             count = min(chunk, points - first + 1)
             ! Rows past the last point carry zero weight and zero response.
@@ -158,10 +179,23 @@ contains
             end do
             do component = 1, 5
                 term = 0.0_dp
-                call accumulate_period_averaged( &
-                    cosine_part(:, :, component), sine_part(:, :, component), &
-                    cosine_phase, sine_phase, weight(:, component), plus, &
-                    minus, mixed, term)
+                if (present(sine_stiffness)) then
+                    sine_term = 0.0_dp
+                    call accumulate_period_averaged( &
+                        cosine_part(:, :, component), &
+                        sine_part(:, :, component), cosine_phase, &
+                        sine_phase, weight(:, component), plus, minus, &
+                        mixed, term, sine_term, rotation)
+                    sine_stiffness = sine_stiffness + sine_term
+                    sine_terms(:, :, component) = sine_terms(:, :, component) &
+                        + sine_term
+                else
+                    call accumulate_period_averaged( &
+                        cosine_part(:, :, component), &
+                        sine_part(:, :, component), cosine_phase, &
+                        sine_phase, weight(:, component), plus, minus, &
+                        mixed, term)
+                end if
                 stiffness = stiffness + term
                 if (present(stiffness_terms)) stiffness_terms(:, :, component) &
                     = stiffness_terms(:, :, component) + term

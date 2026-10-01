@@ -32,7 +32,7 @@ contains
     subroutine assemble_compatible_physical_mass_surface(fields, &
             density_kg_m3, trial_m, trial_n, trial_parity, field_periods, &
             h1_values, eta_values, l2_values, radial_weight, phase_assembly, &
-            mass, info)
+            mass, info, sine_mass)
         real(dp), intent(in) :: fields(:, :, :), density_kg_m3
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods, phase_assembly
@@ -40,6 +40,9 @@ contains
         real(dp), intent(in) :: l2_values(:, :), radial_weight
         real(dp), intent(inout) :: mass(:, :)
         integer, intent(out) :: info
+        ! Cosine-parity trials only: also the mass of the same modes with
+        ! sine parity, from the same angular products.
+        real(dp), intent(inout), optional :: sine_mass(:, :)
         real(dp) :: angular_weight
         integer :: j, k, period
 
@@ -50,6 +53,11 @@ contains
         info = -1
         if (any(shape(eta_values) /= shape(l2_values))) return
         if (.not. all(ieee_is_finite(eta_values))) return
+        if (present(sine_mass)) then
+            if (phase_assembly /= phase_assembly_transformed) return
+            if (any(trial_parity /= phase_cosine)) return
+            if (any(shape(sine_mass) /= shape(mass))) return
+        end if
         if (phase_assembly == phase_assembly_direct) then
             angular_weight = radial_weight / real(size(fields, 1) &
                 * size(fields, 2) * field_periods, dp)
@@ -68,7 +76,7 @@ contains
         else
             call assemble_transformed(fields, density_kg_m3, trial_m, &
                 trial_n, trial_parity, field_periods, h1_values, eta_values, &
-                l2_values, radial_weight, 3, mass, info)
+                l2_values, radial_weight, 3, mass, info, sine_mass)
             if (info /= 0) return
         end if
         info = 0
@@ -122,13 +130,14 @@ contains
     ! perpendicular (xi^s, eta) form, which ignores eta.
     subroutine assemble_transformed(fields, density, trial_m, trial_n, &
             parity, field_periods, h1, eta, l2, radial_weight, components, &
-            mass, info)
+            mass, info, sine_mass)
         real(dp), intent(in) :: fields(:, :, :), density
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:)
         integer, intent(in) :: field_periods, components
         real(dp), intent(in) :: h1(:, :), eta(:, :), l2(:, :), radial_weight
         real(dp), intent(inout) :: mass(:, :)
         integer, intent(out) :: info
+        real(dp), intent(inout), optional :: sine_mass(:, :)
         integer, parameter :: chunk_limit = 256
         real(dp), allocatable :: cosine_part(:, :, :), sine_part(:, :, :)
         real(dp), allocatable :: cosine_phase(:, :), sine_phase(:, :)
@@ -137,6 +146,7 @@ contains
         real(dp) :: point_mass(components, components), eigenvalues(components)
         real(dp) :: work(8 * components), angular_weight, phase, theta, zeta
         real(dp) :: trial_cosine(size(trial_m)), trial_sine(size(trial_m))
+        real(dp) :: rotation(size(mass, 1))
         real(dp), allocatable :: plus(:, :), minus(:, :)
         logical :: mixed
         integer :: channel, chunk, column, columns, count, first, j, k
@@ -159,6 +169,10 @@ contains
             call build_perpendicular_basis(parity, h1, l2, coefficients)
         end if
         call period_masks(trial_n, field_periods, plus, minus, mixed)
+        ! The sine-parity basis turns the normal component a quarter period
+        ! forward and the tangential ones a quarter period back.
+        rotation = -1.0_dp
+        rotation(:size(h1, 1) * trials) = 1.0_dp
         do first = 1, points, chunk
             count = min(chunk, points - first + 1)
             ! Rows past the last point carry zero weight and zero response.
@@ -204,9 +218,17 @@ contains
                 end do
             end do
             do channel = 1, components
-                call accumulate_period_averaged(cosine_part(:, :, channel), &
-                    sine_part(:, :, channel), cosine_phase, sine_phase, &
-                    weight(:, channel), plus, minus, mixed, mass)
+                if (present(sine_mass)) then
+                    call accumulate_period_averaged( &
+                        cosine_part(:, :, channel), sine_part(:, :, channel), &
+                        cosine_phase, sine_phase, weight(:, channel), plus, &
+                        minus, mixed, mass, sine_mass, rotation)
+                else
+                    call accumulate_period_averaged( &
+                        cosine_part(:, :, channel), sine_part(:, :, channel), &
+                        cosine_phase, sine_phase, weight(:, channel), plus, &
+                        minus, mixed, mass)
+                end if
             end do
         end do
         info = 0
