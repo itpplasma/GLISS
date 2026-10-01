@@ -9,14 +9,22 @@ module boundary_mesh_geometry
 
 contains
 
+    ! Triangles whose axis-aligned bounding boxes, widened by the contact
+    ! tolerance scale, are disjoint cannot intersect and skip the exact test.
     function meshes_intersect(first, second) result(intersect)
         real(dp), contiguous, intent(in) :: first(:, :, :), second(:, :, :)
         logical :: intersect
+        real(dp) :: first_box(3, 2, size(first, 3))
+        real(dp) :: second_box(3, 2, size(second, 3))
         integer :: i, j
 
         intersect = .false.
+        call bounding_boxes(first, first_box)
+        call bounding_boxes(second, second_box)
         do j = 1, size(second, 3)
             do i = 1, size(first, 3)
+                if (any(first_box(:, 1, i) > second_box(:, 2, j)) &
+                    .or. any(second_box(:, 1, j) > first_box(:, 2, i))) cycle
                 if (triangles_intersect(first(:, :, i), second(:, :, j))) then
                     intersect = .true.
                     return
@@ -24,6 +32,23 @@ contains
             end do
         end do
     end function meshes_intersect
+
+    pure subroutine bounding_boxes(triangles, boxes)
+        real(dp), intent(in) :: triangles(:, :, :)
+        real(dp), intent(out) :: boxes(:, :, :)
+        real(dp) :: edges, margin, vertices(3, 3)
+        integer :: t
+
+        do t = 1, size(triangles, 3)
+            vertices = triangles(:, :, t)
+            edges = max_edge(vertices)
+            ! Wider than the tolerance of the exact test of any pair.
+            margin = 8192.0_dp * epsilon(1.0_dp) &
+                * max(maxval(abs(vertices)), edges)
+            boxes(:, 1, t) = minval(vertices, dim=2) - margin
+            boxes(:, 2, t) = maxval(vertices, dim=2) + margin
+        end do
+    end subroutine bounding_boxes
 
     function point_inside_mesh(point, triangles) result(inside)
         real(dp), intent(in) :: point(3), triangles(:, :, :)
