@@ -9,7 +9,10 @@ module period_averaged_assembly
     ! n_a - n_b = 0 (mod N_FP) and (1/2) Re(U_a U_b) when n_a + n_b = 0
     ! (mod N_FP). With X = Re(U) and Y = Im(U) the weighted sum over points is
     !     1/2 [(d- + d+) X^T W X + (d- - d+) Y^T W Y],
-    ! the same values as the pairwise phase-product sum, in two GEMMs.
+    ! the same values as the pairwise phase-product sum. Each product is
+    ! symmetric: with rows scaled by sqrt|w| and grouped by the sign of w it
+    ! is the difference of two symmetric rank-k updates, half the flops of a
+    ! general matrix product.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     implicit none
     private
@@ -17,15 +20,14 @@ module period_averaged_assembly
     public :: accumulate_period_averaged, period_masks
 
     interface
-        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
-                beta, c, ldc)
+        subroutine dsyrk(uplo, trans, n, k, alpha, a, lda, beta, c, ldc)
             import :: dp
-            character(len=1), intent(in) :: transa, transb
-            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            character(len=1), intent(in) :: uplo, trans
+            integer, intent(in) :: n, k, lda, ldc
             real(dp), intent(in) :: alpha, beta
-            real(dp), intent(in) :: a(lda, *), b(ldb, *)
+            real(dp), intent(in) :: a(lda, *)
             real(dp), intent(inout) :: c(ldc, *)
-        end subroutine dgemm
+        end subroutine dsyrk
     end interface
 
 contains
@@ -67,50 +69,107 @@ contains
         real(dp), intent(in) :: plus(:, :), minus(:, :)
         logical, intent(in) :: mixed
         real(dp), intent(inout) :: target(:, :)
-        real(dp), allocatable :: real_part(:, :), weighted(:, :)
-        real(dp), allocatable :: product(:, :)
+        real(dp), allocatable :: scaled(:, :), product(:, :)
         integer :: column_trial(size(cosine_part, 2))
-        integer :: a, b, columns, p, points, trials
+        integer :: order(size(weight))
+        integer :: a, columns, negative, p, positive, trials
 
-        points = size(cosine_part, 1)
         columns = size(cosine_part, 2)
         trials = size(plus, 1)
         do a = 1, columns
             column_trial(a) = modulo(a - 1, trials) + 1
         end do
-        allocate (real_part(points, columns), weighted(points, columns), &
+        ! Points with positive weights first, then negative ones; zero
+        ! weights drop out. Rows scaled by sqrt|w| turn each weighted
+        ! product into the difference of two symmetric rank-k updates.
+        positive = 0
+        do p = 1, size(weight)
+            if (weight(p) > 0.0_dp) then
+                positive = positive + 1
+                order(positive) = p
+            end if
+        end do
+        negative = 0
+        do p = 1, size(weight)
+            if (weight(p) < 0.0_dp) then
+                negative = negative + 1
+                order(positive + negative) = p
+            end if
+        end do
+        if (positive + negative == 0) return
+        allocate (scaled(positive + negative, columns), &
             product(columns, columns))
-        do a = 1, columns
-            do p = 1, points
-                real_part(p, a) = cosine_part(p, a) * cosine_phase(p, a) &
-                    + sine_part(p, a) * sine_phase(p, a)
-                weighted(p, a) = weight(p) * real_part(p, a)
-            end do
-        end do
-        call dgemm("T", "N", columns, columns, points, 1.0_dp, real_part, &
-            points, weighted, points, 0.0_dp, product, columns)
-        do b = 1, columns
-            do a = 1, columns
-                target(a, b) = target(a, b) + plus(column_trial(a), &
-                    column_trial(b)) * product(a, b)
-            end do
-        end do
+        call real_rows(.true.)
+        call weighted_gram(positive, negative, columns, scaled, product)
+        call add_masked(plus, product, column_trial, target)
         if (.not. mixed) return
-        do a = 1, columns
-            do p = 1, points
-                real_part(p, a) = cosine_part(p, a) * sine_phase(p, a) &
-                    - sine_part(p, a) * cosine_phase(p, a)
-                weighted(p, a) = weight(p) * real_part(p, a)
+        call real_rows(.false.)
+        call weighted_gram(positive, negative, columns, scaled, product)
+        call add_masked(minus, product, column_trial, target)
+    contains
+        ! X = Re(U) = C cos + S sin, or Y = Im(U) = C sin - S cos, at the
+        ! ordered points, scaled by sqrt|w|.
+        subroutine real_rows(real_part)
+            logical, intent(in) :: real_part
+            real(dp) :: root
+            integer :: column, point, row
+
+            do column = 1, columns
+                do row = 1, positive + negative
+                    point = order(row)
+                    root = sqrt(abs(weight(point)))
+                    if (real_part) then
+                        scaled(row, column) = root &
+                            * (cosine_part(point, column) &
+                            * cosine_phase(point, column) &
+                            + sine_part(point, column) &
+                            * sine_phase(point, column))
+                    else
+                        scaled(row, column) = root &
+                            * (cosine_part(point, column) &
+                            * sine_phase(point, column) &
+                            - sine_part(point, column) &
+                            * cosine_phase(point, column))
+                    end if
+                end do
             end do
-        end do
-        call dgemm("T", "N", columns, columns, points, 1.0_dp, real_part, &
-            points, weighted, points, 0.0_dp, product, columns)
-        do b = 1, columns
-            do a = 1, columns
-                target(a, b) = target(a, b) + minus(column_trial(a), &
-                    column_trial(b)) * product(a, b)
-            end do
-        end do
+        end subroutine real_rows
     end subroutine accumulate_period_averaged
+
+    ! Upper triangle of A_+^T A_+ - A_-^T A_- for the first positive and
+    ! the next negative rows of scaled.
+    subroutine weighted_gram(positive, negative, columns, scaled, product)
+        integer, intent(in) :: positive, negative, columns
+        real(dp), intent(in) :: scaled(positive + negative, columns)
+        real(dp), intent(out) :: product(columns, columns)
+        integer :: rows
+
+        rows = positive + negative
+        product = 0.0_dp
+        if (positive > 0) call dsyrk("U", "T", columns, positive, 1.0_dp, &
+            scaled, rows, 0.0_dp, product, columns)
+        if (negative > 0) call dsyrk("U", "T", columns, negative, -1.0_dp, &
+            scaled(positive + 1, 1), rows, 1.0_dp, product, columns)
+    end subroutine weighted_gram
+
+    ! target(a, b) += mask(trial a, trial b) product(a, b) from the upper
+    ! triangle of the symmetric product.
+    pure subroutine add_masked(mask, product, column_trial, target)
+        real(dp), intent(in) :: mask(:, :), product(:, :)
+        integer, intent(in) :: column_trial(:)
+        real(dp), intent(inout) :: target(:, :)
+        real(dp) :: value
+        integer :: a, b
+
+        do b = 1, size(product, 2)
+            do a = 1, b - 1
+                value = mask(column_trial(a), column_trial(b)) * product(a, b)
+                target(a, b) = target(a, b) + value
+                target(b, a) = target(b, a) + value
+            end do
+            target(b, b) = target(b, b) + mask(column_trial(b), &
+                column_trial(b)) * product(b, b)
+        end do
+    end subroutine add_masked
 
 end module period_averaged_assembly
