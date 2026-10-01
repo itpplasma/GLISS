@@ -196,7 +196,8 @@ contains
         real(dp), contiguous, intent(inout) :: eigenvectors(:, :)
         integer, intent(out) :: info
         real(dp), allocatable :: seeds(:), vector(:), images(:, :)
-        real(dp) :: eigenvalue, residual, resolution, roundoff, tolerance
+        real(dp) :: eigenvalue, quotient, residual, resolution, roundoff
+        real(dp) :: tolerance
         integer :: allocation_status, index, other
         logical :: keep
 
@@ -251,7 +252,22 @@ contains
                 index, eigenvectors(:, index), eigenvalue, vector, residual, &
                 resolution, info)
             if (info /= dense_spectrum_ok) return
-            eigenvalues(index) = eigenvalue
+            ! Inverse iteration inside a degenerate or roundoff-split cluster
+            ! can drift toward a partner already accepted. Eigenvectors are
+            ! mass orthogonal, so the earlier ones are projected out (a
+            ! roundoff-level change for separated eigenvalues) and the pair
+            ! is diagnosed again.
+            call orthonormalize_against(mass, eigenvectors, images, index, &
+                vector, info)
+            if (info /= dense_spectrum_ok) return
+            call variable_generalized_diagnostics(stiffness, mass, vector, &
+                eigenvalue, quotient, residual, resolution, info, &
+                validated=.true.)
+            if (info /= variable_generalized_ok) then
+                info = dense_spectrum_invalid
+                return
+            end if
+            eigenvalues(index) = quotient
             eigenvectors(:, index) = vector
             call apply_variable_block_tridiagonal(mass, &
                 eigenvectors(:, index), images(:, index), info)
@@ -266,6 +282,50 @@ contains
         call sort_eigenpairs(eigenvalues, eigenvectors, vector)
         info = dense_spectrum_ok
     end subroutine refine_dense_spectrum
+
+    ! Mass-orthogonalize vector against the first index - 1 columns of
+    ! vectors (with their mass images) and normalize it in the mass norm;
+    ! a vector lying in their span is rejected.
+    subroutine orthonormalize_against(mass, vectors, images, index, vector, &
+            info)
+        type(variable_block_tridiagonal_t), intent(in) :: mass
+        real(dp), intent(in) :: vectors(:, :), images(:, :)
+        integer, intent(in) :: index
+        real(dp), contiguous, intent(inout) :: vector(:)
+        integer, intent(out) :: info
+        real(dp) :: image(size(vector)), norm_before, squared
+        integer :: other, pass
+
+        info = dense_spectrum_invalid
+        call apply_variable_block_tridiagonal(mass, vector, image, info)
+        if (info /= variable_block_ok) then
+            info = dense_spectrum_invalid
+            return
+        end if
+        norm_before = sqrt(dot_product(vector, image))
+        if (.not. (norm_before > 0.0_dp)) then
+            info = dense_spectrum_invalid
+            return
+        end if
+        ! Two passes of classical Gram-Schmidt reach orthogonality to working
+        ! precision.
+        do pass = 1, 2
+            do other = 1, index - 1
+                vector = vector - dot_product(images(:, other), vector) &
+                    * vectors(:, other)
+            end do
+        end do
+        call apply_variable_block_tridiagonal(mass, vector, image, info)
+        if (info /= variable_block_ok) then
+            info = dense_spectrum_invalid
+            return
+        end if
+        squared = dot_product(vector, image)
+        info = dense_spectrum_invalid
+        if (.not. (squared > (sqrt(epsilon(1.0_dp)) * norm_before)**2)) return
+        vector = vector / sqrt(squared)
+        info = dense_spectrum_ok
+    end subroutine orthonormalize_against
 
     pure subroutine sort_eigenpairs(eigenvalues, eigenvectors, column)
         real(dp), intent(inout) :: eigenvalues(:)
