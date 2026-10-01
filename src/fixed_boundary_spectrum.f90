@@ -461,7 +461,7 @@ contains
         call analyze_variable_spectrum( &
             problem%classes(slot)%stiffness, &
             problem%classes(slot)%mass, problem%zero_floor, summary, &
-            info)
+            info, lowest_only=.true.)
         if (info /= variable_spectrum_ok) then
             info = fixed_boundary_solver_error
             return

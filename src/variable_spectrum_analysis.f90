@@ -28,14 +28,20 @@ module variable_spectrum_analysis
 
 contains
 
+    ! lowest_only: the caller needs only the lowest eigenvalue. The first
+    ! positive cluster is then sought only when no eigenvalue is negative,
+    ! and only isolated (base count at the lower end, more at the upper)
+    ! rather than refined to the floor width.
     subroutine analyze_variable_spectrum(stiffness, mass, zero_floor, &
-            summary, info)
+            summary, info, lowest_only)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: zero_floor
         type(variable_spectrum_summary_t), intent(out) :: summary
         integer, intent(out) :: info
+        logical, intent(in), optional :: lowest_only
         real(dp) :: lower_shift, upper_shift
         integer :: count_above, count_below, dimension
+        logical :: isolate
 
         summary = variable_spectrum_summary_t()
         info = variable_spectrum_invalid
@@ -66,51 +72,64 @@ contains
             info = variable_spectrum_ok
             return
         end if
+        isolate = .false.
+        if (present(lowest_only)) isolate = lowest_only
+        if (isolate .and. count_below > 0) then
+            info = variable_spectrum_ok
+            return
+        end if
         call bracket_first_positive(stiffness, mass, zero_floor, count_above, &
-            summary, info)
+            summary, info, isolate)
     end subroutine analyze_variable_spectrum
 
     subroutine bracket_first_positive(stiffness, mass, zero_floor, base_count, &
-            summary, info)
+            summary, info, isolate)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp), intent(in) :: zero_floor
         integer, intent(in) :: base_count
         type(variable_spectrum_summary_t), intent(inout) :: summary
         integer, intent(out) :: info
+        logical, intent(in) :: isolate
         real(dp) :: lower, upper
         integer :: upper_count
 
         lower = zero_floor
         upper = 2.0_dp * zero_floor
-        call expand_positive_bracket(stiffness, mass, base_count, upper, &
-            upper_count, info)
+        call expand_positive_bracket(stiffness, mass, base_count, lower, &
+            upper, upper_count, info, merge(16.0_dp, 2.0_dp, isolate))
         if (info /= variable_spectrum_ok) return
-        call refine_positive_bracket(stiffness, mass, zero_floor, base_count, &
-            lower, upper, upper_count, info)
-        if (info /= variable_spectrum_ok) return
+        if (.not. isolate) then
+            call refine_positive_bracket(stiffness, mass, zero_floor, &
+                base_count, lower, upper, upper_count, info)
+            if (info /= variable_spectrum_ok) return
+        end if
         summary%has_positive = .true.
         summary%first_positive_lower = lower
         summary%first_positive_upper = upper
         summary%first_positive_cluster_count = upper_count - base_count
     end subroutine bracket_first_positive
 
-    subroutine expand_positive_bracket(stiffness, mass, base_count, upper, &
-            upper_count, info)
+    ! Grow upper by factor until an eigenvalue lies below it; lower is the
+    ! last probe that had none.
+    subroutine expand_positive_bracket(stiffness, mass, base_count, lower, &
+            upper, upper_count, info, factor)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         integer, intent(in) :: base_count
-        real(dp), intent(inout) :: upper
+        real(dp), intent(inout) :: lower, upper
         integer, intent(out) :: upper_count, info
+        real(dp), intent(in) :: factor
         integer :: iteration
 
         do iteration = 1, 4096
             call upward_inertia(stiffness, mass, upper, upper_count, info)
             if (info /= variable_spectrum_ok) return
             if (upper_count > base_count) return
-            if (upper > 0.25_dp * huge(upper)) then
+            if (upper > huge(upper) / (2.0_dp * factor)) then
                 info = variable_spectrum_no_convergence
                 return
             end if
-            upper = 2.0_dp * upper
+            lower = upper
+            upper = factor * upper
         end do
         info = variable_spectrum_no_convergence
     end subroutine expand_positive_bracket

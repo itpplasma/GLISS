@@ -497,7 +497,8 @@ contains
             return
         end if
         call analyze_variable_spectrum(problem%sparse_stiffness, &
-            problem%sparse_mass, zero_floor, summary, local_info)
+            problem%sparse_mass, zero_floor, summary, local_info, &
+            lowest_only=.true.)
         if (local_info /= variable_spectrum_ok) return
         if (.not. present(negative_count_override)) &
             result%negative_count = summary%negative_count
