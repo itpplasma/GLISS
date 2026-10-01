@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Optional, Sequence, Tuple
 
 from . import _require_symbols
-from ._stability_input import mode_integer, validate_modes
+from ._stability_input import mode_integer, radial_cell_count, validate_modes
 from .equilibrium import (
     Equilibrium,
     GlissInternalError,
@@ -121,26 +121,33 @@ class _Cas3dMarginalityResult(ctypes.Structure):
     ]
 
 
-def _bind(library: Any) -> None:
+def _bind(library: Any, symbol: str = "gliss_cas3d_marginality") -> None:
     _require_symbols(
         library,
-        ("gliss_cas3d_marginality",),
+        (symbol,),
         "CAS3D marginality solver",
     )
-    function = library.gliss_cas3d_marginality
+    function = getattr(library, symbol)
+    # The _v2 symbol takes the radial cell count after the angular grid.
+    cells = (ctypes.c_int32,) if symbol.endswith("_v2") else ()
     function.argtypes = (
-        ctypes.c_void_p,
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_int32),
-        ctypes.POINTER(ctypes.c_int32),
-        ctypes.c_int32,
-        ctypes.c_int32,
-        ctypes.c_int32,
-        ctypes.c_int32,
-        ctypes.c_int32,
-        ctypes.POINTER(_Cas3dMarginalityResult),
-        ctypes.c_void_p,
-        ctypes.c_size_t,
+        (
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_int32),
+            ctypes.POINTER(ctypes.c_int32),
+            ctypes.c_int32,
+            ctypes.c_int32,
+            ctypes.c_int32,
+            ctypes.c_int32,
+        )
+        + cells
+        + (
+            ctypes.c_int32,
+            ctypes.POINTER(_Cas3dMarginalityResult),
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+        )
     )
     function.restype = ctypes.c_int
 
@@ -164,13 +171,15 @@ def _bind_phase_envelope(library: Any, symbol: str) -> None:
         ctypes.c_int32,
         ctypes.c_int32,
     )
-    if symbol == "gliss_cas3d2mn_phase_envelope":
+    if symbol.startswith("gliss_cas3d2mn_phase_envelope"):
         argument_types += (
             ctypes.c_int32,
             ctypes.c_int32,
             ctypes.c_double,
             ctypes.c_int32,
         )
+    if symbol.endswith("_v2"):
+        argument_types += (ctypes.c_int32,)
     function.argtypes = argument_types + (
         ctypes.c_int32,
         ctypes.POINTER(_Cas3dMarginalityResult),
@@ -253,12 +262,14 @@ def _result(
     degree: int,
     angular_resolution: Tuple[int, int],
     solve_eigenpair: bool,
+    radial_cells: int = 0,
 ) -> Cas3dMarginalityResult:
     metadata_valid = (
         native.has_eigenpair == int(solve_eigenpair)
         and native.field_periods >= 1
         and native.mode_count == len(modes)
         and native.radial_surfaces >= 2
+        and radial_cells in (0, native.radial_surfaces)
         and native.parity_class == parity_class
         and native.degree == degree
         and (native.angular_theta, native.angular_zeta) == angular_resolution
@@ -307,6 +318,7 @@ def _calculate(
     angular_theta: int,
     angular_zeta: int,
     solve_eigenpair: bool,
+    radial_cells: Optional[int] = None,
 ) -> Cas3dMarginalityResult:
     if not isinstance(equilibrium, Equilibrium):
         raise TypeError("equilibrium must be a gliss.Equilibrium")
@@ -318,14 +330,18 @@ def _calculate(
         _angular_resolution(angular_theta, "angular_theta"),
         _angular_resolution(angular_zeta, "angular_zeta"),
     )
-    _bind(equilibrium._library)
+    cells = radial_cell_count(radial_cells)
+    # The original symbol serves the default mesh, so older libraries
+    # still answer every call that does not refine it.
+    symbol = "gliss_cas3d_marginality_v2" if cells else "gliss_cas3d_marginality"
+    _bind(equilibrium._library, symbol)
     count = len(validated_modes)
     integers = ctypes.c_int32 * count
     mode_m = integers(*(mode[0] for mode in validated_modes))
     mode_n = integers(*(mode[1] for mode in validated_modes))
     native = _Cas3dMarginalityResult(struct_size=ctypes.sizeof(_Cas3dMarginalityResult))
     error = _error_buffer()
-    status = equilibrium._library.gliss_cas3d_marginality(
+    arguments = [
         equilibrium._handle,
         count,
         mode_m,
@@ -334,12 +350,12 @@ def _calculate(
         degree,
         resolution[0],
         resolution[1],
-        int(solve_eigenpair),
-        ctypes.byref(native),
-        error,
-        len(error),
-    )
-    _raise_for_status(status, error, "gliss_cas3d_marginality")
+    ]
+    if cells:
+        arguments.append(cells)
+    arguments.extend([int(solve_eigenpair), ctypes.byref(native), error, len(error)])
+    status = getattr(equilibrium._library, symbol)(*arguments)
+    _raise_for_status(status, error, symbol)
     result = _result(
         native,
         validated_modes,
@@ -347,6 +363,7 @@ def _calculate(
         degree,
         resolution,
         solve_eigenpair,
+        cells,
     )
     return replace(result, coordinate_handedness=equilibrium.coordinate_handedness)
 
@@ -404,6 +421,7 @@ def _phase_envelope_result(
     coefficient_resolution: Optional[Tuple[int, int]],
     reference_length: Optional[float],
     radial_quadrature: str,
+    radial_cells: int = 0,
 ) -> Cas3dPhaseEnvelopeResult:
     sideband_count = 2 * len(envelope_modes) - 1
     metadata_valid = (
@@ -411,6 +429,7 @@ def _phase_envelope_result(
         and native.field_periods >= 1
         and native.mode_count == sideband_count
         and native.radial_surfaces >= 2
+        and radial_cells in (0, native.radial_surfaces)
         and native.parity_class == parity_class
         and native.degree == degree
         and (native.angular_theta, native.angular_zeta) == angular_resolution
@@ -483,6 +502,7 @@ def _calculate_phase_envelope(
     coefficient_angular_resolution: Optional[Tuple[int, int]],
     reference_length: Optional[float],
     radial_quadrature: str,
+    radial_cells: Optional[int] = None,
 ) -> Cas3dPhaseEnvelopeResult:
     if not isinstance(equilibrium, Equilibrium):
         raise TypeError("equilibrium must be a gliss.Equilibrium")
@@ -518,10 +538,13 @@ def _calculate_phase_envelope(
         _angular_resolution(angular_theta, "angular_theta"),
         _angular_resolution(angular_zeta, "angular_zeta"),
     )
+    cells = radial_cell_count(radial_cells)
     if normalization == _PERPENDICULAR_L2:
         symbol = "gliss_cas3d_phase_envelope"
     else:
         symbol = "gliss_cas3d2mn_phase_envelope"
+    if cells:
+        symbol += "_v2"
     _bind_phase_envelope(equilibrium._library, symbol)
     count = len(envelopes)
     integers = ctypes.c_int32 * count
@@ -550,6 +573,8 @@ def _calculate_phase_envelope(
                 quadrature_policy,
             ]
         )
+    if cells:
+        arguments.append(cells)
     arguments.extend([int(solve_eigenpair), ctypes.byref(native), error, len(error)])
     status = getattr(equilibrium._library, symbol)(*arguments)
     _raise_for_status(status, error, symbol)
@@ -565,6 +590,7 @@ def _calculate_phase_envelope(
         coefficient_resolution,
         length_scale,
         quadrature_name,
+        cells,
     )
     return replace(result, coordinate_handedness=equilibrium.coordinate_handedness)
 
@@ -581,6 +607,7 @@ def cas3d_phase_envelope_inertia(
     coefficient_angular_resolution: Optional[Tuple[int, int]] = None,
     reference_length: Optional[float] = None,
     radial_quadrature: str = "gauss5",
+    radial_cells: Optional[int] = None,
 ) -> Cas3dPhaseEnvelopeResult:
     """Count negative directions in a CAS3D2MN phase envelope."""
 
@@ -597,6 +624,7 @@ def cas3d_phase_envelope_inertia(
         coefficient_angular_resolution=coefficient_angular_resolution,
         reference_length=reference_length,
         radial_quadrature=radial_quadrature,
+        radial_cells=radial_cells,
     )
 
 
@@ -612,6 +640,7 @@ def solve_cas3d_phase_envelope(
     coefficient_angular_resolution: Optional[Tuple[int, int]] = None,
     reference_length: Optional[float] = None,
     radial_quadrature: str = "gauss5",
+    radial_cells: Optional[int] = None,
 ) -> Cas3dPhaseEnvelopeResult:
     """Return inertia and the lowest pair for a CAS3D2MN phase envelope."""
 
@@ -628,6 +657,7 @@ def solve_cas3d_phase_envelope(
         coefficient_angular_resolution=coefficient_angular_resolution,
         reference_length=reference_length,
         radial_quadrature=radial_quadrature,
+        radial_cells=radial_cells,
     )
 
 
@@ -638,6 +668,7 @@ def cas3d_marginality_inertia(
     degree: int = 2,
     angular_theta: int = 64,
     angular_zeta: int = 64,
+    radial_cells: Optional[int] = None,
 ) -> Cas3dMarginalityResult:
     """Count negative directions in the compatible FEEC discretization."""
 
@@ -649,6 +680,7 @@ def cas3d_marginality_inertia(
         angular_theta,
         angular_zeta,
         solve_eigenpair=False,
+        radial_cells=radial_cells,
     )
 
 
@@ -659,6 +691,7 @@ def solve_cas3d_marginality(
     degree: int = 2,
     angular_theta: int = 64,
     angular_zeta: int = 64,
+    radial_cells: Optional[int] = None,
 ) -> Cas3dMarginalityResult:
     """Return inertia and the lowest compatible FEEC eigenpair."""
 
@@ -670,4 +703,5 @@ def solve_cas3d_marginality(
         angular_theta,
         angular_zeta,
         solve_eigenpair=True,
+        radial_cells=radial_cells,
     )

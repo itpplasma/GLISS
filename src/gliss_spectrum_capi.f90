@@ -61,6 +61,7 @@ module gliss_spectrum_capi
     public :: gliss_stability_problem_create_c
     public :: gliss_stability_problem_create_v2_c
     public :: gliss_stability_problem_create_free_boundary_c
+    public :: gliss_stability_problem_create_v3_c
     public :: gliss_stability_problem_free_boundary_c
     public :: gliss_stability_problem_destroy_c
     public :: gliss_stability_problem_unknown_count_c
@@ -106,7 +107,7 @@ contains
 
         status = create_problem(equilibrium_handle, adiabatic_index, &
             density_kg_m3, zero_floor, mode_count, mode_m_pointer, &
-            mode_n_pointer, degree, angular_theta, angular_zeta, &
+            mode_n_pointer, degree, angular_theta, angular_zeta, 0_c_int, &
             handle_pointer, error_pointer, error_capacity)
     end function gliss_stability_problem_create_v2_c
 
@@ -136,9 +137,55 @@ contains
         if (status /= status_ok) return
         status = create_problem(equilibrium_handle, adiabatic_index, &
             density_kg_m3, zero_floor, mode_count, mode_m_pointer, &
-            mode_n_pointer, degree, angular_theta, angular_zeta, &
+            mode_n_pointer, degree, angular_theta, angular_zeta, 0_c_int, &
             handle_pointer, error_pointer, error_capacity, vacuum)
     end function gliss_stability_problem_create_free_boundary_c
+
+    ! Fixed boundary for a null vacuum_pointer, free boundary otherwise,
+    ! with radial_cells uniform cells in s (0: one per equilibrium surface).
+    function gliss_stability_problem_create_v3_c(equilibrium_handle, &
+            adiabatic_index, density_kg_m3, zero_floor, mode_count, &
+            mode_m_pointer, mode_n_pointer, degree, angular_theta, &
+            angular_zeta, radial_cells, vacuum_pointer, handle_pointer, &
+            error_pointer, error_capacity) &
+            bind(c, name="gliss_stability_problem_create_v3") result(status)
+        type(c_ptr), value, intent(in) :: equilibrium_handle
+        real(c_double), value, intent(in) :: adiabatic_index, density_kg_m3
+        real(c_double), value, intent(in) :: zero_floor
+        integer(c_size_t), value, intent(in) :: mode_count
+        type(c_ptr), value, intent(in) :: mode_m_pointer, mode_n_pointer
+        integer(c_int), value, intent(in) :: degree, angular_theta, angular_zeta
+        integer(c_int), value, intent(in) :: radial_cells
+        type(c_ptr), value, intent(in) :: vacuum_pointer
+        type(c_ptr), value, intent(in) :: handle_pointer, error_pointer
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+        type(plasma_vacuum_model_t) :: vacuum
+
+        status = error_buffer_status(error_pointer, error_capacity)
+        if (status /= status_ok) return
+        if (radial_cells < 0_c_int .or. radial_cells == 1_c_int) then
+            status = status_invalid_argument
+            call write_error(error_pointer, error_capacity, &
+                "radial_cells must be 0 or at least 2")
+            return
+        end if
+        if (.not. c_associated(vacuum_pointer)) then
+            status = create_problem(equilibrium_handle, adiabatic_index, &
+                density_kg_m3, zero_floor, mode_count, mode_m_pointer, &
+                mode_n_pointer, degree, angular_theta, angular_zeta, &
+                radial_cells, handle_pointer, error_pointer, error_capacity)
+            return
+        end if
+        status = decode_vacuum(vacuum_pointer, vacuum, error_pointer, &
+            error_capacity)
+        if (status /= status_ok) return
+        status = create_problem(equilibrium_handle, adiabatic_index, &
+            density_kg_m3, zero_floor, mode_count, mode_m_pointer, &
+            mode_n_pointer, degree, angular_theta, angular_zeta, &
+            radial_cells, handle_pointer, error_pointer, error_capacity, &
+            vacuum)
+    end function gliss_stability_problem_create_v3_c
 
     function decode_vacuum(vacuum_pointer, vacuum, error_pointer, &
             error_capacity) result(status)
@@ -199,14 +246,15 @@ contains
     function create_problem(equilibrium_handle, adiabatic_index, &
             density_kg_m3, zero_floor, mode_count, mode_m_pointer, &
             mode_n_pointer, degree, angular_theta, angular_zeta, &
-            handle_pointer, error_pointer, error_capacity, vacuum) &
-            result(status)
+            radial_cells, handle_pointer, error_pointer, error_capacity, &
+            vacuum) result(status)
         type(c_ptr), value, intent(in) :: equilibrium_handle
         real(c_double), value, intent(in) :: adiabatic_index, density_kg_m3
         real(c_double), value, intent(in) :: zero_floor
         integer(c_size_t), value, intent(in) :: mode_count
         type(c_ptr), value, intent(in) :: mode_m_pointer, mode_n_pointer
         integer(c_int), value, intent(in) :: degree, angular_theta, angular_zeta
+        integer(c_int), value, intent(in) :: radial_cells
         type(c_ptr), value, intent(in) :: handle_pointer, error_pointer
         integer(c_size_t), value, intent(in) :: error_capacity
         type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
@@ -248,7 +296,8 @@ contains
         call build_fixed_boundary_problem(equilibrium%equilibrium, &
             adiabatic_index, density_kg_m3, zero_floor, mode_m, mode_n, &
             int(degree), context%problem, info, &
-            int(angular_theta), int(angular_zeta), vacuum=vacuum)
+            int(angular_theta), int(angular_zeta), vacuum=vacuum, &
+            radial_cells=int(radial_cells))
         if (info /= fixed_boundary_ok) then
             deallocate (context)
             call report_problem_error(info, status, error_pointer, &

@@ -11,9 +11,10 @@ from typing import Any, Dict, Mapping, Optional
 from .equilibrium import PathLike
 
 # Version 6 adds the free-boundary configuration (boundary_condition "free"
-# with a vacuum model) and allows "free" in results.
-SCHEMA_VERSION = 6
-SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6)
+# with a vacuum model) and allows "free" in results. Version 7 adds the
+# configuration's radial_cells (null: one cell per equilibrium surface).
+SCHEMA_VERSION = 7
+SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
 
 # Revision of the assembled fixed-boundary operator. Documents record it so
 # that a configuration is never replayed on a different discretization:

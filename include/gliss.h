@@ -276,6 +276,22 @@ gliss_status gliss_axisymmetric_spectrum(
     char *error,
     size_t error_capacity);
 
+/* gliss_axisymmetric_spectrum on radial_cells uniform finite-element cells
+ * in s, independent of the equilibrium surfaces, which the problem
+ * interpolates; 0 keeps one cell per surface, otherwise at least 2.
+ * result->radial_surfaces reports the cell count. Added after 0.0.2 within
+ * ABI version 3. */
+gliss_status gliss_axisymmetric_spectrum_v2(
+    const gliss_equilibrium *equilibrium,
+    int32_t toroidal_mode,
+    int32_t poloidal_max,
+    int32_t degree,
+    int32_t radial_cells,
+    int32_t solve_eigenpair,
+    gliss_axisymmetric_spectrum_result *result,
+    char *error,
+    size_t error_capacity);
+
 /* Evaluate the compatible two-component incompressible functional on an
  * explicit 3-D mode table. Its mass is the perpendicular kinetic form at
  * unit mass density (omega^2 in s^-2 for perpendicular inertia); inertia and
@@ -301,6 +317,24 @@ gliss_status gliss_cas3d_marginality(
     char *error,
     size_t error_capacity);
 
+/* gliss_cas3d_marginality on radial_cells uniform cells in s (0: one per
+ * equilibrium surface); result->radial_surfaces reports the cell count.
+ * Added after 0.0.2 within ABI version 3. */
+gliss_status gliss_cas3d_marginality_v2(
+    const gliss_equilibrium *equilibrium,
+    size_t mode_count,
+    const int32_t *mode_m,
+    const int32_t *mode_n,
+    int32_t parity_class,
+    int32_t degree,
+    int32_t angular_theta,
+    int32_t angular_zeta,
+    int32_t radial_cells,
+    int32_t solve_eigenpair,
+    gliss_cas3d_marginality_result *result,
+    char *error,
+    size_t error_capacity);
+
 /* Evaluate the CAS3D2MN phase-envelope representation. base_m and base_n
  * use the GLISS phase 2*pi*(m*theta - n*zeta/N_T). Envelope modes use
  * 2*pi*(m*theta - n*zeta) on one field period and must begin with (0,0).
@@ -319,6 +353,25 @@ gliss_status gliss_cas3d_phase_envelope(
     int32_t degree,
     int32_t angular_theta,
     int32_t angular_zeta,
+    int32_t solve_eigenpair,
+    gliss_cas3d_marginality_result *result,
+    char *error,
+    size_t error_capacity);
+
+/* gliss_cas3d_phase_envelope on radial_cells uniform cells in s (0: one per
+ * equilibrium surface). Added after 0.0.2 within ABI version 3. */
+gliss_status gliss_cas3d_phase_envelope_v2(
+    const gliss_equilibrium *equilibrium,
+    int32_t base_m,
+    int32_t base_n,
+    size_t envelope_count,
+    const int32_t *envelope_m,
+    const int32_t *envelope_n,
+    int32_t parity_class,
+    int32_t degree,
+    int32_t angular_theta,
+    int32_t angular_zeta,
+    int32_t radial_cells,
     int32_t solve_eigenpair,
     gliss_cas3d_marginality_result *result,
     char *error,
@@ -356,6 +409,30 @@ gliss_status gliss_cas3d2mn_phase_envelope(
     int32_t coefficient_zeta,
     double reference_length,
     int32_t radial_quadrature,
+    int32_t solve_eigenpair,
+    gliss_cas3d_marginality_result *result,
+    char *error,
+    size_t error_capacity);
+
+/* gliss_cas3d2mn_phase_envelope on radial_cells uniform cells in s (0: one
+ * per equilibrium surface); delta_s of the coefficient scale is
+ * 1/radial_cells. Added after 0.0.2 within ABI version 3. */
+gliss_status gliss_cas3d2mn_phase_envelope_v2(
+    const gliss_equilibrium *equilibrium,
+    int32_t base_m,
+    int32_t base_n,
+    size_t envelope_count,
+    const int32_t *envelope_m,
+    const int32_t *envelope_n,
+    int32_t parity_class,
+    int32_t degree,
+    int32_t angular_theta,
+    int32_t angular_zeta,
+    int32_t coefficient_theta,
+    int32_t coefficient_zeta,
+    double reference_length,
+    int32_t radial_quadrature,
+    int32_t radial_cells,
     int32_t solve_eigenpair,
     gliss_cas3d_marginality_result *result,
     char *error,
@@ -438,6 +515,28 @@ gliss_status gliss_stability_problem_create_free_boundary(
     int32_t degree,
     int32_t angular_theta,
     int32_t angular_zeta,
+    const gliss_vacuum_model *vacuum,
+    gliss_stability_problem **problem,
+    char *error,
+    size_t error_capacity);
+
+/* Fixed boundary for a null vacuum, the free-boundary problem of
+ * create_free_boundary otherwise, on radial_cells uniform finite-element
+ * cells in s, independent of the equilibrium surfaces, which the problem
+ * interpolates; 0 keeps one cell per surface, otherwise at least 2. Added
+ * after 0.0.2 within ABI version 3. */
+gliss_status gliss_stability_problem_create_v3(
+    const gliss_equilibrium *equilibrium,
+    double adiabatic_index,
+    double density_kg_m3,
+    double zero_floor,
+    size_t mode_count,
+    const int32_t *mode_m,
+    const int32_t *mode_n,
+    int32_t degree,
+    int32_t angular_theta,
+    int32_t angular_zeta,
+    int32_t radial_cells,
     const gliss_vacuum_model *vacuum,
     gliss_stability_problem **problem,
     char *error,

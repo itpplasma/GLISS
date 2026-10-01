@@ -4,6 +4,10 @@ usage:
   compare.py replay FORT23             certified replay of TERPSICHORE's matrices
   compare.py mercier WOUT NAME         GLISS Mercier terms against VMEC's DMerc*
   compare.py inertia EXPORT MODEFILE   independent GLISS FEEC inertia count
+  compare.py refine EXPORT MODEFILE DEGREE CELLS...
+                                       lowest FEEC eigenvalue on each count of
+                                       radial cells, independent of the
+                                       equilibrium surfaces
 
 GLISS_LIB selects the native library. Mercier and inertia use the export
 written by convert_vmec (M = N = 8 by default; GLISS_MN overrides).
@@ -13,6 +17,7 @@ import io
 import os
 import subprocess
 import sys
+import time
 import warnings
 
 import numpy as np
@@ -68,6 +73,27 @@ def inertia(export, modefile):
     print(f"GLISS independent: negative_count={result.negative_count}")
 
 
+def refine(export, modefile, degree, *cells):
+    modes = [tuple(map(int, line.split())) for line in open(modefile) if line.strip()]
+    with gliss.Equilibrium(export) as equilibrium:
+        for count in cells:
+            started = time.perf_counter()
+            result = gliss.solve_cas3d_marginality(
+                equilibrium, modes=modes, parity_class=1, degree=int(degree),
+                angular_theta=96, angular_zeta=64, radial_cells=int(count),
+            )
+            print(
+                f"degree {degree} cells {result.radial_surfaces}: "
+                f"negative_count={result.negative_count} "
+                f"lowest={result.lowest_eigenvalue:.6e} "
+                f"seconds={time.perf_counter() - started:.0f}",
+                flush=True,
+            )
+
+
 if __name__ == "__main__":
     command, *arguments = sys.argv[1:]
-    {"replay": replay, "mercier": mercier, "inertia": inertia}[command](*arguments)
+    commands = {
+        "replay": replay, "mercier": mercier, "inertia": inertia, "refine": refine,
+    }
+    commands[command](*arguments)

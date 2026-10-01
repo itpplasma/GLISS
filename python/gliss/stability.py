@@ -24,7 +24,13 @@ from .equilibrium import (
     _stable_file_digest,
 )
 from ._schema_support import DISCRETIZATION_REVISION
-from ._stability_input import angular_grid, mode_integer, real_parameter, validate_modes
+from ._stability_input import (
+    angular_grid,
+    mode_integer,
+    radial_cell_count,
+    real_parameter,
+    validate_modes,
+)
 from .solver import (
     SolverTolerances,
     bind_solver_tolerances,
@@ -166,6 +172,32 @@ def _bind_free_boundary(library: Any) -> None:
     library.gliss_stability_problem_free_boundary.restype = ctypes.c_int
 
 
+def _bind_radial_cells(library: Any) -> None:
+    _require_symbols(
+        library,
+        ("gliss_stability_problem_create_v3",),
+        "stability problem with radial cells",
+    )
+    library.gliss_stability_problem_create_v3.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.POINTER(_VacuumModel),
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    )
+    library.gliss_stability_problem_create_v3.restype = ctypes.c_int
+
+
 @dataclass(frozen=True)
 class SpectrumResult:
     """Certified lowest eigenpair for one stellarator-symmetry parity class."""
@@ -270,7 +302,10 @@ class StabilityProblem:
     Without ``vacuum`` the plasma edge is held fixed. With a
     :class:`gliss.VacuumModel` the edge normal displacement is free and its
     vacuum energy, bounded by the model's ideal wall if any, enters the
-    stiffness: the physical free-boundary problem.
+    stiffness: the physical free-boundary problem. ``radial_cells`` sets the
+    uniform finite-element cells in s independently of the equilibrium
+    surfaces, which the problem interpolates; None keeps one cell per
+    surface.
     """
 
     def __init__(
@@ -285,6 +320,7 @@ class StabilityProblem:
         angular_theta: int = 64,
         angular_zeta: int = 64,
         vacuum: Optional[VacuumModel] = None,
+        radial_cells: Optional[int] = None,
     ):
         if not isinstance(equilibrium, Equilibrium):
             raise TypeError("equilibrium must be a gliss.Equilibrium")
@@ -307,6 +343,8 @@ class StabilityProblem:
         if self.zero_floor > 0.125 * np.finfo(np.float64).max:
             raise ValueError("zero_floor is too large for spectrum certification")
         self.degree = degree
+        self.radial_cells = radial_cells
+        self._radial_cells = radial_cell_count(radial_cells)
         if not isinstance(solver_tolerances, SolverTolerances):
             raise TypeError("solver_tolerances must be a gliss.SolverTolerances")
         self.solver_tolerances = solver_tolerances
@@ -323,6 +361,8 @@ class StabilityProblem:
         _bind(self._library)
         if vacuum is not None:
             _bind_free_boundary(self._library)
+        if self._radial_cells:
+            _bind_radial_cells(self._library)
         self._handle = ctypes.c_void_p()
         self._create(equilibrium)
         self._set_solver_tolerances()
@@ -348,7 +388,22 @@ class StabilityProblem:
             self.angular_theta,
             self.angular_zeta,
         )
-        if self.vacuum is None:
+        if self._radial_cells:
+            # One constructor for both boundaries; the original ones serve
+            # the default mesh, so older libraries still build those.
+            function = "gliss_stability_problem_create_v3"
+            model = None
+            if self.vacuum is not None:
+                model, _wall = self.vacuum._native()
+            status = self._library.gliss_stability_problem_create_v3(
+                *common,
+                self._radial_cells,
+                None if model is None else ctypes.byref(model),
+                ctypes.byref(self._handle),
+                error,
+                len(error),
+            )
+        elif self.vacuum is None:
             function = "gliss_stability_problem_create_v2"
             status = self._library.gliss_stability_problem_create_v2(
                 *common, ctypes.byref(self._handle), error, len(error)
@@ -485,6 +540,7 @@ class StabilityProblem:
             self.angular_theta,
             self.angular_zeta,
             vacuum=self.vacuum,
+            radial_cells=self.radial_cells,
         )
 
     def write_manifest(self, path: Any, result: StabilityResult) -> "RunManifest":

@@ -129,7 +129,7 @@ contains
     subroutine build_compatible_three_component_problem(equilibrium, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, problem, info, vacuum, &
-            sparse_storage, vacuum_energy)
+            sparse_storage, vacuum_energy, radial_cells)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:)
@@ -144,6 +144,9 @@ contains
         ! With vacuum: the trial-by-trial vacuum energy of this problem's
         ! trials (build_compatible_vacuum_energy), instead of solving it.
         real(dp), optional, intent(in) :: vacuum_energy(:, :)
+        ! Uniform radial cells in s of the finite-element space (0 or
+        ! absent: one cell per equilibrium surface).
+        integer, optional, intent(in) :: radial_cells
         integer, allocatable :: parity(:), trial_m(:), trial_n(:)
         real(dp), allocatable :: trial_power(:)
         integer :: allocation_status, count
@@ -180,7 +183,8 @@ contains
         if (present(sparse_storage)) problem%has_sparse_storage = sparse_storage
         call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             trial_m, trial_n, trial_power, parity, degree, n_theta, n_zeta, &
-            problem, info, vacuum, vacuum_energy)
+            problem, info, vacuum, vacuum_energy, &
+            radial_cells=radial_cells)
     end subroutine build_compatible_three_component_problem
 
     ! Both parity classes of a stellarator-symmetric problem in one pass:
@@ -192,7 +196,7 @@ contains
     subroutine build_compatible_three_component_classes(equilibrium, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
             degree, n_theta, n_zeta, cosine_problem, sine_problem, info, &
-            vacuum, sparse_storage, vacuum_energy)
+            vacuum, sparse_storage, vacuum_energy, radial_cells)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:)
@@ -204,6 +208,7 @@ contains
         type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
         logical, optional, intent(in) :: sparse_storage
         real(dp), optional, intent(in) :: vacuum_energy(:, :)
+        integer, optional, intent(in) :: radial_cells
         integer, allocatable :: parity(:)
         integer :: modes
 
@@ -228,12 +233,12 @@ contains
                 mode_m, mode_n, stored_power, parity, degree, n_theta, &
                 n_zeta, cosine_problem, info, vacuum, &
                 vacuum_energy(:modes, :modes), sine_problem, &
-                vacuum_energy(modes + 1:, modes + 1:))
+                vacuum_energy(modes + 1:, modes + 1:), radial_cells)
         else
             call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
                 mode_m, mode_n, stored_power, parity, degree, n_theta, &
                 n_zeta, cosine_problem, info, vacuum, &
-                sine_problem=sine_problem)
+                sine_problem=sine_problem, radial_cells=radial_cells)
         end if
     end subroutine build_compatible_three_component_classes
 
@@ -281,7 +286,7 @@ contains
     subroutine build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             mode_m, mode_n, stored_power, parity, degree, n_theta, n_zeta, &
             problem, info, vacuum, vacuum_energy, sine_problem, &
-            sine_vacuum_energy)
+            sine_vacuum_energy, radial_cells)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
@@ -294,6 +299,7 @@ contains
         type(compatible_three_component_problem_t), optional, &
             intent(inout) :: sine_problem
         real(dp), optional, intent(in) :: sine_vacuum_energy(:, :)
+        integer, optional, intent(in) :: radial_cells
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(class_setup_t) :: setup, sine_setup
@@ -303,6 +309,11 @@ contains
 
         info = compatible_three_component_invalid
         intervals = size(equilibrium%s)
+        if (present(radial_cells)) then
+            if (radial_cells < 0) return
+            if (radial_cells > 0) intervals = radial_cells
+        end if
+        if (intervals < 2) return
         allocate (breaks(intervals + 1), stat=allocation_status)
         if (allocation_status /= 0) then
             info = compatible_three_component_allocation_error

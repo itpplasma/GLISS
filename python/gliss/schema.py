@@ -33,7 +33,7 @@ from .equilibrium import (
     _file_identity,
     _stable_file_digest,
 )
-from ._stability_input import angular_grid
+from ._stability_input import angular_grid, radial_cell_count
 from ._stability_input import mode_integer as _mode_integer
 from ._stability_input import real_parameter as _real_parameter
 from ._stability_input import validate_modes as _validate_modes
@@ -52,6 +52,8 @@ class StabilityConfiguration:
     """Validated stability problem inputs with JSON interchange.
 
     ``vacuum`` selects the free-boundary problem; ``None`` fixes the edge.
+    ``radial_cells`` sets the uniform radial finite-element cells; ``None``
+    keeps one cell per equilibrium surface.
     """
 
     modes: Tuple[Tuple[int, int], ...]
@@ -64,6 +66,7 @@ class StabilityConfiguration:
     angular_zeta: int = 64
     discretization_revision: int = DISCRETIZATION_REVISION
     vacuum: Optional[VacuumModel] = None
+    radial_cells: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.vacuum is not None and not isinstance(self.vacuum, VacuumModel):
@@ -75,6 +78,8 @@ class StabilityConfiguration:
         if degree < 1 or degree > 4:
             raise ValueError("degree must be between 1 and 4")
         object.__setattr__(self, "degree", degree)
+        cells = radial_cell_count(self.radial_cells)
+        object.__setattr__(self, "radial_cells", cells or None)
         object.__setattr__(self, "modes", _validate_modes(self.modes))
         object.__setattr__(
             self,
@@ -128,6 +133,7 @@ class StabilityConfiguration:
             self.angular_theta,
             self.angular_zeta,
             self.vacuum,
+            self.radial_cells,
         )
 
     @property
@@ -151,6 +157,7 @@ class StabilityConfiguration:
             "solver_tolerances": self.solver_tolerances.to_dict(),
             "discretization_revision": self.discretization_revision,
             "vacuum": None if self.vacuum is None else self.vacuum.to_dict(),
+            "radial_cells": self.radial_cells,
         }
         return document
 
@@ -182,6 +189,8 @@ class StabilityConfiguration:
             expected.add("discretization_revision")
         if version >= 6:
             expected.add("vacuum")
+        if version >= 7:
+            expected.add("radial_cells")
         value = fields(document, expected, "configuration")
         schema(value, _CONFIGURATION_SCHEMA, "configuration", SCHEMA_VERSIONS)
         vacuum = None
@@ -202,6 +211,7 @@ class StabilityConfiguration:
             return cls(
                 discretization_revision=revision,
                 vacuum=vacuum,
+                radial_cells=value.get("radial_cells"),
                 modes=value["modes"],
                 angular_theta=value.get("angular_theta", 64),
                 angular_zeta=value.get("angular_zeta", 64),

@@ -29,6 +29,7 @@ module gliss_axisymmetric_capi
     end type axisymmetric_spectrum_result_c
 
     public :: gliss_axisymmetric_spectrum_c
+    public :: gliss_axisymmetric_spectrum_v2_c
 
 contains
 
@@ -40,6 +41,24 @@ contains
         type(c_ptr), value, intent(in) :: error_pointer
         integer(c_int), value, intent(in) :: toroidal_mode, poloidal_max
         integer(c_int), value, intent(in) :: degree, solve_eigenpair
+        integer(c_size_t), value, intent(in) :: error_capacity
+        integer(c_int) :: status
+
+        status = gliss_axisymmetric_spectrum_v2_c(equilibrium_handle, &
+            toroidal_mode, poloidal_max, degree, 0_c_int, solve_eigenpair, &
+            result_pointer, error_pointer, error_capacity)
+    end function gliss_axisymmetric_spectrum_c
+
+    ! radial_cells uniform cells in s; 0 keeps one per equilibrium surface.
+    function gliss_axisymmetric_spectrum_v2_c(equilibrium_handle, &
+            toroidal_mode, poloidal_max, degree, radial_cells, &
+            solve_eigenpair, result_pointer, error_pointer, error_capacity) &
+            bind(c, name="gliss_axisymmetric_spectrum_v2") result(status)
+        type(c_ptr), value, intent(in) :: equilibrium_handle, result_pointer
+        type(c_ptr), value, intent(in) :: error_pointer
+        integer(c_int), value, intent(in) :: toroidal_mode, poloidal_max
+        integer(c_int), value, intent(in) :: degree, radial_cells
+        integer(c_int), value, intent(in) :: solve_eigenpair
         integer(c_size_t), value, intent(in) :: error_capacity
         integer(c_int) :: status
         type(axisymmetric_spectrum_result_c), pointer :: result
@@ -57,9 +76,16 @@ contains
                 "solve_eigenpair must be 0 or 1")
             return
         end if
+        if (radial_cells < 0_c_int .or. radial_cells == 1_c_int) then
+            status = status_invalid_argument
+            call write_error(error_pointer, error_capacity, &
+                "radial_cells must be 0 or at least 2")
+            return
+        end if
         call compute_axisymmetric_spectrum(equilibrium%equilibrium, &
             int(toroidal_mode), int(poloidal_max), int(degree), &
-            solve_eigenpair == 1_c_int, native, info, message)
+            solve_eigenpair == 1_c_int, native, info, message, &
+            int(radial_cells))
         select case (info)
         case (axisymmetric_spectrum_ok)
             call fill_result(native, result)
@@ -75,7 +101,7 @@ contains
             call write_error(error_pointer, error_capacity, &
                 "axisymmetric solve returned an unknown status")
         end select
-    end function gliss_axisymmetric_spectrum_c
+    end function gliss_axisymmetric_spectrum_v2_c
 
     function prepare_call(equilibrium_handle, result_pointer, error_pointer, &
             error_capacity, equilibrium, result) result(status)

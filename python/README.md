@@ -589,6 +589,14 @@ Poloidal mode `m` must be nonnegative; an axis mode with `m=0` also requires
 `omega^2` threshold in `s^-2`. `degree` selects a compatible radial FEEC
 degree from 1 through 4 and defaults to 2. Angular quadrature defaults to 64 by 64; set `angular_theta` and
 `angular_zeta` on `StabilityProblem` or `StabilityConfiguration` to change it.
+The radial finite-element mesh has one uniform cell in `s` per equilibrium
+surface by default. `radial_cells` (at least 2) sets the cell count
+independently of the surfaces, which the problem interpolates; it is accepted
+by `StabilityProblem`, `StabilityConfiguration`, the CAS3D marginality and
+phase-envelope functions and the axisymmetric functions, and their results
+report it as `radial_surfaces`. Refine the cells to converge the stability
+discretization on a fixed equilibrium, and the equilibrium surfaces to
+converge the equilibrium itself.
 Counts must be positive signed 32-bit integers whose product also fits int32.
 These integer discretization choices remain fixed during differentiation. The native constructor rejects mode tables for which
 `2*max(m) + max(abs(equilibrium poloidal modes)) >= angular_theta` or

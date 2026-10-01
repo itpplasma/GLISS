@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from . import _require_symbols
-from ._stability_input import mode_integer
+from ._stability_input import mode_integer, radial_cell_count
 from .equilibrium import (
     Equilibrium,
     GlissInternalError,
@@ -54,18 +54,21 @@ class _AxisymmetricResult(ctypes.Structure):
     ]
 
 
-def _bind(library: Any) -> None:
+def _bind(library: Any, symbol: str = "gliss_axisymmetric_spectrum") -> None:
     _require_symbols(
         library,
-        ("gliss_axisymmetric_spectrum",),
+        (symbol,),
         "axisymmetric spectrum solver",
     )
-    function = library.gliss_axisymmetric_spectrum
+    function = getattr(library, symbol)
+    # The _v2 symbol takes the radial cell count after the degree.
+    cells = (ctypes.c_int32,) if symbol.endswith("_v2") else ()
     function.argtypes = (
         ctypes.c_void_p,
         ctypes.c_int32,
         ctypes.c_int32,
         ctypes.c_int32,
+        *cells,
         ctypes.c_int32,
         ctypes.POINTER(_AxisymmetricResult),
         ctypes.c_void_p,
@@ -94,6 +97,7 @@ def _result(
     poloidal_max: int,
     degree: int,
     solve_eigenpair: bool,
+    radial_cells: int = 0,
 ) -> AxisymmetricResult:
     metadata_valid = (
         native.has_eigenpair == int(solve_eigenpair)
@@ -102,6 +106,7 @@ def _result(
         and native.poloidal_max == poloidal_max
         and native.mode_count == 2 * poloidal_max + 1
         and native.radial_surfaces >= 1
+        and radial_cells in (0, native.radial_surfaces)
         and native.parity_class in (0, 1)
         and native.degree == degree
         and math.isfinite(native.force_balance_residual)
@@ -148,6 +153,7 @@ def _calculate(
     poloidal_max: int,
     degree: int,
     solve_eigenpair: bool,
+    radial_cells: Optional[int] = None,
 ) -> AxisymmetricResult:
     if not isinstance(equilibrium, Equilibrium):
         raise TypeError("equilibrium must be a gliss.Equilibrium")
@@ -155,22 +161,23 @@ def _calculate(
     toroidal_mode = _positive_mode(toroidal_mode, "toroidal_mode")
     poloidal_max = _positive_mode(poloidal_max, "poloidal_max")
     degree = _degree(degree)
-    _bind(equilibrium._library)
+    cells = radial_cell_count(radial_cells)
+    # The original symbol serves the default mesh, so older libraries
+    # still answer every call that does not refine it.
+    symbol = (
+        "gliss_axisymmetric_spectrum_v2" if cells else "gliss_axisymmetric_spectrum"
+    )
+    _bind(equilibrium._library, symbol)
     native = _AxisymmetricResult(struct_size=ctypes.sizeof(_AxisymmetricResult))
     error = _error_buffer()
-    status = equilibrium._library.gliss_axisymmetric_spectrum(
-        equilibrium._handle,
-        toroidal_mode,
-        poloidal_max,
-        degree,
-        int(solve_eigenpair),
-        ctypes.byref(native),
-        error,
-        len(error),
-    )
-    _raise_for_status(status, error, "gliss_axisymmetric_spectrum")
+    arguments = [equilibrium._handle, toroidal_mode, poloidal_max, degree]
+    if cells:
+        arguments.append(cells)
+    arguments.extend([int(solve_eigenpair), ctypes.byref(native), error, len(error)])
+    status = getattr(equilibrium._library, symbol)(*arguments)
+    _raise_for_status(status, error, symbol)
     return _result(
-        native, toroidal_mode, poloidal_max, degree, solve_eigenpair
+        native, toroidal_mode, poloidal_max, degree, solve_eigenpair, cells
     )
 
 
@@ -179,6 +186,7 @@ def axisymmetric_inertia(
     toroidal_mode: int = 1,
     poloidal_max: int = 8,
     degree: int = 2,
+    radial_cells: Optional[int] = None,
 ) -> AxisymmetricResult:
     """Count negative eigenvalues in one axisymmetric Fourier family."""
 
@@ -188,6 +196,7 @@ def axisymmetric_inertia(
         poloidal_max,
         degree,
         solve_eigenpair=False,
+        radial_cells=radial_cells,
     )
 
 
@@ -196,6 +205,7 @@ def solve_axisymmetric(
     toroidal_mode: int = 1,
     poloidal_max: int = 8,
     degree: int = 2,
+    radial_cells: Optional[int] = None,
 ) -> AxisymmetricResult:
     """Return inertia and the certified lowest axisymmetric eigenpair."""
 
@@ -205,4 +215,5 @@ def solve_axisymmetric(
         poloidal_max,
         degree,
         solve_eigenpair=True,
+        radial_cells=radial_cells,
     )

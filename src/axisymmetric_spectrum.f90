@@ -38,13 +38,15 @@ contains
 
     subroutine compute_axisymmetric_spectrum(equilibrium, toroidal_mode, &
             poloidal_max, degree, solve_eigenpair, result, info, &
-            message)
+            message, radial_cells)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: toroidal_mode, poloidal_max, degree
         logical, intent(in) :: solve_eigenpair
         type(axisymmetric_spectrum_result_t), intent(out) :: result
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
+        ! Uniform radial cells (0 or absent: one cell per surface).
+        integer, optional, intent(in) :: radial_cells
         type(marginality_spectrum_result_t) :: general
         integer, allocatable :: mode_m(:), mode_n(:)
         real(dp), allocatable :: normal_stored_power(:)
@@ -58,14 +60,14 @@ contains
         parity_class = 1
         call compute_marginality_spectrum(equilibrium, mode_m, mode_n, &
             normal_stored_power, parity_class, degree, n_theta, n_zeta, &
-            solve_eigenpair, general, general_info, message)
+            solve_eigenpair, general, general_info, message, radial_cells)
         if (general_info == marginality_spectrum_asymmetric) then
             ! An up-down asymmetric equilibrium couples the sine-parity
             ! family to its cosine partner; parity class 0 assembles both.
             parity_class = 0
             call compute_marginality_spectrum(equilibrium, mode_m, mode_n, &
                 normal_stored_power, parity_class, degree, n_theta, n_zeta, &
-                solve_eigenpair, general, general_info, message)
+                solve_eigenpair, general, general_info, message, radial_cells)
         end if
         if (general_info /= marginality_spectrum_ok) then
             if (general_info == marginality_spectrum_invalid) then

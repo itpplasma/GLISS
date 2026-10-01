@@ -78,6 +78,9 @@ module fixed_boundary_spectrum
         integer :: degree = 0
         integer :: n_theta = fixed_boundary_n_theta
         integer :: n_zeta = fixed_boundary_n_zeta
+        ! Uniform radial cells of the finite-element space (0: one cell per
+        ! equilibrium surface).
+        integer :: radial_cells = 0
         real(dp) :: adiabatic_index = 0.0_dp
         real(dp) :: density_kg_m3 = 0.0_dp
         real(dp) :: zero_floor = 0.0_dp
@@ -139,7 +142,7 @@ contains
 
     subroutine build_fixed_boundary_problem(equilibrium, adiabatic_index, &
             density_kg_m3, zero_floor, mode_m, mode_n, degree, problem, info, &
-            angular_theta, angular_zeta, coupled, vacuum)
+            angular_theta, angular_zeta, coupled, vacuum, radial_cells)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3, zero_floor
         integer, intent(in) :: mode_m(:), mode_n(:), degree
@@ -151,6 +154,9 @@ contains
         logical, optional, intent(in) :: coupled
         ! Present: the physical free-boundary problem with this vacuum model.
         type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
+        ! Uniform radial cells in s of the finite-element space, independent
+        ! of the equilibrium surfaces (0 or absent: one cell per surface).
+        integer, optional, intent(in) :: radial_cells
         real(dp), allocatable :: stored_power(:)
         ! Default-initialized: holds no matrices.
         type(fixed_boundary_class_problem_t) :: empty_class
@@ -162,6 +168,8 @@ contains
         if (present(angular_zeta)) problem%n_zeta = angular_zeta
         if (min(problem%n_theta, problem%n_zeta) < 1) return
         if (problem%n_theta > huge(1) / problem%n_zeta) return
+        if (present(radial_cells)) problem%radial_cells = radial_cells
+        if (problem%radial_cells < 0 .or. problem%radial_cells == 1) return
         if (.not. valid_inputs(equilibrium, adiabatic_index, density_kg_m3, &
             zero_floor, mode_m, mode_n, degree, problem%n_theta, problem%n_zeta)) return
         if (present(vacuum)) then
@@ -202,7 +210,7 @@ contains
             call assemble_classes(equilibrium, adiabatic_index, &
                 density_kg_m3, mode_m, mode_n, stored_power, degree, &
                 problem%classes, info, problem%n_theta, problem%n_zeta, &
-                vacuum, vacuum_energy)
+                problem%radial_cells, vacuum, vacuum_energy)
             if (info /= fixed_boundary_ok .and. &
                 info /= fixed_boundary_asymmetric) return
             problem%coupled = info == fixed_boundary_asymmetric
@@ -214,11 +222,13 @@ contains
                 call assemble_class(equilibrium, adiabatic_index, &
                     density_kg_m3, mode_m, mode_n, stored_power, 0, degree, &
                     problem%classes(1), info, problem%n_theta, &
-                    problem%n_zeta, vacuum, vacuum_energy)
+                    problem%n_zeta, problem%radial_cells, vacuum, &
+                    vacuum_energy)
             else
                 call assemble_class(equilibrium, adiabatic_index, &
                     density_kg_m3, mode_m, mode_n, stored_power, 0, degree, &
-                    problem%classes(1), info, problem%n_theta, problem%n_zeta)
+                    problem%classes(1), info, problem%n_theta, &
+                    problem%n_zeta, problem%radial_cells)
             end if
             if (info /= fixed_boundary_ok) return
         end if
@@ -234,7 +244,8 @@ contains
 
     subroutine assemble_class(equilibrium, adiabatic_index, density_kg_m3, &
             mode_m, mode_n, stored_power, parity_class, degree, &
-            class_problem, info, n_theta, n_zeta, vacuum, vacuum_energy)
+            class_problem, info, n_theta, n_zeta, radial_cells, vacuum, &
+            vacuum_energy)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity_class, degree
@@ -242,7 +253,7 @@ contains
         type(fixed_boundary_class_problem_t), intent(out) :: class_problem
         integer, intent(out) :: info
         type(compatible_three_component_problem_t) :: compatible
-        integer, intent(in) :: n_theta, n_zeta
+        integer, intent(in) :: n_theta, n_zeta, radial_cells
         type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
         real(dp), optional, intent(in) :: vacuum_energy(:, :)
         integer :: compatible_info
@@ -251,7 +262,7 @@ contains
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, &
             n_zeta, compatible, compatible_info, vacuum, sparse_storage=.true., &
-            vacuum_energy=vacuum_energy)
+            vacuum_energy=vacuum_energy, radial_cells=radial_cells)
         if (compatible_info /= compatible_three_component_ok) then
             info = class_status(compatible_info)
             return
@@ -261,14 +272,14 @@ contains
 
     subroutine assemble_classes(equilibrium, adiabatic_index, &
             density_kg_m3, mode_m, mode_n, stored_power, degree, classes, &
-            info, n_theta, n_zeta, vacuum, vacuum_energy)
+            info, n_theta, n_zeta, radial_cells, vacuum, vacuum_energy)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), degree
         real(dp), intent(in) :: stored_power(:)
         type(fixed_boundary_class_problem_t), intent(inout) :: classes(2)
         integer, intent(out) :: info
-        integer, intent(in) :: n_theta, n_zeta
+        integer, intent(in) :: n_theta, n_zeta, radial_cells
         type(plasma_vacuum_model_t), optional, intent(in) :: vacuum
         real(dp), allocatable, intent(in) :: vacuum_energy(:, :)
         type(compatible_three_component_problem_t) :: cosine, sine
@@ -279,12 +290,13 @@ contains
                 adiabatic_index, density_kg_m3, mode_m, mode_n, &
                 stored_power, degree, n_theta, n_zeta, cosine, sine, &
                 compatible_info, vacuum, sparse_storage=.true., &
-                vacuum_energy=vacuum_energy)
+                vacuum_energy=vacuum_energy, radial_cells=radial_cells)
         else
             call build_compatible_three_component_classes(equilibrium, &
                 adiabatic_index, density_kg_m3, mode_m, mode_n, &
                 stored_power, degree, n_theta, n_zeta, cosine, sine, &
-                compatible_info, vacuum, sparse_storage=.true.)
+                compatible_info, vacuum, sparse_storage=.true., &
+                radial_cells=radial_cells)
         end if
         info = class_status(compatible_info)
         if (info /= fixed_boundary_ok) return

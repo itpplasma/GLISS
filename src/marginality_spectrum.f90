@@ -85,7 +85,7 @@ contains
 
     subroutine compute_marginality_spectrum(equilibrium, mode_m, mode_n, &
             normal_stored_power, parity_class, degree, n_theta, n_zeta, &
-            solve_eigenpair, result, info, message)
+            solve_eigenpair, result, info, message, radial_cells)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: normal_stored_power(:)
@@ -94,19 +94,23 @@ contains
         type(marginality_spectrum_result_t), intent(out) :: result
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
+        ! Uniform radial cells in s of the finite-element space, independent
+        ! of the equilibrium surfaces (0 or absent: one cell per surface).
+        integer, optional, intent(in) :: radial_cells
 
         call compute_spectrum(equilibrium, mode_m, mode_n, &
             normal_stored_power, size(mode_m), parity_class, degree, &
             n_theta, n_zeta, solve_eigenpair, &
             marginality_normalization_perpendicular_l2, n_theta, n_zeta, &
-            1.0_dp, marginality_quadrature_gauss, result, info, message)
+            1.0_dp, marginality_quadrature_gauss, &
+            cell_count(equilibrium, radial_cells), result, info, message)
     end subroutine compute_marginality_spectrum
 
     subroutine compute_phase_envelope_spectrum(equilibrium, base_m, base_n, &
             envelope_m, envelope_n, parity_class, degree, n_theta, n_zeta, &
             solve_eigenpair, result, info, message, normalization_policy, &
             coefficient_n_theta, coefficient_n_zeta, reference_length, &
-            radial_quadrature_policy)
+            radial_quadrature_policy, radial_cells)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: base_m, base_n
         integer, intent(in) :: envelope_m(:), envelope_n(:)
@@ -120,6 +124,9 @@ contains
         integer, optional, intent(in) :: coefficient_n_zeta
         real(dp), optional, intent(in) :: reference_length
         integer, optional, intent(in) :: radial_quadrature_policy
+        ! Uniform radial cells (0 or absent: one cell per surface); the
+        ! CAS3D2MN coefficient mass scales with the cell width.
+        integer, optional, intent(in) :: radial_cells
         integer, allocatable :: labeled_m(:), labeled_n(:)
         integer, allocatable :: labeled_orientation(:)
         integer, allocatable :: mode_m(:), mode_n(:)
@@ -179,21 +186,35 @@ contains
             call compute_spectrum(equilibrium, mode_m, mode_n, stored_power, &
                 labeled_count, parity_class, degree, n_theta, n_zeta, &
                 solve_eigenpair, policy, coefficient_theta, coefficient_zeta, &
-                length_scale, quadrature_policy, result, info, message, &
-                coefficient_map)
+                length_scale, quadrature_policy, &
+                cell_count(equilibrium, radial_cells), result, info, &
+                message, coefficient_map)
         else
             call compute_spectrum(equilibrium, mode_m, mode_n, stored_power, &
                 labeled_count, parity_class, degree, n_theta, n_zeta, &
                 solve_eigenpair, policy, coefficient_theta, coefficient_zeta, &
-                length_scale, quadrature_policy, result, info, message)
+                length_scale, quadrature_policy, &
+                cell_count(equilibrium, radial_cells), result, info, message)
         end if
     end subroutine compute_phase_envelope_spectrum
+
+    ! Requested radial cell count, defaulting to one per surface; a
+    ! negative request stays negative and fails validation.
+    pure integer function cell_count(equilibrium, radial_cells) result(cells)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, optional, intent(in) :: radial_cells
+
+        cells = size(equilibrium%s)
+        if (present(radial_cells)) then
+            if (radial_cells /= 0) cells = radial_cells
+        end if
+    end function cell_count
 
     subroutine compute_spectrum(equilibrium, mode_m, mode_n, stored_power, &
             reported_mode_count, parity_class, degree, n_theta, n_zeta, &
             solve_eigenpair, normalization_policy, coefficient_n_theta, &
             coefficient_n_zeta, reference_length, radial_quadrature_policy, &
-            result, info, message, coefficient_map)
+            radial_cells, result, info, message, coefficient_map)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:), reported_mode_count
         real(dp), intent(in) :: stored_power(:)
@@ -202,7 +223,7 @@ contains
         integer, intent(in) :: normalization_policy
         integer, intent(in) :: coefficient_n_theta, coefficient_n_zeta
         real(dp), intent(in) :: reference_length
-        integer, intent(in) :: radial_quadrature_policy
+        integer, intent(in) :: radial_quadrature_policy, radial_cells
         type(marginality_spectrum_result_t), intent(out) :: result
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
@@ -219,7 +240,7 @@ contains
         call validate_inputs(equilibrium, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, normalization_policy, &
             coefficient_n_theta, coefficient_n_zeta, reference_length, &
-            radial_quadrature_policy, info, message)
+            radial_quadrature_policy, radial_cells, info, message)
         if (info /= marginality_spectrum_ok) return
         if (normalization_policy == marginality_normalization_cas3d2mn &
             .or. radial_quadrature_policy &
@@ -230,7 +251,8 @@ contains
                 mode_m, mode_n, stored_power, parity_class, degree, n_theta, &
                 n_zeta, problem, info, &
                 radial_quadrature_policy=radial_quadrature_policy, &
-                sparse_storage=.true., axis_conforming=.false.)
+                sparse_storage=.true., axis_conforming=.false., &
+                radial_cells=radial_cells)
         else
             ! The positive norm is the physical perpendicular kinetic form
             ! at unit mass density, bounded on the energy space; the plain
@@ -240,7 +262,7 @@ contains
                 mode_m, mode_n, stored_power, parity_class, degree, n_theta, &
                 n_zeta, problem, info, density_kg_m3=1.0_dp, &
                 radial_quadrature_policy=radial_quadrature_policy, &
-                sparse_storage=.true.)
+                sparse_storage=.true., radial_cells=radial_cells)
         end if
         if (info == compatible_problem_asymmetric) then
             info = marginality_spectrum_asymmetric
@@ -259,7 +281,7 @@ contains
                 return
             end if
             coefficient_scale = cas3d2mn_envelope_mass_scale( &
-                size(equilibrium%s), coefficient_n_theta, &
+                radial_cells, coefficient_n_theta, &
                 coefficient_n_zeta, reference_length)
             call solve_compatible_marginality_problem(problem, .false., &
                 quotient_result, info, message)
@@ -327,7 +349,7 @@ contains
         result%has_eigenpair = solve_eigenpair
         result%field_periods = equilibrium%field_periods
         result%mode_count = reported_mode_count
-        result%radial_surfaces = size(equilibrium%s)
+        result%radial_surfaces = radial_cells
         result%parity_class = parity_class
         result%degree = degree
         result%normalization_policy = normalization_policy
@@ -610,7 +632,7 @@ contains
     subroutine validate_inputs(equilibrium, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, normalization_policy, &
             coefficient_n_theta, coefficient_n_zeta, reference_length, &
-            radial_quadrature_policy, info, message)
+            radial_quadrature_policy, radial_cells, info, message)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
@@ -618,7 +640,7 @@ contains
         integer, intent(in) :: normalization_policy
         integer, intent(in) :: coefficient_n_theta, coefficient_n_zeta
         real(dp), intent(in) :: reference_length
-        integer, intent(in) :: radial_quadrature_policy
+        integer, intent(in) :: radial_quadrature_policy, radial_cells
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
 
@@ -652,7 +674,7 @@ contains
             message = "CAS3D2MN reference length must be finite and positive"
         else if (normalization_policy == &
                 marginality_normalization_cas3d2mn .and. &
-                cas3d2mn_envelope_mass_scale(size(equilibrium%s), &
+                cas3d2mn_envelope_mass_scale(radial_cells, &
                 coefficient_n_theta, coefficient_n_zeta, reference_length) &
                 <= 0.0_dp) then
             message = "CAS3D2MN coefficient mass scale is not representable"
@@ -669,6 +691,8 @@ contains
             message = "field periods must be positive"
         else if (size(equilibrium%s) < 2) then
             message = "equilibrium requires at least two radial surfaces"
+        else if (radial_cells < 2) then
+            message = "radial cell count must be at least 2"
         else if (angular_grid_aliases(equilibrium, mode_m, mode_n, n_theta, &
                 n_zeta)) then
             message = "mode table aliases the angular quadrature"

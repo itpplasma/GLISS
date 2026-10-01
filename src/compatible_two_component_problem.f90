@@ -86,7 +86,8 @@ contains
     subroutine build_compatible_two_component_problem(equilibrium, mode_m, &
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
             problem, info, trace_cells, trace, density_kg_m3, &
-            radial_quadrature_policy, sparse_storage, axis_conforming)
+            radial_quadrature_policy, sparse_storage, axis_conforming, &
+            radial_cells)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
@@ -102,6 +103,9 @@ contains
         ! regularity tie and the axis-element rule in sqrt(s). The CAS3D
         ! midpoint and coefficient replays keep the historical space.
         logical, optional, intent(in) :: axis_conforming
+        ! Uniform radial cells in s of the finite-element space, independent
+        ! of the equilibrium surfaces (0 or absent: one cell per surface).
+        integer, optional, intent(in) :: radial_cells
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
@@ -137,6 +141,11 @@ contains
         end if
         problem%coupled = parity_class == 0
         intervals = size(equilibrium%s)
+        if (present(radial_cells)) then
+            if (radial_cells < 0) return
+            if (radial_cells > 0) intervals = radial_cells
+        end if
+        if (intervals < 2) return
         if (present(trace_cells) .neqv. present(trace)) return
         if (present(trace_cells)) then
             if (.not. trace_cells_are_valid(trace_cells, intervals)) return

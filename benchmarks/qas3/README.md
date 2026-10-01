@@ -89,6 +89,9 @@ Fixed-boundary stability against the current fraction:
   | 129 | 128 | +0.112 | +0.053 | −5.8e-8 |
   | 257 | 256 | −0.0037 | −0.149 | −2.7e-8 |
 
+  The cell count is the `radial_cells` option, independent of the
+  equilibrium surfaces; `compare.py refine EXPORT deck.data.modes 1 64 128
+  256` reproduces a row on four threads in 2, 4 and 9 minutes.
   On the ns = 257 equilibrium both codes are unstable at 0.75. The earlier
   "GLISS stable" came from 64 cells on the ns = 65 equilibrium; refining
   only the cells there converges to a small positive value, so the

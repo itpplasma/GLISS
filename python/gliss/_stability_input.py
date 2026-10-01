@@ -37,6 +37,18 @@ def mode_integer(value: Any, name: str) -> int:
     return result
 
 
+def radial_cell_count(value: Any) -> int:
+    """Validate an optional radial cell count; None maps to 0, one cell per
+    equilibrium surface."""
+
+    if value is None:
+        return 0
+    result = mode_integer(value, "radial_cells")
+    if result < 2:
+        raise ValueError("radial_cells must be at least 2")
+    return result
+
+
 def validate_modes(
     modes: Sequence[Tuple[int, int]],
 ) -> Tuple[Tuple[int, int], ...]:

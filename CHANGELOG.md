@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Refine the radial finite-element mesh independently of the equilibrium
+  surfaces: `radial_cells` on `StabilityProblem`, `StabilityConfiguration`
+  (schema version 7), the CAS3D marginality and phase-envelope solves and
+  the axisymmetric spectrum; `None` keeps one cell per surface. The C ABI
+  gains `gliss_stability_problem_create_v3` (fixed or free boundary),
+  `gliss_cas3d_marginality_v2`, `gliss_cas3d_phase_envelope_v2`,
+  `gliss_cas3d2mn_phase_envelope_v2` and `gliss_axisymmetric_spectrum_v2`.
+  On the 16-surface Solov'ev export the degree-3 kink eigenvalue converges
+  at high order with the cell count.
 - Keep the refined eigenvectors of a degenerate cluster mass orthogonal in
   the full-spectrum solve. With reference BLAS/LAPACK, inverse iteration in
   the roundoff-split parity pairs of a coupled axisymmetric operator could

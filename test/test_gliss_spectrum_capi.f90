@@ -150,6 +150,20 @@ program test_gliss_spectrum_capi
             integer(c_int) :: result
         end function problem_create_free
 
+        function problem_create_v3(equilibrium_handle, gamma, density, &
+                floor, mode_count, poloidal, toroidal, degree, theta, zeta, &
+                radial_cells, vacuum, handle, error_pointer, error_capacity) &
+                bind(c, name="gliss_stability_problem_create_v3") &
+                result(result)
+            import c_double, c_int, c_ptr, c_size_t
+            type(c_ptr), value :: equilibrium_handle, poloidal, toroidal
+            type(c_ptr), value :: vacuum, handle, error_pointer
+            real(c_double), value :: gamma, density, floor
+            integer(c_size_t), value :: mode_count, error_capacity
+            integer(c_int), value :: degree, theta, zeta, radial_cells
+            integer(c_int) :: result
+        end function problem_create_v3
+
         function problem_free_boundary(handle, free, error_pointer, &
                 error_capacity) &
                 bind(c, name="gliss_stability_problem_free_boundary") &
@@ -285,6 +299,7 @@ program test_gliss_spectrum_capi
     call require(status == status_ok, "problem creation failed")
     call require(c_associated(problem), "problem handle is null")
     call check_free_boundary_entry_points()
+    call check_radial_cell_entry_point()
     tolerances%struct_size = c_sizeof(tolerances)
     tolerances%eigenvalue_relative = 1.0e-13_c_double
     tolerances%residual_relative = 1.0e-12_c_double
@@ -673,6 +688,57 @@ contains
         call require(.not. c_associated(rejected), &
             "a rejected free boundary returned a problem handle")
     end subroutine check_free_boundary_entry_points
+
+    ! create_v3: a null vacuum and zero cells reproduce the default fixed
+    ! problem; refined cells add unknowns; one cell or a negative count is
+    ! rejected without a handle.
+    subroutine check_radial_cell_entry_point()
+        type(c_ptr), target :: refined
+        integer(c_size_t), target :: default_count, refined_count
+        integer(c_int) :: cells(2)
+        integer :: index
+
+        refined = c_null_ptr
+        status = problem_create_v3(equilibrium, 5.0_c_double / 3.0_c_double, &
+            2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
+            c_loc(mode_n), 1_c_int, 64_c_int, 64_c_int, 0_c_int, c_null_ptr, &
+            c_loc(refined), c_loc(error_buffer), &
+            int(size(error_buffer), c_size_t))
+        call require(status == status_ok, "create_v3 default mesh failed")
+        status = problem_unknown_count(refined, 1_c_int, c_loc(default_count), &
+            c_loc(error_buffer), int(size(error_buffer), c_size_t))
+        call require(status == status_ok .and. default_count == 195_c_size_t, &
+            "create_v3 changed the default mesh")
+        status = problem_destroy(c_loc(refined), c_loc(error_buffer), &
+            int(size(error_buffer), c_size_t))
+        call require(status == status_ok, "create_v3 destroy failed")
+        status = problem_create_v3(equilibrium, 5.0_c_double / 3.0_c_double, &
+            2.0_c_double, 1.0_c_double, 2_c_size_t, c_loc(mode_m), &
+            c_loc(mode_n), 1_c_int, 64_c_int, 64_c_int, 64_c_int, c_null_ptr, &
+            c_loc(refined), c_loc(error_buffer), &
+            int(size(error_buffer), c_size_t))
+        call require(status == status_ok, "create_v3 refined mesh failed")
+        status = problem_unknown_count(refined, 1_c_int, c_loc(refined_count), &
+            c_loc(error_buffer), int(size(error_buffer), c_size_t))
+        call require(status == status_ok &
+            .and. refined_count > default_count, &
+            "refined radial cells did not add unknowns")
+        status = problem_destroy(c_loc(refined), c_loc(error_buffer), &
+            int(size(error_buffer), c_size_t))
+        call require(status == status_ok, "refined destroy failed")
+        cells = [1_c_int, -3_c_int]
+        do index = 1, size(cells)
+            status = problem_create_v3(equilibrium, &
+                5.0_c_double / 3.0_c_double, 2.0_c_double, 1.0_c_double, &
+                2_c_size_t, c_loc(mode_m), c_loc(mode_n), 1_c_int, 64_c_int, &
+                64_c_int, cells(index), c_null_ptr, c_loc(rejected), &
+                c_loc(error_buffer), int(size(error_buffer), c_size_t))
+            call require(status == status_invalid_argument, &
+                "an invalid radial cell count was accepted")
+            call require(.not. c_associated(rejected), &
+                "a rejected radial cell count returned a problem handle")
+        end do
+    end subroutine check_radial_cell_entry_point
 
 
     subroutine copy_chars(source, destination)

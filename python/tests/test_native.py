@@ -218,3 +218,79 @@ def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
         gliss.VacuumModel((24, 12), -0.1)
     with pytest.raises(ValueError, match="shape"):
         gliss.VacuumModel((24, 12), np.zeros((2, 4, 4)))
+
+
+def test_native_radial_refinement_converges(native_library, test_data):
+    # The n=1 kink of the 16-surface q0=1.035 export, solved on finite-element
+    # meshes refined independently of the equilibrium surfaces. One cell per
+    # surface reproduces the default mesh exactly; doubling the cells
+    # converges monotonically at high order (the successive differences fall
+    # by more than eight).
+    with gliss.Equilibrium(test_data / "solovev_q1.035.nc") as equilibrium:
+        default = gliss.solve_axisymmetric(equilibrium, poloidal_max=6, degree=3)
+        lowest = []
+        for cells in (16, 32, 64):
+            result = gliss.solve_axisymmetric(
+                equilibrium, poloidal_max=6, degree=3, radial_cells=cells
+            )
+            assert result.radial_surfaces == cells
+            assert result.negative_count == 1
+            lowest.append(result.lowest_eigenvalue)
+        assert default.radial_surfaces == 16
+        assert lowest[0] == default.lowest_eigenvalue
+        assert lowest[0] > lowest[1] > lowest[2]
+        assert lowest[1] - lowest[2] < (lowest[0] - lowest[1]) / 8.0
+        marginal = gliss.cas3d_marginality_inertia(
+            equilibrium, [(1, 1), (2, 1)], degree=1, radial_cells=24
+        )
+        assert marginal.radial_surfaces == 24
+        envelope = gliss.cas3d_phase_envelope_inertia(
+            equilibrium, (1, 1), [(0, 0)], degree=1, radial_cells=24
+        )
+        assert envelope.radial_surfaces == 24
+        coefficient = gliss.cas3d_phase_envelope_inertia(
+            equilibrium, (1, 1), [(0, 0)], degree=1, radial_cells=24,
+            normalization="cas3d2mn_coefficient",
+            coefficient_angular_resolution=(16, 16), reference_length=1.0,
+        )
+        assert coefficient.radial_surfaces == 24
+
+
+def test_native_stability_problem_radial_cells(native_library, test_data, tmp_path):
+    modes = [(1, 1), (2, 1)]
+    with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
+        with gliss.StabilityProblem(
+            equilibrium, modes, degree=1, angular_theta=24, angular_zeta=8
+        ) as coarse:
+            coarse_result = coarse.solve_class(1)
+        with gliss.StabilityProblem(
+            equilibrium, modes, degree=1, angular_theta=24, angular_zeta=8,
+            radial_cells=32,
+        ) as fine:
+            fine_result = fine.solve_class(1)
+            configuration = fine.configuration
+        with gliss.StabilityProblem(
+            equilibrium, modes, degree=1, angular_theta=24, angular_zeta=8,
+            radial_cells=32, vacuum=gliss.VacuumModel((24, 12)),
+        ) as free:
+            assert free.boundary_condition == "free"
+            assert free.configuration.radial_cells == 32
+            free_result = free.solve_class(1)
+        replayed = configuration.create_problem(equilibrium)
+        with replayed:
+            assert replayed.solve_class(1).lowest_eigenvalue == (
+                fine_result.lowest_eigenvalue
+            )
+        for cells in (0, 1, -4, True, 2.0):
+            with pytest.raises((TypeError, ValueError), match="radial_cells"):
+                gliss.StabilityProblem(equilibrium, modes, radial_cells=cells)
+            with pytest.raises((TypeError, ValueError), match="radial_cells"):
+                gliss.solve_axisymmetric(equilibrium, radial_cells=cells)
+    # Twice the cells: twice the normal unknowns away from the axis.
+    assert fine_result.normal_unknowns > 1.9 * coarse_result.normal_unknowns
+    # The edge is free: the vacuum lowers the energy of the fixed edge.
+    assert free_result.lowest_eigenvalue < fine_result.lowest_eigenvalue
+    path = tmp_path / "configuration.json"
+    configuration.write(path)
+    assert gliss.StabilityConfiguration.read(path) == configuration
+    assert configuration.to_dict()["radial_cells"] == 32
