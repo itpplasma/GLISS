@@ -48,7 +48,7 @@ Fixed-boundary stability against the current fraction:
 | Current | TERPSICHORE λ | TERPSICHORE count | GLISS replay | GLISS independent |
 |---|---|---|---|---|
 | 1.00 | −7.03701e-7 | 5 | −7.0370098e-7, count 5 | unstable, count 1 |
-| 0.75 | −8.7e-8 | 1 | agrees | stable (0) |
+| 0.75 | −8.7e-8 | 1 | agrees | stable (0) at ns = 65; unstable at ns = 257 (below) |
 | 0.50 | +5.956134e-7 | 0 | +5.956091e-7, count 0 | stable (0) |
 
 ## Findings
@@ -73,10 +73,33 @@ Fixed-boundary stability against the current fraction:
   stops at NITMAX with nonconverged components and reports −3.24e-8, while
   the certified lowest is −3.54e-8 (overlap 0.58). `run_case.sh` warns when
   this happens. This is a usage limit, not a TERPSICHORE defect.
-- Open, cause not established:
-  - The critical current fraction differs: TERPSICHORE is weakly unstable at
-    0.75, where its own sign flips with ns (33 stable, 65 and 129 unstable),
-    and GLISS is stable.
+- The critical current fraction agrees once both radial resolutions are
+  resolved. At 0.75 of the base current the lowest eigenvalue is close to
+  marginal and depends on the VMEC radial resolution of the equilibrium as
+  well as on the radial discretization of each code. GLISS independent
+  (CAS3D marginality, 68 modes, 96 x 64 angular points), lowest eigenvalue
+  by VMEC ns and FEEC radial cells:
+
+  | VMEC ns | cells | degree 1 | degree 2 | TERPSICHORE |
+  |---|---|---|---|---|
+  | 33 | | | | +9.6e-8 |
+  | 65 | 64 | +0.301 | +0.129 | −8.7e-8 |
+  | 65 | 128 | +0.122 | | |
+  | 65 | 256 | +0.061 | | |
+  | 129 | 128 | +0.112 | +0.053 | −5.8e-8 |
+  | 257 | 256 | −0.0037 | −0.149 | −2.7e-8 |
+
+  On the ns = 257 equilibrium both codes are unstable at 0.75. The earlier
+  "GLISS stable" came from 64 cells on the ns = 65 equilibrium; refining
+  only the cells there converges to a small positive value, so the
+  equilibrium resolution decides the sign as much as the stability
+  discretization. TERPSICHORE moves toward marginal from below with ns.
+  Raising the VMEC angular resolution of the 0.75 equilibrium to
+  mpol/ntor = 12/8 changes TERPSICHORE's eigenvalue by 1.6 % (it needs a
+  Boozer table of M = 16, |N| = 12 there: a loop over the VMEC modes indexes
+  the Boozer-table array, which overflows for mnmax_nyq = 326 with the
+  benchmark's 14 x 10 table). The GLISS FORT.23 replay of the ns = 257 case
+  is refused: it assembles dense matrices of order 34,748, beyond this VM.
   - The QAS D_curr difference below s = 0.4 (see li383 below for the
     mechanism) is not rechecked: its export needs Boozer resolution above
     M = N = 24 (Jacobian truncation 0.073), beyond this VM's memory on all

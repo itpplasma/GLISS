@@ -109,9 +109,10 @@ of every external solver.
   [#30](https://github.com/itpplasma/GLISS/issues/30) GVEC CAS3D export and
   [#31](https://github.com/itpplasma/GLISS/issues/31) DCON default tolerances.
 - `benchmarks/qas3` compares STELLOPT VMEC, TERPSICHORE 1.2 and GLISS on the
-  QAS3 family. The TERPSICHORE replay agrees to 1e-8. Open, cause not
-  established: the independent critical current (TERPSICHORE unstable at
-  0.75 of the base current, GLISS stable). The li383 D_curr difference was
+  QAS3 family. The TERPSICHORE replay agrees to 1e-8. The independent
+  critical current agrees once resolved: on an ns = 257 equilibrium both
+  codes are unstable at 0.75 of the base current, where GLISS on 64 cells
+  of the ns = 65 equilibrium was stable. The li383 D_curr difference was
   VMEC's angular truncation of J.B: raising VMEC mpol/ntor from 9/5 to 16/10
   brings its median D_curr to 0.999 of GLISS's. The `convert_vmec` force-balance and |B|
   gates were resolved: the pointwise metric-B_s closure (0.1-0.26 at any M,
