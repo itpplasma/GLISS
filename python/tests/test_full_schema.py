@@ -383,6 +383,32 @@ def test_full_run_manifest_rejects_configuration_mismatch(
     assert not (tmp_path / "full-run.gliss").exists()
 
 
+@pytest.mark.parametrize("configuration_is_free", [False, True])
+def test_full_run_manifest_rejects_boundary_mismatch(
+    full_result, configuration, tmp_path, configuration_is_free
+):
+    if configuration_is_free:
+        configuration = replace(configuration, vacuum=gliss.VacuumModel())
+    else:
+        full_result = gliss.FullStabilityResult(
+            tuple(
+                replace(
+                    item,
+                    certified_lowest=replace(
+                        item.certified_lowest, boundary_condition="free"
+                    ),
+                )
+                for item in full_result.classes
+            )
+        )
+    destination = tmp_path / "full-run.gliss"
+    with pytest.raises(ValueError, match="result boundary_condition.*configuration"):
+        gliss.write_full_run_manifest(
+            destination, tmp_path / "equilibrium.nc", configuration, full_result
+        )
+    assert not destination.exists()
+
+
 def test_full_run_manifest_rejects_wrong_result_type(configuration):
     with pytest.raises(TypeError, match="gliss.FullStabilityResult"):
         gliss.FullRunManifest(
