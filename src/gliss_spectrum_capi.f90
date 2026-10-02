@@ -63,6 +63,7 @@ module gliss_spectrum_capi
     public :: gliss_stability_problem_create_free_boundary_c
     public :: gliss_stability_problem_create_v3_c
     public :: gliss_stability_problem_free_boundary_c
+    public :: gliss_stability_problem_coupled_c
     public :: gliss_stability_problem_destroy_c
     public :: gliss_stability_problem_unknown_count_c
     public :: gliss_stability_problem_solve_class_c
