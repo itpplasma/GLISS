@@ -62,7 +62,7 @@ def test_native_rayleigh_gradient_matches_finite_differences(
             equilibrium,
             modes=[(0, 1), (1, -1), (1, 1)],
             degree=1,
-            angular_theta=32,
+            angular_theta=64,
             angular_zeta=8,
         ) as problem:
             size = problem._unknown_count(1)
@@ -92,7 +92,7 @@ def test_native_coupled_operator_reproduces_parity_classes(native_library, test_
     # same equilibrium stored with both parities. Its coupled operator must
     # reproduce the union of the two parity classes of the original.
     modes = [(0, 1), (1, 1), (2, 1)]
-    options = {"degree": 1, "angular_theta": 32, "angular_zeta": 8}
+    options = {"degree": 1, "angular_theta": 64, "angular_zeta": 8}
     with gliss.Equilibrium(test_data / "solovev_q1.035.nc") as equilibrium:
         with gliss.StabilityProblem(equilibrium, modes, **options) as problem:
             assert not problem.coupled and problem.parity_classes == (1, 2)
@@ -144,7 +144,7 @@ def test_native_free_boundary_kink_and_wall(native_library, test_data):
     # boundary is the free space with a vanishing edge and the vacuum energy
     # grows as the wall approaches, so min-max orders the lowest eigenvalues.
     modes = [(0, 1), (1, -1), (1, 1), (2, -1), (2, 1)]
-    options = dict(degree=2, angular_theta=24, angular_zeta=8)
+    options = dict(degree=2, angular_theta=64, angular_zeta=8)
     theta = np.linspace(0.0, 2.0 * np.pi, 24, endpoint=False)
     phi = np.linspace(0.0, 2.0 * np.pi, 12, endpoint=False)
     # A circular shell of radius 0.75 m about R = 0.935 m encloses the
@@ -201,7 +201,7 @@ def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
     with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
         with pytest.raises(gliss.GlissArgumentError, match="edge mesh"):
             gliss.StabilityProblem(
-                equilibrium, modes, degree=1, angular_theta=24,
+                equilibrium, modes, degree=1, angular_theta=64,
                 angular_zeta=8, vacuum=gliss.VacuumModel((4, 12)),
             )
         inside = np.zeros((3, 8, 8))
@@ -210,7 +210,7 @@ def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
         inside[2] = np.linspace(-0.01, 0.01, 8)[:, None]
         with pytest.raises(gliss.GlissError):
             gliss.StabilityProblem(
-                equilibrium, modes, degree=1, angular_theta=24,
+                equilibrium, modes, degree=1, angular_theta=64,
                 angular_zeta=8,
                 vacuum=gliss.VacuumModel((24, 12), inside),
             )
@@ -260,7 +260,7 @@ def test_native_stability_problem_radial_cells(native_library, test_data, tmp_pa
     modes = [(1, 1), (2, 1)]
     with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
         with gliss.StabilityProblem(
-            equilibrium, modes, degree=1, angular_theta=24, angular_zeta=8
+            equilibrium, modes, degree=1, angular_theta=64, angular_zeta=8
         ) as coarse:
             coarse_results = coarse.solve()
             coarse_result = coarse_results.classes[0]
@@ -270,7 +270,7 @@ def test_native_stability_problem_radial_cells(native_library, test_data, tmp_pa
                 test_data / "solovev_q1.035.nc", coarse.configuration, coarse_results,
             )
         with gliss.StabilityProblem(
-            equilibrium, modes, degree=1, angular_theta=24, angular_zeta=8,
+            equilibrium, modes, degree=1, angular_theta=64, angular_zeta=8,
             radial_cells=32,
         ) as fine:
             fine_result = fine.solve_class(1)
@@ -278,7 +278,7 @@ def test_native_stability_problem_radial_cells(native_library, test_data, tmp_pa
             with pytest.raises(ValueError, match="configuration SHA-256"):
                 fine.write_manifest(tmp_path / "wrong-mesh.json", coarse_results)
         with gliss.StabilityProblem(
-            equilibrium, modes, degree=1, angular_theta=24, angular_zeta=8,
+            equilibrium, modes, degree=1, angular_theta=64, angular_zeta=8,
             radial_cells=32, vacuum=gliss.VacuumModel((24, 12)),
         ) as free:
             assert free.boundary_condition == "free"
@@ -293,7 +293,7 @@ def test_native_stability_problem_radial_cells(native_library, test_data, tmp_pa
             with pytest.raises(ValueError, match="equilibrium SHA-256"):
                 gliss.RunManifest.from_dict(tampered)
             changed_wall = gliss.StabilityConfiguration(
-                modes, degree=1, angular_theta=24, angular_zeta=8,
+                modes, degree=1, angular_theta=64, angular_zeta=8,
                 radial_cells=32, vacuum=gliss.VacuumModel((24, 12), 0.03),
             )
             with pytest.raises(ValueError, match="configuration SHA-256"):
