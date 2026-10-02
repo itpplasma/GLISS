@@ -264,7 +264,15 @@ contains
         integer, intent(in) :: n
         real(dp), intent(inout) :: matrix(n, n), rhs(n)
         integer, intent(out) :: info
-        external :: dposv
+        interface
+            subroutine dposv(uplo, n, nrhs, a, lda, b, ldb, info)
+                import dp
+                character(len=1), intent(in) :: uplo
+                integer, intent(in) :: n, nrhs, lda, ldb
+                real(dp), intent(inout) :: a(lda, *), b(ldb, *)
+                integer, intent(out) :: info
+            end subroutine dposv
+        end interface
 
         call dposv("U", n, 1, matrix, n, rhs, n, info)
     end subroutine solve_spd
