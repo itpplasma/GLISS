@@ -12,6 +12,7 @@ compatibility
 mode_diagnostics
 conventions
 angular_grids
+free_boundary
 api
 ```
 
