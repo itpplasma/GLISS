@@ -244,8 +244,10 @@ def _release_handle(destroy: Any, handle: ctypes.c_void_p) -> None:
 class Equilibrium:
     """Loaded GVEC/CAS3D equilibrium with explicit native lifetime.
 
-    ``close()`` or a ``with`` block releases the native data deterministically;
-    an unclosed instance is released when it is garbage collected.
+    ``close()`` or a ``with`` block releases this owner's native handle;
+    retained data remains alive until its last StabilityProblem closes.
+    Construction/destruction of problems sharing this equilibrium and its
+    close() must serialize. An unclosed owner is released on garbage collection.
     """
 
     def __init__(self, path: PathLike):

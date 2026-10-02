@@ -7,8 +7,10 @@ surfaces.  It solves the energy-principle eigenvalue problem
 elements in the radius, reads equilibria from the
 [GVEC](https://gitlab.mpcdf.mpg.de/gvec-group/gvec) CAS3D export, and is
 built for differentiability: verified assembly kernels carry
-Enzyme-generated derivative actions.  The public equilibrium-parameter to
-spectrum gradient chain and optimization loop remain under construction.
+Enzyme-generated derivative actions. Fixed-boundary pressure-sample spectral
+derivatives include the spline and stiffness response at fixed imported
+geometry. The force-balanced equilibrium-to-spectrum design derivative chain
+and optimization loop remain under construction.
 
 Version 0.0.2 supports production fixed-boundary FEEC spectra and energies,
 Mercier diagnostics, and symmetric GVEC or VMEC equilibrium input. Selected

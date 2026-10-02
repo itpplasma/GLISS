@@ -9,7 +9,9 @@ binding; no `f90wrap` dependency is required.
 
 The supported production scope is fixed- and free-boundary FEEC. TERPSICHORE
 FORT.23/24 solves are compatibility replays for validation, and the public
-equilibrium-to-spectrum derivative chain is incomplete. Version 0.0.2 ships a
+force-balanced equilibrium-to-spectrum design derivative chain is incomplete.
+Pressure-sample spectral derivatives at fixed imported geometry are available.
+Version 0.0.2 ships a
 manylinux x86-64 wheel and source distribution. macOS wheels remain future
 work. Asymmetric equilibria are solved with the coupled parity operator, and
 precomputed BOOZ_XFORM inputs convert.
@@ -779,6 +781,58 @@ allocation failures raise typed GLISS exceptions. `StabilityProblem.close()`
 is idempotent; an unclosed problem releases its native matrices when it is
 garbage collected. Calls on one problem must not overlap, but independently
 constructed problems may coexist.
+Construction and destruction of problems sharing one `Equilibrium`, including
+closing that equilibrium, must serialize with each other. Their native shared
+ownership counter is not atomic.
+
+### Pressure-sample spectral derivatives
+
+The fixed-boundary API differentiates the sum of an isolated eigenvalue or a
+complete cluster with respect to the imported pressure samples in Pa. The
+native problem retains these immutable samples even after its originating
+`Equilibrium` closes. The pressure spline, magnetic differential equation,
+pressure drive and plasma compressibility all contribute to the exact tangent.
+
+```python
+with gliss.Equilibrium("equilibrium_export.nc") as equilibrium:
+    with gliss.StabilityProblem(
+        equilibrium, [(1, 1)], degree=1, angular_theta=64,
+        angular_zeta=16, radial_cells=2,
+    ) as problem:
+        nodes, pressure_pa = problem.pressure_samples()
+        spectrum = problem.solve_full_spectrum_class(1)
+        stop = spectrum.eigenvalues.size
+        direction_pa = 0.01 * pressure_pa
+        derivative = problem.spectral_pressure_jvp(
+            1, stop - 1, stop, direction_pa, gap=1e-4,
+        )
+        sensitivity = problem.spectral_pressure_sensitivity(
+            1, stop - 1, stop, gap=1e-4,
+        )
+        gradient = sensitivity.vjp()
+```
+
+The direction is in Pa and the gradient in `s^-2 Pa^-1`; the selected sum and
+its JVP are in `s^-2`. `start:stop` is a frozen half-open range. Its exterior
+gaps must exceed the requested positive absolute `gap` plus neighboring
+residuals and resolutions, as for the material-parameter sensitivity API.
+Internal degeneracy is allowed: selecting the entire cluster gives a trace
+invariant under mass-orthonormal basis rotations. The gap check is a numerical
+admission diagnostic, not an equilibrium or mesh convergence certificate.
+
+Pressure must be strictly positive at the imported samples and all assembly
+points. Zero-width resonances must admit the full pressure-sample direction
+space. Geometry, magnetic flux and current profiles, density, adiabatic index,
+mode table, radial and angular quadrature, and resonance topology are frozen.
+These partial derivatives do not include a force-balanced GVEC equilibrium
+response. Free-boundary pressure derivatives are not currently supported.
+
+The direct JVP uses one tangent assembly. Constructing `PressureSensitivity`
+uses one exact tangent assembly per pressure sample; it avoids a dense
+pressure-to-stiffness Jacobian but its cost grows with the sample count.
+The full-spectrum solve also has the dense cost described above. Returned
+sample arrays and sensitivity gradients are read-only owned snapshots and
+survive closing the problem; the snapshot's `jvp` and `vjp` need no native handle.
 
 ### Free boundary
 

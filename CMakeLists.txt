@@ -153,6 +153,7 @@ add_library(gliss_c SHARED
     src/gliss_spectrum_capi.f90
     src/gliss_solver_controls_capi.f90
     src/gliss_energy_capi.f90
+    src/gliss_pressure_capi.f90
     src/gliss_terpsichore_capi.f90
     src/gliss_axisymmetric_capi.f90
     src/gliss_marginality_capi.f90

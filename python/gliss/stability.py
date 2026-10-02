@@ -624,6 +624,24 @@ class StabilityProblem:
 
         return diagnose_energy(self, parity_class, vector)
 
+    def pressure_samples(self):
+        """Return owned pressure coordinates and samples retained by this problem."""
+        from .pressure_derivatives import pressure_samples
+
+        return pressure_samples(self)
+
+    def spectral_pressure_jvp(self, parity_class, start, stop, tangent, *, gap):
+        """Differentiate a spectral sum at fixed geometry along a pressure direction."""
+        from .pressure_derivatives import spectral_pressure_jvp
+
+        return spectral_pressure_jvp(self, parity_class, start, stop, tangent, gap=gap)
+
+    def spectral_pressure_sensitivity(self, parity_class, start, stop, *, gap):
+        """Return a pressure-sample spectral gradient at fixed geometry."""
+        from .pressure_derivatives import spectral_pressure_sensitivity
+
+        return spectral_pressure_sensitivity(self, parity_class, start, stop, gap=gap)
+
     rayleigh_jvp = _rayleigh_jvp
     rayleigh_vjp = _rayleigh_vjp
 

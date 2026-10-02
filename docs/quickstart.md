@@ -78,6 +78,41 @@ assert abs(energy.rayleigh_quotient - lowest.lowest_eigenvalue) <= (
 )
 ```
 
+## Pressure-sample derivatives
+
+The pressure JVP follows the imported sample spline through the assembled
+stiffness at fixed geometry. For an isolated eigenvalue, its contraction uses
+the mass-normalized eigenvector; a complete cluster uses its basis-invariant
+trace. The positive `gap` specifies an exterior separation in s^-2.
+
+```python
+with gliss.Equilibrium(stable) as equilibrium:
+    with gliss.StabilityProblem(
+        equilibrium, [(1, 1)], degree=1, angular_theta=64,
+        angular_zeta=16, radial_cells=2,
+    ) as problem:
+        nodes, pressure_pa = problem.pressure_samples()
+        spectrum = problem.solve_full_spectrum_class(1)
+        stop = spectrum.eigenvalues.size
+        direction_pa = 0.01 * pressure_pa
+        jvp = problem.spectral_pressure_jvp(
+            1, stop - 1, stop, direction_pa, gap=1e-4,
+        )
+        sensitivity = problem.spectral_pressure_sensitivity(
+            1, stop - 1, stop, gap=1e-4,
+        )
+assert np.isclose(sensitivity.jvp(direction_pa), jvp, rtol=1e-9)
+assert not sensitivity.gradient.flags.writeable
+```
+
+The gradient has units s^-2 Pa^-1 and remains usable after the problem closes.
+Constructing it costs one tangent assembly per pressure sample; a direct JVP
+uses one. Pressure must be strictly positive, including at the assembly
+points, and zero-width resonances must admit the full sample-direction domain.
+Geometry, magnetic profiles, density, gamma, modes, quadrature and resonance
+topology are held fixed. A force-balanced external equilibrium response and
+free-boundary pressure derivatives remain future work.
+
 ## Free-boundary spectra
 
 A `VacuumModel` frees the plasma edge: its normal displacement drives a

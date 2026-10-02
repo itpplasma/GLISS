@@ -20,6 +20,7 @@ int main(void) {
     size_t surfaces = 1;
     int32_t schema_version = -1;
     int32_t coupled = -1;
+    double pressure_derivative = 123.0;
     char error[128];
 
     memset(&summary, 0, sizeof(summary));
@@ -186,6 +187,24 @@ int main(void) {
             problem, NULL, error, sizeof(error)) !=
         GLISS_STATUS_INVALID_ARGUMENT) {
         return 44;
+    }
+    surfaces = 123;
+    if (gliss_stability_problem_pressure_samples(
+            problem, 0, NULL, NULL, &surfaces, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT || surfaces != 0) {
+        return 45;
+    }
+    if (gliss_stability_problem_pressure_trace_jvp(
+            problem, 1, 0, 0, NULL, 0, NULL, &pressure_derivative,
+            error, sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT ||
+        pressure_derivative != 123.0) {
+        return 46;
+    }
+    if (gliss_stability_problem_pressure_trace_vjp(
+            problem, 1, 0, 0, NULL, 1.0, 1, &pressure_derivative,
+            error, sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT ||
+        pressure_derivative != 123.0) {
+        return 47;
     }
     return 0;
 }

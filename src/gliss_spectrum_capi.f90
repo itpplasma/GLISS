@@ -15,6 +15,7 @@ module gliss_spectrum_capi
         status_capacity, status_compute_error, status_invalid_argument, &
         status_internal_error, status_ok, write_error
     use gliss_c_contexts, only: equilibrium_context_t, &
+        release_equilibrium_context, retain_equilibrium_context, &
         stability_problem_context_t
     use plasma_vacuum_boundary, only: plasma_vacuum_model_t, &
         vacuum_wall_surface
@@ -305,6 +306,15 @@ contains
                 error_capacity)
             return
         end if
+        call retain_equilibrium_context(equilibrium, allocation_status)
+        if (allocation_status /= 0) then
+            deallocate (context)
+            status = status_internal_error
+            call write_error(error_pointer, error_capacity, &
+                "failed to retain the equilibrium context")
+            return
+        end if
+        context%equilibrium => equilibrium
         handle = c_loc(context)
         status = status_ok
     end function create_problem
@@ -386,6 +396,13 @@ contains
             return
         end if
         call c_f_pointer(handle, context)
+        call release_equilibrium_context(context%equilibrium, allocation_status)
+        if (allocation_status /= 0) then
+            status = status_internal_error
+            call write_error(error_pointer, error_capacity, &
+                "failed to release the retained equilibrium")
+            return
+        end if
         deallocate (context, stat=allocation_status)
         if (allocation_status /= 0) then
             status = status_internal_error
