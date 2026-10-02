@@ -37,7 +37,7 @@ contains
         real(dp), intent(in) :: triangles(:, :, :)
         real(dp), intent(out) :: boxes(:, :, :)
         real(dp) :: edges, margin, vertices(3, 3)
-        integer :: t
+        integer :: component, t
 
         do t = 1, size(triangles, 3)
             vertices = triangles(:, :, t)
@@ -45,8 +45,12 @@ contains
             ! Wider than the tolerance of the exact test of any pair.
             margin = 8192.0_dp * epsilon(1.0_dp) &
                 * max(maxval(abs(vertices)), edges)
-            boxes(:, 1, t) = minval(vertices, dim=2) - margin
-            boxes(:, 2, t) = maxval(vertices, dim=2) + margin
+            do component = 1, 3
+                boxes(component, 1, t) = min(vertices(component, 1), &
+                    vertices(component, 2), vertices(component, 3)) - margin
+                boxes(component, 2, t) = max(vertices(component, 1), &
+                    vertices(component, 2), vertices(component, 3)) + margin
+            end do
         end do
     end subroutine bounding_boxes
 
