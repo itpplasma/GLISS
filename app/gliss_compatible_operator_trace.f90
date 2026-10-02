@@ -495,7 +495,7 @@ contains
         logical, intent(out) :: unity_form
         character(len=64) :: token
         integer :: allocation_status, argument, cell, cell_count, comma
-        integer :: local_info, mode, mode_count
+        integer :: leading_cells, local_info, mode, mode_count
         logical :: form_seen, quadrature_seen
 
         arguments = command_argument_count()
@@ -512,6 +512,7 @@ contains
         if (local_parity < 1 .or. local_parity > 2) &
             call usage("PARITY must be 1 or 2")
         cell_count = 0
+        leading_cells = 0
         mode_count = 0
         solve_eigenpair = .false.
         radial_quadrature = compatible_quadrature_gauss
@@ -520,7 +521,15 @@ contains
         quadrature_seen = .false.
         do argument = 6, arguments
             call read_argument(argument, "mode or option", token)
-            if (index(token, "--cell=") == 1) then
+            if (index(token, "--first-cells=") == 1) then
+                if (leading_cells > 0) call usage("duplicate --first-cells option")
+                if (len_trim(token) == len("--first-cells=")) &
+                    call usage("--first-cells requires a value")
+                call parse_integer(token(len("--first-cells=") + 1:), &
+                    "first-cell count", leading_cells, local_info)
+                if (leading_cells < 1 .or. leading_cells > 32) &
+                    call usage("--first-cells must be between 1 and 32")
+            else if (index(token, "--cell=") == 1) then
                 if (len_trim(token) == 7) call usage("trace cell is empty")
                 cell_count = cell_count + 1
             else if (trim(token) == "--eigen") then
@@ -544,15 +553,26 @@ contains
         if (radial_quadrature == compatible_quadrature_cas3d_midpoint &
             .and. local_degree /= 1) &
             call usage("cas3d_midpoint radial quadrature requires DEGREE=1")
+        if (leading_cells > 0) then
+            if (cell_count > 0) call usage("--first-cells conflicts with --cell")
+            cell_count = leading_cells
+        end if
         if (mode_count < 1) call usage("at least one mode is required")
         allocate (poloidal_modes(mode_count), toroidal_modes(mode_count), &
             powers(mode_count), cells(cell_count), &
             stat=allocation_status)
         if (allocation_status /= 0) call fail("mode allocation", -1)
         cell = 0
+        if (leading_cells > 0) then
+            do cell = 1, leading_cells
+                cells(cell) = cell
+            end do
+            cell = 0
+        end if
         mode = 0
         do argument = 6, arguments
             call read_argument(argument, "mode or option", token)
+            if (index(token, "--first-cells=") == 1) cycle
             if (trim(token) == "--eigen") cycle
             if (index(token, "--radial-quadrature=") == 1) cycle
             if (index(token, "--form-function=") == 1) cycle

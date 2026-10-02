@@ -1,0 +1,2 @@
+path
+invalid_subspace_vector.csv

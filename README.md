@@ -101,6 +101,69 @@ cmake --build build-enzyme
 ctest --test-dir build-enzyme -L enzyme --output-on-failure
 ```
 
+## Diagnostic spectrum counts
+
+`gliss_compatible_marginality` can count the generalized eigenvalues below
+fixed physical shifts without assigning level numbers to mesh-dependent
+continuum samples.  For example:
+
+```sh
+fo exec gliss_compatible_marginality equilibrium.nc 4 32 8 1e-8 1 \
+  --physical-density=1e-7 \
+  --count-shifts=0,0.001,0.002,0.005 \
+  0,0 1,0 2,0
+```
+
+The command writes CSV with columns `shift,eigenvalues_below_shift`.  A row at
+shift `s` is the inertia count of eigenvalues satisfying `lambda < s` for the
+assembled generalized pencil.  Shifts must be finite, nonnegative, and
+strictly increasing.  The count mode is mutually exclusive with bracketing
+and `--inertia-only`; malformed or conflicting input exits nonzero before an
+equilibrium is opened.  This interface is intended for deterministic
+cross-grid and cross-code spectral-distribution comparisons.
+
+## Diagnostic profiles
+
+The same executable can reconstruct one radial eigenfunction after an inertia
+bracket has isolated it:
+
+```sh
+fo exec gliss_compatible_marginality equilibrium.nc 4 64 8 1e-10 1 \
+  --physical-density=1 \
+  --stored-powers=0.5,0.5,0 \
+  --eta-stored-powers=0.5,0.5,0 \
+  --eigenvalue-bracket=0.003,0.004,0.005 \
+  --eigenprofile-index=1 --profile-points=201 \
+  0,1 1,1 2,1
+```
+
+The bracket endpoint counts must be `INDEX-1` and `INDEX`; otherwise the
+command fails.  Profile mode automatically refines the eigenvalue interval to
+at most `min(TOLERANCE,1e-10)` relative width.  It then uses deterministic
+shift-invert iteration at the outer-bracket midpoint and emits a profile only
+if the isolated level is the closest eigenvalue and the mass-whitened residual
+estimates an eigenspace-angle bound no larger than `1e-3`. These are
+finite-pencil diagnostics with floating-point uncertainty.
+
+The selected-eigenpair CSV row reports the outer and refined brackets, their
+bracket midpoint, the independently computed Rayleigh quotient, the raw and
+diagonally equilibrated action-relative residuals, a Frobenius-norm backward
+error, the mass-whitened absolute residual, the eigenspace-angle bound, and the
+reciprocal condition estimate of the equilibrated mass matrix.  These are
+different diagnostics: a low mode of a strongly cancelling energy pencil can
+have a visibly larger action-relative residual while remaining backward stable
+and having a small, estimated subspace error.  The following rows are
+`normal` and `eta` field values at cell-centred coordinates; no coefficient
+layout is exposed to downstream scripts.
+
+Counts and stand-alone bracket refinement use the production block storage. Profile,
+external coefficient-energy and seeded-subspace diagnostics use the current
+FEEC assembly with a conservative 2048-unknown dense limit. The default space
+retains the Cartesian axis ties; an explicit eta-power table differing from
+the normal table selects the historical unconstrained validation space.
+See [mode diagnostics](docs/mode_diagnostics.md) for coefficient conventions,
+branch integration and the remaining MISHKA/CASTOR acceptance requirements.
+
 ## Formulation and provenance
 
 The formulation follows the CAS3D energy-principle programme published by
