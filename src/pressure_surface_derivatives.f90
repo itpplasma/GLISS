@@ -36,6 +36,7 @@ module pressure_surface_derivatives
 
     public :: build_pressure_surface_response
     public :: pressure_surface_jvp, pressure_surface_vjp
+    public :: surface_slope_response
 
 contains
 

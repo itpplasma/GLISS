@@ -9,6 +9,7 @@ module compatible_three_component_problem
         symmetrize_compatible_blocks
     use compatible_compressible_stiffness_assembly, only: &
         assemble_compatible_compressible_stiffness_surface, &
+        assemble_compatible_pressure_stiffness_tangent, &
         compatible_stiffness_term_count
     use compatible_physical_mass_assembly, only: &
         assemble_compatible_physical_mass_surface
@@ -35,6 +36,9 @@ module compatible_three_component_problem
         primitive_kernel_ok
     use radial_feec_complex, only: build_radial_feec_complex, &
         evaluate_radial_feec_complex, radial_feec_complex_t, radial_feec_ok
+    use radial_cubic_spline, only: evaluate_radial_cubic_spline_field, &
+        fit_radial_cubic_spline_field, radial_cubic_spline_field_t, &
+        radial_cubic_spline_ok
     use variable_block_tridiagonal, only: variable_block_tridiagonal_t
     use trial_space_topology, only: build_trial_space_topology, &
         trial_component_eta, trial_component_mu, trial_component_normal, &
@@ -91,6 +95,7 @@ module compatible_three_component_problem
     public :: build_compatible_three_component_problem
     public :: build_compatible_three_component_classes
     public :: build_compatible_vacuum_energy
+    public :: build_compatible_pressure_stiffness_tangent
 
     logical, parameter :: accurate_term(5) = &
         [.true., .true., .false., .true., .false.]
@@ -129,7 +134,7 @@ contains
     subroutine build_compatible_three_component_problem(equilibrium, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, problem, info, vacuum, &
-            sparse_storage, vacuum_energy, radial_cells)
+            sparse_storage, vacuum_energy, radial_cells, pressure_direction)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:)
@@ -147,6 +152,7 @@ contains
         ! Uniform radial cells in s of the finite-element space (0 or
         ! absent: one cell per equilibrium surface).
         integer, optional, intent(in) :: radial_cells
+        real(dp), optional, intent(in) :: pressure_direction(:)
         integer, allocatable :: parity(:), trial_m(:), trial_n(:)
         real(dp), allocatable :: trial_power(:)
         integer :: allocation_status, count
@@ -184,8 +190,39 @@ contains
         call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             trial_m, trial_n, trial_power, parity, degree, n_theta, n_zeta, &
             problem, info, vacuum, vacuum_energy, &
-            radial_cells=radial_cells)
+            radial_cells=radial_cells, pressure_direction=pressure_direction)
     end subroutine build_compatible_three_component_problem
+
+    ! Pressure-sample parameterization v1, in Pa on equilibrium%s. All geometry,
+    ! flux/current profiles, mass density, axis ties, quadrature and resonance
+    ! widths remain fixed. Output stiffness/terms are dK; mass is unchanged M.
+    ! This derivative is of the imported operator, without a force-balance map.
+    subroutine build_compatible_pressure_stiffness_tangent(equilibrium, &
+            adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
+            parity_class, &
+            degree, n_theta, n_zeta, pressure_direction, problem, info, &
+            sparse_storage, radial_cells)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        real(dp), intent(in) :: adiabatic_index, density_kg_m3
+        integer, intent(in) :: mode_m(:), mode_n(:), parity_class, degree
+        integer, intent(in) :: n_theta, n_zeta
+        real(dp), intent(in) :: stored_power(:), pressure_direction(:)
+        type(compatible_three_component_problem_t), intent(out) :: problem
+        integer, intent(out) :: info
+        logical, optional, intent(in) :: sparse_storage
+        integer, optional, intent(in) :: radial_cells
+
+        info = compatible_three_component_invalid
+        if (.not. allocated(equilibrium%pressure)) return
+        if (size(pressure_direction) /= size(equilibrium%pressure)) return
+        if (.not. all(ieee_is_finite(pressure_direction))) return
+        if (any(equilibrium%pressure <= 0.0_dp)) return
+        call build_compatible_three_component_problem(equilibrium, adiabatic_index, &
+            density_kg_m3, mode_m, mode_n, stored_power, parity_class, &
+            degree, n_theta, n_zeta, problem, info, sparse_storage=sparse_storage, &
+            radial_cells=radial_cells, &
+            pressure_direction=pressure_direction)
+    end subroutine build_compatible_pressure_stiffness_tangent
 
     ! Both parity classes of a stellarator-symmetric problem in one pass:
     ! the sine-parity forms come from the angular products of the
@@ -286,7 +323,7 @@ contains
     subroutine build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             mode_m, mode_n, stored_power, parity, degree, n_theta, n_zeta, &
             problem, info, vacuum, vacuum_energy, sine_problem, &
-            sine_vacuum_energy, radial_cells)
+            sine_vacuum_energy, radial_cells, pressure_direction)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
@@ -300,10 +337,12 @@ contains
             intent(inout) :: sine_problem
         real(dp), optional, intent(in) :: sine_vacuum_energy(:, :)
         integer, optional, intent(in) :: radial_cells
+        real(dp), optional, intent(in) :: pressure_direction(:)
+        type(radial_cubic_spline_field_t), allocatable :: pressure_tangent
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(class_setup_t) :: setup, sine_setup
-        real(dp), allocatable :: breaks(:), theta(:), zeta(:)
+        real(dp), allocatable :: breaks(:), theta(:), zeta(:), direction(:, :)
         integer, allocatable :: sine_parity(:)
         integer :: allocation_status, intervals, local_info
 
@@ -332,6 +371,14 @@ contains
             info = compatible_three_component_assembly_error
             return
         end if
+        if (present(pressure_direction)) then
+            if (present(vacuum) .or. present(sine_problem)) return
+            allocate (pressure_tangent, direction(size(pressure_direction), 1))
+            direction(:, 1) = pressure_direction
+            call fit_radial_cubic_spline_field(spline%radial_grid, direction, &
+                pressure_tangent, local_info)
+            if (local_info /= radial_cubic_spline_ok) return
+        end if
         call prepare_class(spline, complex, mode_m, mode_n, parity, &
             stored_power, degree, problem, setup, info, vacuum, vacuum_energy)
         if (info /= compatible_three_component_ok) return
@@ -350,7 +397,7 @@ contains
         else
             call assemble_problem(spline, complex, breaks, theta, zeta, &
                 adiabatic_index, density_kg_m3, mode_m, mode_n, parity, &
-                stored_power, setup, problem, info)
+                stored_power, setup, problem, info, pressure_tangent=pressure_tangent)
         end if
         if (info /= compatible_three_component_ok) return
         call finish_class(complex, degree, setup, problem, info)
@@ -622,7 +669,7 @@ contains
 
     subroutine assemble_problem(spline, complex, breaks, theta, zeta, &
             adiabatic_index, density, mode_m, mode_n, parity, stored_power, &
-            setup, problem, info, sine_setup, sine_problem)
+            setup, problem, info, sine_setup, sine_problem, pressure_tangent)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: breaks(:), theta(:), zeta(:)
@@ -635,6 +682,7 @@ contains
         type(class_setup_t), optional, intent(in) :: sine_setup
         type(compatible_three_component_problem_t), optional, &
             intent(inout) :: sine_problem
+        type(radial_cubic_spline_field_t), optional, intent(in) :: pressure_tangent
         type(radial_contribution_t), allocatable :: batch(:)
         real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
         real(dp), allocatable :: axis_nodes(:), axis_weights(:)
@@ -709,7 +757,7 @@ contains
                         adiabatic_index, density, mode_m, mode_n, parity, &
                         stored_power, setup, problem, &
                         kinds(entry) /= point_constraint, orientation, &
-                        batch(entry - first + 1))
+                        batch(entry - first + 1), pressure_tangent=pressure_tangent)
                 end if
             end do
             !$omp end parallel do
@@ -737,7 +785,7 @@ contains
     subroutine compute_radial_point(spline, complex, coordinate, weight, &
             theta, zeta, adiabatic_index, density, mode_m, mode_n, parity, &
             stored_power, setup, problem, assemble_mass, orientation, &
-            contribution, sine_setup, sine_problem)
+            contribution, sine_setup, sine_problem, pressure_tangent)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         type(radial_feec_complex_t), intent(in) :: complex
         real(dp), intent(in) :: coordinate, weight, theta(:), zeta(:)
@@ -752,7 +800,9 @@ contains
         type(class_setup_t), optional, intent(in) :: sine_setup
         type(compatible_three_component_problem_t), optional, intent(in) :: &
             sine_problem
+        type(radial_cubic_spline_field_t), optional, intent(in) :: pressure_tangent
         real(dp), allocatable :: fields(:, :, :), drive(:, :)
+        real(dp), allocatable :: fields_dot(:, :, :), drive_dot(:, :)
         real(dp), allocatable :: jacobian_s(:, :), jacobian_t(:, :)
         real(dp), allocatable :: jacobian_z(:, :), gamma_p(:, :)
         real(dp), allocatable :: h1(:), dh1(:), l2(:), local_h1(:, :)
@@ -760,6 +810,7 @@ contains
         real(dp), allocatable :: local_eta(:, :), local_k(:, :), sine_k(:, :)
         integer, allocatable :: h1_index(:), l2_index(:)
         real(dp) :: pressure
+        real(dp) :: tangent_value(1), tangent_slope(1), tangent_second(1)
         integer :: allocation_status, local_info, trials
 
         contribution%info = compatible_three_component_assembly_error
@@ -798,9 +849,21 @@ contains
         if (local_info /= compatible_support_ok) return
         call replicate_indexed_values(l2, l2_index, local_l2, local_info)
         if (local_info /= compatible_support_ok) return
-        call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
-            zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
-            jacobian_z, pressure, orientation=orientation)
+        if (present(pressure_tangent)) then
+            call evaluate_radial_cubic_spline_field(spline%radial_grid, &
+                pressure_tangent, &
+                coordinate, tangent_value, tangent_slope, tangent_second, local_info)
+            if (local_info /= radial_cubic_spline_ok) return
+            call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
+                zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
+                jacobian_z, pressure, orientation=orientation, &
+                pressure_slope_tangent=tangent_slope(1), fields_tangent=fields_dot, &
+                drive_tangent=drive_dot)
+        else
+            call evaluate_primitive_kernel_surface(spline, coordinate, theta, &
+                zeta, fields, drive, local_info, jacobian_s, jacobian_t, &
+                jacobian_z, pressure, orientation=orientation)
+        end if
         contribution%orientation = orientation
         if (local_info /= primitive_kernel_ok) return
         if (.not. problem%coupled) then
@@ -827,7 +890,13 @@ contains
             contribution%info = compatible_three_component_allocation_error
             return
         end if
-        if (present(sine_setup)) then
+        if (present(pressure_tangent)) then
+            call assemble_compatible_pressure_stiffness_tangent(fields, drive, &
+                jacobian_s, jacobian_t, jacobian_z, gamma_p, fields_dot, drive_dot, &
+                adiabatic_index * tangent_value(1), mode_m, mode_n, parity, &
+                spline%field_periods, local_h1, local_dh1, local_eta, local_l2, &
+                weight, local_k, contribution%cosine%terms, local_info)
+        else if (present(sine_setup)) then
             call assemble_compatible_compressible_stiffness_surface(fields, &
                 drive, jacobian_s, jacobian_t, jacobian_z, gamma_p, mode_m, &
                 mode_n, parity, spline%field_periods, local_h1, local_dh1, &

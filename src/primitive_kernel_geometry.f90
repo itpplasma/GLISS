@@ -9,6 +9,8 @@ module primitive_kernel_geometry
         fit_primitive_equilibrium, primitive_equilibrium_ok, &
         primitive_equilibrium_spline_t
     use primitive_geometry_grid, only: primitive_geometry_grid_t
+    use pressure_surface_derivatives, only: pressure_derivative_ok, &
+        surface_slope_response
     use radial_cubic_spline, only: evaluate_radial_cubic_spline_field, &
         radial_cubic_spline_ok
     implicit none
@@ -25,7 +27,8 @@ contains
 
     subroutine evaluate_primitive_kernel_surface(spline, coordinate, theta, &
             zeta_period, fields, drive, info, jacobian_radial, &
-            jacobian_theta, jacobian_zeta, pressure_pa, geometric_drive, orientation)
+            jacobian_theta, jacobian_zeta, pressure_pa, geometric_drive, orientation, &
+            pressure_slope_tangent, fields_tangent, drive_tangent)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         real(dp), intent(in) :: coordinate, theta(:), zeta_period(:)
         real(dp), allocatable, intent(out) :: fields(:, :, :), drive(:, :)
@@ -36,6 +39,9 @@ contains
         real(dp), optional, intent(out) :: pressure_pa
         real(dp), allocatable, optional, intent(out) :: geometric_drive(:, :)
         integer, optional, intent(inout) :: orientation
+        real(dp), optional, intent(in) :: pressure_slope_tangent
+        real(dp), allocatable, optional, intent(out) :: fields_tangent(:, :, :)
+        real(dp), allocatable, optional, intent(out) :: drive_tangent(:, :)
         type(primitive_geometry_grid_t) :: geometry
         type(surface_data_t) :: surface
         type(surface_profiles_t) :: profiles
@@ -43,6 +49,11 @@ contains
         integer :: allocation_status, local_info, surface_orientation
 
         info = primitive_kernel_invalid
+        if (present(pressure_slope_tangent) .neqv. present(fields_tangent)) return
+        if (present(fields_tangent) .neqv. present(drive_tangent)) return
+        if (present(pressure_slope_tangent)) then
+            if (.not. ieee_is_finite(pressure_slope_tangent)) return
+        end if
         if (present(pressure_pa)) pressure_pa = 0.0_dp
         call evaluate_primitive_equilibrium(spline, coordinate, theta, &
             zeta_period, geometry, pressure, pressure_slope, local_info)
@@ -85,6 +96,23 @@ contains
             .or. .not. all(ieee_is_finite(drive))) then
             deallocate (fields, drive)
             return
+        end if
+        if (present(pressure_slope_tangent)) then
+            if (pressure <= 0.0_dp) return
+            allocate (fields_tangent, mold=fields, stat=allocation_status)
+            if (allocation_status == 0) allocate (drive_tangent, mold=drive, &
+                stat=allocation_status)
+            if (allocation_status /= 0) then
+                info = primitive_kernel_allocation_error
+                return
+            end if
+            call surface_slope_response(spline%position%poloidal_modes, &
+                spline%position%toroidal_modes, .true., surface, profiles, &
+                geometry%jacobian_s, theta, zeta_period, fields, &
+                fields_tangent, drive_tangent, local_info)
+            if (local_info /= pressure_derivative_ok) return
+            fields_tangent = fields_tangent * pressure_slope_tangent
+            drive_tangent = drive_tangent * pressure_slope_tangent
         end if
         if (present(jacobian_radial)) then
             allocate (jacobian_radial, source=geometry%jacobian_s, &

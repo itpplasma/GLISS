@@ -126,6 +126,10 @@ name = "pressure_surface_derivatives"
 main = "test_pressure_surface_derivatives.f90"
 
 [[test]]
+name = "pressure_stiffness_tangent"
+main = "test_pressure_stiffness_tangent.f90"
+
+[[test]]
 name = "fixed_boundary_spectrum"
 main = "test_fixed_boundary_spectrum.f90"
 
