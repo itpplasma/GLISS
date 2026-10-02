@@ -25,7 +25,7 @@ def main():
                         help="plasma half-width in metres")
     parser.add_argument("--poloidal-max", type=int, default=8)
     parser.add_argument("--degree", type=int, default=2)
-    parser.add_argument("--angular", type=int, nargs=2, default=(64, 8))
+    parser.add_argument("--angular", type=int, nargs=2, default=(128, 8))
     parser.add_argument("--edge", type=int, nargs=2, default=(128, 128))
     parser.add_argument("--bisect", type=float, nargs=2, metavar=("LOW", "HIGH"))
     parser.add_argument("--tolerance", type=float, default=1e-3)

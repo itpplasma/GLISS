@@ -12,10 +12,11 @@ derivatives include the spline and stiffness response at fixed imported
 geometry. The force-balanced equilibrium-to-spectrum design derivative chain
 and optimization loop remain under construction.
 
-Version 0.0.2 supports production fixed-boundary FEEC spectra and energies,
-Mercier diagnostics, and symmetric GVEC or VMEC equilibrium input. Selected
-free-boundary operators remain research components; they do not form a public
-physical plasma-vacuum API. The TERPSICHORE FORT.23/24 entry points reproduce
+The current source supports fixed- and free-boundary FEEC spectra and energies,
+Mercier diagnostics, and GVEC or VMEC equilibrium input. The physical
+plasma-vacuum API uses `StabilityProblem(vacuum=VacuumModel(...))` with a
+current-free vacuum and an optional ideal conducting wall. The TERPSICHORE
+FORT.23/24 entry points reproduce
 that code's stored discretization for validation and are labeled compatibility
 paths throughout the API and documentation.
 
@@ -56,8 +57,9 @@ See the [Python guide](python/README.md) for examples, conventions, input and
 output contracts, direct VMEC conversion, and the optional SIMSOPT adapter.
 
 Release 0.0.2 provides a manylinux x86-64 wheel and a source distribution.
-macOS wheels, the production free-boundary solve, and the complete
-equilibrium-to-spectrum derivative chain are tracked as future work.
+The source includes the physical free-boundary solve; clean-install macOS
+validation and the complete force-balanced equilibrium-to-spectrum derivative
+chain remain tracked work.
 Asymmetric equilibria take the coupled parity operator, and precomputed
 BOOZ_XFORM files convert with `convert_boozer`.
 
