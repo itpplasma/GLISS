@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Preserve the full vacuum cross-parity matrix when an enclosing wall breaks
+  stellarator symmetry. The public free-boundary problem selects coupled
+  class 0 automatically; explicitly separated native requests fail closed.
+  Operator revision 4 also covers the FEEC axis closure and cubic MDE
+  bandwidth corrections. Historical revisions remain readable but require
+  explicit configuration migration and a fresh solve for current verification.
+  ABI 4 prevents stale Python/native pairings from mislabeling this operator;
+  `gliss_discretization_revision()` exposes its revision to C clients. The
+  appended energy/marginality struct fields retain size-qualified legacy
+  handling; the ABI bump protects operator provenance, not a buffer-overwrite
+  repair. The unreleased package version remains 0.0.2.
 - Include off-diagonal stiffness in the unit-independent pencil roundoff
   scale. When a radial Schur pivot is singular or unresolved, retry with
   global pivoting at the same shift for at most 1024 unknowns; larger

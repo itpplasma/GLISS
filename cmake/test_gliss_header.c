@@ -39,6 +39,9 @@ int main(void) {
     if (gliss_abi_version() != GLISS_ABI_VERSION) {
         return 1;
     }
+    if (gliss_discretization_revision() != GLISS_DISCRETIZATION_REVISION) {
+        return 48;
+    }
     if (gliss_equilibrium_destroy(&equilibrium, error, sizeof(error)) !=
         GLISS_STATUS_OK) {
         return 2;

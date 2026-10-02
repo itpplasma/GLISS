@@ -394,7 +394,7 @@ class FullRunManifest:
 
     @property
     def configuration_verified(self) -> bool:
-        """Whether the result records the exact mesh and vacuum configuration."""
+        """Whether the result binds the exact inputs to the current operator."""
         return self._base_manifest().configuration_verified
 
     @property

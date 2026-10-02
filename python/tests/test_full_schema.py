@@ -502,6 +502,40 @@ def test_full_run_manifest_rejects_source_equilibrium_mismatch(
         )
 
 
+def test_revision_three_full_archive_remains_qualified_and_cannot_mint_new_run(
+    configuration, full_result, tmp_path
+):
+    old_configuration = replace(configuration, discretization_revision=3)
+    source = tmp_path / "equilibrium.nc"
+    source.write_bytes(b"historical equilibrium fingerprint")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    old_result = gliss.FullStabilityResult(tuple(
+        replace(item, certified_lowest=replace(
+            item.certified_lowest, discretization_revision=3,
+            configuration_sha256=old_configuration.sha256, equilibrium_sha256=digest,
+        )) for item in full_result.classes
+    ))
+    historical = gliss.FullRunManifest(
+        equilibrium_filename=source.name, equilibrium_size_bytes=source.stat().st_size,
+        equilibrium_sha256=digest, equilibrium_schema_version=1,
+        configuration=old_configuration, result=old_result,
+        gliss_python_version="0.0.2", gliss_native_version="0.0.2", gliss_abi_version=3,
+        numpy_version=np.__version__, python_version="3.9.0",
+    )
+    path = tmp_path / "historical.gliss"
+    historical.write(path)
+    restored = gliss.FullRunManifest.read(path)
+    assert not restored.configuration_verified and restored.equilibrium_verified
+    assert restored.gliss_abi_version == 3
+    np.testing.assert_array_equal(
+        restored.result.classes[0].eigenvalues, old_result.classes[0].eigenvalues,
+    )
+    with pytest.raises(ValueError, match="operator changed.*fresh solve"):
+        gliss.write_full_run_manifest(
+            tmp_path / "reexported.gliss", source, restored.configuration, restored.result,
+        )
+
+
 def test_full_run_manifest_rejects_wrong_result_type(configuration):
     with pytest.raises(TypeError, match="gliss.FullStabilityResult"):
         gliss.FullRunManifest(

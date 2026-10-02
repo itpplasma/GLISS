@@ -150,9 +150,16 @@ configuration records the operator revision it was assembled with, so a
 record from an earlier discretization is not silently replayed.
 Fresh spectra also record the source equilibrium and canonical configuration
 digests, including the radial mesh and exact wall model. Run-manifest writers
-reject mismatched inputs. Historical manifests remain readable with
-``configuration_verified=False`` and ``equilibrium_verified=False``;
-creating a new manifest from an older result requires a fresh solve.
+require the current operator revision, 4, and reject mismatched inputs.
+Earlier revisions remain readable as
+historical records; migrate the configuration explicitly with
+`dataclasses.replace(configuration, discretization_revision=4)` and solve again.
+An old spectrum cannot be relabelled or exported as a verified current run.
+The Python loader checks both ABI 4 and native operator revision 4.
+Historical manifests preserve their fingerprints. An old operator revision
+reports `configuration_verified=False`; `equilibrium_verified` still reports
+whether its recorded source digest is known. Archives without either digest
+report both flags as false. Creating a new manifest requires a fresh solve.
 
 ```python
 with tempfile.TemporaryDirectory() as directory:

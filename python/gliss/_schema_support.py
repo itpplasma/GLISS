@@ -24,8 +24,10 @@ SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8)
 # FEEC operator of versions 3 and 4, 2 the axis-conforming FEEC space of #16
 # (tangential axis weight and the regular third unknown), and 3 the space of
 # #35 that ties the leading |m|=1 coefficients of xi^s and eta and integrates
-# the axis element in sqrt(s).
-DISCRETIZATION_REVISION = 3
+# the axis element in sqrt(s). Revision 4 closes the degenerate FEEC axis
+# representation, admits the cubic MDE bandwidth, and retains vacuum coupling
+# between plasma parity classes when an enclosing wall breaks their symmetry.
+DISCRETIZATION_REVISION = 4
 
 
 def discretization_revision(value: Mapping[str, Any], version: int, context: str) -> int:

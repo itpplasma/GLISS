@@ -269,11 +269,15 @@ class RunManifest:
 
     @property
     def configuration_verified(self) -> bool:
-        """Whether every result records this exact configuration.
+        """Whether every result binds this exact configuration to the current operator.
 
         Historical archives remain readable, but results without a digest
         cannot establish which radial mesh or vacuum model produced them.
+        A known historical digest is preserved but does not certify the
+        current operator after its discretization revision changes.
         """
+        if self.configuration.discretization_revision != DISCRETIZATION_REVISION:
+            return False
         return all(
             item.configuration_sha256 == self.configuration.sha256
             for item in self.result.classes
@@ -309,8 +313,8 @@ class RunManifest:
         string(self.gliss_python_version, "gliss_python_version")
         string(self.gliss_native_version, "gliss_native_version")
         abi = integer(self.gliss_abi_version, "gliss_abi_version", 1)
-        if abi not in (1, 2, 3):
-            raise ValueError("gliss_abi_version must be 1, 2 or 3")
+        if abi not in (1, 2, 3, 4):
+            raise ValueError("gliss_abi_version must be 1, 2, 3 or 4")
         string(self.numpy_version, "numpy_version")
         string(self.python_version, "python_version")
         stability_result_to_dict(self.result)
@@ -391,8 +395,8 @@ class RunManifest:
             "run.software",
         )
         abi = integer(software["gliss_abi"], "run.software.gliss_abi", 1)
-        if abi not in (1, 2, 3):
-            raise ValueError("run.software.gliss_abi must be 1, 2 or 3")
+        if abi not in (1, 2, 3, 4):
+            raise ValueError("run.software.gliss_abi must be 1, 2, 3 or 4")
         configuration = StabilityConfiguration.from_dict(value["configuration"])
         result = stability_result_from_dict(value["result"])
         nested_versions = {
@@ -517,6 +521,11 @@ def _create_run_manifest(
         raise TypeError("result must be a gliss.StabilityResult")
     stability_result_to_dict(result)
     _validate_result_configuration(configuration, result, require_provenance=True)
+    if configuration.discretization_revision != DISCRETIZATION_REVISION:
+        raise ValueError(
+            "operator changed: creating a new run manifest requires the current "
+            "discretization revision and a fresh solve"
+        )
     export, _ = _export_path(equilibrium_path)
     equilibrium_schema, equilibrium_size, equilibrium_digest = _equilibrium_metadata(
         export

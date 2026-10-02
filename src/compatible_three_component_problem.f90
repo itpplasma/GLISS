@@ -51,7 +51,7 @@ module compatible_three_component_problem
     integer, parameter, public :: compatible_three_component_invalid = -1
     integer, parameter, public :: compatible_three_component_assembly_error = -2
     integer, parameter, public :: compatible_three_component_allocation_error = -3
-    ! The equilibrium breaks the (theta,zeta)->(-theta,-zeta) symmetry that
+    ! The plasma or vacuum breaks the (theta,zeta)->(-theta,-zeta) symmetry that
     ! decouples the two parity classes; their operator does not apply.
     integer, parameter, public :: compatible_three_component_asymmetric = -4
     ! Free-boundary vacuum failures: the edge mesh cannot resolve the mode
@@ -95,6 +95,7 @@ module compatible_three_component_problem
     public :: build_compatible_three_component_problem
     public :: build_compatible_three_component_classes
     public :: build_compatible_vacuum_energy
+    public :: compatible_vacuum_preserves_parity
     public :: build_compatible_pressure_stiffness_tangent
 
     logical, parameter :: accurate_term(5) = &
@@ -247,6 +248,7 @@ contains
         real(dp), optional, intent(in) :: vacuum_energy(:, :)
         integer, optional, intent(in) :: radial_cells
         integer, allocatable :: parity(:)
+        real(dp), allocatable :: computed_vacuum(:, :)
         integer :: modes
 
         info = compatible_three_component_invalid
@@ -257,6 +259,19 @@ contains
         if (present(vacuum) .and. present(vacuum_energy)) then
             if (size(vacuum_energy, 1) /= 2 * modes &
                 .or. size(vacuum_energy, 2) /= 2 * modes) return
+            if (.not. all(ieee_is_finite(vacuum_energy))) return
+            if (.not. compatible_vacuum_preserves_parity(vacuum_energy)) then
+                info = compatible_three_component_asymmetric
+                return
+            end if
+        else if (present(vacuum)) then
+            call build_compatible_vacuum_energy(equilibrium, mode_m, mode_n, &
+                vacuum, computed_vacuum, info)
+            if (info /= compatible_three_component_ok) return
+            if (.not. compatible_vacuum_preserves_parity(computed_vacuum)) then
+                info = compatible_three_component_asymmetric
+                return
+            end if
         end if
         allocate (parity(modes), source=phase_cosine)
         cosine_problem%free_boundary = present(vacuum)
@@ -271,6 +286,12 @@ contains
                 n_zeta, cosine_problem, info, vacuum, &
                 vacuum_energy(:modes, :modes), sine_problem, &
                 vacuum_energy(modes + 1:, modes + 1:), radial_cells)
+        else if (present(vacuum)) then
+            call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
+                mode_m, mode_n, stored_power, parity, degree, n_theta, &
+                n_zeta, cosine_problem, info, vacuum, &
+                computed_vacuum(:modes, :modes), sine_problem, &
+                computed_vacuum(modes + 1:, modes + 1:), radial_cells)
         else
             call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
                 mode_m, mode_n, stored_power, parity, degree, n_theta, &
@@ -279,10 +300,39 @@ contains
         end if
     end subroutine build_compatible_three_component_classes
 
+    function compatible_vacuum_preserves_parity(energy) result(valid)
+        real(dp), intent(in) :: energy(:, :)
+        logical :: valid
+        real(dp) :: scale, tolerance
+        integer :: modes
+
+        valid = .false.
+        if (size(energy, 1) < 2) return
+        if (size(energy, 1) /= size(energy, 2)) return
+        if (modulo(size(energy, 1), 2) /= 0) return
+        if (.not. all(ieee_is_finite(energy))) return
+        modes = size(energy, 1) / 2
+        scale = maxval(abs(energy))
+        if (scale == 0.0_dp) then
+            valid = .true.
+            return
+        end if
+        ! Only a relative rounding allowance: the wall can break parity
+        ! even when the plasma does not. Do not silently discard a finite
+        ! cross block or change admission when the energy units change.
+        ! This admits parity to working precision, not a quadrature-error
+        ! bound; mass scaling can amplify a discarded rounding-sized entry.
+        tolerance = 1024.0_dp * epsilon(scale)
+        if (maxval(abs(energy(:modes, modes + 1:))) / scale > tolerance) return
+        if (maxval(abs(energy(modes + 1:, :modes))) / scale > tolerance) return
+        valid = .true.
+    end function compatible_vacuum_preserves_parity
+
     ! Vacuum energy of the normal trials of both parity classes in the
     ! coupled order: every mode with parity 1, then every mode with parity
     ! 2. A trial's edge flux depends only on its own mode and parity, so the
-    ! problem of one parity class uses its principal sub-block, and the
+    ! problem of one parity class uses its principal sub-block only after
+    ! compatible_vacuum_preserves_parity admits the separation, and the
     ! vacuum solve, which depends only on the edge and the wall, serves
     ! both classes.
     subroutine build_compatible_vacuum_energy(equilibrium, mode_m, mode_n, &

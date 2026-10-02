@@ -980,14 +980,21 @@ They remain readable and can be copied, but
 creating a new run manifest from them requires a fresh solve. Older documents record a
 different operator: revision 0 is the midpoint quadrature of versions 1 and
 2, revision 1 the Gauss FEEC operator of versions 3 and 4, revision 2 the
-axis-weighted FEEC space of #16, and revision 3 the current space with the
-|m|=1 axis tie and the axis element integrated in `sqrt(s)` (#35). They
+axis-weighted FEEC space of #16, and revision 3 the space with the
+|m|=1 axis tie and the axis element integrated in `sqrt(s)` (#35).
+Revision 4 closes the degenerate FEEC axis representation, requires the cubic
+MDE bandwidth, and retains vacuum cross-parity terms for asymmetric walls.
+An archive from a previous operator revision preserves its known fingerprints
+but reports `configuration_verified=False`; its `equilibrium_verified` still
+reports whether the source digest is known. Earlier records
 remain readable as records, but
 `create_problem()` raises `ValueError("operator changed ...")` for a
 configuration whose revision differs from the current one, and a run manifest
 requires the configuration and result revisions to agree. Accepting the new
 operator is explicit:
-`dataclasses.replace(configuration, discretization_revision=3)`. Full-spectrum readers require the
+`dataclasses.replace(configuration, discretization_revision=4)`, followed by
+a fresh solve. Updating a configuration does not migrate its old spectrum or
+certify it against the new operator. Full-spectrum readers require the
 exact entry set for the declared version, stored without compression or
 encryption. They reject invalid entry sets, malformed
 metadata, incompatible versions, wrong array types or shapes, inconsistent
@@ -995,6 +1002,13 @@ diagnostics, and truncated payloads.
 Writes stream arrays directly into a temporary container in the destination
 directory and replace the destination only after the complete file is closed
 and synchronized. A failed write leaves an existing destination unchanged.
+
+The current native ABI is 4. The Python loader requires both ABI 4 and operator
+revision 4; C clients can check `gliss_abi_version()` and
+`gliss_discretization_revision()` against the constants in `gliss.h`.
+The ABI barrier prevents older wrappers from recording the corrected operator
+under revision 3. Size-qualified legacy energy and marginality layouts remain
+memory safe, and archives recording ABI versions 1 through 3 remain readable.
 
 Writers use an atomic replacement in the destination directory. Readers
 require UTF-8 JSON objects and reject duplicate or unknown fields, missing

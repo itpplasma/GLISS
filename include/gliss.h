@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 
-#define GLISS_ABI_VERSION 3
+#define GLISS_ABI_VERSION 4
+#define GLISS_DISCRETIZATION_REVISION 4
 
 typedef struct gliss_equilibrium gliss_equilibrium;
 typedef struct gliss_stability_problem gliss_stability_problem;
@@ -29,6 +30,9 @@ typedef enum gliss_status {
 
 void gliss_version(char *buffer, int32_t length);
 int32_t gliss_abi_version(void);
+/* Operator revision is separate from data-layout ABI. Clients must check
+ * both before replaying a configuration or recording operator provenance. */
+int32_t gliss_discretization_revision(void);
 
 /* Contexts own all native allocations. They may coexist, but calls using the
  * same context must not overlap. Construction/destruction of problems sharing
