@@ -57,6 +57,24 @@ tolerance was fitted to these observations.
 
 ## Remaining comparisons
 
+`free-boundary-exploration/` preserves an unsuccessful qualification control.
+Its M16/ns48 equilibrium export has SHA256
+`5f5be4e1f68f3e49507973707efe71d9ac2b9369bbd660b15223b68df43483cd`.
+Independent analytic checks found a boundary implicit-function error of
+4.75e-5 against the existing 1e-7 limit and a toroidal-flux error of
+2.38e-14 Wb against 1e-14 Wb. The numerical wall scan therefore supplies
+exploration evidence only. It is not an accepted equilibrium or a passed
+physical plasma-vacuum benchmark.
+
+The refined independent DCON wall scan gives positive energy at 0.152422
+plasma half-widths and negative energy at 0.152500. Linear interpolation
+places the crossing near 0.152488, consistent with the historical reference
+0.15249. `benchmarks/solovev/free_boundary/refine_dcon.py` reproduces these
+additional reference runs after `run.sh` finishes. The exploration GLISS
+scan used the historical half-width approximation 0.35245 m; new runs use
+the analytic half-width 0.3526573415939913 m. The retained provenance and
+qualification record distinguish these distances.
+
 The original CAS3D W7-X deck and its complete normalization are unavailable.
 The existing L139 artifact measures sparse scaling on a different equilibrium;
 it cannot establish same-deck agreement or superiority. Convention-complete

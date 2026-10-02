@@ -1,0 +1,7 @@
+5938529277b737db6930a2c8cff5e32d2e3eb762
+GPEC f5595c0689c624834d720068ddc8b5a7e4028248
+GNU Fortran (GCC) 16.2.1 20260810
+292b6a52383c1bf869212dcf1795a0d920a36bb4deec06547ba5eb3a194d74a8  /home/ert/code/GLISS/benchmarks/solovev/dcon/run.sh
+Version: 1.5.0
+15adb6da0af61d902edc87d329a781894db5085c48de4ab0f60d21cea9f50cb1  /home/ert/code/GLISS/benchmarks/solovev/free_boundary/scan.py
+910104eed737c5e2ea68a9289e21fd88c6c5d37c84e477990d72f27526b338d5  /home/ert/code/GLISS/benchmarks/solovev/free_boundary/run.sh

@@ -1,0 +1,12 @@
+{
+  "equilibrium_sha256": "5f5be4e1f68f3e49507973707efe71d9ac2b9369bbd660b15223b68df43483cd",
+  "accepted_equilibrium": false,
+  "reason": "Independent analytic export qualification failed; retained as failed control, not accepted physics reference.",
+  "max_implicit_boundary_error": 4.7499365e-05,
+  "implicit_boundary_limit": 1e-07,
+  "toroidal_flux_error_wb": 2.3798633e-14,
+  "toroidal_flux_limit_wb": 1e-14,
+  "legacy_half_width_m": 0.35245,
+  "analytic_half_width_m": 0.3526573415939913,
+  "reference_critical_wall_interpolation": 0.1524878846311196
+}

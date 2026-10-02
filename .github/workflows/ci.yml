@@ -89,6 +89,8 @@ jobs:
         # oracles (test/data Solov'ev fixtures); they fail without it. The
         # golden and simsopt tests skip without the LFS fixtures / simsopt.
         run: GLISS_LIB=$PWD/build/libgliss_c.so python -m pytest python/tests -v
+      - name: Check the public analytic equilibrium generator
+        run: python benchmarks/solovev/public/test_solovev.py
       - name: Build distributions
         run: python -m build
       - name: Test installed wheel
