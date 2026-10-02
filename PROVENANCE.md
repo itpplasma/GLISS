@@ -4,6 +4,12 @@ Module-to-source map.  Equation-level traceability with executable
 Wolfram gates is maintained in the research repository's dossier; this
 file records which published work each module implements.
 
+[source_inventory.jsonl](source_inventory.jsonl) separately records source
+hashes, static import/caller references, and bounded review evidence. Unmapped
+contracts, units, assumptions, derivative paths, and unreviewed components are
+explicit. The inventory is not an equation audit; this publication map also
+does not establish that each listed equation has been independently reviewed.
+
 ## Compatibility-source policy
 
 TERPSICHORE revision `04dcf9af` is distributed under Apache-2.0 and carries

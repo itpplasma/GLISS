@@ -10,6 +10,7 @@ quickstart
 vmec
 compatibility
 mode_diagnostics
+source_inventory
 conventions
 angular_grids
 free_boundary
