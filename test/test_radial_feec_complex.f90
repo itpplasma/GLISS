@@ -4,6 +4,7 @@ program test_radial_feec_complex
     use radial_feec_complex, only: build_radial_feec_complex, &
         evaluate_radial_feec_complex, radial_feec_complex_t, &
         radial_feec_invalid, radial_feec_ok
+    use radial_bspline_basis, only: bspline_ok, evaluate_bspline_basis
     implicit none
 
     integer :: degree
@@ -15,9 +16,44 @@ program test_radial_feec_complex
         call verify_complex(degree, .true., .true.)
     end do
     call verify_rejections()
+    call verify_unmatched_knots()
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine verify_unmatched_knots()
+        type(radial_feec_complex_t) :: complex
+        real(dp), allocatable :: h1(:), h1_derivative(:), l2(:), ignored(:)
+        real(dp) :: reconstructed
+        integer :: info
+
+        call build_radial_feec_complex([0.0_dp, 0.5_dp, 1.0_dp], 2, &
+            .false., .false., complex, info)
+        call require(info == radial_feec_ok, "quadratic complex build failed")
+        call evaluate_radial_feec_complex(complex, 0.25_dp, h1, &
+            h1_derivative, l2, info)
+        call require(info == radial_feec_ok, "matched quadratic complex failed")
+        ! The first H1 basis is (1-2s)^2 on the first cell: its derivative
+        ! at s=1/4 is exactly -2. Its L2 representation must give -2 too.
+        call require(abs(h1_derivative(1) + 2.0_dp) < 1.0e-14_dp, &
+            "quadratic derivative differs from the analytical polynomial")
+        reconstructed = dot_product(complex%derivative(:, 1), l2)
+        call require(abs(reconstructed + 2.0_dp) < 1.0e-14_dp, &
+            "matched L2 derivative differs from the analytical polynomial")
+        where (complex%l2_knots == 0.5_dp) complex%l2_knots = 0.6_dp
+        call evaluate_bspline_basis(complex%l2_knots, 1, 0.25_dp, &
+            l2, ignored, info)
+        call require(info == bspline_ok, "individual altered L2 space is invalid")
+        ! The altered first L2 basis is 1-s/0.6. The unchanged derivative
+        ! map multiplies it by -4, giving -7/3 instead of -2.
+        reconstructed = dot_product(complex%derivative(:, 1), l2)
+        call require(abs(reconstructed + 7.0_dp / 3.0_dp) < 1.0e-14_dp, &
+            "unmatched-space analytical control is incorrect")
+        call evaluate_radial_feec_complex(complex, 0.25_dp, h1, &
+            h1_derivative, l2, info)
+        call require(info == radial_feec_invalid, &
+            "unmatched H1/L2 knots were admitted as an exact sequence")
+    end subroutine verify_unmatched_knots
 
     subroutine verify_complex(degree, left_trace, right_trace)
         integer, intent(in) :: degree
