@@ -965,8 +965,9 @@ contains
         integer :: comma
 
         comma = index(line, ",")
-        if (comma <= 1 .or. comma == len_trim(line) &
-            .or. index(line(comma + 1:), ",") > 0) &
+        if (comma <= 1 .or. comma == len_trim(line)) &
+            call fail_external_vector("rows must contain exactly index,value")
+        if (index(line(comma + 1:), ",") > 0) &
             call fail_external_vector("rows must contain exactly index,value")
         call parse_integer(line(:comma - 1), "external vector index", &
             index_value)

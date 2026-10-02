@@ -36,8 +36,12 @@ report = json.load(sys.stdin)
 if report["count"]:
     for warning in report["warnings"]:
         print(
-            f"{warning['file']}:{warning['line']}:{warning['column']}: "
-            f"{warning['message']}",
+            "{file}:{line}:{column}: {message}".format(**warning),
+            file=sys.stderr,
+        )
+    for unused in report.get("unused_imports", []):
+        print(
+            "{file}:{line}: unused import {symbol} from {module}".format(**unused),
             file=sys.stderr,
         )
     raise SystemExit(1)
