@@ -21,16 +21,20 @@ equilibrium with GVEC 1.5.0 (48 surfaces, export M=16, as in
 `scan.py --bisect 0.12 0.20`: parity class 1, modes (0, 1) and m=1..MMAX
 with n=+-1, FEEC degree 2, angular quadrature 128 x 8, zero floor 1e-8, and
 the conformal wall of `gliss.VacuumModel` at `a` times the half-width
-(R_max - R_min)/2 = 0.35245 m along the outward edge normal.
+(R_max - R_min)/2 = 0.3526573415939913 m along the outward edge normal.
+The default half-width is derived from the public GPEC shape parameters:
+`(sqrt(R0^2+2*a*R0)-sqrt(R0^2-2*a*R0))/2`, with R0=1 m and a=0.33 m.
 
 ## Result
 
-The numbers below are historical results obtained with 64 x 8 angular
-quadrature before the cubic MDE forcing admission rule was enforced. That
+The GLISS numbers below are historical results obtained with 64 x 8 angular
+quadrature and the approximate half-width 0.35245 m, before the cubic MDE
+forcing admission rule was enforced and that normalization was corrected. That
 grid is rejected for the regenerated export's declared M=16 position table:
 the current rule requires more than 96 poloidal points. The runner now uses
-128 x 8. These historical values and timings have not been rerun under that
-policy and do not certify the current operator; retain them for comparison
+128 x 8. These historical values and timings have not been rerun with that
+policy and corrected normalization and do not certify the current operator;
+retain them for comparison
 with a fresh run. See [the angular grid contract](../../../docs/angular_grids.md).
 
 DCON (GPEC `f5595c06`, m=-12..18, `mthvac=960`) changes the sign of its
