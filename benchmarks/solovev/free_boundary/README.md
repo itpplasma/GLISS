@@ -27,6 +27,17 @@ The default half-width is derived from the public GPEC shape parameters:
 
 ## Result
 
+The complete physical acceptance case remains open. Fresh October 2 checks
+found that ordinary GVEC half-grid exports do not meet the frozen native
+boundary flux-derivative limits. The corrected M32 export passes the geometry
+checks, but extrapolated `chi'/Phi'` fails the boundary transform limit.
+The runner supplies exploration evidence until faithful true-edge export and
+ingestion and equilibrium exterior matching are qualified. See the
+[failed-control measurement record](../../results/2026-10-02/README.md) and
+[native M32 diagnostics](../../results/2026-10-02/free-boundary-m32-control/README.md).
+The fresh independent DCON refinement confirms its crossing near 0.152488;
+it does not qualify GLISS's imported equilibrium.
+
 The GLISS numbers below are historical results obtained with 64 x 8 angular
 quadrature and the approximate half-width 0.35245 m, before the cubic MDE
 forcing admission rule was enforced and that normalization was corrected. That

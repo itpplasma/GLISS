@@ -16,7 +16,7 @@
   `gliss_discretization_revision()` exposes its revision to C clients. The
   appended energy/marginality struct fields retain size-qualified legacy
   handling; the ABI bump protects operator provenance, not a buffer-overwrite
-  repair. The unreleased package version remains 0.0.2.
+  repair. The development package version is 0.0.3.
 - Include off-diagonal stiffness in the unit-independent pencil roundoff
   scale. When a radial Schur pivot is singular or unresolved, retry with
   global pivoting at the same shift for at most 1024 unknowns; larger

@@ -33,6 +33,11 @@ requires the coupled parity operator so its cross-parity stiffness is retained.
 The native toroidal-harmonic oracle checks absolute vacuum energies with
 and without a wall. The public Solov'ev benchmark compares a critical
 conformal wall distance with DCON and studies discretization convergence.
+The October 2 export qualification found that the current ordinary GVEC
+half-grid export does not meet the frozen native edge flux-slope and
+rotational-transform limits. The complete quantitative plasma-vacuum
+acceptance case therefore remains open; the vacuum oracle alone does not
+qualify that imported equilibrium.
 Historical benchmark results obtained before the current angular admission
 policy require a fresh run; qualitative stabilization and energy closure
 alone do not establish quantitative agreement of the complete

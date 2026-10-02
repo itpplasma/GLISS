@@ -1,17 +1,114 @@
 # GLISS verification and development plan
 
-Updated September 30, 2026 after a source audit and public-source DCON/GVEC
+Updated October 2, 2026 during integration, independent regression review,
+installed-package validation and fresh reference measurements. Historical
+September 30 evidence includes public-source DCON/GVEC
 reproduction of the Solov'ev benchmark (see the corrections section below);
 previously updated September 9, 2026 after an independent Astra xhigh source and
 benchmark audit, parallel fixes, and fresh analytical and Solov'ev runs.
-GLISS is a research-grade fixed-boundary ideal-MHD value evaluator.
+GLISS is a research-grade ideal-MHD value evaluator. Its physical
+free-boundary implementation still lacks the complete qualified acceptance case.
 The complete differentiable equilibrium-to-spectrum optimization workflow is
 unfinished. A certificate for a discrete matrix eigenpair does not certify
 equilibrium quality, discretization convergence, or agreement with another code.
 
+## Delivery status on October 2, 2026
+
+Development stopped at the user's request. The completed integration is being
+committed and promoted to `main`; further scientific work and issue closure
+are deferred. The production source and native test snapshot is
+[`6a27d11`](https://github.com/itpplasma/GLISS/commit/6a27d113d1cca29f641b68c83e2406a1b1ce1c68).
+The subsequent
+[`818826b`](https://github.com/itpplasma/GLISS/commit/818826b92e9a5b3150984526233f5b5b5d3fa451)
+adds the bounded source inventory. This status update changes documentation.
+The development package is 0.0.3, with native ABI 4 and discretization revision
+4. Existing released tags 0.0.1 and 0.0.2 retain their original contents.
+
+Completed work includes integration of the original open branch/PR history,
+axis interpolation and regularity repairs, robust inertia and initial-rank
+checks, exact-resonance derivative and zero-iota gauge repairs, pressure
+JVP/VJP interfaces at fixed geometry, coupled asymmetric-wall support,
+VMEC/BOOZ metadata admission, operator provenance and native-handle ownership.
+Build, installed-wheel, documentation-example and strict macOS CI checks are
+implemented. These bounded corrections do not complete all scientific issues.
+
+At the source snapshot, GNU `fo` passes all stages and 175 native tests; the
+Flang/LLVM 22 pipeline passes 183 tests, including eight Enzyme gates. The
+optimized `-O3 -Warray-temporaries -Werror=array-temporaries` audit passes
+175 tests. Source Python reports 329 passed and two optional skips. The
+installed Linux wheel reports 324 passed and two optional skips, including
+35 tests marked `native`; all ten quickstart/VMEC documentation blocks execute.
+Sphinx HTML, link checking with warnings as errors, and `pip check` pass.
+The skips require optional SIMSOPT or externally supplied Mercier golden data.
+The installed wheel SHA-256 is
+`beb4904769bf7da4794a09d560ffe5516734097f4a28b948a41de7ea5ce5363f`.
+
+[Hosted CI run 37035917702](https://github.com/itpplasma/GLISS/actions/runs/37035917702)
+passes at that exact source commit.
+[macOS run 37035917761](https://github.com/itpplasma/GLISS/actions/runs/37035917761)
+passes all 175 native tests on each of arm64 and x86-64, all twelve installed
+CPython 3.9–3.14 wheel jobs, and the public C consumers. Each macOS Python
+suite reports 313 passed and four optional skips. This strict-shell run
+supersedes earlier runs that masked a failing native test; those earlier green
+statuses are not qualification evidence. The final documentation handoff also
+passes the full local `fo` pipeline (58.2 seconds); later hosted runs are separate.
+
+Fresh analytical and DCON sign comparisons, input hashes, solver certificates,
+timing/RSS observations, and failed free-boundary qualification controls are
+retained in the [October 2 measurement record](benchmarks/results/2026-10-02/README.md).
+They establish bounded analytical accuracy and stable/unstable sign agreement,
+not a converged marginality interval or superiority over every competitor.
+
+## Remaining acceptance work
+
+The issue audit identified bounded corrections ready for closure review in
+#16, #17, #20, #21, #23–#29, #32 and #34. The final macOS run also supplies the
+remaining execution evidence for #14. These issues are not automatically
+closed by this handoff. The substantive remaining requirements are:
+
+- #8: qualify true-edge flux derivatives and equilibrium exterior matching,
+  then run installed plasma-vacuum wall/angular refinement acceptance. The
+  corrected M32 geometry passes, but native edge `chi'/Phi'` error is
+  `3.1952e-7` against `1e-12`; flux-slope error is `1.1983e-14` against `1e-14`.
+- #9: complete geometry/conversion, force-balance, mass and vacuum parameter
+  derivatives and the force-balanced optimization chain with independent
+  finite-difference plateaus and transpose checks.
+- #10 and #22: add unsupported precomputed BOOZ-file version and corrupted
+  metadata controls, and the requested installed LI383 conversion/native
+  truncated-geometry acceptance case.
+- #11 and #12: obtain the original CAS3D W7-X deck and normalization, and
+  implement convention-complete MISHKA/CASTOR mode transfer with independent
+  branch and invariant-subspace acceptance across radial resolutions.
+- #13: certify the full higher-order manufactured FEEC gradient/curl sequence,
+  dense element oracles and three-dimensional energy/spectrum convergence.
+  Radial sequence controls and the passing optimized audit cover only parts.
+- #15: verify an actual deployed documentation site and immutable pages for
+  released tags. Installed examples and Sphinx checks pass; hosted publication
+  and released-tag pages have not been qualified at this stopping point.
+- #18 and #19: add the requested automated VMEC Mercier-sign control and the
+  complete primitive exact-torus off-knot Jacobian sweep at M16/24/28/36.
+- #30: file the retained GVEC export reproductions upstream when tracker access
+  is available; the attempted tracker endpoint returned 404.
+- #33: demonstrate resolved QAS/LI383 rational-surface convergence and expose
+  affected-surface status. Finite-cell inverse regularization is a model choice.
+- #35: meet the degree-1 q0=1.035 instability criterion by 64 radial cells and
+  repeat the higher-degree sweep on qualified inputs.
+
+The source inventory accounts for 311 files, including 148 required production
+paths, 37 C prototypes and 50 file records carrying bounded evidence. It records zero
+whole-component equation certifications. A complete independent source audit,
+the qualified figure-eight equilibrium and common cross-code study remain open.
+
+An unfinished released-documentation bootstrap helper was stopped before
+execution or integration. It remains in the detached local worktree
+`/home/ert/code/GLISS-release-docs-bootstrap` at `818826b`. A backup is
+`/home/ert/code/GLISS-release-docs-bootstrap-818826b.tar.gz`, SHA-256
+`a332a100d22935c1f9429475b3a133bd23511dca4f5f37461faf4a18b5389ab2`.
+It has no test evidence and is excluded from the production integration.
+
 ## Audit baseline and evidence
 
-The reviewed GLISS base is
+The earlier reviewed GLISS base was
 [`b994f51aa9ebe1a5e03bad2c72c6fde730fcaa1b`](https://github.com/itpplasma/GLISS/commit/b994f51aa9ebe1a5e03bad2c72c6fde730fcaa1b)
 (release 0.0.2), initially clean. The empty worktree patch has SHA-256
 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
@@ -93,21 +190,26 @@ of every external solver.
 - Roadmap work on this branch: precomputed `boozmn` and asymmetric VMEC
   conversion (#10 parts A and B) and the coupled parity operator for
   equilibria without stellarator symmetry (#10 part C, checked against the
-  class union of a shifted angle origin), the FEEC convergence
-  certification (#13), the native test harness without path hacks (#14,
-  wheels stay with the release workflow) and documentation sources whose
-  quickstart runs in the suite and a versioned site published from the
-  installed wheel (#15).
+  class union of a shifted angle origin), radial FEEC convergence controls
+  (complete certification remains #13), the native test harness without path
+  hacks and macOS wheel workflow (#14), and documentation sources whose
+  quickstart runs against the installed wheel. Site deployment is verified
+  separately for #15.
 - [#35](https://github.com/itpplasma/GLISS/issues/35) conforming axis space:
   the leading |m|=1 coefficients of xi^s and eta are tied as a smooth
   displacement requires, the axis element is integrated in sqrt(s), and the
   marginality mass is the perpendicular kinetic form (the coefficient norm
   was unbounded for regular |m|=1 fields). Degree 3 now converges at order
-  3.3 on the Solov'ev sweep; eigenvalues are upper bounds, so degree 1
-  converges from above at order 1.3-1.4 and needs ns > 128 for q0 = 1.035.
+  3.3 on the Solov'ev sweep; degree 1 was observed to
+  converge from above at order 1.3-1.4 and needs ns > 128 for q0 = 1.035.
+  This observation does not prove upper bounds for the general discretization.
 - Upstream trackers stay open until the upstream reports are filed:
   [#30](https://github.com/itpplasma/GLISS/issues/30) GVEC CAS3D export and
   [#31](https://github.com/itpplasma/GLISS/issues/31) DCON default tolerances.
+  The DCON report is now filed as
+  [GPEC #292](https://github.com/PrincetonUniversity/GPEC/issues/292), and #31
+  is closed. GVEC's upstream tracker remains inaccessible to this session;
+  #30 is open.
 - `benchmarks/qas3` compares STELLOPT VMEC, TERPSICHORE 1.2 and GLISS on the
   QAS3 family. The TERPSICHORE replay agrees to 1e-8. The independent
   critical current agrees once resolved: on an ns = 257 equilibrium both
@@ -131,16 +233,18 @@ The next audit must trace the complete production calculation from imported
 equilibrium data to reported spectra and derivatives. Earlier component reviews
 and passing tests provide evidence, but leave gaps in equation derivations,
 interpolation accuracy, global derivative propagation, and benchmark agreement.
-Start from the delivered code at
-[`bc0cf46`](https://github.com/itpplasma/GLISS/commit/bc0cf46bc7eede7ba79829307c820ef7c1e8a877),
+Start from the delivered production source at
+[`6a27d11`](https://github.com/itpplasma/GLISS/commit/6a27d113d1cca29f641b68c83e2406a1b1ce1c68),
 then freeze the exact commit and any worktree patch digest for each review.
 
-- [ ] Build a source inventory covering every production Fortran module, Python
+- [x] Build a source inventory covering every production Fortran module, Python
   wrapper, C ABI entry point, application, benchmark runner, and CI verifier.
   Record each component's callers, mathematical contract, units, assumptions,
   independent oracle, derivative coverage, reviewer, and unresolved findings.
   Mark unread or unverified components explicitly; test counts alone do not
-  establish audit coverage.
+  establish audit coverage. [source_inventory.jsonl](source_inventory.jsonl)
+  and [the inventory guide](docs/source_inventory.md) provide this accounting;
+  whole-component contracts and equation reviews remain explicitly unverified.
 - [ ] Have Astra xhigh lead an independent source review, with bounded parallel
   workers for geometry, assembly, eigensolvers, derivatives, and interfaces.
   Workers return findings and reproducible evidence; one controller owns the
@@ -194,9 +298,11 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
   ([#19](https://github.com/itpplasma/GLISS/issues/19)). The spline divided
   harmonics by the full `s^(|m|/2)` and amplified node roundoff by about
   `s_1^(-|m|/2)` (5e9 at m=24, 2e12 at m=28, 1e17 at m=36), which folded the
-  M36 Solov'ev export. Only the parity factor (`s^(1/2)` for odd m, `s` for
-  even m) is now divided out; an exact shaped torus gives the same Jacobian
-  error (2.5e-6 at 64 surfaces, set by edge extrapolation) for M16 through M36.
+  M36 Solov'ev export. The first interval now retains full harmonic
+  `s^(|m|/2)` regularity with a bounded polynomial quotient and a C2 join.
+  Interior interpolation divides out only bounded parity factors. Native
+  m=4/10/24/36 tests cover axis limits, derivatives and refinement. The
+  issue's complete off-knot primitive torus sweep remains to be measured.
 - [x] Replace fixed left-handed result metadata with the actual chart
   orientation ([#21](https://github.com/itpplasma/GLISS/issues/21)).
 - [ ] Complete production analytical coverage and public-API qualification.
@@ -213,8 +319,9 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
   cylinder vertical threshold. Require analytical eigenvalues or independently
   derived marginal limits, both stable and unstable controls, density/field/length
   scaling, and units. Distinguish physical mass from artificial coefficient norms.
-- [x] For FEEC degrees 1 through 4, measure radial convergence on at least three
-  meshes, verify commuting derivatives and traces, and test both parity classes.
+- [ ] Complete degree 1 through 4 certification: radial convergence on at least
+  three meshes, global commuting projections and traces, independent assembled
+  energy/stiffness oracles, and both parity classes.
   `test_radial_feec_convergence` measures the optimal L2-projection rates p+1
   and p on three graded meshes with a monomial oracle and a corrupted-map
   control ([#13](https://github.com/itpplasma/GLISS/issues/13)); the exact
@@ -238,15 +345,20 @@ Related issues: [#13, higher-order FEEC certification](https://github.com/itppla
 - [x] Add a frame-aware physical symmetry admission check before solving separate
   parity classes. A full-storage export can be physically symmetric even when
   `stellarator_symmetry=False`; rejecting that flag alone is wrong. Conversely,
-  genuine asymmetry couples parity classes and is not covered by today's solves.
+  genuine asymmetry couples parity classes and requires class 0.
   Verify symmetric full-storage files and an odd-harmonic cross-parity mass
-  oracle. Coupled asymmetric assembly remains #10.
+  oracle. The full coupled operator supports asymmetric equilibria and retains
+  cross-parity vacuum terms from asymmetric walls. Real symmetric QA and
+  asymmetric LSP VMEC/BOOZ round trips and native spectra are now tested.
   The admitted operator is sampled at assembly nodes with dimensionally scaled
   tolerances; this does not certify continuum symmetry or angular convergence.
-- [x] Reject incompatible nonconstant magnetic differential-equation resonances
-  in `src/export_surface_geometry.f90`. The retained mean-projected equation now
-  uses a RHS/projection roundoff bound and rejects unresolved nonzero forcing.
-  Resolved denominators retain their exact inverse and matching flux derivatives.
+- [x] Give nonconstant magnetic differential-equation resonances an explicit
+  policy in `src/export_surface_geometry.f90`. Without cell spread, the
+  mean-projected equation rejects unresolved nonzero forcing. With finite cell
+  spread it uses `D/(D^2+w^2)`; this regularized model does not prove solvability
+  of the original resonant equation. Exact-resonance derivative tests retain
+  pre-inverse forcing rather than attempting to reconstruct it from zero output.
+  Resolved zero-width denominators retain the exact inverse.
   Independent resonance, near-resonance, scaling, finite-difference and injected
   NaN controls pass. Mercier failures propagate and invalidate legacy outputs.
   Mean force balance and Fourier truncation remain separate diagnostics.
@@ -307,9 +419,13 @@ to that effect in the research
   The new `pressure_surface_derivatives` module completes the fixed-geometry
   pressure-sample spline-to-surface fields/drive/`gamma*p` map and its analytic
   JVP/VJP. Full nodal basis tests on nonuniform nodes, independent production
-  finite-difference plateaus, duality and resonance controls pass. Next connect
-  these tangents to the bilinear surface-assembly product rule and radial
-  scatter; no global pressure or force-balanced design gradient is claimed.
+  finite-difference plateaus, duality and resonance controls pass. These
+  tangents now propagate through bilinear angular products, radial FEEC
+  assembly, axis congruence and sparse scatter to public isolated eigenvalue
+  and complete-cluster pressure JVPs/VJPs. Imported geometry and resonance
+  topology are fixed, samples must remain positive, and the VJP currently
+  performs one tangent assembly per sample. Force-balanced GVEC geometry,
+  conversion and vacuum design derivatives remain incomplete.
 - [ ] Implement basis-invariant cluster objectives with a declared spectral
   gap and cluster-selection policy. Reject unresolved crossings and changing
   cluster dimensions; an ordered minimum need not be differentiable there.
@@ -355,21 +471,29 @@ Related issue: [#15, executable versioned documentation](https://github.com/itpp
 
 ## Priority 5: extend the supported scope
 
-- [x] [#8: physical free-boundary plasma-vacuum Python solve](https://github.com/itpplasma/GLISS/issues/8):
+- [ ] [#8: physical free-boundary plasma-vacuum Python solve](https://github.com/itpplasma/GLISS/issues/8):
   `StabilityProblem(vacuum=VacuumModel(...))` adds the scalar-potential
   vacuum energy (exact toroidal-harmonic oracle at second order, with and
-  without a wall); the energy decomposition closes; the q0=1.5 Solov'ev
-  critical conformal wall converges into DCON's bracket
-  (`benchmarks/solovev/free_boundary`). Derivatives of the vacuum block
-  remain part of #9.
+  without a wall), and the energy decomposition closes. Asymmetric walls
+  retain full parity coupling. The historical q0=1.5 wall comparison does
+  not qualify its imported equilibrium. Fresh M16 and corrected M32 exports
+  failed the frozen qualification gates; their hashes, independent analytic
+  checks and native edge values are retained in
+  [the measurement record](benchmarks/results/2026-10-02/README.md).
+  The M32 geometry passes, but native boundary flux derivatives fail.
+  Faithful true-edge export/ingestion, exterior matching and an installed
+  quantitative plasma-vacuum acceptance case remain required. Derivatives
+  of the vacuum block remain part of #9.
 - [ ] [#10: asymmetric VMEC and precomputed BOOZ_XFORM](https://github.com/itpplasma/GLISS/issues/10):
   implement full parity coupling and convention-complete round trips after the
   immediate input-admission work in Priority 1.
-- [ ] [#14: macOS wheels](https://github.com/itpplasma/GLISS/issues/14) and
-  [#15: documentation site](https://github.com/itpplasma/GLISS/issues/15):
-  complete clean-install physics checks on each advertised platform.
+- [x] [#14: macOS wheels](https://github.com/itpplasma/GLISS/issues/14):
+  the strict final source run passes both native builds and all twelve
+  installed-wheel jobs; issue closure review is deferred at this handoff.
+- [ ] [#15: documentation site](https://github.com/itpplasma/GLISS/issues/15):
+  qualify actual publication and released-tag version pages.
 
-The GitHub audit found open issues #8 through #15 and closed
+The earlier GitHub audit found open issues #8 through #15 and closed
 [#1](https://github.com/itpplasma/GLISS/issues/1), the earlier family/single-mode
 assembly discrepancy. No issue was closed merely because this audit passed.
 
