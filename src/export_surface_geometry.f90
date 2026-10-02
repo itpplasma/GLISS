@@ -15,6 +15,8 @@ module export_surface_geometry
     ! The reconstructed tangential metric is not positive definite, which a
     ! truncated metric series of a regular chart can produce.
     integer, parameter, public :: mercier_metric_error = 3
+    ! Cubic position forcing cannot be projected without angular aliasing.
+    integer, parameter, public :: mercier_angular_alias_error = 4
 
     real(dp), parameter, public :: two_pi = 2.0_dp * acos(-1.0_dp)
     real(dp), parameter, public :: mu0 = 2.0_dp * two_pi * 1.0e-7_dp
@@ -52,6 +54,7 @@ module export_surface_geometry
     public :: surface_iota_spread
     public :: solve_beta_derivatives_modes
     public :: magnetic_differential_modes
+    public :: magnetic_differential_grid_is_dealiased
     public :: surface_derivatives
     public :: surface_values
     public :: validate_tangential_metric
@@ -581,6 +584,50 @@ contains
         end do
     end subroutine magnetic_differential_modes
 
+    pure function magnetic_differential_grid_is_dealiased(poloidal, toroidal, &
+            n_theta, n_zeta) result(dealiased)
+        integer, intent(in) :: poloidal(:), toroidal(:), n_theta, n_zeta
+        logical :: dealiased
+
+        dealiased = .false.
+        if (size(poloidal) < 1 .or. size(toroidal) < 1) return
+        if (n_theta < 1 .or. n_zeta < 1) return
+        ! The Jacobian is cubic in position derivatives. Sampling every
+        ! forcing harmonic through 3M and 3N needs strictly more than 6M
+        ! and 6N points; retaining the Nyquist-truncated table cannot undo
+        ! aliases already introduced during pointwise RHS formation.
+        dealiased = maxval(abs(int(poloidal, int64))) &
+            <= int(n_theta - 1, int64) / 6_int64 &
+            .and. maxval(abs(int(toroidal, int64))) &
+            <= int(n_zeta - 1, int64) / 6_int64
+    end function magnetic_differential_grid_is_dealiased
+
+    pure function angular_grid_is_uniform_period(points) result(uniform)
+        real(dp), intent(in) :: points(:)
+        logical :: uniform, seen(size(points))
+        real(dp) :: phase, scaled, tolerance
+        integer :: point, index, nearest, count
+
+        uniform = .false.
+        count = size(points)
+        if (count < 1) return
+        if (.not. all(ieee_is_finite(points))) return
+        seen = .false.
+        tolerance = 64.0_dp * epsilon(1.0_dp) * real(count, dp)
+        do point = 1, count
+            phase = points(point) - points(1)
+            if (.not. ieee_is_finite(phase)) return
+            phase = modulo(phase, 1.0_dp)
+            scaled = phase * real(count, dp)
+            nearest = nint(scaled)
+            if (abs(scaled - real(nearest, dp)) > tolerance) return
+            index = modulo(nearest, count) + 1
+            if (seen(index)) return
+            seen(index) = .true.
+        end do
+        uniform = .true.
+    end function angular_grid_is_uniform_period
+
     subroutine solve_beta_derivatives_modes(position_poloidal_modes, &
             position_toroidal_modes, &
             surface, theta, zeta, covariant_theta_slope, &
@@ -613,6 +660,15 @@ contains
         if (size(position_poloidal_modes) < 1 &
             .or. size(position_toroidal_modes) < 1) return
         if (size(theta) < 1 .or. size(zeta) < 1) return
+        ! Equal-weight Fourier projection requires one complete uniform
+        ! period. An origin shift, wrapping or permutation is permitted.
+        if (.not. angular_grid_is_uniform_period(theta)) return
+        if (.not. angular_grid_is_uniform_period(zeta)) return
+        if (.not. magnetic_differential_grid_is_dealiased(position_poloidal_modes, &
+            position_toroidal_modes, size(theta), size(zeta))) then
+            if (present(info)) info = mercier_angular_alias_error
+            return
+        end if
         call magnetic_differential_modes(position_poloidal_modes, &
             position_toroidal_modes, size(theta), size(zeta), &
             poloidal_modes, toroidal_modes)

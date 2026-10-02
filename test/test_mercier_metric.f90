@@ -20,7 +20,7 @@ program test_mercier_metric
     call read_gvec_cas3d_file(trim(directory) // '/solovev_q1.035.nc', &
         equilibrium, info)
     if (info /= reader_ok) error stop 'cannot read the Solov''ev fixture'
-    call compute_mercier(equilibrium, 32, 32, result, info)
+    call compute_mercier(equilibrium, 64, 32, result, info)
     if (info /= mercier_ok) error stop 'regular fixture was rejected'
     if (.not. all(result%d_mercier == result%d_mercier)) &
         error stop 'regular fixture has NaN Mercier terms'
@@ -30,7 +30,7 @@ program test_mercier_metric
     equilibrium%g_tz%cosine(:, m0, n0) = equilibrium%g_tz%cosine(:, m0, n0) &
         + 2.0_dp * sqrt(abs(equilibrium%g_tt%cosine(:, m0, n0) &
         * equilibrium%g_zz%cosine(:, m0, n0)))
-    call compute_mercier(equilibrium, 32, 32, result, info)
+    call compute_mercier(equilibrium, 64, 32, result, info)
     if (info /= mercier_metric_error) &
         error stop 'indefinite metric was not reported'
     write (*, '(a)') 'Mercier metric positivity check passed'

@@ -46,7 +46,7 @@ contains
         real(dp), allocatable :: jacobian_z(:, :), gamma_p(:, :)
         real(dp) :: h1(h1_count, trials), dh1(h1_count, trials)
         real(dp) :: eta(l2_count, trials), l2(l2_count, trials)
-        real(dp) :: theta(24), zeta(10), pressure
+        real(dp) :: theta(64), zeta(32), pressure
         real(dp), allocatable :: k_cos(:, :), t_cos(:, :, :), m_cos(:, :)
         real(dp), allocatable :: k_sin(:, :), t_sin(:, :, :), m_sin(:, :)
         real(dp), allocatable :: k_ref(:, :), t_ref(:, :, :), m_ref(:, :)

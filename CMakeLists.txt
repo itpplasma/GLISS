@@ -779,6 +779,12 @@ if(BUILD_TESTING)
     add_test(NAME magnetic_differential_equation
         COMMAND test_magnetic_differential_equation)
 
+    add_executable(test_magnetic_differential_dealiasing
+        test/test_magnetic_differential_dealiasing.f90)
+    target_link_libraries(test_magnetic_differential_dealiasing PRIVATE gliss)
+    add_test(NAME magnetic_differential_dealiasing
+        COMMAND test_magnetic_differential_dealiasing)
+
     add_executable(test_chart_orientation test/test_chart_orientation.f90)
     target_link_libraries(test_chart_orientation PRIVATE gliss)
     add_test(NAME chart_orientation
