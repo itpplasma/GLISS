@@ -5,7 +5,7 @@ module gliss_capi
         status_allocation_error, status_capacity, status_compute_error, &
         status_invalid_argument, status_internal_error, status_ok, &
         status_read_error, write_error
-    use gliss_c_contexts, only: equilibrium_context_t
+    use gliss_c_contexts, only: equilibrium_context_t, release_equilibrium_context
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok, &
         reader_position_frame_error
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
@@ -178,7 +178,7 @@ contains
                 "equilibrium handle is invalid")
             return
         end if
-        deallocate (context, stat=allocation_status)
+        call release_equilibrium_context(context, allocation_status)
         if (allocation_status /= 0) then
             status = status_internal_error
             call write_error(error_pointer, error_capacity, &

@@ -144,6 +144,12 @@ from .parameter_derivatives import (  # noqa: E402
     ParameterSensitivity,
     spectral_parameter_sensitivity,
 )
+from .pressure_derivatives import (  # noqa: E402
+    PressureSensitivity,
+    pressure_samples,
+    spectral_pressure_jvp,
+    spectral_pressure_sensitivity,
+)
 
 __all__ = [
     "__version__",
@@ -154,6 +160,10 @@ __all__ = [
     "EnergyTerms",
     "ParameterSensitivity",
     "spectral_parameter_sensitivity",
+    "PressureSensitivity",
+    "pressure_samples",
+    "spectral_pressure_jvp",
+    "spectral_pressure_sensitivity",
     "GlissAllocationError",
     "GlissArgumentError",
     "GlissCapacityError",
