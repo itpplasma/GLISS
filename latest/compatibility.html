@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>TERPSICHORE compatibility &#8212; GLISS 0.0.3</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=47de8214"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Mode diagnostics" href="mode_diagnostics.html" />
+    <link rel="prev" title="VMEC and BOOZ_XFORM input" href="vmec.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="terpsichore-compatibility">
+<h1>TERPSICHORE compatibility<a class="headerlink" href="#terpsichore-compatibility" title="Link to this heading">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">solve_terpsichore_fixed_boundary</span></code> and <code class="docutils literal notranslate"><span class="pre">solve_terpsichore_pseudoplasma</span></code>
+replay the matrices stored in TERPSICHORE FORT.23 (and FORT.24) files and
+certify the lowest eigenpair with GLISS’s inertia bracketing. They
+reproduce TERPSICHORE’s eigenvalue to 1e-8 relative on the QAS3 family
+(<code class="docutils literal notranslate"><span class="pre">benchmarks/qas3</span></code>). A stable file returns <code class="docutils literal notranslate"><span class="pre">negative_count</span> <span class="pre">==</span> <span class="pre">0</span></code> with the
+lowest nonnegative eigenpair.</p>
+<p>These replays validate GLISS against TERPSICHORE’s own discretization and
+normalization. They are not GLISS’s physical fixed-boundary operator and not
+a production plasma-vacuum solve.</p>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">TERPSICHORE compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mode_diagnostics.html">Mode diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="source_inventory.html">Source inventory</a></li>
+<li class="toctree-l1"><a class="reference internal" href="conventions.html">Conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="angular_grids.html">Angular grids</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free_boundary.html">Free-boundary model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="vmec.html" title="previous chapter">VMEC and BOOZ_XFORM input</a></li>
+      <li>Next: <a href="mode_diagnostics.html" title="next chapter">Mode diagnostics</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/compatibility.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Source inventory &#8212; GLISS 0.0.3</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=47de8214"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Conventions" href="conventions.html" />
+    <link rel="prev" title="Mode diagnostics" href="mode_diagnostics.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="source-inventory">
+<h1>Source inventory<a class="headerlink" href="#source-inventory" title="Link to this heading">¶</a></h1>
+<p>The machine-readable <a class="reference download internal" download="" href="_downloads/13167f4a6df09d853a6a07b3fdfe8628/source_inventory.jsonl"><code class="xref download docutils literal notranslate"><span class="pre">source</span> <span class="pre">inventory</span></code></a>
+accounts for the native library, Python interfaces, C declarations, applications,
+benchmark runners, verification sources, and build/CI configuration. Each JSON
+line identifies one source file, its SHA-256, and the exact source snapshot base.
+The inventory is a starting point for assigning equation and interface reviews.
+It does not establish that those reviews have been completed.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">mathematical_contract</span></code>, <code class="docutils literal notranslate"><span class="pre">units</span></code>, <code class="docutils literal notranslate"><span class="pre">assumptions</span></code>, <code class="docutils literal notranslate"><span class="pre">independent_oracle</span></code>,
+<code class="docutils literal notranslate"><span class="pre">derivative_coverage</span></code>, and <code class="docutils literal notranslate"><span class="pre">reviewer</span></code> fields explicitly retain unmapped or
+unreviewed whole-component obligations. <code class="docutils literal notranslate"><span class="pre">targeted_contract_evidence</span></code> records
+only bounded fixes and oracle descriptions at cited commits. A review of a
+single resonance derivative or inertia probe cannot qualify the whole module.
+The recorded regressions are evidence sources, rather than new executions by
+the inventory generator. Subsequent edits require a fresh scoped review.</p>
+<section id="reference-map">
+<h2>Reference map<a class="headerlink" href="#reference-map" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">dependencies</span></code> and <code class="docutils literal notranslate"><span class="pre">caller_references</span></code> are reciprocal static references. The
+generator resolves Fortran <code class="docutils literal notranslate"><span class="pre">use</span></code> statements, Python imports, and C includes to included
+source files. It also records C ABI token references and literal file paths
+with their source line numbers. Those latter references can occur in comments
+or strings; they identify candidates for review rather than prove execution.
+Python package re-exports, dynamic imports/calls, runtime compiler selection,
+and generated command paths still require manual tracing. External and
+unresolved imports remain visible in each record.
+Fortran interface declarations and named external C bindings also remain
+visible as external candidates when no included binding definition is found;
+their library linkage needs review. Native named C binding definitions are
+recorded separately, including benchmark bindings whose names lack <code class="docutils literal notranslate"><span class="pre">gliss_</span></code>.</p>
+<p>The native-library and header records list each detected named
+<code class="docutils literal notranslate"><span class="pre">gliss_*</span></code> entry point in the source. This does not establish compiled symbol
+visibility. Their individual contracts remain explicitly unmapped
+unless a bounded evidence record applies. Binary equilibrium fixtures and
+external solver/data repositories are outside this source-file inventory.
+Their identities and benchmark acceptance evidence remain separate obligations
+in <a class="reference external" href="https://github.com/itpplasma/GLISS/blob/main/PLAN.md">PLAN.md</a> and
+<a class="reference external" href="https://github.com/itpplasma/GLISS/blob/main/PROVENANCE.md">PROVENANCE.md</a>.</p>
+</section>
+<section id="updating-the-inventory">
+<h2>Updating the inventory<a class="headerlink" href="#updating-the-inventory" title="Link to this heading">¶</a></h2>
+<p>Run these commands from the repository root after changes to included sources:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>ci/source_inventory.py
+python3<span class="w"> </span>ci/source_inventory.py<span class="w"> </span>--check
+</pre></div>
+</div>
+<p>Writing pins the current Git commit and hashes the current included sources;
+an uncommitted source patch therefore remains distinguishable by its hashes.
+<code class="docutils literal notranslate"><span class="pre">--base</span> <span class="pre">COMMIT</span></code> can retain a deliberately frozen review base. <code class="docutils literal notranslate"><span class="pre">--check</span></code> checks
+only metadata consistency with the current files and static reference map. It
+does not test scientific behavior, oracle independence, derivative correctness,
+or source-review completion. The generator writes and flushes JSON lines in
+bounded batches so an interrupted write leaves recoverable partial work.</p>
+<p>The evidence catalog in <code class="docutils literal notranslate"><span class="pre">ci/source_inventory_evidence.json</span></code> must preserve the
+review scope, cited fix commit, independent oracle, derivative scope, reviewer,
+and remaining gaps. New evidence must describe an actually performed bounded
+review; test counts alone do not establish equation coverage.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compatibility.html">TERPSICHORE compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mode_diagnostics.html">Mode diagnostics</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Source inventory</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#reference-map">Reference map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#updating-the-inventory">Updating the inventory</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="conventions.html">Conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="angular_grids.html">Angular grids</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free_boundary.html">Free-boundary model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="mode_diagnostics.html" title="previous chapter">Mode diagnostics</a></li>
+      <li>Next: <a href="conventions.html" title="next chapter">Conventions</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/source_inventory.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

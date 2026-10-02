@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>GLISS &#8212; GLISS 0.0.3</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=47de8214"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Quickstart" href="quickstart.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="gliss">
+<h1>GLISS<a class="headerlink" href="#gliss" title="Link to this heading">¶</a></h1>
+<p>GLISS computes ideal-MHD stability of toroidal equilibria with the CAS3D
+energy principle on compatible FEEC radial spaces.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#equilibria">Equilibria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#mercier-stability">Mercier stability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#the-n-1-axisymmetric-family">The n = 1 axisymmetric family</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#fixed-boundary-spectra">Fixed-boundary spectra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#pressure-sample-derivatives">Pressure-sample derivatives</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#free-boundary-spectra">Free-boundary spectra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#persistence">Persistence</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="vmec.html#symmetric-conversion-and-precomputed-replay">Symmetric conversion and precomputed replay</a></li>
+<li class="toctree-l2"><a class="reference internal" href="vmec.html#asymmetric-conversion">Asymmetric conversion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="compatibility.html">TERPSICHORE compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mode_diagnostics.html">Mode diagnostics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mode_diagnostics.html#coefficients-and-axis-regularity">Coefficients and axis regularity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mode_diagnostics.html#numerical-evidence">Numerical evidence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mode_diagnostics.html#integrated-branches">Integrated branches</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mode_diagnostics.html#mishka-castor-acceptance">MISHKA/CASTOR acceptance</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="source_inventory.html">Source inventory</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="source_inventory.html#reference-map">Reference map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="source_inventory.html#updating-the-inventory">Updating the inventory</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="conventions.html">Conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="angular_grids.html">Angular grids</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free_boundary.html">Free-boundary model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.Equilibrium"><code class="docutils literal notranslate"><span class="pre">Equilibrium</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.PressureSensitivity"><code class="docutils literal notranslate"><span class="pre">PressureSensitivity</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.pressure_samples"><code class="docutils literal notranslate"><span class="pre">pressure_samples()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.spectral_pressure_jvp"><code class="docutils literal notranslate"><span class="pre">spectral_pressure_jvp()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.spectral_pressure_sensitivity"><code class="docutils literal notranslate"><span class="pre">spectral_pressure_sensitivity()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.convert_boozer"><code class="docutils literal notranslate"><span class="pre">convert_boozer()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.convert_vmec"><code class="docutils literal notranslate"><span class="pre">convert_vmec()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.mercier_objective"><code class="docutils literal notranslate"><span class="pre">mercier_objective()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.mercier_profile"><code class="docutils literal notranslate"><span class="pre">mercier_profile()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.SpectrumResult"><code class="docutils literal notranslate"><span class="pre">SpectrumResult</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.StabilityConfiguration"><code class="docutils literal notranslate"><span class="pre">StabilityConfiguration</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.StabilityProblem"><code class="docutils literal notranslate"><span class="pre">StabilityProblem</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.StabilityResult"><code class="docutils literal notranslate"><span class="pre">StabilityResult</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.VacuumModel"><code class="docutils literal notranslate"><span class="pre">VacuumModel</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.solve_axisymmetric"><code class="docutils literal notranslate"><span class="pre">solve_axisymmetric()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.solve_terpsichore_fixed_boundary"><code class="docutils literal notranslate"><span class="pre">solve_terpsichore_fixed_boundary()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#gliss.solve_terpsichore_pseudoplasma"><code class="docutils literal notranslate"><span class="pre">solve_terpsichore_pseudoplasma()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</div>
+<section id="scope">
+<h2>Scope<a class="headerlink" href="#scope" title="Link to this heading">¶</a></h2>
+<p>Production
+: Fixed- and free-boundary FEEC spectra (<code class="docutils literal notranslate"><span class="pre">StabilityProblem</span></code>, with a
+<code class="docutils literal notranslate"><span class="pre">VacuumModel</span></code> for the plasma-vacuum problem and an optional ideal wall),
+the axisymmetric and CAS3D marginality families,
+Mercier profiles, persistence of configurations and results, and the
+conversion of VMEC <code class="docutils literal notranslate"><span class="pre">wout</span></code> and precomputed BOOZ_XFORM <code class="docutils literal notranslate"><span class="pre">boozmn</span></code> files.
+Fixed-boundary pressure-sample spectral derivatives include the pressure
+spline and stiffness response at fixed imported geometry.</p>
+<p>Compatibility
+: The TERPSICHORE FORT.23/FORT.24 replays reproduce TERPSICHORE’s matrices
+for validation. They are not a physical plasma-vacuum API.</p>
+<p>Unfinished
+: The force-balanced equilibrium-to-spectrum design derivative chain.
+Asymmetric equilibria are
+solved with the coupled parity operator (parity class 0).</p>
+<p>Every code block in the quickstart is executed by the native test suite
+(<code class="docutils literal notranslate"><span class="pre">python/tests/test_docs.py</span></code>) against the Solov’ev fixtures in <code class="docutils literal notranslate"><span class="pre">test/data</span></code>.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compatibility.html">TERPSICHORE compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mode_diagnostics.html">Mode diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="source_inventory.html">Source inventory</a></li>
+<li class="toctree-l1"><a class="reference internal" href="conventions.html">Conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="angular_grids.html">Angular grids</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free_boundary.html">Free-boundary model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+      <li>Next: <a href="quickstart.html" title="next chapter">Quickstart</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/index.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

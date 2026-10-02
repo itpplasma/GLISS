@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Quickstart &#8212; GLISS 0.0.3</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=47de8214"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="VMEC and BOOZ_XFORM input" href="vmec.html" />
+    <link rel="prev" title="GLISS" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="quickstart">
+<h1>Quickstart<a class="headerlink" href="#quickstart" title="Link to this heading">¶</a></h1>
+<p>The examples use the analytic Solov’ev equilibrium (R0 = 1 m, a = 0.33 m,
+elongation 1.6) exported by <code class="docutils literal notranslate"><span class="pre">benchmarks/solovev/public</span></code>, with q0 = 1.035
+(n = 1 unstable) and q0 = 1.045 (stable). GPEC/DCON puts the marginal point
+at q0 = 1.0396. Every block below runs in the test suite, in order.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">gliss</span>
+
+<span class="n">data</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"GLISS_TEST_DATA"</span><span class="p">,</span> <span class="s2">"test/data"</span><span class="p">))</span>
+<span class="n">unstable</span> <span class="o">=</span> <span class="n">data</span> <span class="o">/</span> <span class="s2">"solovev_q1.035.nc"</span>
+<span class="n">stable</span> <span class="o">=</span> <span class="n">data</span> <span class="o">/</span> <span class="s2">"solovev_q1.045.nc"</span>
+</pre></div>
+</div>
+<section id="equilibria">
+<h2>Equilibria<a class="headerlink" href="#equilibria" title="Link to this heading">¶</a></h2>
+<p>An <code class="docutils literal notranslate"><span class="pre">Equilibrium</span></code> owns the native data. Use it as a context manager, or call
+<code class="docutils literal notranslate"><span class="pre">close()</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">gliss</span><span class="o">.</span><span class="n">Equilibrium</span><span class="p">(</span><span class="n">unstable</span><span class="p">)</span> <span class="k">as</span> <span class="n">equilibrium</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">equilibrium</span><span class="o">.</span><span class="n">schema_version</span><span class="p">,</span> <span class="n">equilibrium</span><span class="o">.</span><span class="n">coordinate_handedness</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">equilibrium</span><span class="o">.</span><span class="n">coordinate_handedness</span> <span class="o">==</span> <span class="s2">"left-handed"</span>
+</pre></div>
+</div>
+</section>
+<section id="mercier-stability">
+<h2>Mercier stability<a class="headerlink" href="#mercier-stability" title="Link to this heading">¶</a></h2>
+<p>Positive <code class="docutils literal notranslate"><span class="pre">D_Mercier</span></code> is stable, as in VMEC. <code class="docutils literal notranslate"><span class="pre">mercier_objective</span></code> returns
+<code class="docutils literal notranslate"><span class="pre">-min(D_Mercier)</span></code>, positive exactly when a surface is Mercier-unstable.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">s</span><span class="p">,</span> <span class="n">d_mercier</span> <span class="o">=</span> <span class="n">gliss</span><span class="o">.</span><span class="n">mercier_profile</span><span class="p">(</span><span class="n">unstable</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">d_mercier</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mf">0.0</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">d_mercier</span><span class="p">[</span><span class="n">s</span> <span class="o">&gt;</span> <span class="mf">0.25</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">gliss</span><span class="o">.</span><span class="n">mercier_objective</span><span class="p">(</span><span class="n">unstable</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">0.0</span>
+</pre></div>
+</div>
+</section>
+<section id="the-n-1-axisymmetric-family">
+<h2>The n = 1 axisymmetric family<a class="headerlink" href="#the-n-1-axisymmetric-family" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">solve_axisymmetric</span></code> counts negative directions of the two-component
+marginality operator and certifies the lowest eigenpair. The trial space is
+conforming, so its eigenvalues approach the converged ones from above; on
+these 16-surface exports degree 3 resolves the near-marginal kink.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">path</span><span class="p">,</span> <span class="n">expected</span> <span class="ow">in</span> <span class="p">((</span><span class="n">unstable</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="n">stable</span><span class="p">,</span> <span class="mi">0</span><span class="p">)):</span>
+    <span class="k">with</span> <span class="n">gliss</span><span class="o">.</span><span class="n">Equilibrium</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">as</span> <span class="n">equilibrium</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">gliss</span><span class="o">.</span><span class="n">solve_axisymmetric</span><span class="p">(</span><span class="n">equilibrium</span><span class="p">,</span> <span class="n">poloidal_max</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">result</span><span class="o">.</span><span class="n">negative_count</span> <span class="o">==</span> <span class="n">expected</span>
+    <span class="k">assert</span> <span class="n">result</span><span class="o">.</span><span class="n">certificate</span> <span class="o">&lt;</span> <span class="nb">abs</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">lowest_eigenvalue</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="fixed-boundary-spectra">
+<h2>Fixed-boundary spectra<a class="headerlink" href="#fixed-boundary-spectra" title="Link to this heading">¶</a></h2>
+<p>A <code class="docutils literal notranslate"><span class="pre">StabilityProblem</span></code> assembles the compressible fixed-boundary operator with
+physical mass for both stellarator-symmetry parity classes. Eigenvalues are
+omega^2 in s^-2.</p>
+<p>The magnetic differential equation projects cubic position-harmonic products.
+Its angular grid must exceed six times the largest absolute stored equilibrium
+harmonic index in each direction. These Solov’ev exports contain poloidal
+harmonics through m = 8, so the examples use 64 poloidal points; their
+axisymmetric position has n = 0. The vacuum edge mesh has its own resolution
+and is independent of this volume projection grid.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">modes</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]</span>
+<span class="k">with</span> <span class="n">gliss</span><span class="o">.</span><span class="n">Equilibrium</span><span class="p">(</span><span class="n">stable</span><span class="p">)</span> <span class="k">as</span> <span class="n">equilibrium</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">gliss</span><span class="o">.</span><span class="n">StabilityProblem</span><span class="p">(</span>
+        <span class="n">equilibrium</span><span class="p">,</span> <span class="n">modes</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">angular_theta</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">angular_zeta</span><span class="o">=</span><span class="mi">8</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">problem</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+        <span class="n">lowest</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">classes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">energy</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">energy</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">lowest</span><span class="o">.</span><span class="n">eigenvector</span><span class="p">)</span>
+        <span class="n">configuration</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">configuration</span>
+<span class="k">assert</span> <span class="n">lowest</span><span class="o">.</span><span class="n">negative_count</span> <span class="o">==</span> <span class="mi">0</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">energy</span><span class="o">.</span><span class="n">rayleigh_quotient</span> <span class="o">-</span> <span class="n">lowest</span><span class="o">.</span><span class="n">lowest_eigenvalue</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="p">(</span>
+    <span class="n">lowest</span><span class="o">.</span><span class="n">certificate</span> <span class="o">+</span> <span class="mf">1e-9</span> <span class="o">*</span> <span class="nb">abs</span><span class="p">(</span><span class="n">lowest</span><span class="o">.</span><span class="n">lowest_eigenvalue</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="pressure-sample-derivatives">
+<h2>Pressure-sample derivatives<a class="headerlink" href="#pressure-sample-derivatives" title="Link to this heading">¶</a></h2>
+<p>The pressure JVP follows the imported sample spline through the assembled
+stiffness at fixed geometry. For an isolated eigenvalue, its contraction uses
+the mass-normalized eigenvector; a complete cluster uses its basis-invariant
+trace. The positive <code class="docutils literal notranslate"><span class="pre">gap</span></code> specifies an exterior separation in s^-2.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">gliss</span><span class="o">.</span><span class="n">Equilibrium</span><span class="p">(</span><span class="n">stable</span><span class="p">)</span> <span class="k">as</span> <span class="n">equilibrium</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">gliss</span><span class="o">.</span><span class="n">StabilityProblem</span><span class="p">(</span>
+        <span class="n">equilibrium</span><span class="p">,</span> <span class="p">[(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)],</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">angular_theta</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+        <span class="n">angular_zeta</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">radial_cells</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">problem</span><span class="p">:</span>
+        <span class="n">nodes</span><span class="p">,</span> <span class="n">pressure_pa</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">pressure_samples</span><span class="p">()</span>
+        <span class="n">spectrum</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">solve_full_spectrum_class</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">stop</span> <span class="o">=</span> <span class="n">spectrum</span><span class="o">.</span><span class="n">eigenvalues</span><span class="o">.</span><span class="n">size</span>
+        <span class="n">direction_pa</span> <span class="o">=</span> <span class="mf">0.01</span> <span class="o">*</span> <span class="n">pressure_pa</span>
+        <span class="n">jvp</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">spectral_pressure_jvp</span><span class="p">(</span>
+            <span class="mi">1</span><span class="p">,</span> <span class="n">stop</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">direction_pa</span><span class="p">,</span> <span class="n">gap</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">sensitivity</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">spectral_pressure_sensitivity</span><span class="p">(</span>
+            <span class="mi">1</span><span class="p">,</span> <span class="n">stop</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">gap</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+        <span class="p">)</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">sensitivity</span><span class="o">.</span><span class="n">jvp</span><span class="p">(</span><span class="n">direction_pa</span><span class="p">),</span> <span class="n">jvp</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="mf">1e-9</span><span class="p">)</span>
+<span class="k">assert</span> <span class="ow">not</span> <span class="n">sensitivity</span><span class="o">.</span><span class="n">gradient</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">writeable</span>
+</pre></div>
+</div>
+<p>The gradient has units s^-2 Pa^-1 and remains usable after the problem closes.
+Constructing it costs one tangent assembly per pressure sample; a direct JVP
+uses one. Pressure must be strictly positive, including at the assembly
+points, and zero-width resonances must admit the full sample-direction domain.
+Geometry, magnetic profiles, density, gamma, modes, quadrature and resonance
+topology are held fixed. A force-balanced external equilibrium response and
+free-boundary pressure derivatives remain future work.</p>
+</section>
+<section id="free-boundary-spectra">
+<h2>Free-boundary spectra<a class="headerlink" href="#free-boundary-spectra" title="Link to this heading">¶</a></h2>
+<p>A <code class="docutils literal notranslate"><span class="pre">VacuumModel</span></code> frees the plasma edge: its normal displacement drives a
+current-free vacuum field, whose energy (a scalar-potential boundary integral
+over the edge and wall) enters the stiffness. The model sets the full-torus edge mesh and an optional
+ideal wall, here conformal at 3 cm. Without a wall this q0 = 1.045 Solov’ev
+edge is kink unstable; the close wall stabilizes it.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">free_modes</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]</span>
+<span class="n">lowest_free</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="k">with</span> <span class="n">gliss</span><span class="o">.</span><span class="n">Equilibrium</span><span class="p">(</span><span class="n">stable</span><span class="p">)</span> <span class="k">as</span> <span class="n">equilibrium</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">wall</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="mf">0.03</span><span class="p">):</span>
+        <span class="k">with</span> <span class="n">gliss</span><span class="o">.</span><span class="n">StabilityProblem</span><span class="p">(</span>
+            <span class="n">equilibrium</span><span class="p">,</span> <span class="n">free_modes</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">angular_theta</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+            <span class="n">angular_zeta</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">vacuum</span><span class="o">=</span><span class="n">gliss</span><span class="o">.</span><span class="n">VacuumModel</span><span class="p">((</span><span class="mi">24</span><span class="p">,</span> <span class="mi">12</span><span class="p">),</span> <span class="n">wall</span><span class="p">),</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">problem</span><span class="p">:</span>
+            <span class="n">lowest_free</span><span class="p">[</span><span class="n">wall</span><span class="p">]</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">solve_class</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">lowest_free</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span><span class="o">.</span><span class="n">negative_count</span> <span class="o">&gt;=</span> <span class="mi">1</span>
+<span class="k">assert</span> <span class="n">lowest_free</span><span class="p">[</span><span class="mf">0.03</span><span class="p">]</span><span class="o">.</span><span class="n">negative_count</span> <span class="o">==</span> <span class="mi">0</span>
+<span class="k">assert</span> <span class="n">lowest_free</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span><span class="o">.</span><span class="n">boundary_condition</span> <span class="o">==</span> <span class="s2">"free"</span>
+</pre></div>
+</div>
+</section>
+<section id="persistence">
+<h2>Persistence<a class="headerlink" href="#persistence" title="Link to this heading">¶</a></h2>
+<p>Configurations and results round-trip exactly through versioned JSON. A
+configuration records the operator revision it was assembled with, so a
+record from an earlier discretization is not silently replayed.
+Fresh spectra also record the source equilibrium and canonical configuration
+digests, including the radial mesh and exact wall model. Run-manifest writers
+require the current operator revision, 4, and reject mismatched inputs.
+Earlier revisions remain readable as
+historical records; migrate the configuration explicitly with
+<code class="docutils literal notranslate"><span class="pre">dataclasses.replace(configuration,</span> <span class="pre">discretization_revision=4)</span></code> and solve again.
+An old spectrum cannot be relabelled or exported as a verified current run.
+The Python loader checks both ABI 4 and native operator revision 4.
+Historical manifests preserve their fingerprints. An old operator revision
+reports <code class="docutils literal notranslate"><span class="pre">configuration_verified=False</span></code>; <code class="docutils literal notranslate"><span class="pre">equilibrium_verified</span></code> still reports
+whether its recorded source digest is known. Archives without either digest
+report both flags as false. Creating a new manifest requires a fresh solve.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">directory</span><span class="p">:</span>
+    <span class="n">configuration</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">directory</span><span class="p">)</span> <span class="o">/</span> <span class="s2">"configuration.json"</span><span class="p">)</span>
+    <span class="n">result</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">directory</span><span class="p">)</span> <span class="o">/</span> <span class="s2">"result.json"</span><span class="p">)</span>
+    <span class="n">restored</span> <span class="o">=</span> <span class="n">gliss</span><span class="o">.</span><span class="n">StabilityConfiguration</span><span class="o">.</span><span class="n">read</span><span class="p">(</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">directory</span><span class="p">)</span> <span class="o">/</span> <span class="s2">"configuration.json"</span>
+    <span class="p">)</span>
+    <span class="n">reread</span> <span class="o">=</span> <span class="n">gliss</span><span class="o">.</span><span class="n">StabilityResult</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">directory</span><span class="p">)</span> <span class="o">/</span> <span class="s2">"result.json"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">restored</span> <span class="o">==</span> <span class="n">configuration</span>
+<span class="k">assert</span> <span class="n">reread</span><span class="o">.</span><span class="n">classes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lowest_eigenvalue</span> <span class="o">==</span> <span class="n">lowest</span><span class="o">.</span><span class="n">lowest_eigenvalue</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#equilibria">Equilibria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mercier-stability">Mercier stability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-n-1-axisymmetric-family">The n = 1 axisymmetric family</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fixed-boundary-spectra">Fixed-boundary spectra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pressure-sample-derivatives">Pressure-sample derivatives</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#free-boundary-spectra">Free-boundary spectra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#persistence">Persistence</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compatibility.html">TERPSICHORE compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mode_diagnostics.html">Mode diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="source_inventory.html">Source inventory</a></li>
+<li class="toctree-l1"><a class="reference internal" href="conventions.html">Conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="angular_grids.html">Angular grids</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free_boundary.html">Free-boundary model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">GLISS</a></li>
+      <li>Next: <a href="vmec.html" title="next chapter">VMEC and BOOZ_XFORM input</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/quickstart.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

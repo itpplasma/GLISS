@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Angular grids &#8212; GLISS 0.0.3</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=47de8214"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Free-boundary model" href="free_boundary.html" />
+    <link rel="prev" title="Conventions" href="conventions.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="angular-grids">
+<h1>Angular grids<a class="headerlink" href="#angular-grids" title="Link to this heading">¶</a></h1>
+<p>The magnetic differential equation (MDE) for the Pfirsch-Schlueter response
+forms its forcing on an angular grid before Fourier projection. Its Jacobian
+is cubic in Cartesian position derivatives. If the imported position table
+has maximum absolute indices <code class="docutils literal notranslate"><span class="pre">M_eq</span></code> and <code class="docutils literal notranslate"><span class="pre">N_eq</span></code>, the grid must satisfy</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>angular_theta &gt; 6 * M_eq
+angular_zeta  &gt; 6 * N_eq
+</pre></div>
+</div>
+<p>The inequalities are strict. They retain every harmonic through <code class="docutils literal notranslate"><span class="pre">3*M_eq</span></code>
+and <code class="docutils literal notranslate"><span class="pre">3*N_eq</span></code> below Nyquist. Truncating the projected table after forming an
+undersampled forcing cannot remove aliases that have already folded into
+lower harmonics. The rule uses the declared position table, including padded
+zero coefficients, rather than the requested displacement mode table.
+For example, an M=8, N=0 position table admits a 64 x 8 grid; M=16, N=0
+requires at least 97 x 8, and a 128 x 8 grid satisfies that requirement.
+The separate displacement-product bandwidth checks also apply.</p>
+<p>The native axisymmetric convenience routine and CLI keep their default
+64 x 8 grid. For higher-bandwidth exports, the CLI accepts
+<code class="docutils literal notranslate"><span class="pre">--angular</span> <span class="pre">NTHETA</span> <span class="pre">NZETA</span></code> and reports the chosen grid in its CSV result.
+The public Solov’ev regeneration runner derives an admitted grid from the
+retained export and displacement truncations; its M=24 default uses 256 x 8.
+Python callers needing an explicit axisymmetric comparison grid can pass
+the same mode family to <code class="docutils literal notranslate"><span class="pre">solve_cas3d_marginality</span></code> with <code class="docutils literal notranslate"><span class="pre">angular_theta</span></code> and
+<code class="docutils literal notranslate"><span class="pre">angular_zeta</span></code>.</p>
+<p>Python constructors generate uniform grids from <code class="docutils literal notranslate"><span class="pre">angular_theta</span></code> and
+<code class="docutils literal notranslate"><span class="pre">angular_zeta</span></code>. The direct native <code class="docutils literal notranslate"><span class="pre">solve_beta_derivatives_modes</span></code> interface
+requires each angle array to cover one complete uniform period, expressed
+in coordinates with period one. Origin shifts, wrapping and permutations
+are allowed. Repeated points, nonuniform spacing and incomplete periods are
+invalid inputs.</p>
+<p>The low-level native routine reports
+<code class="docutils literal notranslate"><span class="pre">mercier_angular_alias_error</span> <span class="pre">=</span> <span class="pre">4</span></code> when the position bandwidth exceeds the
+grid. Invalid angular point sets report <code class="docutils literal notranslate"><span class="pre">mercier_invalid_input</span> <span class="pre">=</span> <span class="pre">1</span></code>.
+Higher-level equilibrium and stability interfaces can map these failures to
+their input or assembly error status; increase the relevant grid size before
+retrying.</p>
+<p>This admission rule prevents folding of the polynomial cubic forcing. Ratios,
+inverse metrics and other nonlinear geometry quantities require a separate
+angular refinement study. Compare spectra, energy terms and equilibrium
+diagnostics on successively finer admitted grids, and report the observed
+changes. Passing admission or obtaining a certified discrete eigenpair does
+not establish angular convergence.</p>
+<p>The vacuum boundary mesh is independent of this volume quadrature grid.
+<code class="docutils literal notranslate"><span class="pre">VacuumModel.edge_resolution</span></code> must resolve the displacement mode table and
+must also be refined when studying plasma-vacuum convergence.</p>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compatibility.html">TERPSICHORE compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mode_diagnostics.html">Mode diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="source_inventory.html">Source inventory</a></li>
+<li class="toctree-l1"><a class="reference internal" href="conventions.html">Conventions</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Angular grids</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free_boundary.html">Free-boundary model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="conventions.html" title="previous chapter">Conventions</a></li>
+      <li>Next: <a href="free_boundary.html" title="next chapter">Free-boundary model</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/angular_grids.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

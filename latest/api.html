@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>API reference &#8212; GLISS 0.0.3</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=47de8214"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Free-boundary model" href="free_boundary.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-gliss">
+<span id="api-reference"></span><h1>API reference<a class="headerlink" href="#module-gliss" title="Link to this heading">¶</a></h1>
+<p>Python interface to the Global Linear Ideal Stability Solver.</p>
+<p>Equilibria have explicit, context-managed native lifetimes. One-shot Mercier
+functions remain available for scripts that evaluate an export once.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gliss.Equilibrium">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">Equilibrium</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.Equilibrium" title="Link to this definition">¶</a></dt>
+<dd><p>Loaded GVEC/CAS3D equilibrium with explicit native lifetime.</p>
+<p><code class="docutils literal notranslate"><span class="pre">close()</span></code> or a <code class="docutils literal notranslate"><span class="pre">with</span></code> block releases this owner’s native handle;
+retained data remains alive until its last StabilityProblem closes.
+Construction/destruction of problems sharing this equilibrium and its
+close() must serialize. An unclosed owner is released on garbage collection.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.Equilibrium.closed">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">closed</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></span><a class="headerlink" href="#gliss.Equilibrium.closed" title="Link to this definition">¶</a></dt>
+<dd><p>Whether the native equilibrium has been released.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.Equilibrium.schema_version">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">schema_version</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#gliss.Equilibrium.schema_version" title="Link to this definition">¶</a></dt>
+<dd><p>0 for legacy inputs and 1 for GLISS exports.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>NetCDF export schema</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.Equilibrium.coordinate_handedness">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">coordinate_handedness</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#gliss.Equilibrium.coordinate_handedness" title="Link to this definition">¶</a></dt>
+<dd><p>Orientation of the reconstructed <code class="docutils literal notranslate"><span class="pre">(s,</span> <span class="pre">theta,</span> <span class="pre">zeta)</span></code> chart.</p>
+<p><code class="docutils literal notranslate"><span class="pre">&quot;right-handed&quot;</span></code> for a positive signed Jacobian and
+<code class="docutils literal notranslate"><span class="pre">&quot;left-handed&quot;</span></code> for a negative one; GVEC CAS3D exports with the
+poloidal flip are left-handed.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.Equilibrium.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#gliss.Equilibrium.close" title="Link to this definition">¶</a></dt>
+<dd><p>Release the native equilibrium; repeated calls are safe.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.Equilibrium.mercier_profile">
+<span class="sig-name descname"><span class="pre">mercier_profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_theta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_zeta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gliss.Equilibrium.mercier_profile" title="Link to this definition">¶</a></dt>
+<dd><p>Return radial coordinates and Mercier discriminants.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.Equilibrium.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Path</span></span></span><a class="headerlink" href="#gliss.Equilibrium.write" title="Link to this definition">¶</a></dt>
+<dd><p>Atomically write a version-1 equilibrium export.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gliss.PressureSensitivity">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">PressureSensitivity</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gradient</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pressure_pa</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">surfaces_s</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gap</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">contract_version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.PressureSensitivity" title="Link to this definition">¶</a></dt>
+<dd><p>Derivative of a fixed-index spectral sum with respect to pressure samples.</p>
+<p>gradient has units s^-2 Pa^-1, and sample directions use Pa. Whole
+unresolved eigenvalue clusters must be selected; their basis rotations
+leave the trace unchanged. The exterior-gap gate is the numerical
+admission diagnostic used for material sensitivities, not a mesh or
+equilibrium convergence certificate. Constructing the gradient currently
+costs one exact tangent assembly per pressure sample.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.pressure_samples">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">pressure_samples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">problem</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.pressure_samples" title="Link to this definition">¶</a></dt>
+<dd><p>Return owned read-only arrays (s coordinates, pressure samples in Pa).</p>
+<p>The problem retains the imported data until close(), so its originating
+Equilibrium may already be closed. Returned arrays survive problem.close().</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.spectral_pressure_jvp">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">spectral_pressure_jvp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">problem</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parity_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tangent</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">gap</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.spectral_pressure_jvp" title="Link to this definition">¶</a></dt>
+<dd><p>Differentiate a spectral sum along a pressure direction using one assembly.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.spectral_pressure_sensitivity">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">spectral_pressure_sensitivity</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">problem</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parity_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">gap</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.spectral_pressure_sensitivity" title="Link to this definition">¶</a></dt>
+<dd><p>Return a pressure gradient for an isolated eigenvalue or complete cluster.</p>
+<p>The pressure domain is strictly positive at samples and assembly points;
+zero-width resonances require a valid full sample-direction domain.
+All other imported data and the assembly topology remain fixed. This
+exact reverse action currently uses ns tangent assemblies. For a single
+direction, spectral_pressure_jvp uses one assembly instead.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.convert_boozer">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">convert_boozer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta_average</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wout_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">poloidal_max</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">toroidal_max</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_balance_policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'error'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">truncation_tolerance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Path</span></span></span><a class="headerlink" href="#gliss.convert_boozer" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a precomputed BOOZ_XFORM <code class="docutils literal notranslate"><span class="pre">boozmn</span></code> file for GLISS.</p>
+<p>The Boozer transform is not re-run: <code class="docutils literal notranslate"><span class="pre">mboz</span></code>, <code class="docutils literal notranslate"><span class="pre">nboz</span></code> and the surface
+list are those of the file, which must be a centered uniform subset of
+the VMEC half grid. A <code class="docutils literal notranslate"><span class="pre">boozmn</span></code> file does not store the volume-averaged
+beta; pass it as <code class="docutils literal notranslate"><span class="pre">beta_average</span></code> or give the parent <code class="docutils literal notranslate"><span class="pre">wout_path</span></code>,
+whose metadata (solve status, signgs, symmetry and beta) is then also
+checked. Its field periods and radial-grid size must agree with the
+precomputed transform. The same geometric and force-balance gates as
+<a class="reference internal" href="#gliss.convert_vmec" title="gliss.convert_vmec"><code class="xref py py-func docutils literal notranslate"><span class="pre">convert_vmec()</span></code></a> apply, and both entry points produce identical
+exports for the same transform.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.convert_vmec">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">convert_vmec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">poloidal_max</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">toroidal_max</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform_factor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radial_surfaces</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_balance_policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'error'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">truncation_tolerance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Path</span></span></span><a class="headerlink" href="#gliss.convert_vmec" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a VMEC <code class="docutils literal notranslate"><span class="pre">wout</span></code> file for GLISS.</p>
+<p>The result uses the left-handed, one-field-period Boozer convention of
+pyGVEC’s CAS3D exporter. A stellarator-symmetric file stores the
+populated parity of each field; an asymmetric (<code class="docutils literal notranslate"><span class="pre">lasym</span></code>) file stores
+both parities and <code class="docutils literal notranslate"><span class="pre">stellarator_symmetry=&quot;False&quot;</span></code>, which GLISS solves
+with the coupled parity operator. <code class="docutils literal notranslate"><span class="pre">radial_surfaces</span></code> optionally
+selects an exact centered uniform subset of the VMEC half grid. A failed
+flux-surface averaged radial force balance (relative residual above
+1e-2), the solvability condition of the Pfirsch-Schlueter equation GLISS
+solves, rejects the conversion by default; the pointwise closure with the
+metric B_s is reported as <code class="docutils literal notranslate"><span class="pre">force_balance_pointwise</span></code> only. The explicit
+<code class="docutils literal notranslate"><span class="pre">force_balance_policy=&quot;warn&quot;</span></code> option retains the diagnostic export for
+convergence studies. GLISS rebuilds the geometry from the truncated
+<code class="docutils literal notranslate"><span class="pre">xhat,</span> <span class="pre">yhat,</span> <span class="pre">zhat</span></code> harmonics only; the conversion therefore rejects a
+maximum relative Jacobian error of that truncated reconstruction above
+<code class="docutils literal notranslate"><span class="pre">truncation_tolerance</span></code>, which usually calls for larger <code class="docutils literal notranslate"><span class="pre">poloidal_max</span></code>
+and <code class="docutils literal notranslate"><span class="pre">toroidal_max</span></code>. Existing outputs are preserved unless
+<code class="docutils literal notranslate"><span class="pre">overwrite=True</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.mercier_objective">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">mercier_objective</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_theta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_zeta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#gliss.mercier_objective" title="Link to this definition">¶</a></dt>
+<dd><p>Return the Mercier instability measure <code class="docutils literal notranslate"><span class="pre">-min(d_mercier)</span></code>.</p>
+<p>The value is positive exactly when some retained surface is
+Mercier-unstable; smaller is more stable.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.mercier_profile">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">mercier_profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_theta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_zeta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gliss.mercier_profile" title="Link to this definition">¶</a></dt>
+<dd><p>Return radial coordinates and Mercier discriminants.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>path</strong> (<em>str</em><em> or </em><em>os.PathLike</em>) – GVEC/CAS3D NetCDF equilibrium export.</p></li>
+<li><p><strong>n_theta</strong> (<em>int</em><em>, </em><em>optional</em>) – Positive angular quadrature sizes. Both default to 64.</p></li>
+<li><p><strong>n_zeta</strong> (<em>int</em><em>, </em><em>optional</em>) – Positive angular quadrature sizes. Both default to 64.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>s, d_mercier</strong> – One-dimensional <code class="docutils literal notranslate"><span class="pre">float64</span></code> arrays in the VMEC / Landreman-Jorge
+<code class="docutils literal notranslate"><span class="pre">D_Mercier</span></code> convention: positive values are Mercier-stable and
+negative values are unstable.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>numpy.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gliss.SpectrumResult">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">SpectrumResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">parity_class:</span> <span class="pre">int,</span> <span class="pre">field_periods:</span> <span class="pre">int,</span> <span class="pre">modes:</span> <span class="pre">~typing.Tuple[~typing.Tuple[int,</span> <span class="pre">int],</span> <span class="pre">...],</span> <span class="pre">degree:</span> <span class="pre">int,</span> <span class="pre">angular_resolution:</span> <span class="pre">~typing.Tuple[int,</span> <span class="pre">int],</span> <span class="pre">adiabatic_index:</span> <span class="pre">float,</span> <span class="pre">density_kg_m3:</span> <span class="pre">float,</span> <span class="pre">zero_floor:</span> <span class="pre">float,</span> <span class="pre">negative_count:</span> <span class="pre">int,</span> <span class="pre">floor_count:</span> <span class="pre">int,</span> <span class="pre">lowest_eigenvalue:</span> <span class="pre">float,</span> <span class="pre">certificate:</span> <span class="pre">float,</span> <span class="pre">eigenpair_residual:</span> <span class="pre">float,</span> <span class="pre">eigenpair_resolution:</span> <span class="pre">float,</span> <span class="pre">inertia_interval:</span> <span class="pre">float,</span> <span class="pre">eigenvector:</span> <span class="pre">~numpy.ndarray,</span> <span class="pre">normal_unknowns:</span> <span class="pre">int,</span> <span class="pre">eta_unknowns:</span> <span class="pre">int,</span> <span class="pre">mu_unknowns:</span> <span class="pre">int,</span> <span class="pre">has_chart_metric:</span> <span class="pre">bool,</span> <span class="pre">has_eigenvector:</span> <span class="pre">bool,</span> <span class="pre">solver_tolerances:</span> <span class="pre">~gliss.solver.SolverTolerances</span> <span class="pre">=</span> <span class="pre">&lt;factory&gt;,</span> <span class="pre">eigenvalue_unit:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'s^-2',</span> <span class="pre">boundary_condition:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'fixed',</span> <span class="pre">normalization:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'x.T</span> <span class="pre">&#64;</span> <span class="pre">M</span> <span class="pre">&#64;</span> <span class="pre">x</span> <span class="pre">=</span> <span class="pre">1',</span> <span class="pre">coordinate_handedness:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'left-handed',</span> <span class="pre">fourier_convention:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'2*pi*(m*theta</span> <span class="pre">-</span> <span class="pre">n*zeta/N_T)',</span> <span class="pre">discretization_revision:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">4,</span> <span class="pre">configuration_sha256:</span> <span class="pre">str</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">equilibrium_sha256:</span> <span class="pre">str</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.SpectrumResult" title="Link to this definition">¶</a></dt>
+<dd><p>Certified lowest eigenpair for one stellarator-symmetry parity class.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.SpectrumResult.normal">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">normal</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ndarray</span></span><a class="headerlink" href="#gliss.SpectrumResult.normal" title="Link to this definition">¶</a></dt>
+<dd><p>Normal coefficients in dynamic-layout order.</p>
+<p>A free-boundary result also holds the edge coefficients.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.SpectrumResult.eta">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">eta</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ndarray</span></span><a class="headerlink" href="#gliss.SpectrumResult.eta" title="Link to this definition">¶</a></dt>
+<dd><p>Tangential eta coefficients in dynamic-layout order.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.SpectrumResult.mu">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">mu</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ndarray</span></span><a class="headerlink" href="#gliss.SpectrumResult.mu" title="Link to this definition">¶</a></dt>
+<dd><p>Compressional mu coefficients in dynamic-layout order.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gliss.StabilityConfiguration">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">StabilityConfiguration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">modes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adiabatic_index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.6666666666666667</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">density_kg_m3</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zero_floor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">degree</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">solver_tolerances</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">SolverTolerances</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">SolverTolerances(eigenvalue_relative=1e-13,</span> <span class="pre">residual_relative=1e-12,</span> <span class="pre">negative_bracket_relative=1e-09,</span> <span class="pre">negative_bracket_floor=0.001,</span> <span class="pre">inverse_iteration_limit=500,</span> <span class="pre">bracket_iteration_limit=200)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angular_theta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angular_zeta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">discretization_revision</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vacuum</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gliss.VacuumModel" title="gliss.vacuum.VacuumModel"><span class="pre">VacuumModel</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radial_cells</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.StabilityConfiguration" title="Link to this definition">¶</a></dt>
+<dd><p>Validated stability problem inputs with JSON interchange.</p>
+<p><code class="docutils literal notranslate"><span class="pre">vacuum</span></code> selects the free-boundary problem; <code class="docutils literal notranslate"><span class="pre">None</span></code> fixes the edge.
+<code class="docutils literal notranslate"><span class="pre">radial_cells</span></code> sets the uniform radial finite-element cells; <code class="docutils literal notranslate"><span class="pre">None</span></code>
+keeps one cell per equilibrium surface.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityConfiguration.create_problem">
+<span class="sig-name descname"><span class="pre">create_problem</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">equilibrium</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#gliss.StabilityProblem" title="gliss.stability.StabilityProblem"><span class="pre">StabilityProblem</span></a></span></span><a class="headerlink" href="#gliss.StabilityConfiguration.create_problem" title="Link to this definition">¶</a></dt>
+<dd><p>Create an assembled problem from this immutable configuration.</p>
+<p>A configuration recorded with an earlier discretization revision is
+rejected: this GLISS would assemble a different operator than the one
+that produced its results.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.StabilityConfiguration.boundary_condition">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">boundary_condition</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#gliss.StabilityConfiguration.boundary_condition" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">&quot;free&quot;</span></code> with a vacuum model, otherwise <code class="docutils literal notranslate"><span class="pre">&quot;fixed&quot;</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityConfiguration.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gliss.StabilityConfiguration.to_dict" title="Link to this definition">¶</a></dt>
+<dd><p>Return the canonical versioned configuration document.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.StabilityConfiguration.sha256">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">sha256</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#gliss.StabilityConfiguration.sha256" title="Link to this definition">¶</a></dt>
+<dd><p>Digest of the canonical inputs, including the radial mesh and wall.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityConfiguration.from_dict">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">document</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Mapping</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#gliss.StabilityConfiguration" title="gliss.schema.StabilityConfiguration"><span class="pre">StabilityConfiguration</span></a></span></span><a class="headerlink" href="#gliss.StabilityConfiguration.from_dict" title="Link to this definition">¶</a></dt>
+<dd><p>Validate and construct a versioned configuration document.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityConfiguration.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#gliss.StabilityConfiguration.write" title="Link to this definition">¶</a></dt>
+<dd><p>Atomically write the canonical JSON configuration.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityConfiguration.read">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#gliss.StabilityConfiguration" title="gliss.schema.StabilityConfiguration"><span class="pre">StabilityConfiguration</span></a></span></span><a class="headerlink" href="#gliss.StabilityConfiguration.read" title="Link to this definition">¶</a></dt>
+<dd><p>Read and strictly validate a JSON configuration.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gliss.StabilityProblem">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">StabilityProblem</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">equilibrium</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gliss.Equilibrium" title="gliss.equilibrium.Equilibrium"><span class="pre">Equilibrium</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">modes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adiabatic_index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.6666666666666667</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">density_kg_m3</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zero_floor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">degree</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">solver_tolerances</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">SolverTolerances</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">SolverTolerances(eigenvalue_relative=1e-13,</span> <span class="pre">residual_relative=1e-12,</span> <span class="pre">negative_bracket_relative=1e-09,</span> <span class="pre">negative_bracket_floor=0.001,</span> <span class="pre">inverse_iteration_limit=500,</span> <span class="pre">bracket_iteration_limit=200)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angular_theta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angular_zeta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vacuum</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gliss.VacuumModel" title="gliss.vacuum.VacuumModel"><span class="pre">VacuumModel</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radial_cells</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.StabilityProblem" title="Link to this definition">¶</a></dt>
+<dd><p>Reusable assembled ideal-MHD eigenproblem.</p>
+<p>Without <code class="docutils literal notranslate"><span class="pre">vacuum</span></code> the plasma edge is held fixed. With a
+<a class="reference internal" href="#gliss.VacuumModel" title="gliss.VacuumModel"><code class="xref py py-class docutils literal notranslate"><span class="pre">gliss.VacuumModel</span></code></a> the edge normal displacement is free and its
+vacuum energy, bounded by the model’s ideal wall if any, enters the
+stiffness: the physical free-boundary problem. <code class="docutils literal notranslate"><span class="pre">radial_cells</span></code> sets the
+uniform finite-element cells in s independently of the equilibrium
+surfaces, which the problem interpolates; None keeps one cell per
+surface.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.boundary_condition">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">boundary_condition</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#gliss.StabilityProblem.boundary_condition" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">&quot;free&quot;</span></code> with a vacuum model, otherwise <code class="docutils literal notranslate"><span class="pre">&quot;fixed&quot;</span></code>.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.parity_classes">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">parity_classes</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#gliss.StabilityProblem.parity_classes" title="Link to this definition">¶</a></dt>
+<dd><p>(1, 2), or (0,) when both parities are coupled.</p>
+<p>An equilibrium without stellarator symmetry couples the two Fourier
+parities of every mode into one operator, parity class 0.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Class numbers</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.closed">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">closed</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></span><a class="headerlink" href="#gliss.StabilityProblem.closed" title="Link to this definition">¶</a></dt>
+<dd><p>Whether the assembled native problem has been released.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#gliss.StabilityProblem.close" title="Link to this definition">¶</a></dt>
+<dd><p>Release the assembled native problem; repeated calls are safe.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.configuration">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">configuration</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#gliss.StabilityConfiguration" title="gliss.StabilityConfiguration"><span class="pre">StabilityConfiguration</span></a></span><a class="headerlink" href="#gliss.StabilityProblem.configuration" title="Link to this definition">¶</a></dt>
+<dd><p>Immutable serializable inputs for this assembled problem.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.write_manifest">
+<span class="sig-name descname"><span class="pre">write_manifest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gliss.StabilityResult" title="gliss.stability.StabilityResult"><span class="pre">StabilityResult</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">RunManifest</span></span></span><a class="headerlink" href="#gliss.StabilityProblem.write_manifest" title="Link to this definition">¶</a></dt>
+<dd><p>Write a portable manifest for a result produced by this problem.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.write_full_manifest">
+<span class="sig-name descname"><span class="pre">write_full_manifest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">FullStabilityResult</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">FullRunManifest</span></span></span><a class="headerlink" href="#gliss.StabilityProblem.write_full_manifest" title="Link to this definition">¶</a></dt>
+<dd><p>Write a portable manifest containing both complete spectra.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.solve">
+<span class="sig-name descname"><span class="pre">solve</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#gliss.StabilityResult" title="gliss.stability.StabilityResult"><span class="pre">StabilityResult</span></a></span></span><a class="headerlink" href="#gliss.StabilityProblem.solve" title="Link to this definition">¶</a></dt>
+<dd><p>Solve and certify the lowest eigenpair in every parity class.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.solve_class">
+<span class="sig-name descname"><span class="pre">solve_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parity_class</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#gliss.SpectrumResult" title="gliss.stability.SpectrumResult"><span class="pre">SpectrumResult</span></a></span></span><a class="headerlink" href="#gliss.StabilityProblem.solve_class" title="Link to this definition">¶</a></dt>
+<dd><p>Solve and certify one class of <code class="docutils literal notranslate"><span class="pre">parity_classes</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.solve_full_spectrum">
+<span class="sig-name descname"><span class="pre">solve_full_spectrum</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">FullStabilityResult</span></span></span><a class="headerlink" href="#gliss.StabilityProblem.solve_full_spectrum" title="Link to this definition">¶</a></dt>
+<dd><p>Compute every eigenpair in both parity classes.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.solve_full_spectrum_class">
+<span class="sig-name descname"><span class="pre">solve_full_spectrum_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parity_class</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">FullSpectrumResult</span></span></span><a class="headerlink" href="#gliss.StabilityProblem.solve_full_spectrum_class" title="Link to this definition">¶</a></dt>
+<dd><p>Compute every eigenpair in one parity class with dense LAPACK.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.energy">
+<span class="sig-name descname"><span class="pre">energy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parity_class</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EnergyTerms</span></span></span><a class="headerlink" href="#gliss.StabilityProblem.energy" title="Link to this definition">¶</a></dt>
+<dd><p>Evaluate physical energy terms for one displacement vector.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.pressure_samples">
+<span class="sig-name descname"><span class="pre">pressure_samples</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gliss.StabilityProblem.pressure_samples" title="Link to this definition">¶</a></dt>
+<dd><p>Return owned pressure coordinates and samples retained by this problem.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.spectral_pressure_jvp">
+<span class="sig-name descname"><span class="pre">spectral_pressure_jvp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parity_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tangent</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">gap</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.StabilityProblem.spectral_pressure_jvp" title="Link to this definition">¶</a></dt>
+<dd><p>Differentiate a spectral sum at fixed geometry along a pressure direction.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.spectral_pressure_sensitivity">
+<span class="sig-name descname"><span class="pre">spectral_pressure_sensitivity</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parity_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">gap</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.StabilityProblem.spectral_pressure_sensitivity" title="Link to this definition">¶</a></dt>
+<dd><p>Return a pressure-sample spectral gradient at fixed geometry.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.rayleigh_jvp">
+<span class="sig-name descname"><span class="pre">rayleigh_jvp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parity_class</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tangent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#gliss.StabilityProblem.rayleigh_jvp" title="Link to this definition">¶</a></dt>
+<dd><p>Forward derivative of the Rayleigh quotient along <code class="docutils literal notranslate"><span class="pre">tangent</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityProblem.rayleigh_vjp">
+<span class="sig-name descname"><span class="pre">rayleigh_vjp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parity_class</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cotangent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#gliss.StabilityProblem.rayleigh_vjp" title="Link to this definition">¶</a></dt>
+<dd><p>Reverse derivative of the Rayleigh quotient with respect to <code class="docutils literal notranslate"><span class="pre">vector</span></code>.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gliss.StabilityResult">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">StabilityResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gliss.SpectrumResult" title="gliss.stability.SpectrumResult"><span class="pre">SpectrumResult</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.StabilityResult" title="Link to this definition">¶</a></dt>
+<dd><p>Certified results for the parity classes of one problem.</p>
+<p><code class="docutils literal notranslate"><span class="pre">classes</span></code> holds parity classes 1 and 2 of a stellarator-symmetric
+problem, or the single coupled class 0 of an equilibrium without
+stellarator symmetry.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.StabilityResult.lowest">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">lowest</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#gliss.SpectrumResult" title="gliss.stability.SpectrumResult"><span class="pre">SpectrumResult</span></a></span><a class="headerlink" href="#gliss.StabilityResult.lowest" title="Link to this definition">¶</a></dt>
+<dd><p>Class with the algebraically lowest computed eigenvalue.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityResult.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#gliss.StabilityResult.to_dict" title="Link to this definition">¶</a></dt>
+<dd><p>Return the canonical versioned result document.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityResult.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#gliss.StabilityResult.write" title="Link to this definition">¶</a></dt>
+<dd><p>Atomically write the canonical JSON result document.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityResult.read">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#gliss.StabilityResult" title="gliss.stability.StabilityResult"><span class="pre">StabilityResult</span></a></span></span><a class="headerlink" href="#gliss.StabilityResult.read" title="Link to this definition">¶</a></dt>
+<dd><p>Read and strictly validate a JSON result document.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.StabilityResult.read_dict">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">read_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">document</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#gliss.StabilityResult" title="gliss.stability.StabilityResult"><span class="pre">StabilityResult</span></a></span></span><a class="headerlink" href="#gliss.StabilityResult.read_dict" title="Link to this definition">¶</a></dt>
+<dd><p>Strictly validate a versioned result document in memory.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gliss.VacuumModel">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">VacuumModel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">edge_resolution</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(32,</span> <span class="pre">32)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wall</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">None</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gliss.VacuumModel" title="Link to this definition">¶</a></dt>
+<dd><p>Vacuum outside the plasma edge, optionally bounded by an ideal wall.</p>
+<p><code class="docutils literal notranslate"><span class="pre">edge_resolution</span></code> is the (poloidal, toroidal) node count of the
+full-torus edge mesh on which the vacuum boundary-integral equation is
+discretized; each count must exceed twice the largest <code class="docutils literal notranslate"><span class="pre">|m|</span></code> and <code class="docutils literal notranslate"><span class="pre">|n|</span></code> of the
+mode table. <code class="docutils literal notranslate"><span class="pre">wall</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code> (no wall, vacuum to infinity), a
+positive float (a conformal wall that distance in metres along the
+outward edge normal), or a Cartesian node array of shape (3, nu, nv) in
+metres, poloidal index first, that encloses the plasma.</p>
+<p>The equilibrium must have zero pressure at the edge and a continuous
+tangential magnetic field matching a current-free exterior. This model
+assembles no equilibrium surface-current-sheet term. The caller must
+qualify these conditions: construction checks and discrete eigenpair
+certificates do not establish equilibrium matching.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="gliss.VacuumModel.wall_kind">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">wall_kind</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#gliss.VacuumModel.wall_kind" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">&quot;none&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;conformal&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;surface&quot;</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.VacuumModel.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gliss.VacuumModel.to_dict" title="Link to this definition">¶</a></dt>
+<dd><p>Return the JSON form recorded in configuration documents.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gliss.VacuumModel.from_dict">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">document</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Mapping</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#gliss.VacuumModel" title="gliss.vacuum.VacuumModel"><span class="pre">VacuumModel</span></a></span></span><a class="headerlink" href="#gliss.VacuumModel.from_dict" title="Link to this definition">¶</a></dt>
+<dd><p>Validate the JSON form of a vacuum model.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.solve_axisymmetric">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">solve_axisymmetric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">equilibrium</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gliss.Equilibrium" title="gliss.equilibrium.Equilibrium"><span class="pre">Equilibrium</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">toroidal_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">poloidal_max</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">degree</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radial_cells</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">AxisymmetricResult</span></span></span><a class="headerlink" href="#gliss.solve_axisymmetric" title="Link to this definition">¶</a></dt>
+<dd><p>Return inertia and the certified lowest axisymmetric eigenpair.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.solve_terpsichore_fixed_boundary">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">solve_terpsichore_fixed_boundary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">TerpsichoreFixedBoundaryResult</span></span></span><a class="headerlink" href="#gliss.solve_terpsichore_fixed_boundary" title="Link to this definition">¶</a></dt>
+<dd><p>Solve the lowest IVAC=0, MODELK=0 TERPSICHORE eigenpair.</p>
+<p>Stable files return <code class="docutils literal notranslate"><span class="pre">negative_count</span> <span class="pre">==</span> <span class="pre">0</span></code> with the lowest nonnegative
+eigenpair instead of raising. IVAC&gt;0 files are rejected with a
+<code class="docutils literal notranslate"><span class="pre">GlissIOError</span></code> that names the pseudoplasma solver.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gliss.solve_terpsichore_pseudoplasma">
+<span class="sig-prename descclassname"><span class="pre">gliss.</span></span><span class="sig-name descname"><span class="pre">solve_terpsichore_pseudoplasma</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">matrix_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vacuum_intervals</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vacuum_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">PathLike</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">TerpsichorePseudoplasmaResult</span></span></span><a class="headerlink" href="#gliss.solve_terpsichore_pseudoplasma" title="Link to this definition">¶</a></dt>
+<dd><p>Solve a MODELK=0 TERPSICHORE pressureless-pseudoplasma problem.</p>
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compatibility.html">TERPSICHORE compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mode_diagnostics.html">Mode diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="source_inventory.html">Source inventory</a></li>
+<li class="toctree-l1"><a class="reference internal" href="conventions.html">Conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="angular_grids.html">Angular grids</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free_boundary.html">Free-boundary model</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.Equilibrium"><code class="docutils literal notranslate"><span class="pre">Equilibrium</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.PressureSensitivity"><code class="docutils literal notranslate"><span class="pre">PressureSensitivity</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.pressure_samples"><code class="docutils literal notranslate"><span class="pre">pressure_samples()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.spectral_pressure_jvp"><code class="docutils literal notranslate"><span class="pre">spectral_pressure_jvp()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.spectral_pressure_sensitivity"><code class="docutils literal notranslate"><span class="pre">spectral_pressure_sensitivity()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.convert_boozer"><code class="docutils literal notranslate"><span class="pre">convert_boozer()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.convert_vmec"><code class="docutils literal notranslate"><span class="pre">convert_vmec()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.mercier_objective"><code class="docutils literal notranslate"><span class="pre">mercier_objective()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.mercier_profile"><code class="docutils literal notranslate"><span class="pre">mercier_profile()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.SpectrumResult"><code class="docutils literal notranslate"><span class="pre">SpectrumResult</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.StabilityConfiguration"><code class="docutils literal notranslate"><span class="pre">StabilityConfiguration</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.StabilityProblem"><code class="docutils literal notranslate"><span class="pre">StabilityProblem</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.StabilityResult"><code class="docutils literal notranslate"><span class="pre">StabilityResult</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.VacuumModel"><code class="docutils literal notranslate"><span class="pre">VacuumModel</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.solve_axisymmetric"><code class="docutils literal notranslate"><span class="pre">solve_axisymmetric()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.solve_terpsichore_fixed_boundary"><code class="docutils literal notranslate"><span class="pre">solve_terpsichore_fixed_boundary()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gliss.solve_terpsichore_pseudoplasma"><code class="docutils literal notranslate"><span class="pre">solve_terpsichore_pseudoplasma()</span></code></a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="free_boundary.html" title="previous chapter">Free-boundary model</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/api.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
