@@ -15,12 +15,23 @@ benchmarks/solovev/public/run.sh /tmp/solovev 1.035 1.039062 1.039843 1.045
 `gvec-1.5.0-cas3d.patch`, and for each q0 writes the GVEC input
 (`make_gvec_input.py`), solves the equilibrium (M=20, 32 degree-5 elements,
 force tolerance 1e-10), exports 64 half-grid surfaces with M=24, and runs GLISS
-(m=0..8 with both sidebands, FEEC degree 2). Each q0 takes about a minute on
+(m=0..8 with both sidebands, FEEC degree 2). Angular quadrature is rounded
+upward to a power of two that satisfies both the cubic position-forcing and
+displacement-product bandwidth rules: the default M=24 export uses 256 x 8.
+The CLI's `--angular NTHETA NZETA` option and its CSV output record the actual
+grid without changing the equilibrium export or displacement mode range.
+Each q0 takes about a minute on
 four threads. `make_fixture.py` shrinks a `--stellsym` export into the 24 kB
 fixtures under `test/data` (16 surfaces, M=8) used by
 `test_solovev_axis_regularity`.
 
 ## Result
+
+The following numbers and timings are historical results on the previous
+fixed 64 x 8 grid. That grid is no longer admitted for a declared M=24
+position table. The revised runner preserves the physical truncations and
+uses 256 x 8; these archived values have not been rerun at that grid and do
+not qualify the current operator. See [the angular grid contract](../../../docs/angular_grids.md).
 
 | q0 | DCON zero crossings | GLISS before #16: count, lowest eigenvalue | GLISS after #16: count, lowest eigenvalue | GLISS now: count, lowest omega^2 (s^-2) |
 | --- | --- | --- | --- | --- |
@@ -29,7 +40,8 @@ fixtures under `test/data` (16 surfaces, M=8) used by
 | 1.039843 | 0 | 1, -1.35e-3 | 0, +1.99e-5 | 0, +45.28 |
 | 1.045 | 0 | 1, -1.21e-3 | 0, +2.32e-4 | 0, +472.8 |
 
-These are `run.sh` defaults (64 surfaces, export M=24, m=0..8, degree 2).
+These used the former `run.sh` defaults (64 surfaces, export M=24, m=0..8,
+degree 2, angular quadrature 64 x 8).
 The first two GLISS columns used the earlier compatible perpendicular-L2
 norm, a pure number. The current eigenvalues are omega^2 in s^-2 with the
 perpendicular kinetic form at unit mass density (1 kg m^-3) as the inertia

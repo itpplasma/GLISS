@@ -31,25 +31,33 @@ program test_solovev_axis_regularity
     ! The wider table has near-null directions at the zero-shift inertia
     ! probe; a growth-free block factorization must still resolve it.
     call check(trim(directory) // '/solovev_q1.045.nc', 0, 10, 2)
+    ! A configurable admitted grid preserves the independent DCON signs.
+    call check(trim(directory) // '/solovev_q1.035.nc', 1, 6, 3, 256)
+    call check(trim(directory) // '/solovev_q1.045.nc', 0, 6, 3, 256)
     write (*, '(a)') 'Solov''ev axis-regularity regression passed'
 
 contains
 
-    subroutine check(path, expected, poloidal_max, degree)
+    subroutine check(path, expected, poloidal_max, degree, angular_theta)
         character(len=*), intent(in) :: path
         integer, intent(in) :: expected, poloidal_max, degree
+        integer, optional, intent(in) :: angular_theta
         type(gvec_cas3d_equilibrium_t) :: equilibrium
         type(axisymmetric_spectrum_result_t) :: result
         character(len=256) :: message
-        integer :: info
+        integer :: info, n_theta
 
+        n_theta = 64
+        if (present(angular_theta)) n_theta = angular_theta
         call read_gvec_cas3d_file(path, equilibrium, info)
         if (info /= reader_ok) error stop 'Solov''ev fixture read failed'
         call compute_axisymmetric_spectrum(equilibrium, 1, poloidal_max, &
             degree, &
             .true., &
-            result, info, message)
+            result, info, message, angular_theta=n_theta, angular_zeta=8)
         if (info /= axisymmetric_spectrum_ok) error stop 'spectrum failed'
+        if (result%angular_theta /= n_theta .or. result%angular_zeta /= 8) &
+            error stop 'spectrum reports the wrong angular grid'
         write (*, '(a,a,i0,a,es12.4,a,es10.2)') path, ' negative count ', &
             result%negative_count, ' lowest ', result%lowest_eigenvalue, &
             ' certificate ', result%certificate

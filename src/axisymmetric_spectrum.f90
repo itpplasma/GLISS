@@ -9,7 +9,7 @@ module axisymmetric_spectrum
     implicit none
     private
 
-    integer, parameter :: n_theta = 64, n_zeta = 8
+    integer, parameter :: default_n_theta = 64, default_n_zeta = 8
     integer, parameter, public :: axisymmetric_spectrum_ok = 0
     integer, parameter, public :: axisymmetric_spectrum_invalid_input = 1
     integer, parameter, public :: axisymmetric_spectrum_compute_error = 2
@@ -24,6 +24,8 @@ module axisymmetric_spectrum
         integer :: parity_class = 0
         integer :: degree = 0
         integer :: negative_count = 0
+        integer :: angular_theta = 0
+        integer :: angular_zeta = 0
         real(dp) :: lowest_eigenvalue = 0.0_dp
         real(dp) :: certificate = 0.0_dp
         real(dp) :: eigenpair_residual = 0.0_dp
@@ -38,7 +40,7 @@ contains
 
     subroutine compute_axisymmetric_spectrum(equilibrium, toroidal_mode, &
             poloidal_max, degree, solve_eigenpair, result, info, &
-            message, radial_cells)
+            message, radial_cells, angular_theta, angular_zeta)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: toroidal_mode, poloidal_max, degree
         logical, intent(in) :: solve_eigenpair
@@ -47,13 +49,18 @@ contains
         character(len=*), intent(out) :: message
         ! Uniform radial cells (0 or absent: one cell per surface).
         integer, optional, intent(in) :: radial_cells
+        integer, optional, intent(in) :: angular_theta, angular_zeta
         type(marginality_spectrum_result_t) :: general
         integer, allocatable :: mode_m(:), mode_n(:)
         real(dp), allocatable :: normal_stored_power(:)
-        integer :: general_info, parity_class
+        integer :: general_info, parity_class, n_theta, n_zeta
 
+        n_theta = default_n_theta
+        n_zeta = default_n_zeta
+        if (present(angular_theta)) n_theta = angular_theta
+        if (present(angular_zeta)) n_zeta = angular_zeta
         call validate_input(equilibrium, toroidal_mode, poloidal_max, &
-            degree, info, message)
+            degree, n_theta, n_zeta, info, message)
         if (info /= axisymmetric_spectrum_ok) return
         call build_axisymmetric_mode_table(toroidal_mode, poloidal_max, &
             mode_m, mode_n, normal_stored_power)
@@ -78,6 +85,8 @@ contains
             return
         end if
         call assign_result(general, toroidal_mode, poloidal_max, result)
+        result%angular_theta = n_theta
+        result%angular_zeta = n_zeta
         info = axisymmetric_spectrum_ok
         message = ""
     end subroutine compute_axisymmetric_spectrum
@@ -110,9 +119,9 @@ contains
     end subroutine build_axisymmetric_mode_table
 
     subroutine validate_input(equilibrium, toroidal_mode, poloidal_max, &
-            degree, info, message)
+            degree, n_theta, n_zeta, info, message)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
-        integer, intent(in) :: toroidal_mode, poloidal_max, degree
+        integer, intent(in) :: toroidal_mode, poloidal_max, degree, n_theta, n_zeta
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
 
@@ -123,6 +132,8 @@ contains
             message = "poloidal maximum must be positive"
         else if (degree < 1 .or. degree > 4) then
             message = "FEEC degree must be between 1 and 4"
+        else if (n_theta < 8 .or. n_zeta < 8) then
+            message = "angular quadrature sizes must be at least 8"
         else if (equilibrium%field_periods /= 1) then
             message = "axisymmetric comparison requires N_FP=1"
         else if (.not. equilibrium_is_axisymmetric(equilibrium)) then
