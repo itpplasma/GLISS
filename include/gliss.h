@@ -31,7 +31,10 @@ void gliss_version(char *buffer, int32_t length);
 int32_t gliss_abi_version(void);
 
 /* Contexts own all native allocations. They may coexist, but calls using the
- * same context must not overlap. Concurrent creation also requires a
+ * same context must not overlap. Construction/destruction of problems sharing
+ * an equilibrium, and destruction of that equilibrium, must serialize with
+ * each other because their shared ownership counter is not atomic.
+ * Concurrent creation also requires a
  * thread-safe NetCDF C library. No allocation returned by GLISS is freed by
  * the caller. */
 gliss_status gliss_equilibrium_create(
@@ -440,8 +443,9 @@ gliss_status gliss_cas3d2mn_phase_envelope_v2(
     char *error,
     size_t error_capacity);
 
-/* A fixed-boundary problem copies and assembles all data it needs, so the
- * equilibrium may be destroyed after successful construction. mode_m and
+/* A fixed-boundary problem assembles its operators and retains the immutable
+ * equilibrium data, so the equilibrium handle may be destroyed after
+ * successful construction. mode_m and
  * mode_n are mode_count contiguous int32_t values. degree selects the
  * compatible radial FEEC degree from 1 through 4. */
 gliss_status gliss_stability_problem_create(
@@ -541,6 +545,59 @@ gliss_status gliss_stability_problem_create_v3(
     int32_t radial_cells,
     const gliss_vacuum_model *vacuum,
     gliss_stability_problem **problem,
+    char *error,
+    size_t error_capacity);
+
+/* Copy the imported pressure coordinates s and pressure samples in Pa.
+ * The problem retains immutable equilibrium data until destruction, even if
+ * its originating equilibrium is destroyed first. Returned arrays belong to
+ * the caller. With capacity below the sample count, written reports the
+ * required capacity and neither array is modified (CAPACITY status).
+ * Added after 0.0.2 within ABI version 3. */
+gliss_status gliss_stability_problem_pressure_samples(
+    const gliss_stability_problem *problem,
+    size_t capacity,
+    double *surfaces_s,
+    double *pressure_pa,
+    size_t *written,
+    char *error,
+    size_t error_capacity);
+
+/* Exact fixed-geometry pressure partial derivative of a spectral trace.
+ * vectors stores basis_count vectors of vector_count doubles, vector entries
+ * fastest; they must be M-orthonormal in the original component layout.
+ * pressure_direction has pressure_count entries in Pa on the imported s grid.
+ * Geometry, magnetic flux/current profiles, gamma, density, modes, quadrature,
+ * and resonance topology remain fixed. Samples and interpolated pressure must
+ * lie in an open positive-pressure domain; unresolved zero-width resonances
+ * must admit every pressure-sample direction. Fixed boundary only. The caller
+ * must select complete unresolved clusters with an admitted exterior gap.
+ * No output is modified on failure. Added after 0.0.2 within ABI version 3. */
+gliss_status gliss_stability_problem_pressure_trace_jvp(
+    const gliss_stability_problem *problem,
+    int32_t parity_class,
+    size_t vector_count,
+    size_t basis_count,
+    const double *vectors,
+    size_t pressure_count,
+    const double *pressure_direction,
+    double *derivative,
+    char *error,
+    size_t error_capacity);
+
+/* Reverse action of the same trace map. gradient contains one s^-2 Pa^-1
+ * value per imported sample, multiplied by cotangent. This exact fallback
+ * costs one tangent assembly per sample and forms no dense pressure Jacobian.
+ * No output is modified on failure, including insufficient gradient capacity. */
+gliss_status gliss_stability_problem_pressure_trace_vjp(
+    const gliss_stability_problem *problem,
+    int32_t parity_class,
+    size_t vector_count,
+    size_t basis_count,
+    const double *vectors,
+    double cotangent,
+    size_t gradient_capacity,
+    double *gradient,
     char *error,
     size_t error_capacity);
 

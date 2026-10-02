@@ -5,6 +5,7 @@ module fixed_boundary_spectrum
     use compatible_three_component_problem, only: &
         build_compatible_three_component_classes, &
         build_compatible_three_component_problem, &
+        build_compatible_pressure_stiffness_tangent, &
         build_compatible_vacuum_energy, &
         compatible_three_component_allocation_error, &
         compatible_three_component_asymmetric, &
@@ -34,6 +35,7 @@ module fixed_boundary_spectrum
     use symmetric_eigensolver, only: solve_symmetric_generalized_allocated, &
         symmetric_eigensolver_allocation, symmetric_eigensolver_ok
     use variable_block_tridiagonal, only: &
+        apply_variable_block_tridiagonal, &
         variable_block_allocation, variable_block_ok, &
         variable_block_to_dense, variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
@@ -41,6 +43,7 @@ module fixed_boundary_spectrum
         variable_generalized_ok
     use variable_spectrum_analysis, only: analyze_variable_spectrum, &
         variable_spectrum_ok, variable_spectrum_summary_t
+    use stable_reduction, only: stable_dot_product
     implicit none
     private
 
@@ -135,6 +138,7 @@ module fixed_boundary_spectrum
     public :: fixed_boundary_is_coupled, fixed_boundary_is_free
     public :: fixed_boundary_energy_terms_t, fixed_boundary_unknown_count
     public :: fixed_boundary_rayleigh_gradient
+    public :: fixed_boundary_pressure_trace_jvp, fixed_boundary_pressure_trace_vjp
     public :: set_fixed_boundary_solver_controls, solve_fixed_boundary_class
     public :: solve_fixed_boundary_full_spectrum
 
@@ -445,6 +449,128 @@ contains
             problem%classes(slot)%permutation, vector, gradient, info)
         info = map_fixed_boundary_energy_info(info)
     end subroutine fixed_boundary_rayleigh_gradient
+
+    subroutine fixed_boundary_pressure_trace_jvp(problem, equilibrium, &
+            parity_class, vectors, direction, derivative, info)
+        type(fixed_boundary_problem_t), intent(in) :: problem
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(in) :: parity_class
+        real(dp), intent(in) :: vectors(:, :), direction(:)
+        real(dp), intent(out) :: derivative
+        integer, intent(out) :: info
+        type(compatible_three_component_problem_t) :: tangent
+        real(dp), allocatable :: powers(:), permuted(:, :), image(:)
+        real(dp) :: overlap, expected, tolerance
+        integer :: allocation_status, column, row, mode, slot, compatible_info
+
+        info = fixed_boundary_invalid
+        derivative = 0.0_dp
+        if (.not. problem%ready) return
+        if (problem%free_boundary) return
+        slot = class_slot(problem, parity_class)
+        if (slot == 0) return
+        if (size(vectors, 1) /= problem%classes(slot)%unknowns) return
+        if (size(vectors, 2) < 1) return
+        if (size(vectors, 2) > size(vectors, 1)) return
+        if (.not. allocated(equilibrium%s)) return
+        if (size(direction) /= size(equilibrium%s)) return
+        if (.not. all(ieee_is_finite(vectors))) return
+        if (.not. all(ieee_is_finite(direction))) return
+        allocate (powers(size(problem%mode_m)), &
+            permuted(size(vectors, 1), size(vectors, 2)), &
+            image(size(vectors, 1)), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = fixed_boundary_allocation_error
+            return
+        end if
+        do column = 1, size(vectors, 2)
+            do row = 1, size(vectors, 1)
+                permuted(row, column) = &
+                    vectors(problem%classes(slot)%permutation(row), column)
+            end do
+        end do
+        ! Use the full-spectrum M-orthogonality tolerance. Supplied vectors
+        ! are never silently renormalized, so rotations retain the objective.
+        tolerance = 64.0_dp * sqrt(epsilon(1.0_dp))
+        do column = 1, size(vectors, 2)
+            call apply_variable_block_tridiagonal(problem%classes(slot)%mass, &
+                permuted(:, column), image, compatible_info)
+            if (compatible_info /= variable_block_ok) return
+            do row = 1, column
+                expected = 0.0_dp
+                if (row == column) expected = 1.0_dp
+                overlap = stable_dot_product(permuted(:, row), image)
+                if (.not. ieee_is_finite(overlap)) return
+                if (abs(overlap - expected) > tolerance) return
+            end do
+        end do
+        do mode = 1, size(powers)
+            powers(mode) = 0.0_dp
+            if (problem%mode_m(mode) > 0) powers(mode) = &
+                1.0_dp - 0.5_dp * real(problem%mode_m(mode), dp)
+        end do
+        call build_compatible_pressure_stiffness_tangent(equilibrium, &
+            problem%adiabatic_index, problem%density_kg_m3, problem%mode_m, &
+            problem%mode_n, powers, parity_class, problem%degree, &
+            problem%n_theta, problem%n_zeta, direction, tangent, compatible_info, &
+            sparse_storage=.true., radial_cells=problem%radial_cells)
+        info = class_status(compatible_info)
+        if (info /= fixed_boundary_ok) return
+        info = fixed_boundary_assembly_error
+        if (.not. tangent%has_sparse_storage) return
+        if (size(tangent%sparse_stiffness%widths) /= &
+            size(problem%classes(slot)%stiffness%widths)) return
+        if (any(tangent%sparse_stiffness%widths /= &
+            problem%classes(slot)%stiffness%widths)) return
+        derivative = 0.0_dp
+        do column = 1, size(vectors, 2)
+            call apply_variable_block_tridiagonal(tangent%sparse_stiffness, &
+                permuted(:, column), image, compatible_info)
+            if (compatible_info /= variable_block_ok) return
+            derivative = derivative + stable_dot_product(permuted(:, column), image)
+        end do
+        if (.not. ieee_is_finite(derivative)) return
+        info = fixed_boundary_ok
+    end subroutine fixed_boundary_pressure_trace_jvp
+
+    subroutine fixed_boundary_pressure_trace_vjp(problem, equilibrium, &
+            parity_class, vectors, cotangent, gradient, info)
+        type(fixed_boundary_problem_t), intent(in) :: problem
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(in) :: parity_class
+        real(dp), intent(in) :: vectors(:, :), cotangent
+        real(dp), allocatable, intent(out) :: gradient(:)
+        integer, intent(out) :: info
+        real(dp), allocatable :: direction(:)
+        real(dp) :: derivative
+        integer :: allocation_status, sample
+
+        info = fixed_boundary_invalid
+        if (.not. ieee_is_finite(cotangent)) return
+        if (.not. allocated(equilibrium%s)) return
+        allocate (gradient(size(equilibrium%s)), direction(size(equilibrium%s)), &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = fixed_boundary_allocation_error
+            return
+        end if
+        ! Exact cardinal-direction fallback: ns tangent assemblies, never
+        ! a dense pressure-to-stiffness Jacobian or finite differences.
+        direction = 0.0_dp
+        do sample = 1, size(direction)
+            direction(sample) = 1.0_dp
+            call fixed_boundary_pressure_trace_jvp(problem, equilibrium, &
+                parity_class, vectors, direction, derivative, info)
+            if (info /= fixed_boundary_ok) return
+            gradient(sample) = cotangent * derivative
+            direction(sample) = 0.0_dp
+        end do
+        if (.not. all(ieee_is_finite(gradient))) then
+            info = fixed_boundary_assembly_error
+            return
+        end if
+        info = fixed_boundary_ok
+    end subroutine fixed_boundary_pressure_trace_vjp
 
     pure function map_fixed_boundary_energy_info(info) result(status)
         integer, intent(in) :: info

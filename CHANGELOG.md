@@ -8,6 +8,14 @@
   pencils report failure and retain sparse storage. Independent eigenvalue
   checks cover reordered blocks, scaled units and zero-diagonal operators.
 
+- Expose exact fixed-boundary pressure-sample spectral JVPs and VJPs (#9),
+  including the pressure spline, magnetic differential equation, drive and
+  compressibility response. Isolated eigenvalues and complete cluster traces
+  use the material-sensitivity exterior-gap gate. Native problems retain the
+  imported equilibrium after its original owner closes. Pressure samples are
+  in Pa and must remain strictly positive; geometry and resonance topology
+  are fixed. The VJP currently uses one tangent assembly per sample. A
+  force-balanced external equilibrium response remains future work.
 - Record the source equilibrium and canonical configuration SHA-256 in newly solved spectra
   (schema version 8), including the radial mesh and exact vacuum/wall model.
   Run-manifest writers reject changed inputs. Older archives remain readable
