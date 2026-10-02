@@ -1,0 +1,359 @@
+[
+  {
+    "id": "axis-full-harmonic-order",
+    "commit": "b9d4127d1d6719fed157f737b279868d75f1fe0b",
+    "paths": [
+      "src/axis_regular_harmonic_spline.f90",
+      "test/test_axis_harmonic_regularity.f90",
+      "test/test_axis_regular_harmonic_spline.f90"
+    ],
+    "contract_scope": "fit_axis_regular_harmonics/evaluate_axis_regular_harmonics: retain full |m|/2 axis order on the first interval and a C2 join to the interior spline",
+    "units": "s is the normalized radial coordinate; field units are inherited from the samples",
+    "assumptions": "Admitted half-grid and mode tables; this does not audit all downstream geometric conditioning",
+    "independent_oracle": "Analytic f(s)=s^(|m|/2)*(1+s^3), exact axis jets, two-sided C2 join and 64/128/256 refinement for m=4,10,24,36",
+    "verification_sources": [
+      "test/test_axis_harmonic_regularity.f90"
+    ],
+    "derivative_scope": "First and second radial spline derivatives in the analytic controls; parameter JVP/VJP paths unreviewed",
+    "reviewer": "Controller's bounded audit/fix record; inventory worker inspected the named analytic test",
+    "status": "targeted contract evidence only; whole component unreviewed"
+  },
+  {
+    "id": "inertia-same-shift-pivot-fallback",
+    "commit": "c5a2c60911572ae49b01da04b9750950945199d7",
+    "paths": [
+      "src/variable_block_tridiagonal.f90",
+      "src/variable_generalized_solver.f90",
+      "src/variable_spectrum_analysis.f90",
+      "src/dense_spectrum_support.f90",
+      "test/test_variable_generalized_solver.f90"
+    ],
+    "contract_scope": "Same-shift global pivot fallback for failed/weak radial pivots; include off-diagonal pencil scales and require consistent directed inertia probes",
+    "units": "Algebraic pencil units and scaling inherited from K and M; mapping to physical eigenvalue units is outside this review",
+    "assumptions": "Admitted symmetric finite pencils with positive-definite mass; full-spectrum complexity is separately documented",
+    "independent_oracle": "Exact diagonal/repeated/zero-mode pencils and dense LAPACK comparison for a separately specified block pencil",
+    "verification_sources": [
+      "test/test_variable_generalized_solver.f90"
+    ],
+    "derivative_scope": "Not reviewed",
+    "reviewer": "Controller's bounded audit/fix record; inventory worker checked commit paths and oracle construction",
+    "status": "targeted contract evidence only; whole component unreviewed"
+  },
+  {
+    "id": "zero-iota-forcing-versus-gauge",
+    "commit": "5a65410b81d6ad54b9c712e326cf033a87ab24d7",
+    "paths": [
+      "src/export_surface_geometry.f90",
+      "src/mercier_diagnostic.f90",
+      "test/test_magnetic_differential_equation.f90",
+      "test/test_mercier_fluxslope_gradient.f90"
+    ],
+    "contract_scope": "Treat nonconstant m!=0,n=0 forcing at zero iota as a resonance; reserve the discarded constant gauge for m=n=0",
+    "units": "Normalized Fourier angles; other surface/profile units not globally mapped",
+    "assumptions": "Admitted sampled forcing bandwidth and declared cell-averaged resonance regularization; no proof of equilibrium force balance",
+    "independent_oracle": "Analytic Fourier forcing with independently evaluated magnetic differential residual and perturbed-profile finite differences",
+    "verification_sources": [
+      "test/test_magnetic_differential_equation.f90",
+      "test/test_mercier_fluxslope_gradient.f90"
+    ],
+    "derivative_scope": "Named zero-iota flux-slope control only",
+    "reviewer": "Controller's bounded audit/fix record; inventory worker inspected the named forcing/gradient test setup",
+    "status": "targeted contract evidence only; whole component unreviewed"
+  },
+  {
+    "id": "mercier-exact-resonance-gradient",
+    "commit": "c6b3d608ea9646e5a6776e4906de80db3865b97e",
+    "paths": [
+      "src/export_surface_geometry.f90",
+      "src/mercier_diagnostic.f90",
+      "test/test_mercier_fluxslope_gradient.f90"
+    ],
+    "contract_scope": "Differentiate the regularized magnetic differential response at exact m=n resonance, including flux-slope dependence of the regularization width",
+    "units": "Flux-slope perturbation units inherited from the synthetic surface fixture; global units not mapped",
+    "assumptions": "Fixed sampled surface geometry and admitted iota spread; shearless rational-surface physics remains an explicit PLAN gap",
+    "independent_oracle": "Central differences of re-solved perturbed synthetic surfaces, including exact resonance and zero iota",
+    "verification_sources": [
+      "test/test_mercier_fluxslope_gradient.f90"
+    ],
+    "derivative_scope": "Toroidal and poloidal flux-slope partial derivatives in the named controls; complete equilibrium-to-spectrum chain unreviewed",
+    "reviewer": "Controller's bounded audit/fix record; inventory worker inspected the named finite-difference test setup",
+    "status": "targeted contract evidence only; whole component unreviewed"
+  },
+  {
+    "id": "persisted-configuration-source-identity",
+    "commit": "3cf04e5c7d91dfdc6a31514fc6e753afd93766d3",
+    "paths": [
+      "python/gliss/_result_schema.py",
+      "python/gliss/_schema_support.py",
+      "python/gliss/full_schema.py",
+      "python/gliss/schema.py",
+      "python/gliss/stability.py",
+      "python/tests/test_full_schema.py",
+      "python/tests/test_schema.py",
+      "python/tests/test_native.py"
+    ],
+    "contract_scope": "Persist exact configuration identity and source hashes and reject inconsistent stored identities",
+    "units": "Nonphysical metadata; source sizes in bytes and digests in SHA-256",
+    "assumptions": "Declared schema versions and canonical serialization; no review of all result fields or all migration paths",
+    "independent_oracle": "Independently altered source/configuration identities and native persistence consumer controls in the cited commit",
+    "verification_sources": [
+      "python/tests/test_full_schema.py",
+      "python/tests/test_schema.py",
+      "python/tests/test_native.py"
+    ],
+    "derivative_scope": "Not applicable to this metadata contract",
+    "reviewer": "Controller's bounded audit/fix record; inventory worker checked the exact evidence commit/path set",
+    "status": "targeted contract evidence only; whole component unreviewed"
+  },
+  {
+    "id": "public-coupled-query-and-boundary-manifest",
+    "commit": "4b884d6f69aed4bd90c01d0bb04884b4b386eba7",
+    "paths": [
+      "src/gliss_spectrum_capi.f90",
+      "cmake/test_gliss_header.c",
+      "python/gliss/schema.py",
+      "python/tests/test_full_schema.py",
+      "python/tests/test_schema.py"
+    ],
+    "contract_scope": "Export gliss_stability_problem_coupled for an independent header consumer and reject inconsistent boundary manifests",
+    "units": "Coupled query returns a dimensionless logical flag; metadata contract",
+    "assumptions": "Valid native context ownership and admitted schema payload; other C ABI symbols/lifetimes not reviewed here",
+    "independent_oracle": "Separately compiled C header consumer plus malformed boundary-manifest controls",
+    "verification_sources": [
+      "cmake/test_gliss_header.c",
+      "python/tests/test_full_schema.py",
+      "python/tests/test_schema.py"
+    ],
+    "derivative_scope": "Not applicable to this interface contract",
+    "reviewer": "Controller's bounded audit/fix record; inventory worker checked the exact evidence commit/path set",
+    "status": "targeted contract evidence only; whole component unreviewed",
+    "c_abi_symbols": [
+      "gliss_stability_problem_coupled"
+    ]
+  },
+  {
+    "commit": "59693ae76949ebab2423b09bed6f2ce3a6ca05e1",
+    "reviewer": "Validation integration worker and independent branch-ancestry reviewer; committed frozen-input review",
+    "status": "targeted contract evidence only; whole component unreviewed",
+    "id": "seeded-dense-diagnostic-solve",
+    "paths": [
+      "src/dense_generalized_inverse_iteration.f90",
+      "test/test_dense_generalized_inverse_iteration.f90"
+    ],
+    "contract_scope": "Seeded dense near-shift/subspace diagnostic: validate the full mass as SPD and report exhausted iteration budgets; scale-relative symmetry admission",
+    "units": "Algebraic units inherited from K and M; generalized eigenvalue units are K/M",
+    "assumptions": "Finite symmetric dense pencils, full SPD mass, bounded validation-only size; this is outside the production sparse solve",
+    "independent_oracle": "Exact diagonal generalized pencils, rejected positive-diagonal indefinite mass, forced nonconvergence, seed basis rotation/scaling, nonsymmetric controls at 1e-200/1/1e200",
+    "verification_sources": [
+      "test/test_dense_generalized_inverse_iteration.f90"
+    ],
+    "derivative_scope": "Not reviewed"
+  },
+  {
+    "commit": "59693ae76949ebab2423b09bed6f2ce3a6ca05e1",
+    "reviewer": "Validation integration worker and independent branch-ancestry reviewer; committed frozen-input review",
+    "status": "targeted contract evidence only; whole component unreviewed",
+    "id": "compatible-vector-axis-tie-evaluation",
+    "paths": [
+      "src/compatible_three_component_problem.f90",
+      "test/test_compatible_vector_evaluation.f90"
+    ],
+    "contract_scope": "evaluate_compatible_three_component_vector reconstructs eliminated leading axis-tie coefficients when axis_tie is supplied",
+    "units": "s is the normalized radial coordinate; evaluated displacement-component units follow the diagnostic coefficient representation",
+    "assumptions": "Admitted compatible radial grid/layout and stored-power table; complete FEEC energy/mass derivation unreviewed",
+    "independent_oracle": "Hand-evaluated degree-1 basis and leading tied coefficient values, compared with exact expected vector fields",
+    "verification_sources": [
+      "test/test_compatible_vector_evaluation.f90"
+    ],
+    "derivative_scope": "Not reviewed"
+  },
+  {
+    "commit": "59693ae76949ebab2423b09bed6f2ce3a6ca05e1",
+    "reviewer": "Validation integration worker and independent branch-ancestry reviewer; committed frozen-input review",
+    "status": "targeted contract evidence only; whole component unreviewed",
+    "id": "validation-cli-traces-and-dcon-count",
+    "paths": [
+      "app/gliss_compatible_marginality.f90",
+      "test/check_compatible_count.cmake",
+      "test/check_compatible_eta_defaults.cmake"
+    ],
+    "contract_scope": "Retain inertia/shift traces, profiles and external coefficient/subspace diagnostics while inheriting final parsed stored powers for eta defaults",
+    "units": "Diagnostic eigenvalue norm and component powers must be read from the command output; complete cross-code normalization is unresolved",
+    "assumptions": "Dense diagnostic paths limited to 2048 unknowns; alternate untied power tables are explicitly legacy diagnostics",
+    "independent_oracle": "Published independent DCON Solovev sign controls at q0=1.035 and 1.045, and command-line explicit-versus-inherited power-table behavior",
+    "verification_sources": [
+      "test/check_compatible_count.cmake",
+      "test/check_compatible_eta_defaults.cmake"
+    ],
+    "derivative_scope": "Not reviewed",
+    "remaining_gap": "No independently validated MISHKA/CASTOR coefficient-layout transfer or low/high-beta branch fixtures; issue #12 remains incomplete"
+  },
+  {
+    "id": "native-pressure-sample-stiffness-tangent",
+    "commit": "c2d92b282ac1244c30197469607e7db1ccc1c68e",
+    "paths": [
+      "src/compatible_compressible_stiffness_assembly.f90",
+      "src/compatible_three_component_problem.f90",
+      "src/period_averaged_assembly.f90",
+      "src/pressure_surface_derivatives.f90",
+      "src/primitive_kernel_geometry.f90",
+      "test/test_pressure_stiffness_tangent.f90"
+    ],
+    "contract_scope": "Native pressure-sample tangent through compatible stiffness assembly with fixed geometry/flux/topology; pressure does not change physical mass in this declared partial derivative",
+    "units": "Input pressure samples in Pa on fixed normalized-flux nodes s in [0,1]; inherited stiffness units",
+    "assumptions": "Fixed equilibrium geometry, flux profiles, harmonics, grids, gamma and density; admitted positive-pressure domain; no differentiated equilibrium force balance",
+    "independent_oracle": "Central differences of complete reassembled K on perturbed pressure samples, three step sizes, parity classes 0, 1 and 2, 6 and 12 radial cells, dense/sparse storage, plus native duality and invalid controls",
+    "verification_sources": [
+      "test/test_pressure_stiffness_tangent.f90"
+    ],
+    "derivative_scope": "Native global fixed-geometry pressure partial tangent; public C/Python propagation has separate bounded evidence below, while equilibrium force-balance derivatives remain unreviewed",
+    "reviewer": "Controller/pressure worker bounded native FD record; inventory worker inspected committed oracle setup",
+    "status": "bounded native derivative evidence only; whole component unreviewed",
+    "remaining_gap": "Complete parameter-to-equilibrium geometry/force-balance/mass/vacuum chain and optimization workflow require separate evidence; public fixed-geometry pressure actions are not that full chain"
+  },
+  {
+    "id": "solovev-critical-crossing-acceptance-gap",
+    "commit": "79e470722934d6b187d4804977bcd59ace1bdc55",
+    "paths": [
+      "benchmarks/solovev/native_refinement.py",
+      "benchmarks/solovev/dcon/run.sh"
+    ],
+    "contract_scope": "External critical-crossing acceptance for Solovev; the native fixed-bandwidth endpoint-sign sweep does not establish this acceptance",
+    "units": "q0 and bracket width dimensionless; normalized eigenpair residual and relative inertia certificate",
+    "assumptions": "Matched independently generated equilibria and a threshold inside the independent DCON unstable q0=1.039062 / stable q0=1.039843 bracket; distinct solver pins retained",
+    "independent_oracle": "Independent DCON critical determinant crossing; explicit research acceptance manifest rather than GLISS outputs",
+    "verification_sources": [
+      "benchmarks/solovev/dcon/run.sh",
+      "benchmarks/solovev/native_refinement.py"
+    ],
+    "derivative_scope": "Not applicable to the critical-crossing comparison",
+    "reviewer": "Inventory worker read the pinned acceptance manifest and current endpoint runner; no equation review or new crossing execution",
+    "status": "acceptance requirements mapped and remaining gap recorded; whole runner unreviewed",
+    "acceptance_requirements": {
+      "max_bracket_width": 0.0001,
+      "max_eigenpair_residual": 1e-10,
+      "max_relative_inertia_certificate": 0.0001,
+      "min_fourier_resolutions": 2,
+      "min_radial_resolutions": 2,
+      "threshold_must_lie_in_dcon_bracket": true
+    },
+    "acceptance_source": {
+      "repository": "plasma/proj/stel/gvec-stability",
+      "commit": "822b2bb0296f48cedd246a67cc46ad69266a5cb7",
+      "path": "benchmarks/gvec/solovev/acceptance.json",
+      "sha256": "8b3c0da50395d302eab1fb54bebc8aaf5cf49f7b1ae4c2cd0a412b39829a70f2",
+      "access_evidence": "Controller fetched and verified the immutable raw ref through glab API; inventory worker read the retained exact JSON"
+    },
+    "remaining_gap": "At least two Fourier and two radial resolutions with a critical-q0 bracket no wider than 1e-4, threshold inside DCON bracket, eigenpair residual<=1e-10 and relative inertia certificate<=1e-4; the six fixed-bandwidth endpoint-sign cases do not meet these requirements"
+  },
+  {
+    "id": "public-fixed-geometry-pressure-chain",
+    "commit": "b60ce0f41cfc8d2637d4ce549d6f51d7871f402a",
+    "paths": [
+      "src/gliss_pressure_capi.f90",
+      "src/fixed_boundary_spectrum.f90",
+      "src/gliss_c_contexts.f90",
+      "python/gliss/pressure_derivatives.py",
+      "python/gliss/stability.py",
+      "python/tests/test_pressure_derivatives.py",
+      "cmake/test_gliss_header.c",
+      "include/gliss.h"
+    ],
+    "contract_scope": "Public fixed-boundary pressure sample JVP/VJP of an admitted isolated spectral-cluster trace, through native stiffness assembly with fixed geometry/flux/topology",
+    "units": "Pressure samples and their perturbations in Pa on fixed normalized-flux nodes; spectral response units inherited from K/M; gradient units are spectral response per Pa",
+    "assumptions": "Fixed equilibrium geometry, flux, harmonics, quadrature, gamma and density; declared gap-admitted cluster and SPD physical mass; free-boundary derivative calls are rejected",
+    "independent_oracle": "Central differences of separately perturbed NetCDF pressure inputs and freshly reconstructed spectra at three step sizes, both parity-separated and coupled problems; seed basis rotation, JVP/VJP duality and independent C header consumer",
+    "verification_sources": [
+      "python/tests/test_pressure_derivatives.py",
+      "cmake/test_gliss_header.c"
+    ],
+    "derivative_scope": "Fixed-geometry pressure partial of a separated cluster trace only; geometry/force-balanced equilibrium response, mass/vacuum derivatives and arbitrary equilibrium parameter JVP/VJP remain unreviewed",
+    "reviewer": "Pressure/API workers and controller bounded integrated/installed-wheel evidence; inventory worker inspected the named step-study oracle source",
+    "status": "targeted derivative/interface evidence only; whole component unreviewed",
+    "remaining_gap": "This partial derivative does not complete issue #9 or qualify independent continuum/critical-crossing acceptance",
+    "c_abi_symbols": [
+      "gliss_stability_problem_pressure_samples",
+      "gliss_stability_problem_pressure_trace_jvp",
+      "gliss_stability_problem_pressure_trace_vjp"
+    ]
+  },
+  {
+    "id": "seeded-dense-direct-rank-admission",
+    "commit": "00feae59dc2f4d39aea89afb474a1002669dcbcb",
+    "paths": [
+      "src/dense_generalized_inverse_iteration.f90",
+      "test/test_dense_generalized_inverse_iteration.f90"
+    ],
+    "contract_scope": "Check numerical column rank of independently normalized input seeds by direct pivoted QR before mass-Gram construction and inverse iteration",
+    "units": "Normalized rank criterion is dimensionless; pencil/eigenvalue units inherited from K and M",
+    "assumptions": "Finite admitted symmetric dense pencil and full SPD mass; QR tolerance is numerical admission resolution, not an exact mathematical rank decision",
+    "independent_oracle": "Analytically dependent duplicate/linear-combination seeds under extreme independent signed column scales, positive analytic {1,2,3} spans, near-dependence resolution controls and independently specified SPD mass cancellation; 40 separate reviewer controls",
+    "verification_sources": [
+      "test/test_dense_generalized_inverse_iteration.f90"
+    ],
+    "derivative_scope": "Not reviewed",
+    "reviewer": "Validation worker, independent child reviewer and geometry reviewer at frozen base 54437764322e170f111d5a39be85453bd7cc9e86 / patch 40eb1d2cd70f2edcba28a18c571c869c1540d3e0103cdf489ed818898ee312b0",
+    "status": "targeted seed admission evidence only; whole component unreviewed",
+    "remaining_gap": "Hosted native macOS qualification remains separate; the earlier green arm64 workflow masked a native failure"
+  },
+  {
+    "id": "precomputed-booz-parent-grid-admission",
+    "commit": "6b506045e0cc8d92dbb61dbacbbf124dd939971e",
+    "paths": [
+      "python/gliss/vmec.py",
+      "python/tests/test_vmec.py",
+      "python/tests/test_vmec_native.py"
+    ],
+    "contract_scope": "Reject precomputed BOOZ transforms paired with inconsistent VMEC parent field periods or full radial dimensions before output replacement",
+    "units": "Field period count and radial dimensions are dimensionless discrete metadata",
+    "assumptions": "BOOZ/VMEC data within declared supported conventions; complete transform-file version and normalization admission remains outside this bounded fix",
+    "independent_oracle": "Mutate only nfp/ns in the frozen two-period, 50-point parent NetCDF fixture; require named rejection and preservation of existing output with no temporary file leakage",
+    "verification_sources": [
+      "python/tests/test_vmec.py",
+      "python/tests/test_vmec_native.py"
+    ],
+    "derivative_scope": "Not applicable to metadata rejection",
+    "reviewer": "Converter worker and controller bounded fix; inventory worker inspected the independent corrupted-parent control source",
+    "status": "targeted metadata admission evidence only; whole component unreviewed"
+  },
+  {
+    "id": "cubic-mde-angular-alias-admission",
+    "commit": "4cd3a255d6833f4f783a9b9d87f5e3f2ecf5b5d0",
+    "paths": [
+      "src/export_surface_geometry.f90",
+      "test/test_magnetic_differential_dealiasing.f90"
+    ],
+    "contract_scope": "Reject inadequate/nonuniform angular sampling for cubic forcing bandwidth and retain the dealiased spectral magnetic differential response",
+    "units": "Angles measured in periods; bandwidth/grid counts dimensionless; response units inherited from supplied surface forcing",
+    "assumptions": "Declared retained position-mode table and finite sampled forcing; no general force-balance or rational-surface continuum certification",
+    "independent_oracle": "Exact expansion of (1+a*cos(24*theta))^3 with harmonics 0,24,48,72, absence of folded 8/16 response, toroidal grid capacity and shifted uniform grid derivative controls",
+    "verification_sources": [
+      "test/test_magnetic_differential_dealiasing.f90"
+    ],
+    "derivative_scope": "Angular manufactured response only; parameter derivatives unreviewed",
+    "reviewer": "Controller bounded fix record; inventory worker inspected independently expanded polynomial oracle",
+    "status": "targeted alias admission evidence only; whole component unreviewed"
+  },
+  {
+    "id": "free-boundary-export-acceptance-gap",
+    "commit": "7a89489f40caf00a43f8d5f6377e016571b3c9a3",
+    "paths": [
+      "benchmarks/solovev/free_boundary/qualify_export.py",
+      "benchmarks/solovev/free_boundary/diagnose_profiles.f90",
+      "benchmarks/solovev/free_boundary/refine_dcon.py",
+      "benchmarks/solovev/free_boundary/scan.py"
+    ],
+    "contract_scope": "Separate generator profile/shape agreement from actual native extrapolated-edge and explicit schema1 boundary qualification",
+    "units": "Toroidal flux/slope in Wb, pressure in Pa, iota dimensionless, geometry distances in m",
+    "assumptions": "M32 half-grid failed control is an exploration fixture; it does not satisfy required M36 explicit schema1 edge data or matched equilibrium exterior-field acceptance",
+    "independent_oracle": "Independent 80-digit analytical Solovev edge flux/iota and native reconstructed dchi/dphi; committed M32 control has edge-iota error 3.1952e-7 versus limit 1e-12 and lacks explicit schema1 boundary",
+    "verification_sources": [
+      "benchmarks/solovev/free_boundary/qualify_export.py",
+      "benchmarks/solovev/free_boundary/diagnose_profiles.f90"
+    ],
+    "derivative_scope": "Native radial profile slopes as diagnostic only; full parameter derivatives unreviewed",
+    "reviewer": "Controller/geometry worker failed-control evidence; inventory worker read retained committed native_edge.json and qualification.json",
+    "status": "explicit acceptance failure accounted; whole runner unreviewed",
+    "remaining_gap": "Issue #8 stays open: qualify independent explicit boundary export, flux slopes, zero edge pressure, tangential equilibrium field/exterior matching and wall/angular convergence before physical free-boundary comparison"
+  }
+]
