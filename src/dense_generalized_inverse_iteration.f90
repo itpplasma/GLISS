@@ -135,10 +135,30 @@ contains
         requested_work_size = 64_int64 * int(n, int64)
         if (requested_work_size > int(huge(work_size), int64)) return
         work_size = int(requested_work_size)
-        allocate (factor(n, n), mass_factor(n, n), mass_scaled(n, n), &
-            shifted_scaled(n, n), right_hand_side(n, 1), scales(n), &
-            best_vector(n), iterate(n), vector(n), &
-            source_right_hand_side(n, 1), pivots(n), integer_work(n), &
+        ! Keep descriptor initialization and its failure guard together.
+        ! GNU 13 cannot establish this after a multi-object allocation.
+        allocate (mass_scaled(n, n), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = dense_inverse_allocation
+            return
+        end if
+        allocate (shifted_scaled(n, n), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = dense_inverse_allocation
+            return
+        end if
+        allocate (right_hand_side(n, 1), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = dense_inverse_allocation
+            return
+        end if
+        allocate (source_right_hand_side(n, 1), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = dense_inverse_allocation
+            return
+        end if
+        allocate (factor(n, n), mass_factor(n, n), scales(n), &
+            best_vector(n), iterate(n), vector(n), pivots(n), integer_work(n), &
             work(work_size), stat=allocation_status)
         if (allocation_status /= 0) then
             info = dense_inverse_allocation
