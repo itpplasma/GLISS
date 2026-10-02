@@ -17,6 +17,7 @@ program test_cartesian_harmonic_spline
         compatible_three_component_problem_t
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
         radial_grid_half
+    use export_surface_geometry, only: build_angular_grids
     use primitive_equilibrium_spline, only: evaluate_primitive_equilibrium, &
         fit_primitive_equilibrium, primitive_equilibrium_invalid, &
         primitive_equilibrium_ok, primitive_equilibrium_spline_t
@@ -24,7 +25,7 @@ program test_cartesian_harmonic_spline
         primitive_geometry_grid_invalid, primitive_geometry_grid_ok, &
         primitive_geometry_grid_t
     use primitive_kernel_geometry, only: evaluate_primitive_kernel_surface, &
-        primitive_kernel_ok
+        primitive_kernel_invalid, primitive_kernel_ok
     use radial_cubic_spline, only: build_radial_cubic_spline_grid, &
         radial_cubic_spline_grid_t, radial_cubic_spline_ok
     use symmetric_eigensolver, only: solve_symmetric_generalized, &
@@ -245,8 +246,9 @@ contains
         type(harmonic_pair_t), intent(in) :: x_pair, y_pair, z_pair
         type(gvec_cas3d_equilibrium_t) :: equilibrium
         type(primitive_equilibrium_spline_t) :: equilibrium_spline
-        type(primitive_geometry_grid_t) :: actual, reference
+        type(primitive_geometry_grid_t) :: actual, reference, kernel_reference
         real(dp), allocatable :: kernel_fields(:, :, :), kernel_drive(:, :)
+        real(dp), allocatable :: kernel_theta(:), kernel_zeta(:)
         real(dp) :: pressure, pressure_slope
         integer :: status
 
@@ -295,6 +297,15 @@ contains
             "equilibrium pressure jet differs")
         call evaluate_primitive_kernel_surface(equilibrium_spline, query_s, &
             theta, zeta, kernel_fields, kernel_drive, status)
+        call require(status == primitive_kernel_invalid, &
+            "undersampled magnetic differential equation was admitted")
+        call build_angular_grids(8, 8, kernel_theta, kernel_zeta)
+        call evaluate_primitive_equilibrium(equilibrium_spline, query_s, &
+            kernel_theta, kernel_zeta, kernel_reference, pressure, pressure_slope, status)
+        call require(status == primitive_equilibrium_ok, &
+            "kernel reference geometry failed")
+        call evaluate_primitive_kernel_surface(equilibrium_spline, query_s, &
+            kernel_theta, kernel_zeta, kernel_fields, kernel_drive, status)
         call require(status == primitive_kernel_ok, &
             "primitive kernel composition failed")
         call require(all(ieee_is_finite(kernel_fields)) &
@@ -306,8 +317,8 @@ contains
             .and. all(close_scalar(kernel_fields(:, :, 4), 0.0_dp)), &
             "primitive kernel flux profiles differ")
         call require(close_rank2(kernel_fields(:, :, 7), &
-            reference%signed_jacobian) &
-            .and. close_rank2(kernel_fields(:, :, 8), reference%mod_b), &
+            kernel_reference%signed_jacobian) &
+            .and. close_rank2(kernel_fields(:, :, 8), kernel_reference%mod_b), &
             "primitive kernel geometry differs")
         call evaluate_primitive_equilibrium(equilibrium_spline, 1.0_dp, &
             theta, zeta, actual, pressure, pressure_slope, status)
@@ -317,7 +328,7 @@ contains
             .and. close_scalar(pressure_slope, 0.0_dp), &
             "half-mesh pressure edge differs")
         call evaluate_primitive_kernel_surface(equilibrium_spline, 1.0_dp, &
-            theta, zeta, kernel_fields, kernel_drive, status)
+            kernel_theta, kernel_zeta, kernel_fields, kernel_drive, status)
         call require(status == primitive_kernel_ok, &
             "half-mesh edge kernel evaluation failed")
         call require(all(close_scalar(kernel_fields(:, :, 1), -7.0_dp)) &

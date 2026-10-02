@@ -32,12 +32,13 @@ program test_asymmetric_coupling
 
     call get_command_argument(1, directory)
     if (len_trim(directory) == 0) error stop 'supply the fixture directory'
-    n_theta = 32
+    n_theta = 64
     n_zeta = 8
     mode_m = [0, 1, 2]
     mode_n = [1, 1, 1]
     call run_case(trim(directory) // '/solovev_q1.035.nc', .true.)
-    n_zeta = 16
+    n_theta = 32
+    n_zeta = 32
     mode_m = [0, 1, 1, 2]
     mode_n = [1, 1, -1, 1]
     call run_case(trim(directory) // '/qa_lowres.nc', .false.)

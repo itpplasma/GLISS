@@ -45,11 +45,11 @@ contains
 
         if (present(tangent)) then
             call build_compatible_pressure_stiffness_tangent(data, 1.4_dp, 1.0_dp, &
-                [0, 1, 2], [1, 1, 1], [0.0_dp, 0.5_dp, 0.0_dp], parity, 2, 32, 8, &
+                [0, 1, 2], [1, 1, 1], [0.0_dp, 0.5_dp, 0.0_dp], parity, 2, 64, 8, &
                 tangent, problem, status, sparse_storage=sparse, radial_cells=cells)
         else
             call build_compatible_three_component_problem(data, 1.4_dp, 1.0_dp, &
-                [0, 1, 2], [1, 1, 1], [0.0_dp, 0.5_dp, 0.0_dp], parity, 2, 32, 8, &
+                [0, 1, 2], [1, 1, 1], [0.0_dp, 0.5_dp, 0.0_dp], parity, 2, 64, 8, &
                 problem, status, sparse_storage=sparse, radial_cells=cells)
         end if
         call require(status == compatible_three_component_ok, &

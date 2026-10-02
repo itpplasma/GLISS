@@ -194,7 +194,7 @@ contains
             call build(model, problem, info)
         else
             call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
-                1.0_dp, 1.0e-8_dp, mode_m, mode_n, 2, problem, info, 24, 8)
+                1.0_dp, 1.0e-8_dp, mode_m, mode_n, 2, problem, info, 64, 32)
         end if
         call require(info == fixed_boundary_ok, "problem construction failed")
         call require(fixed_boundary_is_free(problem) .eqv. free, &
@@ -215,7 +215,7 @@ contains
         integer, intent(out) :: status
 
         call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
-            1.0_dp, 1.0e-8_dp, mode_m, mode_n, 2, problem, status, 24, 8, &
+            1.0_dp, 1.0e-8_dp, mode_m, mode_n, 2, problem, status, 64, 32, &
             vacuum=model)
     end subroutine build
 
