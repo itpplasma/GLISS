@@ -23,6 +23,8 @@ program test_variable_generalized_solver
         variable_generalized_inertia, variable_generalized_invalid, &
         variable_generalized_mass_not_spd, variable_generalized_ok, &
         variable_eigenvalue_bound, pencil_roundoff
+    use variable_spectrum_analysis, only: analyze_variable_spectrum, &
+        variable_spectrum_ok, variable_spectrum_summary_t
     implicit none
 
     integer, parameter :: widths(3) = [2, 3, 1]
@@ -103,6 +105,10 @@ program test_variable_generalized_solver
     call check_ill_scaled_dense_pencil()
     call check_rigorous_residual_bound()
     call check_scale_invariant_tolerances()
+    call check_cross_block_pivoting()
+    call check_offdiagonal_pencil_scale()
+    call check_global_pivot_ceiling()
+    call check_large_directed_probes()
 
     corrupt = stiffness
     corrupt%diagonal(1)%values(1, 2) = &
@@ -124,6 +130,228 @@ program test_variable_generalized_solver
     write (*, "(a)") "PASS"
 
 contains
+
+    ! This arrow matrix is well conditioned although a leading radial block
+    ! is singular at the count floor. LAPACK's dense eigensolver supplies an
+    ! independent oracle for counts, brackets and inverse-iteration roots.
+    subroutine check_cross_block_pivoting()
+        real(dp), parameter :: scales(3) = [1.0e-15_dp, 1.0_dp, 1.0e15_dp]
+        integer, parameter :: permutations(4, 3) = reshape([1, 2, 3, 4, &
+            1, 3, 2, 4, 4, 3, 2, 1], [4, 3])
+        type(variable_block_tridiagonal_t) :: packed_k, packed_m
+        type(variable_spectrum_summary_t) :: summary
+        real(dp) :: matrix(4, 4), identity(4, 4), permuted(4, 4)
+        real(dp) :: floor, shift, interval, value, residual, resolution
+        real(dp), allocatable :: values(:), vectors(:, :), vector(:)
+        integer :: scale_index, ordering, partition, i, j, info, negative
+
+        identity = 0.0_dp
+        do i = 1, 4
+            identity(i, i) = 1.0_dp
+        end do
+        do scale_index = 1, size(scales)
+            matrix = 0.0_dp
+            matrix(2, 2) = 1.0_dp
+            matrix(3, 3) = 0.5_dp
+            matrix(4, 4) = 1.0_dp
+            matrix(1, 3:4) = 1.0_dp
+            matrix(3:4, 1) = 1.0_dp
+            matrix(1, 1) = -2048.0_dp * epsilon(1.0_dp)
+            matrix = scales(scale_index) * matrix
+            call solve_symmetric_generalized(matrix, identity, values, &
+                vectors, info)
+            call require(info == symmetric_eigensolver_ok, &
+                "cross-block eigenvalue oracle failed")
+            do ordering = 1, size(permutations, 2)
+                do j = 1, 4
+                    do i = 1, 4
+                        permuted(i, j) = matrix(permutations(i, ordering), &
+                            permutations(j, ordering))
+                    end do
+                end do
+                do partition = 1, 3
+                    select case (partition)
+                    case (1)
+                        call pack_variable_blocks(permuted, [2, 2], &
+                            packed_k, info)
+                        call pack_variable_blocks(identity, [2, 2], &
+                            packed_m, info)
+                    case (2)
+                        call pack_variable_blocks(permuted, [1, 3], &
+                            packed_k, info)
+                        call pack_variable_blocks(identity, [1, 3], &
+                            packed_m, info)
+                    case (3)
+                        call pack_variable_blocks(permuted, [4], packed_k, info)
+                        call pack_variable_blocks(identity, [4], packed_m, info)
+                    end select
+                    floor = 64.0_dp * pencil_roundoff(packed_k, packed_m)
+                    call analyze_variable_spectrum(packed_k, packed_m, floor, &
+                        summary, info)
+                    call require(info == variable_spectrum_ok, &
+                        "radial pivot defeated well-conditioned spectrum")
+                    call require(summary%negative_count &
+                        == sum(merge(1, 0, values < -floor)), &
+                        "cross-block negative count disagrees with eigenvalues")
+                    call require(summary%zero_count &
+                        == sum(merge(1, 0, abs(values) <= floor)), &
+                        "cross-block floor count disagrees with eigenvalues")
+                    call variable_generalized_inertia(packed_k, packed_m, &
+                        matrix(1, 1), negative, info)
+                    call require(info == variable_generalized_ok &
+                        .and. negative == 1, &
+                        "singular leading block lost the global inertia")
+                end do
+            end do
+            ! A positive pencil encounters the same singular radial pivot
+            ! at the midpoint 2*scale; refine and solve its lowest root.
+            do i = 1, 4
+                matrix(i, i) = matrix(i, i) + 2.0_dp * scales(scale_index)
+            end do
+            call pack_variable_blocks(matrix, [2, 2], packed_k, info)
+            call pack_variable_blocks(identity, [2, 2], packed_m, info)
+            call bracket_lowest_positive(packed_k, packed_m, 0.0_dp, &
+                4.0_dp * scales(scale_index), shift, interval, info)
+            call require(info == fixed_boundary_bracket_ok, &
+                "cross-block positive bracket failed")
+            value = values(1) + 2.0_dp * scales(scale_index)
+            call require(shift <= value .and. value <= shift + interval, &
+                "positive bracket missed the lowest dense eigenvalue")
+            call iterate_variable_generalized_eigenvalue(packed_k, packed_m, &
+                shift, value, vector, residual, resolution, info)
+            call require(info == variable_generalized_ok, &
+                "cross-block positive inverse iteration failed")
+            call require(abs(value - values(1) - 2.0_dp * scales(scale_index)) &
+                <= 1.0e-10_dp * scales(scale_index), &
+                "positive iteration selected a higher eigenvalue")
+        end do
+    end subroutine check_cross_block_pivoting
+
+    ! The zero-diagonal Toeplitz matrix has exact eigenvalues
+    ! 2*cos(k*pi/5); off-diagonal energy sets the roundoff scale even though
+    ! all diagonal Rayleigh quotients vanish.
+    subroutine check_offdiagonal_pencil_scale()
+        real(dp), parameter :: scales(3) = [1.0e-15_dp, 1.0_dp, 1.0e15_dp]
+        type(variable_block_tridiagonal_t) :: packed_k, packed_m
+        type(variable_spectrum_summary_t) :: summary
+        real(dp) :: matrix(4, 4), identity(4, 4), exact(4), floor, reference
+        integer :: i, scale_index, info
+
+        identity = 0.0_dp
+        do i = 1, 4
+            identity(i, i) = 1.0_dp
+            exact(i) = 2.0_dp * cos(real(5 - i, dp) * acos(-1.0_dp) / 5.0_dp)
+        end do
+        reference = 0.0_dp
+        do scale_index = 1, size(scales)
+            matrix = 0.0_dp
+            do i = 1, 3
+                matrix(i, i + 1) = scales(scale_index)
+                matrix(i + 1, i) = scales(scale_index)
+            end do
+            call pack_variable_blocks(matrix, [2, 2], packed_k, info)
+            call pack_variable_blocks(identity, [2, 2], packed_m, info)
+            floor = 64.0_dp * pencil_roundoff(packed_k, packed_m)
+            call require(floor >= 1024.0_dp * epsilon(1.0_dp) &
+                * maxval(abs(exact)) * scales(scale_index), &
+                "off-diagonal spectral energy is absent from the floor")
+            if (scale_index == 1) reference = floor / scales(scale_index)
+            call require(abs(floor / scales(scale_index) / reference - 1.0_dp) &
+                <= 1.0e-14_dp, "off-diagonal floor is not scale invariant")
+            call analyze_variable_spectrum(packed_k, packed_m, floor, &
+                summary, info)
+            call require(info == variable_spectrum_ok, &
+                "zero-diagonal spectrum refinement failed")
+            call require(summary%negative_count == 2 .and. summary%zero_count == 0, &
+                "zero-diagonal Toeplitz inertia is wrong")
+            call require(summary%first_positive_lower <= exact(3) &
+                * scales(scale_index) .and. summary%first_positive_upper &
+                >= exact(3) * scales(scale_index), &
+                "zero-diagonal bracket missed the analytical eigenvalue")
+        end do
+    end subroutine check_offdiagonal_pencil_scale
+
+    ! A large chain with a nonsingular 2x2 leading physical pencil but a
+    ! singular 1x1 radial pivot must fail explicitly at that exact shift.
+    ! It must not silently allocate a global production-size dense matrix.
+    subroutine check_global_pivot_ceiling()
+        integer, parameter :: n = 1025
+        type(variable_block_tridiagonal_t) :: packed_k, packed_m
+        integer :: i, info, count
+
+        allocate (packed_k%widths(n), packed_k%diagonal(n), packed_k%lower(n - 1))
+        allocate (packed_m%widths(n), packed_m%diagonal(n), packed_m%lower(n - 1))
+        packed_k%widths = 1
+        packed_m%widths = 1
+        do i = 1, n
+            allocate (packed_k%diagonal(i)%values(1, 1), source=1.0_dp)
+            allocate (packed_m%diagonal(i)%values(1, 1), source=1.0_dp)
+            if (i == n) cycle
+            allocate (packed_k%lower(i)%values(1, 1), source=0.0_dp)
+            allocate (packed_m%lower(i)%values(1, 1), source=0.0_dp)
+        end do
+        packed_k%diagonal(1)%values = 0.0_dp
+        packed_k%diagonal(2)%values = 0.0_dp
+        packed_k%lower(1)%values = 1.0_dp
+        call variable_generalized_inertia(packed_k, packed_m, 0.0_dp, count, info)
+        call require(info == variable_generalized_invalid .and. count == -1, &
+            "large unresolved radial pivot did not fail explicitly")
+    end subroutine check_global_pivot_ceiling
+
+    ! Above the global-pivot ceiling, symmetric nearby counts can resolve a
+    ! radial pivot when no physical eigenvalue lies between them. A physical
+    ! eigenvalue inside that interval must keep the floor count unresolved.
+    subroutine check_large_directed_probes()
+        integer, parameter :: blocks = 1023
+        type(variable_block_tridiagonal_t) :: packed_k, packed_m
+        type(variable_spectrum_summary_t) :: summary
+        real(dp) :: floor
+        integer :: block, i, info, negative, width
+
+        allocate (packed_k%widths(blocks), packed_k%diagonal(blocks), &
+            packed_k%lower(blocks - 1))
+        allocate (packed_m%widths(blocks), packed_m%diagonal(blocks), &
+            packed_m%lower(blocks - 1))
+        packed_k%widths = 1
+        packed_k%widths(1:2) = 2
+        packed_m%widths = packed_k%widths
+        do block = 1, blocks
+            width = packed_k%widths(block)
+            allocate (packed_k%diagonal(block)%values(width, width), &
+                packed_m%diagonal(block)%values(width, width), source=0.0_dp)
+            do i = 1, width
+                packed_k%diagonal(block)%values(i, i) = 2.0_dp
+                packed_m%diagonal(block)%values(i, i) = 1.0_dp
+            end do
+            if (block == blocks) cycle
+            allocate (packed_k%lower(block)%values( &
+                packed_k%widths(block + 1), width), &
+                packed_m%lower(block)%values( &
+                packed_m%widths(block + 1), width), source=0.0_dp)
+        end do
+        packed_k%diagonal(1)%values(1, 1) = -2048.0_dp * epsilon(1.0_dp)
+        packed_k%diagonal(1)%values(2, 2) = 1.0_dp
+        packed_k%diagonal(2)%values(1, 1) = 0.5_dp
+        packed_k%diagonal(2)%values(2, 2) = 1.0_dp
+        packed_k%lower(1)%values(:, 1) = 1.0_dp
+        floor = 64.0_dp * pencil_roundoff(packed_k, packed_m)
+        call variable_generalized_inertia(packed_k, packed_m, -floor, &
+            negative, info)
+        call require(info == variable_generalized_invalid, &
+            "large radial-pivot fixture unexpectedly resolved the exact shift")
+        call analyze_variable_spectrum(packed_k, packed_m, floor, summary, &
+            info, lowest_only=.true.)
+        call require(info == variable_spectrum_ok, &
+            "matching nearby counts did not resolve a large radial pivot")
+        call require(summary%negative_count == 1 .and. summary%zero_count == 0, &
+            "large arrow matrix inertia disagrees with its analytic sign")
+        packed_k%diagonal(3)%values(1, 1) = &
+            -floor + 64.0_dp * epsilon(1.0_dp)
+        call analyze_variable_spectrum(packed_k, packed_m, floor, summary, &
+            info, lowest_only=.true.)
+        call require(info /= variable_spectrum_ok, &
+            "neighboring probes crossed a physical eigenvalue without rejection")
+    end subroutine check_large_directed_probes
 
     ! For an ill-conditioned mass the Euclidean residual ||r||/||Mx|| can
     ! underestimate the distance to the spectrum by orders of magnitude; the
@@ -211,7 +439,7 @@ contains
             if (local_info /= variable_block_ok) &
                 call fail("identity mass was rejected")
             roundoff = pencil_roundoff(packed, packed_mass)
-            if (abs(roundoff / (16.0_dp * epsilon(1.0_dp) * 3.0_dp &
+            if (abs(roundoff / (16.0_dp * epsilon(1.0_dp) * 4.0_dp &
                 * scales(i)) - 1.0_dp) > 1.0e-14_dp) &
                 call fail("pencil roundoff floor is not scale invariant")
         end do

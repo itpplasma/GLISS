@@ -419,10 +419,11 @@ therefore introduce exact zero-stiffness directions with positive mass. GLISS
 computes `negative_count` on the unique physical quotient, where those
 redundancies are absent, and solves the labeled pencil for the code-specific
 lowest Ritz value. The count uses the common numerical floor
-`lambda < -result.inertia_zero_floor`. The floor is `1024 eps max_i
-|K_ii|/M_ii`, the double-precision roundoff of the pencil, so the count is
-independent of the units of the stiffness and mass matrices. Axisymmetric
-and marginality results report the same field.
+`lambda < -result.inertia_zero_floor`. The floor is `1024 eps ||D^-1/2 K
+D^-1/2||_inf`, where `D = diag(M)`. This includes off-diagonal stiffness
+and estimates the pencil's roundoff scale independently of its units; for
+a nondiagonal mass it is a scale estimate, not a spectral enclosure.
+Axisymmetric and marginality results report the same field.
 
 `radial_quadrature="gauss5"` uses accurate radial integration. The optional
 `"cas3d_midpoint"` policy reproduces the tangent-trapezoid midpoint rule and
@@ -666,8 +667,9 @@ with gliss.Equilibrium("equilibrium_export.nc") as equilibrium:
 ```
 
 Inverse iteration stops when the eigenvalue change is no larger than
-`max(eigenvalue_relative * max(1, abs(omega_squared)), resolution)` and the
-backward residual is no larger than the analogous `residual_relative` bound.
+`max(eigenvalue_relative * abs(omega_squared), pencil_roundoff, resolution)`
+and the backward residual is no larger than the analogous `residual_relative`
+bound. Here `pencil_roundoff = 16 eps ||D^-1/2 K D^-1/2||_inf`.
 The negative-eigenvalue inertia bracket stops at
 `negative_bracket_relative * abs(midpoint) + negative_bracket_floor *
 zero_floor`.  The iteration limits bound those two loops.  All tolerances must
@@ -676,6 +678,13 @@ Changing them does not change the matrices, radial discretization, floor-band
 classification or normalization.  Omitting them selects the exact constants
 used before this API was exposed.  Each `SpectrumResult` reports the controls
 that produced it.
+
+Sparse shifted factorizations monitor unresolved radial Schur pivots.
+For at most 1024 unknowns, a singular or unresolved radial pivot triggers
+a globally pivoted dense factorization at the same shift; each dense matrix
+uses at most 8 MiB. Larger pencils keep sparse storage and report a failed
+probe when the radial count is unresolved. Bracketing can try nearby shifts;
+an unresolved count is never accepted as an inertia certificate.
 
 Evaluate the physical terms before closing the assembled problem:
 

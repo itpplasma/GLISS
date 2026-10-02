@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Include off-diagonal stiffness in the unit-independent pencil roundoff
+  scale. When a radial Schur pivot is singular or unresolved, retry with
+  global pivoting at the same shift for at most 1024 unknowns; larger
+  pencils report failure and retain sparse storage. Independent eigenvalue
+  checks cover reordered blocks, scaled units and zero-diagonal operators.
+
 - Replay TERPSICHORE FORT.23 fixed-boundary files without dense matrices:
   the stiffness and mass are scattered interval by interval into the
   block-tridiagonal storage of the solver, bit-identical to the packed
