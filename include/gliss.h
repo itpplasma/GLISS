@@ -631,11 +631,13 @@ gliss_status gliss_stability_problem_rayleigh_vjp(
     char *error,
     size_t error_capacity);
 
-/* Compute every generalized eigenpair with a dense LAPACK solve. This is an
- * explicit O(unknowns^3)-time, O(unknowns^2)-memory operation: dense pairs
+/* Compute every generalized eigenpair with a dense LAPACK solve. The normal
+ * path takes O(unknowns^3) time and O(unknowns^2) memory: dense pairs
  * that meet the residual and mass-orthonormality criteria are kept, only the
  * others are refined individually, and the inertia at every resolved gap is
- * certified by Sturm counts on one congruent tridiagonal reduction. Use
+ * certified by Sturm counts on one congruent tridiagonal reduction. Each
+ * rejected pair requires dense factorizations for its individual refinement;
+ * rejecting O(unknowns) pairs gives O(unknowns^4) worst-case time. Use
  * gliss_stability_problem_solve_class when only the certified lowest pair is
  * required. Eigenvectors contains unknowns contiguous vectors in ascending
  * eigenvalue order, each in dynamic component order and normalized by
