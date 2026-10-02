@@ -11,6 +11,7 @@ final row ``critical,LOW,HIGH`` reports the bracket.
 """
 import argparse
 import csv
+import math
 import sys
 from pathlib import Path
 
@@ -21,7 +22,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("export", type=Path)
     parser.add_argument("walls", type=float, nargs="*")
-    parser.add_argument("--half-width", type=float, default=0.35245,
+    # GPEC's analytic boundary has R extrema sqrt(R0^2 +/- 2*a*R0).
+    major_radius, minor_parameter = 1.0, 0.33
+    half_width = 0.5 * (
+        math.sqrt(major_radius**2 + 2.0 * minor_parameter * major_radius)
+        - math.sqrt(major_radius**2 - 2.0 * minor_parameter * major_radius)
+    )
+    parser.add_argument("--half-width", type=float, default=half_width,
                         help="plasma half-width in metres")
     parser.add_argument("--poloidal-max", type=int, default=8)
     parser.add_argument("--degree", type=int, default=2)
