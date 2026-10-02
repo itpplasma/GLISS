@@ -392,6 +392,16 @@ class FullRunManifest:
     numpy_version: str
     python_version: str
 
+    @property
+    def configuration_verified(self) -> bool:
+        """Whether the result records the exact mesh and vacuum configuration."""
+        return self._base_manifest().configuration_verified
+
+    @property
+    def equilibrium_verified(self) -> bool:
+        """Whether every result records the checksummed source equilibrium."""
+        return self._base_manifest().equilibrium_verified
+
     def __post_init__(self) -> None:
         _validate_full_result(self.result)
         self._base_manifest()

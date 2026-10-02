@@ -1,5 +1,6 @@
 """Versioned JSON interchange for fixed-boundary stability results."""
 
+import re
 from typing import Any, Dict, Mapping
 
 import numpy as np
@@ -56,6 +57,9 @@ _SPECTRUM_FIELDS_OLD = (_SPECTRUM_FIELDS - {"degree"}) | {
 _SPECTRUM_FIELDS_V2 = _SPECTRUM_FIELDS_OLD | {"solver_tolerances"}
 _SPECTRUM_FIELDS_V3 = _SPECTRUM_FIELDS | {"solver_tolerances"}
 _SPECTRUM_FIELDS_V5 = _SPECTRUM_FIELDS_V3 | {"discretization_revision"}
+_SPECTRUM_FIELDS_V8 = _SPECTRUM_FIELDS_V5 | {
+    "configuration_sha256", "equilibrium_sha256"
+}
 
 
 def _spectrum_to_dict(result: SpectrumResult) -> Dict[str, Any]:
@@ -89,6 +93,8 @@ def _spectrum_to_dict(result: SpectrumResult) -> Dict[str, Any]:
     }
     document["solver_tolerances"] = result.solver_tolerances.to_dict()
     document["discretization_revision"] = result.discretization_revision
+    document["configuration_sha256"] = result.configuration_sha256
+    document["equilibrium_sha256"] = result.equilibrium_sha256
     return document
 
 
@@ -193,9 +199,18 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
         expected = _SPECTRUM_FIELDS_V2
     elif version in (3, 4):
         expected = _SPECTRUM_FIELDS_V3
-    else:
+    elif version < 8:
         expected = _SPECTRUM_FIELDS_V5
+    else:
+        expected = _SPECTRUM_FIELDS_V8
     value = fields(document, expected, context)
+    for name in ("configuration_sha256", "equilibrium_sha256"):
+        digest = value.get(name)
+        if digest is not None:
+            if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+                raise ValueError(
+                    f"{context}.{name} must be null or 64 lowercase hex digits"
+                )
     parity = integer(value["parity_class"], f"{context}.parity_class", 0)
     if parity not in (0, 1, 2):
         raise ValueError(f"{context}.parity_class must be 0, 1 or 2")
@@ -247,6 +262,8 @@ def _spectrum_from_dict(document: Any, index: int, version: int) -> SpectrumResu
             else SolverTolerances.historical_defaults()
         ),
         discretization_revision=discretization_revision(value, version, context),
+        configuration_sha256=value.get("configuration_sha256"),
+        equilibrium_sha256=value.get("equilibrium_sha256"),
     )
 
 
@@ -303,6 +320,8 @@ def stability_result_from_dict(document: Mapping[str, Any]) -> StabilityResult:
             "solver_tolerances",
             "discretization_revision",
             "boundary_condition",
+            "configuration_sha256",
+            "equilibrium_sha256",
         )
         if any(getattr(item, name) != getattr(reference, name) for name in shared):
             raise ValueError("result parity classes have inconsistent problem metadata")

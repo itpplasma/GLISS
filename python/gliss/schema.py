@@ -1,6 +1,7 @@
 """Versioned configuration, result, and run-manifest schemas."""
 
 import hashlib
+import json
 import platform
 import re
 from dataclasses import dataclass
@@ -161,6 +162,14 @@ class StabilityConfiguration:
         }
         return document
 
+    @property
+    def sha256(self) -> str:
+        """Digest of the canonical inputs, including the radial mesh and wall."""
+        encoded = json.dumps(
+            self.to_dict(), sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
     @classmethod
     def from_dict(cls, document: Mapping[str, Any]) -> "StabilityConfiguration":
         """Validate and construct a versioned configuration document."""
@@ -258,6 +267,26 @@ class RunManifest:
     numpy_version: str
     python_version: str
 
+    @property
+    def configuration_verified(self) -> bool:
+        """Whether every result records this exact configuration.
+
+        Historical archives remain readable, but results without a digest
+        cannot establish which radial mesh or vacuum model produced them.
+        """
+        return all(
+            item.configuration_sha256 == self.configuration.sha256
+            for item in self.result.classes
+        )
+
+    @property
+    def equilibrium_verified(self) -> bool:
+        """Whether every result records the checksummed source equilibrium."""
+        return all(
+            item.equilibrium_sha256 == self.equilibrium_sha256
+            for item in self.result.classes
+        )
+
     def __post_init__(self) -> None:
         filename = string(self.equilibrium_filename, "equilibrium_filename")
         if "\0" in filename:
@@ -286,6 +315,7 @@ class RunManifest:
         string(self.python_version, "python_version")
         stability_result_to_dict(self.result)
         _validate_result_configuration(self.configuration, self.result)
+        _validate_result_equilibrium(self.equilibrium_sha256, self.result)
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, RunManifest):
@@ -404,7 +434,8 @@ class RunManifest:
 
 
 def _validate_result_configuration(
-    configuration: StabilityConfiguration, result: StabilityResult
+    configuration: StabilityConfiguration, result: StabilityResult, *,
+    require_provenance: bool = False,
 ) -> None:
     reference = result.classes[0]
     if reference.angular_resolution != (
@@ -425,6 +456,16 @@ def _validate_result_configuration(
     for name in names:
         if getattr(reference, name) != getattr(configuration, name):
             raise ValueError(f"result {name} does not match configuration {name}")
+    digest = reference.configuration_sha256
+    if digest is None:
+        if require_provenance:
+            raise ValueError(
+                "result configuration provenance is unavailable: historical results "
+                "do not record the radial mesh and vacuum model; solve again before "
+                "creating a run manifest"
+            )
+    elif digest != configuration.sha256:
+        raise ValueError("result configuration SHA-256 does not match configuration")
 
 
 def _sha256(path: Path) -> str:
@@ -433,6 +474,12 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _validate_result_equilibrium(digest: str, result: StabilityResult) -> None:
+    for item in result.classes:
+        if item.equilibrium_sha256 is not None and item.equilibrium_sha256 != digest:
+            raise ValueError("result equilibrium SHA-256 does not match equilibrium")
 
 
 def _native_version() -> str:
@@ -469,7 +516,7 @@ def _create_run_manifest(
     if not isinstance(result, StabilityResult):
         raise TypeError("result must be a gliss.StabilityResult")
     stability_result_to_dict(result)
-    _validate_result_configuration(configuration, result)
+    _validate_result_configuration(configuration, result, require_provenance=True)
     export, _ = _export_path(equilibrium_path)
     equilibrium_schema, equilibrium_size, equilibrium_digest = _equilibrium_metadata(
         export
@@ -481,6 +528,7 @@ def _create_run_manifest(
     )
     if expected_equilibrium is not None and actual_equilibrium != expected_equilibrium:
         raise GlissIOError("equilibrium export differs from problem input")
+    _validate_result_equilibrium(equilibrium_digest, result)
     from . import __version__
 
     return RunManifest(

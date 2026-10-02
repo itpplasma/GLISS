@@ -33,6 +33,9 @@ def spectrum(parity_class, lowest):
         mu_unknowns=2,
         has_chart_metric=True,
         has_eigenvector=True,
+        configuration_sha256=gliss.StabilityConfiguration(
+            modes=((1, 1), (2, -1)), density_kg_m3=2.0
+        ).sha256,
     )
 
 
@@ -63,7 +66,7 @@ def test_configuration_round_trip_is_deterministic(configuration, tmp_path):
     assert first.read_bytes() == second.read_bytes()
     document = json.loads(first.read_text(encoding="utf-8"))
     assert document["schema"] == "gliss.stability.configuration"
-    assert document["schema_version"] == 7
+    assert document["schema_version"] == 8
     assert document["discretization_revision"] == 3
     assert document["boundary_condition"] == "fixed"
 
@@ -79,14 +82,14 @@ def test_schema_three_round_trip_preserves_solver_tolerances(configuration, resu
     )
     configured = replace(configuration, solver_tolerances=tolerances)
     configured_document = configured.to_dict()
-    assert configured_document["schema_version"] == 7
+    assert configured_document["schema_version"] == 8
     assert gliss.StabilityConfiguration.from_dict(configured_document) == configured
 
     controlled_result = gliss.StabilityResult(
         tuple(replace(item, solver_tolerances=tolerances) for item in result.classes)
     )
     result_document = controlled_result.to_dict()
-    assert result_document["schema_version"] == 7
+    assert result_document["schema_version"] == 8
     loaded = gliss.StabilityResult.read_dict(result_document)
     assert all(item.solver_tolerances == tolerances for item in loaded.classes)
 
@@ -109,6 +112,8 @@ def test_schema_one_reads_historical_solver_tolerances(configuration, result):
         item.pop("degree")
         item.pop("solver_tolerances")
         item.pop("discretization_revision")
+        item.pop("configuration_sha256")
+        item.pop("equilibrium_sha256")
     loaded_configuration = gliss.StabilityConfiguration.from_dict(
         configuration_document
     )
@@ -131,7 +136,7 @@ def test_schema_one_reads_historical_solver_tolerances(configuration, result):
         (lambda value: value.update(extra=1), "unknown field 'extra'"),
         (lambda value: value.pop("modes"), "missing field 'modes'"),
         (
-            lambda value: value.update(schema_version=8),
+            lambda value: value.update(schema_version=9),
             "schema_version.*expected 1 or 2 or 3",
         ),
         (lambda value: value.update(boundary_condition="free"), "fixed"),
@@ -157,6 +162,14 @@ def test_configuration_rejects_truncated_json(tmp_path):
     path.write_text('{"schema":', encoding="utf-8")
     with pytest.raises(ValueError, match="invalid or truncated JSON.*line 1"):
         gliss.StabilityConfiguration.read(path)
+
+
+@pytest.mark.parametrize("name", ["schema", "schema_version"])
+def test_configuration_rejects_missing_schema_fields(configuration, name):
+    document = configuration.to_dict()
+    del document[name]
+    with pytest.raises(ValueError, match=f"missing field '{name}'"):
+        gliss.StabilityConfiguration.from_dict(document)
 
 
 def test_configuration_rejects_duplicate_json_fields(configuration, tmp_path):
@@ -289,6 +302,54 @@ def test_manifest_rejects_boundary_mismatch(
     assert not destination.exists()
 
 
+def test_historical_manifest_remains_explicitly_unverified(
+    configuration, result, tmp_path, monkeypatch
+):
+    equilibrium = tmp_path / "equilibrium.nc"
+    equilibrium.write_bytes(b"fixture")
+    monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.2")
+    monkeypatch.setattr("gliss.schema._equilibrium_schema_version", lambda path: 1)
+    manifest = gliss.write_run_manifest(
+        tmp_path / "run.json", equilibrium, configuration, result
+    )
+    assert manifest.configuration_verified
+    document = manifest.to_dict()
+    document["schema_version"] = 7
+    document["configuration"]["schema_version"] = 7
+    document["result"]["schema_version"] = 7
+    for item in document["result"]["classes"]:
+        del item["configuration_sha256"]
+        del item["equilibrium_sha256"]
+    historical = gliss.RunManifest.from_dict(document)
+    assert not historical.configuration_verified
+    assert not historical.equilibrium_verified
+    assert all(item.configuration_sha256 is None for item in historical.result.classes)
+    historical.write(tmp_path / "historical.json")
+    assert not gliss.RunManifest.read(tmp_path / "historical.json").configuration_verified
+    with pytest.raises(ValueError, match="provenance is unavailable"):
+        gliss.write_run_manifest(
+            tmp_path / "invented.json", equilibrium, configuration, historical.result
+        )
+    assert not (tmp_path / "invented.json").exists()
+
+
+def test_manifest_rejects_changed_wall_nodes(configuration, result, tmp_path):
+    wall = np.zeros((3, 4, 4))
+    original = replace(configuration, vacuum=gliss.VacuumModel((8, 8), wall))
+    recorded = gliss.StabilityResult(
+        tuple(
+            replace(item, boundary_condition="free", configuration_sha256=original.sha256)
+            for item in result.classes
+        )
+    )
+    wall[0, 0, 0] = np.nextafter(0.0, 1.0)
+    changed = replace(original, vacuum=gliss.VacuumModel((8, 8), wall))
+    with pytest.raises(ValueError, match="configuration SHA-256"):
+        gliss.write_run_manifest(
+            tmp_path / "wrong-nodes.json", tmp_path / "equilibrium.nc", changed, recorded
+        )
+
+
 def test_manifest_rejects_equilibrium_changed_during_metadata_collection(
     configuration, result, tmp_path, monkeypatch
 ):
@@ -333,7 +394,7 @@ def test_manifest_rejects_changed_equilibrium(configuration, result, tmp_path):
     path = tmp_path / "run.json"
     document = {
         "schema": "gliss.stability.run",
-        "schema_version": 7,
+        "schema_version": 8,
         "equilibrium": {
             "format": "gvec-cas3d-netcdf",
             "schema_version": 1,
@@ -402,7 +463,7 @@ def test_manifest_reader_accepts_legacy_and_rejects_unknown_equilibrium_schema(
     path = tmp_path / "run.json"
     document = {
         "schema": "gliss.stability.run",
-        "schema_version": 7,
+        "schema_version": 8,
         "equilibrium": {
             "format": "gvec-cas3d-netcdf",
             "schema_version": 0,

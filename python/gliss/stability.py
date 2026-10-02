@@ -231,6 +231,9 @@ class SpectrumResult:
     fourier_convention: str = "2*pi*(m*theta - n*zeta/N_T)"
     # Operator revision that produced this result; see gliss.schema.
     discretization_revision: int = DISCRETIZATION_REVISION
+    # None identifies historical results whose mesh/wall inputs were not recorded.
+    configuration_sha256: Optional[str] = None
+    equilibrium_sha256: Optional[str] = None
 
     @property
     def normal(self) -> np.ndarray:
@@ -364,6 +367,7 @@ class StabilityProblem:
         if self._radial_cells:
             _bind_radial_cells(self._library)
         self._handle = ctypes.c_void_p()
+        self._configuration_sha256 = self.configuration.sha256
         self._create(equilibrium)
         self._set_solver_tolerances()
         self.coupled = self._query_coupled()
@@ -705,6 +709,8 @@ class StabilityProblem:
             solver_tolerances=self.solver_tolerances,
             coordinate_handedness=self.coordinate_handedness,
             boundary_condition=self.boundary_condition,
+            configuration_sha256=self._configuration_sha256,
+            equilibrium_sha256=self._equilibrium_metadata[2],
         )
 
     def _require_open(self) -> None:
