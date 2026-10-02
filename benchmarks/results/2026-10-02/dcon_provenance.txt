@@ -1,0 +1,3 @@
+GPEC f5595c0689c624834d720068ddc8b5a7e4028248
+GNU Fortran (GCC) 16.2.1 20260810
+292b6a52383c1bf869212dcf1795a0d920a36bb4deec06547ba5eb3a194d74a8  benchmarks/solovev/dcon/run.sh

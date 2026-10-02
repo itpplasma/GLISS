@@ -1,0 +1,11 @@
+{
+  "local_scaled_errors": [
+    7.314590396335798e-17,
+    5.851672317068639e-16,
+    1.0240426554870118e-15
+  ],
+  "theta_max_error": 0.0035753621496330545,
+  "maximum_relative_residual": 1.1579388730293462e-13,
+  "maximum_mass_orthogonality": 1.1435297153639112e-14,
+  "theta_acceptance": "Measured convergence; no new acceptance bound fitted"
+}

@@ -1,0 +1,130 @@
+[
+  {
+    "degree": 1,
+    "branch": "fast_1",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 2.005854695328217,
+    "smooth_asymptotic_order": 2
+  },
+  {
+    "degree": 1,
+    "branch": "fast_1",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": 1.998573256573762,
+    "smooth_asymptotic_order": 2
+  },
+  {
+    "degree": 1,
+    "branch": "fast_2",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 4.281420283553539,
+    "smooth_asymptotic_order": 2
+  },
+  {
+    "degree": 1,
+    "branch": "fast_2",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": 1.2824157395718596,
+    "smooth_asymptotic_order": 2
+  },
+  {
+    "degree": 2,
+    "branch": "fast_1",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 3.972085022893527,
+    "smooth_asymptotic_order": 4
+  },
+  {
+    "degree": 2,
+    "branch": "fast_1",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": 3.992088352638263,
+    "smooth_asymptotic_order": 4
+  },
+  {
+    "degree": 2,
+    "branch": "fast_2",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 3.5577337136972016,
+    "smooth_asymptotic_order": 4
+  },
+  {
+    "degree": 2,
+    "branch": "fast_2",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": 3.898484084236874,
+    "smooth_asymptotic_order": 4
+  },
+  {
+    "degree": 3,
+    "branch": "fast_1",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 5.842747126278071,
+    "smooth_asymptotic_order": 6
+  },
+  {
+    "degree": 3,
+    "branch": "fast_1",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": 1.9602247169742792,
+    "smooth_asymptotic_order": 6
+  },
+  {
+    "degree": 3,
+    "branch": "fast_2",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 5.864263563419493,
+    "smooth_asymptotic_order": 6
+  },
+  {
+    "degree": 3,
+    "branch": "fast_2",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": 5.935763777144231,
+    "smooth_asymptotic_order": 6
+  },
+  {
+    "degree": 4,
+    "branch": "fast_1",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": -2.9710720177665335,
+    "smooth_asymptotic_order": 8
+  },
+  {
+    "degree": 4,
+    "branch": "fast_1",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": 0.5634891003863391,
+    "smooth_asymptotic_order": 8
+  },
+  {
+    "degree": 4,
+    "branch": "fast_2",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 7.641446264212756,
+    "smooth_asymptotic_order": 8
+  },
+  {
+    "degree": 4,
+    "branch": "fast_2",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": 1.0175890212931575,
+    "smooth_asymptotic_order": 8
+  }
+]

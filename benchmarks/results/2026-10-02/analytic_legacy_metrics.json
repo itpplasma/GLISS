@@ -1,0 +1,11 @@
+{
+  "local_scaled_errors": [
+    7.314590396335798e-17,
+    5.851672317068639e-16,
+    1.0240426554870118e-15
+  ],
+  "theta_max_error": 0.7499826597028316,
+  "maximum_relative_residual": 2.7240009140533668e-14,
+  "maximum_mass_orthogonality": 1.0880185641326534e-14,
+  "theta_acceptance": "INVALID legacy geometry comparison"
+}

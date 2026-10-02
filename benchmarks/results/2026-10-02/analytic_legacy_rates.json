@@ -1,0 +1,130 @@
+[
+  {
+    "degree": 1,
+    "branch": "fast_1",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 0.8272646458690947,
+    "smooth_asymptotic_order": 2
+  },
+  {
+    "degree": 1,
+    "branch": "fast_1",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": 0.308416041806116,
+    "smooth_asymptotic_order": 2
+  },
+  {
+    "degree": 1,
+    "branch": "fast_2",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 4.8043552229106865,
+    "smooth_asymptotic_order": 2
+  },
+  {
+    "degree": 1,
+    "branch": "fast_2",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": -0.8286040676220818,
+    "smooth_asymptotic_order": 2
+  },
+  {
+    "degree": 2,
+    "branch": "fast_1",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": -0.0017902881253778413,
+    "smooth_asymptotic_order": 4
+  },
+  {
+    "degree": 2,
+    "branch": "fast_1",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": -0.00011410835068399386,
+    "smooth_asymptotic_order": 4
+  },
+  {
+    "degree": 2,
+    "branch": "fast_2",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": -0.2441451136212836,
+    "smooth_asymptotic_order": 4
+  },
+  {
+    "degree": 2,
+    "branch": "fast_2",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": -0.019316148864065692,
+    "smooth_asymptotic_order": 4
+  },
+  {
+    "degree": 3,
+    "branch": "fast_1",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": -9.459231588304267e-07,
+    "smooth_asymptotic_order": 6
+  },
+  {
+    "degree": 3,
+    "branch": "fast_1",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": -1.5170574609009473e-08,
+    "smooth_asymptotic_order": 6
+  },
+  {
+    "degree": 3,
+    "branch": "fast_2",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": -0.002865310484755185,
+    "smooth_asymptotic_order": 6
+  },
+  {
+    "degree": 3,
+    "branch": "fast_2",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": -4.918912068148682e-05,
+    "smooth_asymptotic_order": 6
+  },
+  {
+    "degree": 4,
+    "branch": "fast_1",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": 3.722061254734539e-11,
+    "smooth_asymptotic_order": 8
+  },
+  {
+    "degree": 4,
+    "branch": "fast_1",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": -3.5298161065545044e-09,
+    "smooth_asymptotic_order": 8
+  },
+  {
+    "degree": 4,
+    "branch": "fast_2",
+    "coarse": 8,
+    "fine": 16,
+    "measured_order": -4.843693236017792e-06,
+    "smooth_asymptotic_order": 8
+  },
+  {
+    "degree": 4,
+    "branch": "fast_2",
+    "coarse": 16,
+    "fine": 32,
+    "measured_order": -2.2760117084828332e-08,
+    "smooth_asymptotic_order": 8
+  }
+]
