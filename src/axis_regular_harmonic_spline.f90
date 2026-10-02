@@ -74,6 +74,8 @@ contains
         integer, intent(out) :: info
         real(dp) :: quotient(size(values)), quotient_derivative(size(values))
         real(dp) :: quotient_second(size(values))
+        real(dp) :: first_values(size(values)), first_slopes(size(values))
+        real(dp) :: first_seconds(size(values))
         integer :: spline_info
 
         values = 0.0_dp
@@ -103,6 +105,19 @@ contains
             call apply_axis_factors(field%poloidal_modes, coordinate, &
                 quotient, quotient_derivative, quotient_second, values, &
                 derivatives, second_derivatives)
+        end if
+        if (coordinate < grid%nodes(1) .and. &
+            any(abs(field%poloidal_modes) > 2)) then
+            call evaluate_radial_cubic_spline_field(grid, field%quotient, &
+                grid%nodes(1), quotient, quotient_derivative, quotient_second, &
+                spline_info)
+            if (spline_info /= radial_cubic_spline_ok) return
+            call apply_axis_factors(field%poloidal_modes, grid%nodes(1), &
+                quotient, quotient_derivative, quotient_second, first_values, &
+                first_slopes, first_seconds)
+            call apply_regular_axis_patch(field%poloidal_modes, coordinate, &
+                grid%nodes(1), first_values, first_slopes, first_seconds, &
+                values, derivatives, second_derivatives)
         end if
         if (.not. all(ieee_is_finite(values)) .or. &
             .not. all(ieee_is_finite(derivatives)) .or. &
@@ -139,6 +154,50 @@ contains
                 / coordinate**2)
         end do
     end subroutine apply_axis_factors
+
+    ! On [0,s_1], match the bounded interior spline's value and two derivatives
+    ! by X(s) = t^(|m|/2) P(t), t=s/s_1, with a quadratic P.  This retains
+    ! full Cartesian axis order without propagating s_1^(-|m|/2) node noise
+    ! into other cells.  Its coefficients use only s_1 X' and s_1^2 X'',
+    ! and t is at most one; the patch is C2 at the first data surface.
+    pure subroutine apply_regular_axis_patch(modes, coordinate, first_node, &
+            first_values, first_slopes, first_seconds, values, slopes, seconds)
+        integer, intent(in) :: modes(:)
+        real(dp), intent(in) :: coordinate, first_node
+        real(dp), intent(in) :: first_values(:), first_slopes(:), first_seconds(:)
+        real(dp), intent(inout) :: values(:), slopes(:), seconds(:)
+        real(dp) :: t, exponent, linear, quadratic, polynomial, derivative
+        integer :: column, mode
+
+        t = coordinate / first_node
+        do column = 1, size(modes)
+            mode = abs(modes(column))
+            if (mode <= 2) cycle
+            exponent = 0.5_dp * real(mode, dp)
+            linear = first_node * first_slopes(column) &
+                - exponent * first_values(column)
+            quadratic = 0.5_dp * (first_node**2 * first_seconds(column) &
+                - 2.0_dp * exponent * first_node * first_slopes(column) &
+                + exponent * (exponent + 1.0_dp) * first_values(column))
+            polynomial = first_values(column) + linear * (t - 1.0_dp) &
+                + quadratic * (t - 1.0_dp)**2
+            derivative = linear + 2.0_dp * quadratic * (t - 1.0_dp)
+            values(column) = t**exponent * polynomial
+            if (coordinate == 0.0_dp) then
+                slopes(column) = 0.0_dp
+                seconds(column) = 0.0_dp
+                if (mode == 4) seconds(column) = &
+                    2.0_dp * polynomial / first_node**2
+            else
+                slopes(column) = t**(exponent - 1.0_dp) &
+                    * (exponent * polynomial + t * derivative) / first_node
+                seconds(column) = t**(exponent - 2.0_dp) &
+                    * (exponent * (exponent - 1.0_dp) * polynomial &
+                    + 2.0_dp * exponent * t * derivative &
+                    + 2.0_dp * quadratic * t**2) / first_node**2
+            end if
+        end do
+    end subroutine apply_regular_axis_patch
 
     subroutine evaluate_axis_limits(poloidal_modes, quotient, &
             quotient_derivative, quotient_second, values, derivatives, &
@@ -193,7 +252,8 @@ contains
         integer, intent(in) :: poloidal_modes(:)
         logical :: singular
 
-        singular = any(modulo(poloidal_modes, 2) == 1)
+        singular = any(abs(poloidal_modes) == 1) &
+            .or. any(abs(poloidal_modes) == 3)
     end function axis_jet_is_singular
 
     ! A regular harmonic behaves like s^(|m|/2) times a smooth function of s.

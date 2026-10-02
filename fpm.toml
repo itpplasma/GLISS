@@ -62,6 +62,10 @@ name = "axis_regular_harmonic_spline"
 main = "test_axis_regular_harmonic_spline.f90"
 
 [[test]]
+name = "axis_harmonic_regularity"
+main = "test_axis_harmonic_regularity.f90"
+
+[[test]]
 name = "cartesian_primitive_geometry"
 main = "test_cartesian_primitive_geometry.f90"
 

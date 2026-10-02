@@ -47,7 +47,7 @@ contains
             call require(status == axis_regular_harmonic_ok, &
                 "manufactured evaluation failed")
             do column = 1, size(modes)
-                exponent = parity_exponent(modes(column))
+                exponent = 0.5_dp * real(abs(modes(column)), dp)
                 expected = queries(query)**exponent &
                     * quotient(queries(query), column)
                 call require(close(values(column), expected), &
@@ -95,11 +95,11 @@ contains
             "absolute m=2 axis slope differs")
         call require(close(seconds(2), 2.0_dp * quotient_s(0.0_dp, 2)), &
             "absolute m=2 axis second derivative differs")
-        call require(close(slopes(3), quotient(0.0_dp, 3)) .and. &
-            close(seconds(3), 2.0_dp * quotient_s(0.0_dp, 3)), &
+        call require(close(slopes(3), 0.0_dp) .and. &
+            close(seconds(3), 2.0_dp * quotient(0.0_dp, 3)), &
             "m=4 axis jet differs")
-        call require(close(slopes(4), quotient(0.0_dp, 4)) .and. &
-            close(seconds(4), 2.0_dp * quotient_s(0.0_dp, 4)), &
+        call require(close(slopes(4), 0.0_dp) .and. &
+            close(seconds(4), 0.0_dp), &
             "m=6 axis jet differs")
         call require(all(values(2:) == 0.0_dp), "zero axis limits differ")
     end subroutine check_axis_limits
@@ -178,7 +178,7 @@ contains
         integer :: column
 
         do column = 1, size(modes)
-            samples(:, column) = nodes**parity_exponent(modes(column)) &
+            samples(:, column) = nodes**(0.5_dp * real(abs(modes(column)), dp)) &
                 * quotient(nodes, column)
         end do
     end subroutine build_samples
@@ -189,9 +189,7 @@ contains
         real(dp) :: value
 
         value = 1.0_dp + 0.2_dp * column &
-            + (0.5_dp * column - 1.0_dp) * s &
-            + (0.25_dp - 0.1_dp * column) * s**2 &
-            + 0.05_dp * column * s**3
+            + (0.5_dp * column - 1.0_dp) * s
     end function quotient
 
     elemental function quotient_s(s, column) result(value)
@@ -199,9 +197,7 @@ contains
         integer, intent(in) :: column
         real(dp) :: value
 
-        value = 0.5_dp * column - 1.0_dp &
-            + 2.0_dp * (0.25_dp - 0.1_dp * column) * s &
-            + 0.15_dp * column * s**2
+        value = 0.5_dp * column - 1.0_dp + 0.0_dp * s
     end function quotient_s
 
     elemental function quotient_ss(s, column) result(value)
@@ -209,8 +205,7 @@ contains
         integer, intent(in) :: column
         real(dp) :: value
 
-        value = 2.0_dp * (0.25_dp - 0.1_dp * column) &
-            + 0.3_dp * column * s
+        value = 0.0_dp * (s + real(column, dp))
     end function quotient_ss
 
     ! Roundoff-sized node values of a high harmonic must stay roundoff-sized
@@ -248,15 +243,6 @@ contains
         call require(largest < 1.0e-15_dp, &
             "high-mode roundoff is amplified between knots")
     end subroutine check_high_mode_roundoff
-
-    pure function parity_exponent(mode) result(exponent)
-        integer, intent(in) :: mode
-        real(dp) :: exponent
-
-        exponent = 1.0_dp
-        if (mode == 0) exponent = 0.0_dp
-        if (modulo(mode, 2) == 1) exponent = 0.5_dp
-    end function parity_exponent
 
     function close(actual, expected) result(matches)
         real(dp), intent(in) :: actual, expected

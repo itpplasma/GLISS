@@ -533,6 +533,11 @@ if(BUILD_TESTING)
     add_test(NAME axis_regular_harmonic_spline
         COMMAND test_axis_regular_harmonic_spline)
 
+    add_executable(test_axis_harmonic_regularity
+        test/test_axis_harmonic_regularity.f90)
+    target_link_libraries(test_axis_harmonic_regularity PRIVATE gliss)
+    add_test(NAME axis_harmonic_regularity COMMAND test_axis_harmonic_regularity)
+
     add_executable(test_cartesian_primitive_geometry
         test/test_cartesian_primitive_geometry.f90)
     target_link_libraries(test_cartesian_primitive_geometry PRIVATE gliss)
