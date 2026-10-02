@@ -46,6 +46,12 @@ class VacuumModel:
     positive float (a conformal wall that distance in metres along the
     outward edge normal), or a Cartesian node array of shape (3, nu, nv) in
     metres, poloidal index first, that encloses the plasma.
+
+    The equilibrium must have zero pressure at the edge and a continuous
+    tangential magnetic field matching a current-free exterior. This model
+    assembles no equilibrium surface-current-sheet term. The caller must
+    qualify these conditions: construction checks and discrete eigenpair
+    certificates do not establish equilibrium matching.
     """
 
     edge_resolution: Tuple[int, int] = (32, 32)

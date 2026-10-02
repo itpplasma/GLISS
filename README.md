@@ -19,6 +19,11 @@ current-free vacuum and an optional ideal conducting wall. The TERPSICHORE
 FORT.23/24 entry points reproduce
 that code's stored discretization for validation and are labeled compatibility
 paths throughout the API and documentation.
+The free-boundary model assumes zero pressure at the plasma edge and a
+continuous tangential equilibrium magnetic field matching a current-free
+exterior; it includes no equilibrium surface-current-sheet term. Callers
+must qualify these conditions for the imported equilibrium. A discrete
+eigenpair certificate does not establish this equilibrium matching.
 
 ## Documentation
 

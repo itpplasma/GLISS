@@ -509,7 +509,11 @@ typedef struct gliss_vacuum_model {
  * scalar-potential boundary-integral solution, is added to the plasma
  * stiffness. Class-indexed calls,
  * spectra and energies are those of create_v2; the energy terms report the
- * vacuum part separately. */
+ * vacuum part separately. The caller must qualify zero equilibrium pressure
+ * at the edge and continuity of the tangential equilibrium magnetic field
+ * with a current-free exterior. No equilibrium surface-current-sheet term
+ * is assembled. Construction and eigenpair certification do not verify
+ * this equilibrium matching. */
 gliss_status gliss_stability_problem_create_free_boundary(
     const gliss_equilibrium *equilibrium,
     double adiabatic_index,
