@@ -1,0 +1,64 @@
+{
+  "commit": "9e027eac38028d57aa23777be52a781aa860e347",
+  "fixtures": {
+    "boozmn_li383_reference.nc": {
+      "bytes": 176996,
+      "sha256": "593f78a5469ba2dfc6b83e84cf67ea2197bf399e537def2ea67c6b23bcf3936e",
+      "upstream_path": "tests/test_files/boozmn_li383_low_res.nc"
+    },
+    "boozmn_lsp_asymmetric.nc": {
+      "booz_xform_version": "0.0.9",
+      "bytes": 526612,
+      "compute_surfs": [
+        1,
+        4,
+        7,
+        10,
+        13,
+        16,
+        19,
+        22
+      ],
+      "generated_from": "wout_lsp_asymmetric.nc",
+      "mboz": 20,
+      "nboz": 20,
+      "read_flux": true,
+      "sha256": "c1539e978234e78cd1f77b57f663ebeb073177ab646622452d857a6a7937ffe2"
+    },
+    "boozmn_qa.nc": {
+      "booz_xform_version": "0.0.9",
+      "bytes": 194304,
+      "compute_surfs": [
+        3,
+        10,
+        17,
+        24,
+        31,
+        38,
+        45
+      ],
+      "generated_from": "wout_qa_lowres.nc",
+      "mboz": 20,
+      "nboz": 16,
+      "read_flux": true,
+      "sha256": "b4be5b2dd6499bbf6c55383bb61b60b5e7a1ce32dcdc3bbfd2ca376ebb3815ad"
+    },
+    "wout_li383_lowres.nc": {
+      "bytes": 124376,
+      "sha256": "975b13acbcef2a9ef2c34ec565fc9799ec989e3acf37686e5208d048f960f92f",
+      "upstream_path": "tests/test_files/wout_li383_low_res_reference.nc"
+    },
+    "wout_lsp_asymmetric.nc": {
+      "bytes": 414256,
+      "sha256": "a5bc177285779cb11a9dc4c7d95d3392ffc295b44159e47b35f581587596bc98",
+      "upstream_path": "tests/test_files/wout_LandremanSenguptaPlunk_section5p3_reference.nc"
+    },
+    "wout_qa_lowres.nc": {
+      "bytes": 1055848,
+      "sha256": "333ab8cef64c4b4f406e76209266fc3bf4d7976e9c28c162983c2120e112e771",
+      "upstream_path": "tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc"
+    }
+  },
+  "license": "LICENSE.simsopt",
+  "repository": "https://github.com/hiddenSymmetries/simsopt"
+}
