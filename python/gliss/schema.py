@@ -420,6 +420,7 @@ def _validate_result_configuration(
         "degree",
         "solver_tolerances",
         "discretization_revision",
+        "boundary_condition",
     )
     for name in names:
         if getattr(reference, name) != getattr(configuration, name):

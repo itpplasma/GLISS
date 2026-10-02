@@ -19,6 +19,7 @@ int main(void) {
     int32_t envelope_n[1] = {0};
     size_t surfaces = 1;
     int32_t schema_version = -1;
+    int32_t coupled = -1;
     char error[128];
 
     memset(&summary, 0, sizeof(summary));
@@ -172,6 +173,19 @@ int main(void) {
             equilibrium, 3, 2, 1, envelope_m, envelope_n, 1, 1, 8, 8, 1,
             NULL, error, sizeof(error)) != GLISS_STATUS_INVALID_ARGUMENT) {
         return 25;
+    }
+    if (gliss_stability_problem_coupled(
+            problem, &coupled, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 42;
+    }
+    if (coupled != 0 || error[0] == '\0') {
+        return 43;
+    }
+    if (gliss_stability_problem_coupled(
+            problem, NULL, error, sizeof(error)) !=
+        GLISS_STATUS_INVALID_ARGUMENT) {
+        return 44;
     }
     return 0;
 }

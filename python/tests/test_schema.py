@@ -269,6 +269,26 @@ def test_manifest_rejects_result_configuration_mismatch(
         gliss.write_run_manifest(tmp_path / "run.json", equilibrium, mismatch, result)
 
 
+@pytest.mark.parametrize("configuration_is_free", [False, True])
+def test_manifest_rejects_boundary_mismatch(
+    configuration, result, tmp_path, configuration_is_free
+):
+    # The boundary changes the admissible displacement space and operator.
+    # A persisted run must never advertise the opposite boundary on replay.
+    if configuration_is_free:
+        configuration = replace(configuration, vacuum=gliss.VacuumModel())
+    else:
+        result = gliss.StabilityResult(
+            tuple(replace(item, boundary_condition="free") for item in result.classes)
+        )
+    destination = tmp_path / "run.json"
+    with pytest.raises(ValueError, match="result boundary_condition.*configuration"):
+        gliss.write_run_manifest(
+            destination, tmp_path / "equilibrium.nc", configuration, result
+        )
+    assert not destination.exists()
+
+
 def test_manifest_rejects_equilibrium_changed_during_metadata_collection(
     configuration, result, tmp_path, monkeypatch
 ):
