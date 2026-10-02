@@ -27,6 +27,14 @@ module dense_generalized_inverse_iteration
             real(dp), intent(in) :: alpha, beta, a(lda, *), b(ldb, *)
             real(dp), intent(inout) :: c(ldc, *)
         end subroutine dgemm
+        subroutine dgeqp3(m, n, a, lda, jpvt, tau, work, lwork, info)
+            import dp
+            integer, intent(in) :: m, n, lda, lwork
+            real(dp), intent(inout) :: a(lda, *), work(*)
+            integer, intent(inout) :: jpvt(*)
+            real(dp), intent(out) :: tau(*)
+            integer, intent(out) :: info
+        end subroutine dgeqp3
         subroutine dpocon(uplo, n, a, lda, anorm, rcond, work, iwork, info)
             import dp
             character(len=1), intent(in) :: uplo
@@ -323,6 +331,7 @@ contains
         integer, intent(out) :: iterations, info
         type(fixed_boundary_solver_controls_t), intent(in), optional :: controls
         type(fixed_boundary_solver_controls_t) :: stopping
+        real(dp) :: column_scale, rank_tolerance
         real(dp), allocatable :: candidate(:, :), coefficients(:, :)
         real(dp), allocatable :: current(:, :), factor(:, :), image(:, :)
         real(dp), allocatable :: mass_reduced(:, :), scales(:)
@@ -378,6 +387,34 @@ contains
             info = dense_inverse_mass_not_spd
             return
         end if
+        ! A rounded mass Gram matrix can give dependent seeds positive
+        ! Cholesky pivots. Check their rank directly with pivoted QR; normalize
+        ! each column first so its arbitrary scale cannot change admission.
+        do column = 1, k
+            column_scale = maxval(abs(initial(:, column)))
+            if (column_scale <= 0.0_dp) then
+                info = dense_inverse_mass_not_spd
+                return
+            end if
+            do row = 1, n
+                candidate(row, column) = initial(row, column) / column_scale
+            end do
+        end do
+        pivots = 0
+        call dgeqp3(n, k, candidate, n, pivots, mass_reduced(:, 1), &
+            work, work_size, lapack_info)
+        if (lapack_info /= 0) then
+            info = dense_inverse_factorization
+            return
+        end if
+        rank_tolerance = 64.0_dp * epsilon(1.0_dp) &
+            * real(n, dp) * abs(candidate(1, 1))
+        do column = 1, k
+            if (abs(candidate(column, column)) <= rank_tolerance) then
+                info = dense_inverse_mass_not_spd
+                return
+            end if
+        end do
         do column = 1, n
             do row = 1, n
                 factor(row, column) = scales(row) &
