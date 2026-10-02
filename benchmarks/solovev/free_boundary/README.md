@@ -19,11 +19,19 @@ wall), and records DCON's total energy. It then solves the same analytic
 equilibrium with GVEC 1.5.0 (48 surfaces, export M=16, as in
 `benchmarks/solovev/public`) and bisects the GLISS critical wall with
 `scan.py --bisect 0.12 0.20`: parity class 1, modes (0, 1) and m=1..MMAX
-with n=+-1, FEEC degree 2, angular quadrature 64 x 8, zero floor 1e-8, and
+with n=+-1, FEEC degree 2, angular quadrature 128 x 8, zero floor 1e-8, and
 the conformal wall of `gliss.VacuumModel` at `a` times the half-width
 (R_max - R_min)/2 = 0.35245 m along the outward edge normal.
 
 ## Result
+
+The numbers below are historical results obtained with 64 x 8 angular
+quadrature before the cubic MDE forcing admission rule was enforced. That
+grid is rejected for the regenerated export's declared M=16 position table:
+the current rule requires more than 96 poloidal points. The runner now uses
+128 x 8. These historical values and timings have not been rerun under that
+policy and do not certify the current operator; retain them for comparison
+with a fresh run. See [the angular grid contract](../../../docs/angular_grids.md).
 
 DCON (GPEC `f5595c06`, m=-12..18, `mthvac=960`) changes the sign of its
 total energy between a=0.152422 (+3.10e-3) and a=0.1525 (-5.69e-4), so

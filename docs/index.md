@@ -11,6 +11,7 @@ vmec
 compatibility
 mode_diagnostics
 conventions
+angular_grids
 api
 ```
 

@@ -52,7 +52,7 @@ equilibrium=$out/gvec/q$q0
     --MN_out 16 0 --winding -1 -o export.nc > export.log 2>&1)
 # Bisect the critical wall between a stable 0.12 and an unstable 0.20.
 OMP_NUM_THREADS=$threads python3 "$here/scan.py" "$equilibrium/export.nc" \
-    --bisect 0.12 0.20 --poloidal-max "$mmax" --edge $edge \
+    --bisect 0.12 0.20 --poloidal-max "$mmax" --angular 128 8 --edge $edge \
     > "$out/gliss_walls.csv"
 {
     git -C "$repo" rev-parse HEAD
