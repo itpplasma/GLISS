@@ -241,13 +241,76 @@ program test_dense_generalized_inverse_iteration
         block_vectors, block_residuals, block_iterations, info)
     call require(info == dense_inverse_mass_not_spd, &
         "rank-deficient initial subspace was accepted")
+    call require(block_iterations == 0, &
+        "rank-deficient seed reached inverse iterations")
     call solve_dense_generalized_subspace_near_shift(block_stiffness, &
         block_mass, 0.0_dp, block_initial(:, :2), 0, block_eigenvalues, &
         block_vectors, block_residuals, block_iterations, info)
     call require(info == dense_inverse_invalid, &
         "invalid block iteration limit was accepted")
+    call check_dependent_seed_scales()
 
 contains
+
+    subroutine check_dependent_seed_scales()
+        real(dp), parameter :: column_scales(4) = &
+            [1.0_dp, 0.125_dp, 1.0e-8_dp, 1.0e8_dp]
+        real(dp) :: local_mass(6, 6), local_stiffness(6, 6), seeds(6, 3)
+        real(dp), allocatable :: values(:), vectors(:, :), residuals(:)
+        integer :: count, info, row, scale_case
+
+        local_mass = 0.0_dp
+        local_stiffness = 0.0_dp
+        do row = 1, 6
+            local_mass(row, row) = 1.0_dp
+            local_stiffness(row, row) = real(row, dp)
+        end do
+        do scale_case = 1, size(column_scales)
+            seeds = 0.0_dp
+            seeds(1:2, 1) = 1.0_dp
+            seeds(:, 2) = column_scales(scale_case) * seeds(:, 1)
+            seeds(3, 3) = 1.0_dp
+            ! The first two columns are exactly dependent for every scale.
+            ! Their Gram determinant is zero although rounded Cholesky
+            ! elimination can return a positive second pivot.
+            call solve_dense_generalized_subspace_near_shift(local_stiffness, &
+                local_mass, 0.0_dp, seeds, 2, values, vectors, residuals, &
+                count, info)
+            call require(info == dense_inverse_mass_not_spd, &
+                "scaled rank-deficient seed was accepted")
+            call require(count == 0, &
+                "scaled rank-deficient seed reached inverse iterations")
+            ! Separating the second column keeps the full analytic span
+            ! {e1,e2,e3}, even with nearly dependent and rescaled seeds.
+            seeds(2, 2) = column_scales(scale_case) * (1.0_dp + 1.0e-4_dp)
+            call solve_dense_generalized_subspace_near_shift(local_stiffness, &
+                local_mass, 0.0_dp, seeds, 2, values, vectors, residuals, &
+                count, info)
+            call require(info == dense_inverse_ok, &
+                "scaled nearly dependent full-rank seed was rejected")
+            call require(maxval(abs(values - [1.0_dp, 2.0_dp, 3.0_dp])) &
+                < 1.0e-12_dp, "full-rank seed changed the analytic spectrum")
+        end do
+        ! This SPD mass has eigenvalues 1e-8 and 2-1e-8 on {e1,e2}.
+        ! Cancellation in x^T M x can make a singular Gram matrix appear
+        ! positive definite, so seed rank must not rely on that contraction.
+        local_mass(1, 2) = 1.0_dp - 1.0e-8_dp
+        local_mass(2, 1) = local_mass(1, 2)
+        do scale_case = 1, size(column_scales)
+            seeds = 0.0_dp
+            seeds(1, 1) = 1.0_dp
+            seeds(2, 1) = -1.0_dp
+            seeds(:, 2) = column_scales(scale_case) * seeds(:, 1)
+            seeds(3, 3) = 1.0_dp
+            call solve_dense_generalized_subspace_near_shift(local_stiffness, &
+                local_mass, 0.0_dp, seeds, 2, values, vectors, residuals, &
+                count, info)
+            call require(info == dense_inverse_mass_not_spd, &
+                "mass cancellation hid rank-deficient seeds")
+            call require(count == 0, &
+                "mass-cancellation rank-deficient seed reached iterations")
+        end do
+    end subroutine check_dependent_seed_scales
 
     subroutine require(condition, message)
         logical, intent(in) :: condition
