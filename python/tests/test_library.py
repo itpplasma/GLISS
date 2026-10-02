@@ -29,8 +29,30 @@ def test_incompatible_abi_is_rejected(monkeypatch):
         gliss_abi_version = Function()
 
     monkeypatch.setattr(gliss, "_open_library", lambda: Library())
-    with pytest.raises(OSError, match="ABI version 1.*requires 3"):
+    with pytest.raises(OSError, match="ABI version 1.*requires 4"):
         gliss._load_library()
+
+
+@pytest.mark.parametrize("revision", [3, 5])
+def test_incompatible_operator_revision_is_rejected(monkeypatch, revision):
+    calls = []
+
+    class Function:
+        def __init__(self, name, value):
+            self.name, self.value = name, value
+
+        def __call__(self):
+            calls.append(self.name)
+            return self.value
+
+    class Library:
+        gliss_abi_version = Function("abi", 4)
+        gliss_discretization_revision = Function("revision", revision)
+
+    monkeypatch.setattr(gliss, "_open_library", lambda: Library())
+    with pytest.raises(OSError, match=f"discretization revision {revision}.*requires 4"):
+        gliss._load_library()
+    assert calls == ["abi", "revision"]
 
 
 def test_get_include_returns_bundled_header_directory(monkeypatch, tmp_path):

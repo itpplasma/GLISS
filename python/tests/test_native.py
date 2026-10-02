@@ -6,6 +6,7 @@ oracles are the GPEC/DCON Newcomb results for the public Solov'ev fixtures
 """
 
 import math
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -196,6 +197,56 @@ def test_native_free_boundary_kink_and_wall(native_library, test_data):
     assert again.lowest_eigenvalue == lowest["none"].lowest_eigenvalue
 
 
+@pytest.mark.parametrize("radial_cells", [None, 2])
+def test_native_enclosing_wall_can_couple_plasma_parities(
+    native_library, test_data, tmp_path, radial_cells
+):
+    # Translating a circular enclosing shell vertically breaks the plasma's
+    # parity symmetry. Reflecting its displacement preserves the complete
+    # spectrum through a sign congruence, including the vacuum cross block.
+    theta = np.linspace(0.0, 2.0 * np.pi, 24, endpoint=False)
+    phi = np.linspace(0.0, 2.0 * np.pi, 12, endpoint=False)
+    radius = np.broadcast_to(0.935 + 0.75 * np.cos(theta)[:, None], (24, 12))
+    shell = np.stack([
+        radius * np.cos(phi)[None, :], radius * np.sin(phi)[None, :],
+        np.broadcast_to(0.75 * np.sin(theta)[:, None], radius.shape),
+    ])
+    spectra = []
+    with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
+        for offset in (0.0, 0.04, -0.04):
+            wall = shell.copy()
+            wall[2] += offset
+            with gliss.StabilityProblem(
+                equilibrium, [(0, 1), (1, 1), (2, 1)], degree=1,
+                angular_theta=64, angular_zeta=8, zero_floor=1e-8,
+                radial_cells=radial_cells, vacuum=gliss.VacuumModel((24, 12), wall),
+            ) as problem:
+                assert problem.coupled == (offset != 0.0)
+                assert problem.parity_classes == ((0,) if offset else (1, 2))
+                if not offset:
+                    continue
+                with pytest.raises(ValueError, match="parity_class must be 0"):
+                    problem.solve_class(1)
+                spectrum = problem.solve_full_spectrum_class(0)
+                spectra.append(spectrum.eigenvalues)
+                result = problem.solve()
+                assert len(result.classes) == 1
+                assert result.classes[0].parity_class == 0
+                assert result.classes[0].boundary_condition == "free"
+                manifest = problem.write_manifest(tmp_path / f"wall-{offset}.json", result)
+                assert manifest.configuration_verified and manifest.equilibrium_verified
+                restored = gliss.RunManifest.read(tmp_path / f"wall-{offset}.json")
+                with restored.configuration.create_problem(equilibrium) as replay:
+                    assert replay.coupled and replay.parity_classes == (0,)
+                    assert replay.solve_class(0).lowest_eigenvalue == (
+                        result.classes[0].lowest_eigenvalue
+                    )
+    np.testing.assert_allclose(
+        spectra[0], spectra[1], rtol=0.0,
+        atol=1e-9 * np.max(np.abs(spectra[0])),
+    )
+
+
 def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
     modes = [(1, 1), (2, 1)]
     with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
@@ -218,6 +269,58 @@ def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
         gliss.VacuumModel((24, 12), -0.1)
     with pytest.raises(ValueError, match="shape"):
         gliss.VacuumModel((24, 12), np.zeros((2, 4, 4)))
+
+
+def test_native_operator_revision_requires_explicit_migration(
+    native_library, test_data, tmp_path
+):
+    configuration = gliss.StabilityConfiguration(
+        [(1, 1)], degree=1, angular_theta=64, angular_zeta=8, radial_cells=2,
+    )
+    historical_configuration = replace(configuration, discretization_revision=3)
+    # A historical schema-8 record keeps its exact input fingerprints. It
+    # cannot claim current-operator verification or mint a new manifest.
+    with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
+        with configuration.create_problem(equilibrium) as problem:
+            result = problem.solve()
+            fresh = problem.write_manifest(tmp_path / "fresh.json", result)
+        historical_result = gliss.StabilityResult(tuple(
+            replace(item, discretization_revision=3,
+                    configuration_sha256=historical_configuration.sha256)
+            for item in result.classes
+        ))
+        historical = replace(
+            fresh, configuration=historical_configuration, result=historical_result,
+            gliss_abi_version=3,
+        )
+        historical.write(tmp_path / "historical.json")
+        restored = gliss.RunManifest.read(tmp_path / "historical.json")
+        assert restored.configuration.discretization_revision == 3
+        assert restored.gliss_abi_version == 3
+        assert restored.result.classes[0].equilibrium_sha256 == (
+            fresh.result.classes[0].equilibrium_sha256
+        )
+        assert not restored.configuration_verified
+        assert restored.equilibrium_verified
+        with pytest.raises(ValueError, match="operator changed.*revision 3"):
+            restored.configuration.create_problem(equilibrium)
+        with pytest.raises(ValueError, match="operator changed.*fresh solve"):
+            gliss.write_run_manifest(
+                tmp_path / "reexported.json", equilibrium.path,
+                restored.configuration, restored.result,
+            )
+        migrated = replace(restored.configuration, discretization_revision=4)
+        with pytest.raises(ValueError, match="discretization"):
+            gliss.write_run_manifest(
+                tmp_path / "relabelled.json", equilibrium.path,
+                migrated, restored.result,
+            )
+        with migrated.create_problem(equilibrium) as problem:
+            renewed = problem.write_manifest(tmp_path / "renewed.json", problem.solve())
+        assert renewed.configuration_verified and renewed.gliss_abi_version == 4
+        assert renewed.result.classes[0].configuration_sha256 != (
+            restored.result.classes[0].configuration_sha256
+        )
 
 
 def test_native_radial_refinement_converges(native_library, test_data):

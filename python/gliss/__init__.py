@@ -14,7 +14,7 @@ from importlib.resources import as_file, files
 
 __version__ = "0.0.2"
 
-_ABI_VERSION = 3
+_ABI_VERSION = 4
 _LIBRARY_NAME = "gliss_c"
 _RESOURCE_STACK = ExitStack()
 atexit.register(_RESOURCE_STACK.close)
@@ -58,6 +58,22 @@ def _load_library():
         raise OSError(
             f"GLISS shared library ABI version {actual} is incompatible; "
             f"this Python package requires {_ABI_VERSION}"
+        )
+    from ._schema_support import DISCRETIZATION_REVISION
+
+    try:
+        revision = library.gliss_discretization_revision
+    except AttributeError as error:
+        raise OSError(
+            "GLISS shared library does not expose its discretization revision"
+        ) from error
+    revision.argtypes = ()
+    revision.restype = ctypes.c_int
+    actual_revision = revision()
+    if actual_revision != DISCRETIZATION_REVISION:
+        raise OSError(
+            f"GLISS shared library discretization revision {actual_revision} "
+            f"is incompatible; this Python package requires {DISCRETIZATION_REVISION}"
         )
     return library
 

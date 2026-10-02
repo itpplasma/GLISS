@@ -13,7 +13,7 @@ module fixed_boundary_spectrum
         compatible_three_component_problem_t, &
         compatible_three_component_vacuum, &
         compatible_three_component_vacuum_mesh, &
-        compatible_three_component_wall
+        compatible_three_component_wall, compatible_vacuum_preserves_parity
     use dense_spectrum_support, only: certify_dense_spectrum_inertia, &
         certify_dense_spectrum_orthogonality, dense_spectrum_allocation, &
         dense_spectrum_is_certified, dense_spectrum_ok, &
@@ -199,14 +199,23 @@ contains
         ! evidence; the admission test at every assembly point is.
         problem%coupled = .false.
         if (present(coupled)) problem%coupled = coupled
-        ! One vacuum solve serves both parity classes and the coupled
-        ! operator: each takes its principal sub-block.
+        ! One vacuum solve serves the full operator. Principal sub-blocks
+        ! apply only when the vacuum also preserves plasma parity.
         if (present(vacuum)) then
             call build_compatible_vacuum_energy(equilibrium, mode_m, mode_n, &
                 vacuum, vacuum_energy, compatible_info)
             if (compatible_info /= compatible_three_component_ok) then
                 info = class_status(compatible_info)
                 return
+            end if
+            if (.not. compatible_vacuum_preserves_parity(vacuum_energy)) then
+                if (present(coupled)) then
+                    if (.not. coupled) then
+                        info = fixed_boundary_asymmetric
+                        return
+                    end if
+                end if
+                problem%coupled = .true.
             end if
         end if
         if (.not. problem%coupled) then

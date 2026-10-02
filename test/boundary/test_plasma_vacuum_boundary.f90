@@ -1,13 +1,20 @@
 program test_plasma_vacuum_boundary
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use cylinder_fixture, only: create_cylinder_fixture
+    use compatible_three_component_problem, only: &
+        build_compatible_three_component_classes, &
+        build_compatible_three_component_problem, build_compatible_vacuum_energy, &
+        compatible_three_component_asymmetric, compatible_three_component_ok, &
+        compatible_three_component_problem_t
     use fixed_boundary_spectrum, only: build_fixed_boundary_problem, &
         diagnose_fixed_boundary_energy, fixed_boundary_energy_terms_t, &
-        fixed_boundary_invalid, fixed_boundary_is_free, fixed_boundary_ok, &
+        fixed_boundary_asymmetric, fixed_boundary_full_spectrum_t, &
+        fixed_boundary_invalid, fixed_boundary_is_coupled, &
+        fixed_boundary_is_free, fixed_boundary_ok, &
         fixed_boundary_problem_t, fixed_boundary_spectrum_result_t, &
         fixed_boundary_vacuum, fixed_boundary_vacuum_mesh, &
         fixed_boundary_wall, &
-        solve_fixed_boundary_class
+        solve_fixed_boundary_class, solve_fixed_boundary_full_spectrum
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use plasma_vacuum_boundary, only: build_plasma_boundary_surface, &
@@ -38,6 +45,7 @@ program test_plasma_vacuum_boundary
     call require(info == reader_ok, "fixture read failed")
     call test_edge_surface()
     call test_wall_ordering_and_energy()
+    call test_wall_parity_coupling()
     call test_rejections()
     write (*, "(a)") "PASS"
 
@@ -146,6 +154,166 @@ contains
         call require(energy%closure_error <= energy%closure_tolerance, &
             "the energy decomposition does not close")
     end subroutine test_wall_ordering_and_energy
+
+    subroutine test_wall_parity_coupling()
+        type(plasma_vacuum_model_t) :: model
+        type(fixed_boundary_problem_t) :: automatic, forced, reflected
+        type(compatible_three_component_problem_t) :: full, first, second
+        type(fixed_boundary_full_spectrum_t) :: automatic_spectrum, forced_spectrum
+        type(fixed_boundary_full_spectrum_t) :: reflected_spectrum
+        type(fixed_boundary_energy_terms_t) :: energy
+        real(dp), allocatable :: centered(:, :), shifted(:, :), mirror(:, :)
+        real(dp), allocatable :: vector(:)
+        real(dp) :: theta, phi, radius, scale, powers(size(mode_m))
+        real(dp) :: boundary(2 * size(mode_m)), expected, separated, quadratic
+        integer :: i, k, modes, position(2), full_index, target
+
+        model%nu = nu
+        model%nv = nv
+        model%wall_kind = vacuum_wall_surface
+        allocate (model%wall(3, nu, nv))
+        do k = 1, nv
+            phi = 2.0_dp * acos(-1.0_dp) * real(k - 1, dp) / real(nv, dp)
+            do i = 1, nu
+                theta = 2.0_dp * acos(-1.0_dp) * real(i - 1, dp) / real(nu, dp)
+                radius = 0.935_dp + 0.75_dp * cos(theta)
+                model%wall(1, i, k) = radius * cos(phi)
+                model%wall(2, i, k) = radius * sin(phi)
+                model%wall(3, i, k) = 0.75_dp * sin(theta)
+            end do
+        end do
+        call build_compatible_vacuum_energy(equilibrium, mode_m, mode_n, &
+            model, centered, info)
+        call require(info == compatible_three_component_ok, &
+            "centered shell vacuum assembly failed")
+        call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
+            1.0_dp, 1.0e-8_dp, mode_m, mode_n, 1, automatic, info, 64, 32, &
+            vacuum=model, radial_cells=2)
+        call require(info == fixed_boundary_ok, "centered shell build failed")
+        call require(.not. fixed_boundary_is_coupled(automatic), &
+            "symmetric centered shell unnecessarily coupled plasma parity")
+        model%wall(3, :, :) = model%wall(3, :, :) + 0.04_dp
+        call build_compatible_vacuum_energy(equilibrium, mode_m, mode_n, &
+            model, shifted, info)
+        call require(info == compatible_three_component_ok, &
+            "translated enclosing shell vacuum assembly failed")
+        modes = size(mode_m)
+        scale = maxval(abs(shifted))
+        write (*, '(a,2es14.5)') 'vacuum cross-parity relative centered/shifted: ', &
+            maxval(abs(centered(:modes, modes + 1:))) / maxval(abs(centered)), &
+            maxval(abs(shifted(:modes, modes + 1:))) / scale
+        call require(maxval(abs(shifted(:modes, modes + 1:))) > 1.0e-4_dp * scale, &
+            "translated enclosing shell did not mix parity")
+        call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
+            1.0_dp, 1.0e-8_dp, mode_m, mode_n, 1, automatic, info, 64, 32, &
+            vacuum=model, radial_cells=2)
+        call require(info == fixed_boundary_ok, "translated shell build failed")
+        call require(fixed_boundary_is_coupled(automatic), &
+            "translated enclosing wall lost its cross-parity energy")
+        call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
+            1.0_dp, 1.0e-8_dp, mode_m, mode_n, 1, forced, info, 64, 32, &
+            coupled=.false., vacuum=model, radial_cells=2)
+        call require(info == fixed_boundary_asymmetric, &
+            "explicitly separated classes accepted a parity-breaking wall")
+
+        do i = 1, modes
+            powers(i) = 0.0_dp
+            if (mode_m(i) > 0) powers(i) = 1.0_dp - 0.5_dp * real(mode_m(i), dp)
+        end do
+        call build_compatible_three_component_classes(equilibrium, &
+            5.0_dp / 3.0_dp, 1.0_dp, mode_m, mode_n, powers, 1, 64, 32, &
+            first, second, info, vacuum=model, vacuum_energy=shifted, radial_cells=2)
+        call require(info == compatible_three_component_asymmetric, &
+            "paired native assembly discarded a supplied vacuum cross block")
+        call build_compatible_three_component_classes(equilibrium, &
+            5.0_dp / 3.0_dp, 1.0_dp, mode_m, mode_n, powers, 1, 64, 32, &
+            first, second, info, vacuum=model, radial_cells=2)
+        call require(info == compatible_three_component_asymmetric, &
+            "paired native assembly discarded its computed vacuum cross block")
+
+        ! Select the largest independently assembled cross entry. A boundary
+        ! displacement using both parities has the full quadratic form;
+        ! the separated principal blocks would lose exactly twice this entry.
+        position = maxloc(abs(shifted(:modes, modes + 1:)))
+        boundary = 0.0_dp
+        boundary(position(1)) = 1.0_dp
+        boundary(modes + position(2)) = 1.0_dp
+        expected = quadratic_form(shifted, boundary)
+        separated = shifted(position(1), position(1)) &
+            + shifted(modes + position(2), modes + position(2))
+        call require(abs(expected - separated) > 1.0e-4_dp * scale, &
+            "cross-parity oracle does not distinguish the separated model")
+        call build_compatible_three_component_problem(equilibrium, &
+            5.0_dp / 3.0_dp, 1.0_dp, mode_m, mode_n, powers, 0, 1, 64, 32, &
+            full, info, vacuum=model, vacuum_energy=shifted, radial_cells=2)
+        call require(info == compatible_three_component_ok, &
+            "explicit coupled native assembly failed")
+        allocate (vector(size(full%stiffness, 1)), source=0.0_dp)
+        do i = 1, 2 * modes
+            full_index = (full%h1_dofs - 1) * 2 * modes + i
+            target = full%axis_tie%target(full_index)
+            call require(target > 0, "edge trial was removed by an axis tie")
+            vector(target) = boundary(i) / full%axis_tie%factor(full_index)
+        end do
+        quadratic = quadratic_form(full%vacuum, vector)
+        call require(abs(quadratic - expected) < 1.0e-11_dp * scale, &
+            "coupled vacuum scatter lost a cross term")
+        call diagnose_fixed_boundary_energy(automatic, 0, vector, energy, info)
+        call require(info == fixed_boundary_ok, "automatic coupled energy failed")
+        call require(abs(energy%vacuum_energy - expected) < 1.0e-11_dp * scale, &
+            "automatic coupled energy differs from the full vacuum quadratic")
+        call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
+            1.0_dp, 1.0e-8_dp, mode_m, mode_n, 1, forced, info, 64, 32, &
+            coupled=.true., vacuum=model, radial_cells=2)
+        call require(info == fixed_boundary_ok, "forced coupled shell build failed")
+        call solve_fixed_boundary_full_spectrum(automatic, 0, automatic_spectrum, info)
+        call require(info == fixed_boundary_ok, "automatic coupled spectrum failed")
+        call solve_fixed_boundary_full_spectrum(forced, 0, forced_spectrum, info)
+        call require(info == fixed_boundary_ok, "forced coupled spectrum failed")
+        call require(maxval(abs(automatic_spectrum%eigenvalues &
+            - forced_spectrum%eigenvalues)) < 1.0e-10_dp &
+            * maxval(abs(forced_spectrum%eigenvalues)), &
+            "automatic coupling changed the explicit coupled spectrum")
+
+        ! Reflecting the entire enclosing wall reverses the cross block and
+        ! preserves both diagonal blocks. Its full spectrum is congruent.
+        model%wall(3, :, :) = model%wall(3, :, :) - 0.08_dp
+        call build_compatible_vacuum_energy(equilibrium, mode_m, mode_n, &
+            model, mirror, info)
+        call require(info == compatible_three_component_ok, "reflected wall failed")
+        call require(maxval(abs(mirror(:modes, :modes) &
+            - shifted(:modes, :modes))) < 1.0e-11_dp * scale, &
+            "wall reflection changed the cosine diagonal vacuum block")
+        call require(maxval(abs(mirror(modes + 1:, modes + 1:) &
+            - shifted(modes + 1:, modes + 1:))) < 1.0e-11_dp * scale, &
+            "wall reflection changed the sine diagonal vacuum block")
+        call require(maxval(abs(mirror(:modes, modes + 1:) &
+            + shifted(:modes, modes + 1:))) < 1.0e-11_dp * scale, &
+            "wall reflection did not reverse the vacuum cross block")
+        call build_fixed_boundary_problem(equilibrium, 5.0_dp / 3.0_dp, &
+            1.0_dp, 1.0e-8_dp, mode_m, mode_n, 1, reflected, info, 64, 32, &
+            vacuum=model, radial_cells=2)
+        call require(info == fixed_boundary_ok, "reflected shell build failed")
+        call solve_fixed_boundary_full_spectrum(reflected, 0, reflected_spectrum, info)
+        call require(info == fixed_boundary_ok, "reflected spectrum failed")
+        call require(maxval(abs(reflected_spectrum%eigenvalues &
+            - automatic_spectrum%eigenvalues)) < 1.0e-10_dp &
+            * maxval(abs(automatic_spectrum%eigenvalues)), &
+            "wall reflection changed the complete coupled spectrum")
+    end subroutine test_wall_parity_coupling
+
+    function quadratic_form(matrix, vector) result(value)
+        real(dp), intent(in) :: matrix(:, :), vector(:)
+        real(dp) :: value
+        integer :: row, column
+
+        value = 0.0_dp
+        do column = 1, size(vector)
+            do row = 1, size(vector)
+                value = value + vector(row) * matrix(row, column) * vector(column)
+            end do
+        end do
+    end function quadratic_form
 
     subroutine test_rejections()
         type(fixed_boundary_problem_t) :: problem

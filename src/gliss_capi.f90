@@ -15,9 +15,11 @@ module gliss_capi
     private
 
     character(len=*), parameter :: version_string = "0.0.2"
-    integer(c_int), parameter :: abi_version_number = 3
+    integer(c_int), parameter :: abi_version_number = 4
+    integer(c_int), parameter :: discretization_revision_number = 4
     public :: gliss_version_c
     public :: gliss_abi_version_c
+    public :: gliss_discretization_revision_c
     public :: gliss_mercier_profile_c
     public :: gliss_equilibrium_create_c
     public :: gliss_equilibrium_destroy_c
@@ -47,6 +49,13 @@ contains
 
         version = abi_version_number
     end function gliss_abi_version_c
+
+    function gliss_discretization_revision_c() &
+            bind(c, name="gliss_discretization_revision") result(revision)
+        integer(c_int) :: revision
+
+        revision = discretization_revision_number
+    end function gliss_discretization_revision_c
 
     subroutine gliss_mercier_profile_c(path, path_length, n_theta, n_zeta, &
             capacity, surfaces, s_values, d_mercier, status) &
