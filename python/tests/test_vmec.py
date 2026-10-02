@@ -486,6 +486,44 @@ def test_convert_boozer_reads_the_file_without_rerunning(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
+    ("nfp", "ns", "radius", "available", "missing", "match"),
+    [
+        (0.0, 16.0, 16, 15, None, "nfp must be a positive integer"),
+        (3.5, 16.0, 16, 15, None, "nfp must be a positive integer"),
+        (float("nan"), 16.0, 16, 15, None, "nfp is not a finite scalar"),
+        (3.0, 5.0, 5, 4, None, "ns must be an integer with at least six"),
+        (3.0, 16.5, 16, 15, None, "ns must be an integer with at least six"),
+        (3.0, float("inf"), 16, 15, None, "ns is not a finite scalar"),
+        (3.0, 16.0, 17, 15, None, "ns does not match its radius dimension"),
+        (3.0, 16.0, 16, 14, None, "half grid does not match"),
+        (3.0, 16.0, 16, 15, "nfp", "missing nfp"),
+        (3.0, 16.0, 16, 15, "ns", "missing ns"),
+    ],
+)
+def test_convert_boozer_rejects_invalid_parent_grid(
+    tmp_path, monkeypatch, nfp, ns, radius, available, missing, match
+):
+    source = tmp_path / "boozmn.nc"
+    source.write_bytes(b"input")
+    parent = tmp_path / "wout.nc"
+    with netcdf_file(parent, "w") as file:
+        file.createDimension("radius", radius)
+        values = dict(nfp=nfp, ns=ns, ier_flag=0, lasym=0, lrfp=0,
+                      signgs=-1, betatotal=0.02)
+        for name, value in values.items():
+            if name != missing:
+                file.createVariable(name, "d", ())[...] = value
+    transform = _Transform()
+    transform.ns_in = available
+    _stub_dependencies(monkeypatch, transform)
+    destination = tmp_path / "converted.nc"
+    with pytest.raises(ValueError, match=match):
+        vmec.convert_boozer(source, destination, wout_path=parent)
+    assert not destination.exists()
+    assert not transform.ran
+
+
+@pytest.mark.parametrize(
     ("options", "error", "match"),
     [
         ({}, ValueError, "exactly one of beta_average and wout_path"),
