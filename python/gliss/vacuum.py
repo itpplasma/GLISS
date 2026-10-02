@@ -41,7 +41,7 @@ class VacuumModel:
 
     ``edge_resolution`` is the (poloidal, toroidal) node count of the
     full-torus edge mesh on which the vacuum boundary-integral equation is
-    discretized; each count must exceed twice the largest |m| and |n| of the
+    discretized; each count must exceed twice the largest ``|m|`` and ``|n|`` of the
     mode table. ``wall`` is ``None`` (no wall, vacuum to infinity), a
     positive float (a conformal wall that distance in metres along the
     outward edge normal), or a Cartesian node array of shape (3, nu, nv) in

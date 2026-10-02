@@ -1,10 +1,12 @@
 name: docs
 
-# Publishes the versioned documentation site to the gh-pages branch: the
+# Publishes the versioned documentation site through GitHub Pages: the
 # default branch updates `latest`, a release tag vX.Y.Z adds its own
 # directory once. The site is built from the installed wheel, never from the
 # checkout, and every quickstart block runs against that wheel first. This
-# workflow deploys; it does not gate pull requests.
+# gh-pages branch keeps the previously published versions. The complete site
+# is deployed as a Pages artifact; token-authenticated branch pushes do not
+# trigger GitHub's branch-based Pages builds. This workflow does not gate PRs.
 on:
   push:
     branches: [main]
@@ -12,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: docs-pages
@@ -21,8 +23,13 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: read
     steps:
       - uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -40,8 +47,9 @@ jobs:
           mkdir -p /tmp/docs-tests
           cp python/tests/conftest.py python/tests/test_docs.py /tmp/docs-tests/
           cd /tmp/docs-tests
-          export GLISS_LIB="$(/tmp/docs/bin/python -c \
+          GLISS_LIB="$(/tmp/docs/bin/python -c \
             'import gliss; print(gliss._load_library()._name)')"
+          export GLISS_LIB
           GLISS_DOCS="$GITHUB_WORKSPACE/docs" \
             GLISS_TEST_DATA="$GITHUB_WORKSPACE/test/data" \
             /tmp/docs/bin/python -m pytest -q -p no:cacheprovider .
@@ -82,3 +90,23 @@ jobs:
             git -C /tmp/site commit -m "Publish ${{ steps.version.outputs.name }} documentation for $GITHUB_SHA"
             git -C /tmp/site push origin gh-pages
           fi
+          mkdir -p "$RUNNER_TEMP/pages"
+          git -C /tmp/site archive HEAD | tar -x -C "$RUNNER_TEMP/pages"
+      - name: Upload the complete versioned site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/pages
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the versioned documentation site
+        id: deployment
+        uses: actions/deploy-pages@v4
