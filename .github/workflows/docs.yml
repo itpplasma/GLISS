@@ -41,7 +41,7 @@ jobs:
       - name: Install the wheel and documentation tools
         run: |
           python -m venv /tmp/docs
-          /tmp/docs/bin/pip install dist/*.whl sphinx myst-parser pytest
+          /tmp/docs/bin/pip install dist/*.whl sphinx myst-parser pytest scipy booz-xform==0.0.9
       - name: Run the documentation examples against the installed wheel
         run: |
           mkdir -p /tmp/docs-tests
