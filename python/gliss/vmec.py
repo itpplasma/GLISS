@@ -88,7 +88,9 @@ def _scalar_alias(file: Any, *names: str) -> float:
     raise ValueError(f"VMEC wout file is missing {' or '.join(names)}")
 
 
-def _metadata(path: Path, netcdf_file: Any) -> Tuple[float, bool]:
+def _metadata(
+    path: Path, netcdf_file: Any, transform: Any = None
+) -> Tuple[float, bool]:
     """Return the volume-averaged beta and the stellarator symmetry flag."""
     try:
         file = netcdf_file(path, "r", mmap=False)
@@ -102,6 +104,25 @@ def _metadata(path: Path, netcdf_file: Any) -> Tuple[float, bool]:
             raise ValueError("GLISS does not support reversed-field-pinch VMEC output")
         if int(_scalar(file, "signgs")) != -1:
             raise ValueError("GLISS requires the standard VMEC signgs=-1 convention")
+        if transform is not None:
+            nfp = _scalar(file, "nfp")
+            ns = _scalar(file, "ns")
+            if nfp < 1 or nfp != int(nfp):
+                raise ValueError("VMEC wout nfp must be a positive integer")
+            if ns < 6 or ns != int(ns):
+                raise ValueError(
+                    "VMEC wout ns must be an integer with at least six points"
+                )
+            if file.dimensions.get("radius") != ns:
+                raise ValueError("VMEC wout ns does not match its radius dimension")
+            if transform.nfp != nfp:
+                raise ValueError(
+                    "BOOZ_XFORM nfp does not match the parent VMEC wout nfp"
+                )
+            if transform.ns_in != ns - 1:
+                raise ValueError(
+                    "BOOZ_XFORM half grid does not match the parent VMEC wout ns"
+                )
         return _scalar_alias(file, "betatotal", "betatot"), symmetric
 
 
@@ -391,7 +412,8 @@ def convert_boozer(
     the VMEC half grid. A ``boozmn`` file does not store the volume-averaged
     beta; pass it as ``beta_average`` or give the parent ``wout_path``,
     whose metadata (solve status, signgs, symmetry and beta) is then also
-    checked. The same geometric and force-balance gates as
+    checked. Its field periods and radial-grid size must agree with the
+    precomputed transform. The same geometric and force-balance gates as
     :func:`convert_vmec` apply, and both entry points produce identical
     exports for the same transform.
     """
@@ -410,11 +432,9 @@ def convert_boozer(
     if (beta_average is None) == (wout_path is None):
         raise ValueError("give exactly one of beta_average and wout_path")
     booz_xform, netcdf_file = _dependencies()
-    symmetric = None
+    parent_path = None
     if wout_path is not None:
-        beta_average, symmetric = _metadata(
-            _path(wout_path, "wout_path", True), netcdf_file
-        )
+        parent_path = _path(wout_path, "wout_path", True)
     elif isinstance(beta_average, bool) or not isinstance(
         beta_average, (int, float)
     ):
@@ -427,8 +447,10 @@ def convert_boozer(
         transform.read_boozmn(os.fspath(source_path))
     except Exception as error:
         raise RuntimeError(f"cannot load BOOZ_XFORM file {source_path}") from error
-    if symmetric is None:
+    if parent_path is None:
         symmetric = not bool(transform.asym)
+    else:
+        beta_average, symmetric = _metadata(parent_path, netcdf_file, transform)
     return _convert_transform(
         transform,
         booz_xform,
@@ -440,7 +462,7 @@ def convert_boozer(
         toroidal_max,
         options[2],
         options[3],
-        "" if wout_path is None else _path(wout_path, "wout_path", True).name,
+        "" if parent_path is None else parent_path.name,
         "gliss.convert_boozer",
         source_path.name,
     )

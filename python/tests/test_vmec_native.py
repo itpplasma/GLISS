@@ -132,6 +132,37 @@ def test_native_vmec_rejects_corrupted_sign(native_library, vmec_data, tmp_path)
 
 
 @pytest.mark.parametrize("existing_output", [False, True])
+@pytest.mark.parametrize(
+    ("field", "value", "match"),
+    [("nfp", 3, "nfp does not match"),
+     ("ns", 51, "ns does not match its radius dimension")],
+)
+def test_native_boozer_rejects_mismatched_parent_grid(
+    native_library, vmec_data, tmp_path, existing_output, field, value, match
+):
+    # Frozen QA BOOZ data have two periods and derive from a 50-point full grid.
+    # Changing only the parent metadata must not yield a plausible N_FP=2 export.
+    parent = tmp_path / "mismatched-parent.nc"
+    _copy_netcdf(vmec_data / "wout_qa_lowres.nc", parent)
+    with netcdf_file(parent, "a") as file:
+        file.variables[field][...] = value
+    destination = tmp_path / "converted.nc"
+    preserved = b"preserve this existing output"
+    if existing_output:
+        destination.write_bytes(preserved)
+    with pytest.raises(ValueError, match=match):
+        gliss.convert_boozer(
+            vmec_data / "boozmn_qa.nc", destination, wout_path=parent,
+            poloidal_max=4, toroidal_max=3, overwrite=existing_output,
+        )
+    if existing_output:
+        assert destination.read_bytes() == preserved
+    else:
+        assert not destination.exists()
+    assert not list(tmp_path.glob(".converted.nc.*.tmp"))
+
+
+@pytest.mark.parametrize("existing_output", [False, True])
 def test_native_boozer_rejects_missing_asymmetric_harmonic(
     native_library, vmec_data, tmp_path, existing_output
 ):
