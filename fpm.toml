@@ -11,7 +11,11 @@ netcdf = "*"
 [build]
 auto-executables = true
 auto-tests = false
-link = ["lapack"]
+link = ["lapack", "blas"]
+
+[[test]]
+name = "axis_harmonic_regularity"
+main = "test_axis_harmonic_regularity.f90"
 
 [[test]]
 name = "local_mode"

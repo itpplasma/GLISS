@@ -37,9 +37,9 @@ program test_mercier_fluxslope_gradient
         / real(size(surface%jacobian), dp)
     do case = 1, size(spreads)
     spread = spreads(case)
-    ! A regularized exact m=n resonance has zero beta but a nonzero
-    ! derivative. Re-solving perturbed pencils is an independent oracle.
-    if (case == 3) poloidal_base = flux_slope
+        ! A regularized exact m=n resonance has zero beta but a nonzero
+        ! derivative. Re-solving perturbed pencils is an independent oracle.
+        if (case == 3) poloidal_base = flux_slope
     write (*, "(a, f6.3)") "iota spread               = ", spread
 
     call mercier_surface_terms(equilibrium, surface, theta, zeta, &
