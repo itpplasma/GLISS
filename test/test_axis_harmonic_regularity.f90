@@ -88,8 +88,12 @@ contains
                         * coordinate**(exponent - 2.0_dp) &
                         + (exponent + 3.0_dp) * (exponent + 2.0_dp) &
                         * coordinate**(exponent + 1.0_dp)
-                    errors(column, :, mesh) = max(errors(column, :, mesh), &
-                        abs([values(column), slopes(column), seconds(column)] - exact))
+                    errors(column, 1, mesh) = max(errors(column, 1, mesh), &
+                        abs(values(column) - exact(1)))
+                    errors(column, 2, mesh) = max(errors(column, 2, mesh), &
+                        abs(slopes(column) - exact(2)))
+                    errors(column, 3, mesh) = max(errors(column, 3, mesh), &
+                        abs(seconds(column) - exact(3)))
                 end do
             end do
             deallocate (nodes, samples)
@@ -127,9 +131,9 @@ contains
             call evaluate_axis_regular_harmonics(grid, field, coordinate, &
                 values, slopes, seconds, info)
             call require(info == axis_regular_harmonic_ok, 'roundoff jet rejected')
-            maxima = max(maxima, [maxval(abs(values)), &
-                maxval(abs(slopes)) / real(n, dp), &
-                maxval(abs(seconds)) / real(n, dp)**2])
+            maxima(1) = max(maxima(1), maxval(abs(values)))
+            maxima(2) = max(maxima(2), maxval(abs(slopes)) / real(n, dp))
+            maxima(3) = max(maxima(3), maxval(abs(seconds)) / real(n, dp)**2)
         end do
         print '(a,3es12.3)', 'scaled roundoff jets ', maxima
         call require(maxima(1) < 1.0e-15_dp, 'roundoff value amplified')
