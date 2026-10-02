@@ -669,12 +669,8 @@ contains
                     toroidal_flux_slope, denominator, mode_scale)
                 width = resonance_half_width(poloidal_modes(mode_m), &
                     toroidal_flux_slope / scale, iota_spread)
-                if (mode_scale == 0.0_dp) then
-                    if (poloidal_modes(mode_m) /= 0 .or. &
-                        toroidal_modes(mode_n) /= 0) then
-                        if (max(abs(rhs_cosine(mode_m, mode_n)), &
-                            abs(rhs_sine(mode_m, mode_n))) > roundoff * rhs_scale) return
-                    end if
+                if (poloidal_modes(mode_m) == 0 .and. &
+                    toroidal_modes(mode_n) == 0) then
                     beta_pair%cosine(1, mode_m, mode_n) = 0.0_dp
                     beta_pair%sine(1, mode_m, mode_n) = 0.0_dp
                 else if (width > 0.0_dp) then

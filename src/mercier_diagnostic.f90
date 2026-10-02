@@ -468,7 +468,7 @@ contains
                     toroidal_flux_slope, denominator, mode_norm)
                 width = resonance_half_width(poloidal(idx_m), &
                     toroidal_flux_slope / scale, iota_spread)
-                if (mode_norm == 0.0_dp) then
+                if (poloidal(idx_m) == 0 .and. toroidal(idx_n) == 0) then
                     d_pair%cosine(1, idx_m, idx_n) = 0.0_dp
                     d_pair%sine(1, idx_m, idx_n) = 0.0_dp
                 else
@@ -477,7 +477,7 @@ contains
                     d_denominator = (poloidal_weight * mode_m &
                         - toroidal_weight * mode_n)
                     if (width == 0.0_dp .and. abs(denominator) <= &
-                            4.0_dp * epsilon(1.0_dp) * mode_norm) then
+                        4.0_dp * epsilon(1.0_dp) * mode_norm) then
                         factor = 0.0_dp
                     else
                         factor = ((width**2 - denominator**2) &

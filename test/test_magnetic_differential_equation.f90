@@ -90,4 +90,21 @@ program test_magnetic_differential_equation
         error stop 'regularized inverse is not bounded at resonance'
     if (abs(regular_peak(3) - regular_peak(2)) > 1.0e-2_dp * regular_peak(2)) &
         error stop 'regularized inverse has no limit at resonance'
+
+    ! At zero iota every n=0,m/=0 harmonic has D=0 but a positive width.
+    ! A nonzero cos(theta) forcing has the finite regularized solution beta=0;
+    ! only (m,n)=(0,0) is the gauge.  Arithmetic mode_scale=0 must not reject
+    ! this physical resonance before the regularized inverse is considered.
+    do k = 1, n_zeta
+        do j = 1, n_theta
+            surface%jacobian(j, k) = 2.0_dp + 0.3_dp * cos(two_pi * theta(j))
+        end do
+    end do
+    surface%b_theta = 0.0_dp
+    surface%b_zeta = toroidal_slope / surface%jacobian
+    call solve_beta_derivatives_modes([0, 1], [0], surface, theta, zeta, &
+        0.0_dp, 0.0_dp, pressure_slope, 0.0_dp, toroidal_slope, &
+        beta, beta_theta, beta_zeta, info=info, iota_spread=1.0e-2_dp)
+    if (info /= mercier_ok) error stop 'regularized zero-iota forcing rejected'
+    if (maxval(abs(beta)) /= 0.0_dp) error stop 'zero-iota response is not zero'
 end program test_magnetic_differential_equation
