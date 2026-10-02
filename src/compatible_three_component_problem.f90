@@ -39,7 +39,7 @@ module compatible_three_component_problem
     use trial_space_topology, only: build_trial_space_topology, &
         trial_component_eta, trial_component_mu, trial_component_normal, &
         trial_space_topology_t, trial_topology_ok
-    !$ use omp_lib, only: omp_get_max_threads
+    use omp_lib, only: omp_get_max_threads
     implicit none
     private
 
