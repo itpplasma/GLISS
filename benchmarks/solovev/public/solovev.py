@@ -32,19 +32,24 @@ def surface(psi_n, points=4096):
     return R0 + radius * np.cos(angle), radius * np.sin(angle)
 
 
-def safety_factor_and_flux(psi_n, q0):
-    """q and toroidal flux F * int dA / R inside the surface psi_n."""
-    _, psifac = flux_scales(q0)
-    big_r, z = surface(psi_n)
-    wave = np.fft.fftfreq(big_r.size, 1.0 / big_r.size)
-    dr = np.real(np.fft.ifft(1j * wave * np.fft.fft(big_r)))
-    dz = np.real(np.fft.ifft(1j * wave * np.fft.fft(z)))
-    step = 2.0 * np.pi / big_r.size
-    grad_psi = psifac * np.hypot(2 * big_r * z**2 / ELONGATION**2
-                                 + big_r * (big_r**2 - R0**2),
-                                 2 * big_r**2 * z / ELONGATION**2)
-    q = F / (2 * np.pi) * np.sum(np.hypot(dr, dz) * step / (big_r * grad_psi))
-    flux = F * np.sum(np.log(big_r) * dz) * step
+def safety_factor_and_flux(psi_n, q0, points=4096):
+    """q and toroidal flux F * int dA / R inside the surface psi_n.
+
+    The exact contour is R² = R0² + 2 a R0 sqrt(psi_n) cos(t),
+    Z = e a R0 sqrt(psi_n) sin(t) / R. Its area Jacobian is
+    d(R,Z)/d(psi_n,t) = e a² R0² / (2 R²), giving q directly.
+    Integration by parts of F * integral log(R) dZ gives the positive
+    flux integrand below. The periodic trapezoidal rule integrates these
+    smooth periodic expressions directly.
+    """
+    if psi_n == 0.0:
+        return q0, 0.0
+    t = 2.0 * np.pi * np.arange(points) / points
+    big_r = np.sqrt(R0**2 + 2.0 * A * R0 * np.sqrt(psi_n) * np.cos(t))
+    inverse_cube = big_r**-3
+    q = q0 * R0**3 * np.mean(inverse_cube)
+    flux = (2.0 * np.pi * F * ELONGATION * A**2 * R0**2 * psi_n
+            * np.mean(np.sin(t)**2 * inverse_cube))
     return q, flux
 
 
