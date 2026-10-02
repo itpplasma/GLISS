@@ -1,0 +1,16 @@
+{
+  "native_phi_prime_Wb": "0.7071679553076530844",
+  "native_chi_prime_over_phi_prime": "-0.3881901998081039862",
+  "analytic_edge_iota_decimal80": "-0.38818988028685430917040722674131895536357249752164521799493365461960807893527939",
+  "abs_native_toroidal_flux_slope_error_Wb": 1.198303275597511e-14,
+  "abs_native_edge_iota_error": 3.195212496770296e-07,
+  "stored_iota_edge_spline": -0.38818988040606467,
+  "native_ratio_minus_stored_iota": -3.194020393171293e-07,
+  "native_edge_pressure_Pa": 4.767220400481165e-05,
+  "flux_slope_limit_Wb": 1e-14,
+  "edge_iota_limit": 1e-12,
+  "native_extrapolated_edge_meets_corresponding_limits": false,
+  "explicit_schema_1_boundary_export_present": false,
+  "issue_8_physical_acceptance_complete": false,
+  "equilibrium_exterior_matching_qualified": false
+}

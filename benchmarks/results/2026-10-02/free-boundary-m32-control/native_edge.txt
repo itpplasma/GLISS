@@ -1,0 +1,5 @@
+native PhiPrime=  7.071679553076530844E-01
+native chiPrime/PhiPrime= -3.881901998081039862E-01
+stored iota edge spline= -3.881898804060646690E-01
+ratio minus stored iota= -3.194020393171292937E-07
+native edge pressure Pa=  4.767220400481164688E-05

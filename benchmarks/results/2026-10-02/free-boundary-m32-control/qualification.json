@@ -1,0 +1,68 @@
+{
+  "export_sha256": "c50c13330e43a35e5c9a35d3ad6f7d26506a6d8f4568d63fdef95304fc01c054",
+  "parameter_sha256": "c7593db04e81f0f8473317895633b0ecbda663ebd0ca3344427fca6b5a244dbc",
+  "qualifier_sha256": "52f4131a8d59726b36bab17ecf3573f34eefad63e3cd38547eb7ce10e8c7abc1",
+  "q0": 1.5,
+  "theta_points": 32768,
+  "explicit_boundary_schema_version": null,
+  "reference": {
+    "phi_edge_Wb_decimal80": "0.70716795530764110136724402488935028723240383080791304887127696404072412572120660",
+    "q_edge_decimal80": "2.5760589102968021755346604404044898802572069163974122545978403869846557737334082",
+    "psi0": 0.058080000000000014,
+    "p0_Pa": 68557.58328626487,
+    "half_width_m": 0.3526573415939913
+  },
+  "generator_input": {
+    "R_boundary_max_abs_error_m": 1.0105138947835712e-11,
+    "Z_boundary_max_abs_error_m": 3.4747807409196696e-10,
+    "implicit_boundary_max_abs_error": 7.822122949363575e-10,
+    "iota_nodes_max_abs_error": 5.066546626686375e-10,
+    "pressure_nodes_max_abs_error_Pa": 0.00020158664153768768,
+    "phi_edge_abs_error_Wb": 9.863275597511065e-17
+  },
+  "export_halfgrid": {
+    "s_min": 0.010416666666666666,
+    "s_max": 0.9895833333333334,
+    "phi_over_s_max_abs_error_Wb": 1.1102230246251565e-16,
+    "psi_chi_vs_reference_s_max_abs_error": 1.5712320333705065e-11,
+    "implicit_vs_chi_max_abs_error": 4.1670530463722155e-09,
+    "implicit_vs_reference_s_max_abs_error": 4.1669934794374974e-09,
+    "iota_vs_reference_s_max_abs_error": 5.105393330318009e-10,
+    "pressure_vs_reference_s_max_abs_error_Pa": 0.0002031352190670077,
+    "axis_near_max_abs_implicit_error": 4.1670530463722155e-09,
+    "central_max_abs_implicit_error": 6.289413434501512e-11,
+    "maximum_location": {
+      "surface_one_based": 1,
+      "s": 0.010416666666666666,
+      "theta_periods": 0.922454833984375,
+      "R_m": 1.032191842451888,
+      "Z_m": 0.030671631359329748,
+      "analytic_psi_from_chi": 0.013420249346316417,
+      "implicit_psi_from_geometry": 0.01342024517926337,
+      "signed_error": -4.1670530463722155e-09
+    }
+  },
+  "reconstructed_edge_estimate": {
+    "method": "source-equivalent parity-quotient not-a-knot extrapolation to s=1",
+    "implicit_vs_boundary_1_max_abs_error": 2.266512055815184e-08,
+    "implicit_vs_chi_max_abs_error": 2.641585739038277e-08,
+    "psi_from_chi": 1.0000000037507368,
+    "phi_slope_Wb": 0.7071679553076534,
+    "phi_slope_abs_error_Wb": 1.229863275597511e-14,
+    "exported_iota_spline_positive": 0.3881898804060646,
+    "exported_iota_spline_abs_error": 1.1921030829142865e-10,
+    "flux_ratio_iota_positive": 0.38819019980810393,
+    "flux_ratio_iota_abs_error": 3.195212496254207e-07,
+    "flux_ratio_minus_exported_iota": 3.194020393171293e-07,
+    "shape_parameter_matched_R_max_abs_error_m": 2.766447959601237e-09,
+    "shape_parameter_matched_Z_max_abs_error_m": 4.317813329102194e-09,
+    "shape_parameter_matched_distance_max_m": 4.5140463558641925e-09
+  },
+  "domain_notes": [
+    "No acceptance decision or matched exterior-field qualification is made.",
+    "Export contains half-grid surfaces; edge metrics use native-equivalent extrapolation.",
+    "Cylindrical R=hypot(xhat,yhat); positive analytic iota is minus flipped export iota.",
+    "Parameter-matched shape distances are not nearest-point distances.",
+    "Exported iota and reconstructed chi'/Phi' are separate quantities."
+  ]
+}

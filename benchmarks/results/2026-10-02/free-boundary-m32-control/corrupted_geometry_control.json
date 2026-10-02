@@ -1,0 +1,8 @@
+{
+  "independent_oracle": "analytic Solovev implicit surface equation",
+  "perturbation": "add 0.01 m to every half-grid xhat m=0 cosine coefficient; retain original flux profiles",
+  "unaltered_max_abs_implicit_error": 4.1670530463722155e-09,
+  "corrupted_max_abs_implicit_error": 0.07955275296206576,
+  "corrupted_geometry_detected": true,
+  "measurement_theta_points": 4096
+}

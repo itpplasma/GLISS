@@ -870,6 +870,10 @@ if(BUILD_TESTING)
     add_executable(benchmark_local_limits benchmarks/analytic/local_limits.f90)
     target_link_libraries(benchmark_local_limits PRIVATE gliss)
 
+    add_executable(benchmark_boundary_profiles
+        benchmarks/solovev/free_boundary/diagnose_profiles.f90)
+    target_link_libraries(benchmark_boundary_profiles PRIVATE gliss)
+
     add_executable(benchmark_theta_pinch benchmarks/analytic/exact_cylinder.f90
         benchmarks/analytic/theta_pinch.f90)
     target_link_libraries(benchmark_theta_pinch PRIVATE gliss gliss_test_support)
