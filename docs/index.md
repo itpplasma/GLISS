@@ -9,6 +9,7 @@ energy principle on compatible FEEC radial spaces.
 quickstart
 vmec
 compatibility
+mode_diagnostics
 conventions
 api
 ```

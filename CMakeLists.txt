@@ -117,6 +117,7 @@ add_library(gliss
     src/variable_generalized_solver.f90
     src/variable_spectrum_analysis.f90
     src/dense_spectrum_support.f90
+    src/dense_generalized_inverse_iteration.f90
     src/fixed_boundary_energy.f90
     src/fixed_boundary_eigen_bracket.f90
     src/fixed_boundary_spectrum.f90
@@ -220,6 +221,13 @@ add_executable(gliss_spectrum app/gliss_spectrum.f90)
 target_link_libraries(gliss_spectrum PRIVATE gliss)
 set_target_properties(gliss_spectrum PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
+
+# Coefficient and subspace diagnostics share the current FEEC operator.
+# Dense seeded solves are bounded validation helpers, outside public solvers.
+add_executable(gliss_compatible_marginality app/gliss_compatible_marginality.f90)
+target_link_libraries(gliss_compatible_marginality PRIVATE gliss)
+set_target_properties(gliss_compatible_marginality PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/app-mod")
 
 add_executable(gliss_compatible_operator_trace
     app/compatible_operator_geometry_trace.f90
@@ -413,6 +421,36 @@ if(BUILD_TESTING)
     add_test(NAME compatible_radial_quadrature
         COMMAND test_compatible_radial_quadrature)
 
+    add_test(NAME compatible_eta_defaults
+        COMMAND ${CMAKE_COMMAND}
+            -DEXECUTABLE=$<TARGET_FILE:gliss_compatible_marginality>
+            -DEXPORT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/test/data/solovev_q1.035.nc
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_compatible_eta_defaults.cmake)
+
+    foreach(control IN ITEMS unstable stable)
+        if(control STREQUAL "unstable")
+            set(control_q 1.035)
+            set(control_count 1)
+        else()
+            set(control_q 1.045)
+            set(control_count 0)
+        endif()
+        add_test(NAME compatible_count_solovev_${control}
+            COMMAND ${CMAKE_COMMAND}
+                -DEXECUTABLE=$<TARGET_FILE:gliss_compatible_marginality>
+                -DEXPORT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/test/data/solovev_q${control_q}.nc
+                -DEXPECTED_COUNT=${control_count}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_compatible_count.cmake)
+    endforeach()
+
+    add_executable(test_dense_generalized_inverse_iteration test/test_dense_generalized_inverse_iteration.f90)
+    target_link_libraries(test_dense_generalized_inverse_iteration PRIVATE gliss)
+    add_test(NAME dense_generalized_inverse_iteration COMMAND test_dense_generalized_inverse_iteration)
+
+    add_executable(test_compatible_vector_evaluation test/test_compatible_vector_evaluation.f90)
+    target_link_libraries(test_compatible_vector_evaluation PRIVATE gliss)
+    add_test(NAME compatible_vector_evaluation COMMAND test_compatible_vector_evaluation)
+
     add_executable(test_compatible_problem_assembly_support
         test/test_compatible_problem_assembly_support.f90)
     target_link_libraries(test_compatible_problem_assembly_support PRIVATE gliss)
@@ -433,6 +471,230 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_cli_rejection.cmake)
     endfunction()
 
+    add_compatible_cli_rejection(compatible_marginality_cli_trailing_space_path
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: EXPORT_FILE has a trailing space"
+        "missing.nc " 2 8 8 1e-8 1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: missing required arguments")
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_floor
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: FLOOR must be finite"
+        missing.nc 2 8 8 nan 1 1,0)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_density
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --physical-density requires a value"
+        missing.nc 2 8 8 1e-8 1 --physical-density=)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_density
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: physical density must be finite"
+        missing.nc 2 8 8 1e-8 1 --physical-density=nan 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_density
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --physical-density"
+        missing.nc 2 8 8 1e-8 1 --physical-density=1
+        --physical-density=1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_m0_power
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: m=0 stored power must be finite"
+        missing.nc 2 8 8 1e-8 1 --m0-stored-power=nan 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_option
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --m0-stored-power"
+        missing.nc 2 8 8 1e-8 1 --m0-stored-power=0.5
+        --m0-stored-power=0.5 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_power_count
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: stored powers requires one value per mode"
+        missing.nc 2 8 8 1e-8 1 --stored-powers=0,0 0,1 1,1 2,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_power
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: stored powers must be finite"
+        missing.nc 2 8 8 1e-8 1 --stored-powers=0,nan,0 0,1 1,1 2,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_power_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --m0-stored-power conflicts"
+        missing.nc 2 8 8 1e-8 1 --m0-stored-power=0
+        --stored-powers=0,0,0 0,1 1,1 2,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_eta_power_count
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eta stored powers requires one value per mode"
+        missing.nc 2 8 8 1e-8 1 --eta-stored-powers=0,0 0,1 1,1 2,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_eta_power
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eta stored powers must be finite"
+        missing.nc 2 8 8 1e-8 1 --eta-stored-powers=0,nan,0 0,1 1,1 2,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_eta_power
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --eta-stored-powers"
+        missing.nc 2 8 8 1e-8 1 --eta-stored-powers=0,0,0
+        --eta-stored-powers=0,0,0 0,1 1,1 2,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_bracket_order
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: negative bracket must obey"
+        missing.nc 2 8 8 1e-8 1 --negative-bracket=1e-6,1e-8,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_bracket_shape
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: negative bracket requires"
+        missing.nc 2 8 8 1e-8 1 --negative-bracket=1e-8,1e-6 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_eigen_bracket_order
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenvalue bracket must obey"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=1,1,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_eigen_bracket_shape
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenvalue bracket requires"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=0,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_eigen_bracket
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenvalue bracket lower must be finite"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=nan,1,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_eigen_bracket
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --eigenvalue-bracket"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=0,1,1e-3
+        --eigenvalue-bracket=0,1,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_conflicting_brackets
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: conflicting eigenvalue bracket options"
+        missing.nc 2 8 8 1e-8 1 --negative-bracket=1e-8,1e-6,1e-3
+        --eigenvalue-bracket=0,1,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_count_shifts
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --count-shifts requires"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_count_shifts
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --count-shifts"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,1
+        --count-shifts=0,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_empty_count_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: count shifts require nonempty"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_count_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: count shift must be finite"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,nan 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_negative_count_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: count shifts must be nonnegative"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=-1,0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_unsorted_count_shifts
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: count shifts must be strictly increasing"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,1,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_count_bracket_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: conflicting eigenvalue count options"
+        missing.nc 2 8 8 1e-8 1 --eigenvalue-bracket=0,1,1e-3
+        --count-shifts=0,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_count_inertia_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --count-shifts conflicts with --inertia-only"
+        missing.nc 2 8 8 1e-8 1 --count-shifts=0,1 --inertia-only 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_eigenprofile_index
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index requires"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index= 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_eigenprofile_index
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenprofile index must be positive"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_noninteger_eigenprofile_index
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: eigenprofile index must be an integer"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=one 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_eigenprofile
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --eigenprofile-index"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --eigenprofile-index=2 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_points_without_profile
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --profile-points requires --eigenprofile-index"
+        missing.nc 2 8 8 1e-8 1 --profile-points=8 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_profile_points
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: profile points must lie in [8,10000]"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --profile-points=7 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_profile_points
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --profile-points requires an integer"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --profile-points= 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_noninteger_profile_points
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: profile points must be an integer"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --profile-points=many 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_profile_points
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --profile-points"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --profile-points=8 --profile-points=9 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_count_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index conflicts with --count-shifts"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --count-shifts=0,1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_missing_bracket
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index requires --eigenvalue-bracket"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_negative_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index conflicts with --negative-bracket"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1
+        --negative-bracket=1e-3,1e-2,1e-3 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_profile_inertia_conflict
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --eigenprofile-index conflicts with --inertia-only"
+        missing.nc 2 8 8 1e-8 1 --eigenprofile-index=1 --inertia-only 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_missing_subspace_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --subspace-shift requires a value"
+        missing.nc 2 8 8 1e-8 1 --subspace-shift= 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_nonfinite_subspace_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: subspace shift must be finite"
+        missing.nc 2 8 8 1e-8 1 --subspace-shift=nan 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_subspace_shift
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --subspace-shift"
+        missing.nc 2 8 8 1e-8 1 --subspace-shift=0
+        --subspace-shift=0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_subspace_iterations
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: subspace iterations must lie in [1,1000]"
+        missing.nc 2 8 8 1e-8 1 --subspace-iterations=0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_noninteger_subspace_iterations
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: subspace iterations must be an integer"
+        missing.nc 2 8 8 1e-8 1 --subspace-iterations=many 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_duplicate_subspace_iterations
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: duplicate --subspace-iterations"
+        missing.nc 2 8 8 1e-8 1 --subspace-iterations=10
+        --subspace-iterations=10 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_incomplete_subspace_solver
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: --subspace-shift and --subspace-iterations must be given together"
+        missing.nc 2 8 8 1e-8 1 --evaluate-subspace=missing.txt
+        --subspace-shift=0 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_subspace_solver_without_input
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: subspace solver options require --evaluate-subspace"
+        missing.nc 2 8 8 1e-8 1 --subspace-shift=0
+        --subspace-iterations=10 0,1)
+    add_compatible_cli_rejection(compatible_marginality_cli_bad_relative_subspace_vector
+        gliss_compatible_marginality
+        "gliss_compatible_marginality: invalid external subspace: listed vector indices must be consecutive from one"
+        missing.nc 2 8 8 1e-8 1
+        --evaluate-subspace=${CMAKE_CURRENT_SOURCE_DIR}/test/invalid_subspace_paths.txt
+        0,1)
     add_compatible_cli_rejection(compatible_trace_cli_missing
         gliss_compatible_operator_trace
         "gliss_compatible_operator_trace: missing required arguments")
@@ -521,6 +783,15 @@ if(BUILD_TESTING)
     target_link_libraries(test_chart_orientation PRIVATE gliss)
     add_test(NAME chart_orientation
         COMMAND test_chart_orientation ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
+
+    add_compatible_cli_rejection(compatible_trace_cli_missing_first_cells
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: --first-cells requires a value"
+        missing.nc 2 8 8 1 --first-cells=)
+    add_compatible_cli_rejection(compatible_trace_cli_bad_first_cells
+        gliss_compatible_operator_trace
+        "gliss_compatible_operator_trace: --first-cells must be between"
+        missing.nc 2 8 8 1 --first-cells=0 0,1)
 
     add_executable(test_radial_cubic_spline
         test/test_radial_cubic_spline.f90)
