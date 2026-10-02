@@ -8,6 +8,11 @@
   pencils report failure and retain sparse storage. Independent eigenvalue
   checks cover reordered blocks, scaled units and zero-diagonal operators.
 
+- Record the source equilibrium and canonical configuration SHA-256 in newly solved spectra
+  (schema version 8), including the radial mesh and exact vacuum/wall model.
+  Run-manifest writers reject changed inputs. Older archives remain readable
+  with explicitly unverified configuration provenance and require a fresh solve
+  before creating a new run manifest.
 - Replay TERPSICHORE FORT.23 fixed-boundary files without dense matrices:
   the stiffness and mass are scattered interval by interval into the
   block-tridiagonal storage of the solver, bit-identical to the packed

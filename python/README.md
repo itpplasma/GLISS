@@ -911,9 +911,19 @@ It is self-contained except for the checksummed NetCDF equilibrium. Use
 `StabilityProblem.write_full_manifest()` to reject an equilibrium file that
 changed after assembly.
 
-Writers always emit schema version 5. Readers also accept versions 1 to 4,
-map their `radial_quadrature="midpoint"` field to FEEC degree 1, and recover
-historical solver controls when they are absent. Older documents record a
+Writers emit schema version 8. Every freshly solved spectrum records a SHA-256
+digest of its source equilibrium and canonical configuration, including
+`radial_cells` and the exact vacuum and wall inputs. Run-manifest writers reject
+a result whose recorded equilibrium differs from the supplied file, or whose configuration digest differs
+from the supplied configuration, even when the boundary type and mode table agree.
+Readers accept versions 1 to 7, map the versions 1 and 2
+`radial_quadrature="midpoint"` field to FEEC degree 1, and recover
+historical solver controls when they are absent. Results from versions 1 to 7
+have `configuration_sha256=None` and `equilibrium_sha256=None`; their manifests have
+`configuration_verified=False` and `equilibrium_verified=False` because those
+records cannot establish which source, mesh or wall produced the result.
+They remain readable and can be copied, but
+creating a new run manifest from them requires a fresh solve. Older documents record a
 different operator: revision 0 is the midpoint quadrature of versions 1 and
 2, revision 1 the Gauss FEEC operator of versions 3 and 4, revision 2 the
 axis-weighted FEEC space of #16, and revision 3 the current space with the

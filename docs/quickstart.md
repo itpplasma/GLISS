@@ -106,6 +106,11 @@ assert lowest_free[None].boundary_condition == "free"
 Configurations and results round-trip exactly through versioned JSON. A
 configuration records the operator revision it was assembled with, so a
 record from an earlier discretization is not silently replayed.
+Fresh spectra also record the source equilibrium and canonical configuration
+digests, including the radial mesh and exact wall model. Run-manifest writers
+reject mismatched inputs. Historical manifests remain readable with
+``configuration_verified=False`` and ``equilibrium_verified=False``;
+creating a new manifest from an older result requires a fresh solve.
 
 ```python
 with tempfile.TemporaryDirectory() as directory:

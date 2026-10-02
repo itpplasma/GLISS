@@ -34,6 +34,9 @@ def _certified(parity_class, eigenvalues):
         mu_unknowns=2,
         has_chart_metric=True,
         has_eigenvector=True,
+        configuration_sha256=gliss.StabilityConfiguration(
+            modes=((1, 1), (2, -1)), density_kg_m3=2.0
+        ).sha256,
     )
 
 
@@ -87,7 +90,7 @@ def test_full_result_round_trip_is_exact_read_only_and_deterministic(
     with zipfile.ZipFile(first) as archive:
         metadata = json.loads(archive.read("metadata.json"))
         assert metadata["schema"] == "gliss.stability.full-result"
-        assert metadata["schema_version"] == 7
+        assert metadata["schema_version"] == 8
         assert metadata["storage"]["array_order"] == "eigenpair-component"
         assert all(
             item.compress_type == zipfile.ZIP_STORED for item in archive.infolist()
@@ -132,7 +135,7 @@ def test_full_result_schema_three_preserves_solver_tolerances(full_result, tmp_p
 
     with zipfile.ZipFile(path) as archive:
         metadata = json.loads(archive.read("metadata.json"))
-    assert metadata["schema_version"] == 7
+    assert metadata["schema_version"] == 8
     loaded = gliss.FullStabilityResult.read(path)
     assert all(
         item.certified_lowest.solver_tolerances == tolerances
@@ -407,6 +410,96 @@ def test_full_run_manifest_rejects_boundary_mismatch(
             destination, tmp_path / "equilibrium.nc", configuration, full_result
         )
     assert not destination.exists()
+
+
+def test_historical_full_manifest_remains_explicitly_unverified(
+    full_result, configuration, tmp_path, monkeypatch
+):
+    equilibrium = tmp_path / "equilibrium.nc"
+    equilibrium.write_bytes(b"fixture")
+    monkeypatch.setattr("gliss.schema._native_version", lambda: "0.0.2")
+    monkeypatch.setattr("gliss.schema._equilibrium_schema_version", lambda path: 1)
+    path = tmp_path / "full-run.gliss"
+    manifest = gliss.write_full_run_manifest(path, equilibrium, configuration, full_result)
+    assert manifest.configuration_verified
+    entries = _archive_entries(path)
+    metadata = json.loads(entries["metadata.json"])
+    certified = metadata["result"]["certified_result"]
+    for item in (metadata, metadata["configuration"], metadata["result"], certified):
+        item["schema_version"] = 7
+    for item in certified["classes"]:
+        del item["configuration_sha256"]
+        del item["equilibrium_sha256"]
+    entries["metadata.json"] = json.dumps(metadata).encode()
+    _rewrite_archive(path, entries)
+    historical = gliss.FullRunManifest.read(path)
+    assert not historical.configuration_verified
+    assert not historical.equilibrium_verified
+    historical.write(tmp_path / "copy.gliss")
+    assert not gliss.FullRunManifest.read(tmp_path / "copy.gliss").configuration_verified
+    with pytest.raises(ValueError, match="provenance is unavailable"):
+        gliss.write_full_run_manifest(
+            tmp_path / "invented.gliss", equilibrium, configuration, historical.result
+        )
+
+
+def test_full_run_manifest_rejects_mesh_provenance_mismatch(
+    full_result, configuration, tmp_path
+):
+    changed = replace(configuration, radial_cells=32)
+    with pytest.raises(ValueError, match="configuration SHA-256"):
+        gliss.write_full_run_manifest(
+            tmp_path / "wrong-mesh.gliss", tmp_path / "equilibrium.nc",
+            changed, full_result,
+        )
+
+
+def test_full_run_manifest_rejects_wall_provenance_mismatch(
+    full_result, configuration, tmp_path
+):
+    original = replace(configuration, vacuum=gliss.VacuumModel((8, 8), 0.1))
+    recorded = gliss.FullStabilityResult(
+        tuple(
+            replace(
+                item,
+                certified_lowest=replace(
+                    item.certified_lowest, boundary_condition="free",
+                    configuration_sha256=original.sha256,
+                ),
+            )
+            for item in full_result.classes
+        )
+    )
+    changed = replace(original, vacuum=gliss.VacuumModel((8, 8), 0.2))
+    with pytest.raises(ValueError, match="configuration SHA-256"):
+        gliss.write_full_run_manifest(
+            tmp_path / "wrong-wall.gliss", tmp_path / "equilibrium.nc",
+            changed, recorded,
+        )
+
+
+def test_full_run_manifest_rejects_source_equilibrium_mismatch(
+    full_result, configuration, tmp_path, monkeypatch
+):
+    equilibrium = tmp_path / "different.nc"
+    equilibrium.write_bytes(b"other equilibrium")
+    monkeypatch.setattr("gliss.schema._equilibrium_schema_version", lambda path: 1)
+    recorded = gliss.FullStabilityResult(
+        tuple(
+            replace(
+                item,
+                certified_lowest=replace(
+                    item.certified_lowest,
+                    equilibrium_sha256=hashlib.sha256(b"source equilibrium").hexdigest(),
+                ),
+            )
+            for item in full_result.classes
+        )
+    )
+    with pytest.raises(ValueError, match="equilibrium SHA-256"):
+        gliss.write_full_run_manifest(
+            tmp_path / "wrong-source.gliss", equilibrium, configuration, recorded
+        )
 
 
 def test_full_run_manifest_rejects_wrong_result_type(configuration):

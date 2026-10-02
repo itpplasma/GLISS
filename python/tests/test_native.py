@@ -262,20 +262,45 @@ def test_native_stability_problem_radial_cells(native_library, test_data, tmp_pa
         with gliss.StabilityProblem(
             equilibrium, modes, degree=1, angular_theta=24, angular_zeta=8
         ) as coarse:
-            coarse_result = coarse.solve_class(1)
+            coarse_results = coarse.solve()
+            coarse_result = coarse_results.classes[0]
+        with pytest.raises(ValueError, match="equilibrium SHA-256"):
+            gliss.write_run_manifest(
+                tmp_path / "wrong-equilibrium.json",
+                test_data / "solovev_q1.035.nc", coarse.configuration, coarse_results,
+            )
         with gliss.StabilityProblem(
             equilibrium, modes, degree=1, angular_theta=24, angular_zeta=8,
             radial_cells=32,
         ) as fine:
             fine_result = fine.solve_class(1)
             configuration = fine.configuration
+            with pytest.raises(ValueError, match="configuration SHA-256"):
+                fine.write_manifest(tmp_path / "wrong-mesh.json", coarse_results)
         with gliss.StabilityProblem(
             equilibrium, modes, degree=1, angular_theta=24, angular_zeta=8,
             radial_cells=32, vacuum=gliss.VacuumModel((24, 12)),
         ) as free:
             assert free.boundary_condition == "free"
             assert free.configuration.radial_cells == 32
-            free_result = free.solve_class(1)
+            free_results = free.solve()
+            free_result = free_results.classes[0]
+            manifest = free.write_manifest(tmp_path / "free.json", free_results)
+            assert manifest.configuration_verified
+            assert manifest.equilibrium_verified
+            tampered = manifest.to_dict()
+            tampered["equilibrium"]["sha256"] = "0" * 64
+            with pytest.raises(ValueError, match="equilibrium SHA-256"):
+                gliss.RunManifest.from_dict(tampered)
+            changed_wall = gliss.StabilityConfiguration(
+                modes, degree=1, angular_theta=24, angular_zeta=8,
+                radial_cells=32, vacuum=gliss.VacuumModel((24, 12), 0.03),
+            )
+            with pytest.raises(ValueError, match="configuration SHA-256"):
+                gliss.write_run_manifest(
+                    tmp_path / "wrong-wall.json", equilibrium.path,
+                    changed_wall, free_results,
+                )
         replayed = configuration.create_problem(equilibrium)
         with replayed:
             assert replayed.solve_class(1).lowest_eigenvalue == (
