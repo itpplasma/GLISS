@@ -1,0 +1,82 @@
+{
+  "status": "failed native edge qualification; no wall-window acceptance run",
+  "generated_on": "2026-10-02",
+  "redistribution": "Own numerical public GPEC-family/GVEC export and generated input, released under the GLISS MIT license. No private checker source is redistributed.",
+  "file_sha256": {
+    "export.nc": "c50c13330e43a35e5c9a35d3ad6f7d26506a6d8f4568d63fdef95304fc01c054",
+    "parameter.toml": "c7593db04e81f0f8473317895633b0ecbda663ebd0ca3344427fca6b5a244dbc",
+    "qualification.json": "bb44bb2d458fdce67e42b3794f2a0c78bc5e31247638b363d84e74099f1092bd",
+    "native_edge.txt": "1e082d5b89f72cabe3805dd7badbb5059dd2ba2f96039eb0f0709b492c20429e",
+    "native_edge.json": "503ba30dca2375c11315b47b89eeccac061b33b5b3582cb6505fd237e4d3628d",
+    "corrupted_geometry_control.json": "b9d3533caa6ed244052591ea43700f66689e91d614ab49b27cb1c3d91c2271b4"
+  },
+  "generator": {
+    "gliss_generator_commit": "16950ecb643ecb6ac3f7e57fd242dbe8ccd24e5b",
+    "gpec_family_source_commit": "f5595c0689c624834d720068ddc8b5a7e4028248",
+    "gvec_version": "1.5.0",
+    "input_writer_sha256": "dc3caa9c0023928ce57cffbf284f209f8d5aaa5e923a903ce29a6fbb48ee97ba",
+    "gvec_export_patch_sha256": "6ffc1b915a7c32b9ddb927c58ad268af73a312de306d8e74855029c36918e1fc",
+    "equilibrium_modes": [
+      20,
+      0
+    ],
+    "equilibrium_elements": 32,
+    "equilibrium_degree": 5,
+    "equilibrium_iterations": 11487,
+    "reported_force_norm": 9.99e-11,
+    "export_surfaces": 48,
+    "export_modes": [
+      32,
+      0
+    ],
+    "export_winding": -1
+  },
+  "analytic_family": {
+    "q0": 1.5,
+    "R0_m": 1.0,
+    "a_m": 0.33,
+    "elongation": 1.6,
+    "F_T_m": 1.0,
+    "p_edge_Pa": 0.0,
+    "N_FP": 1
+  },
+  "native_diagnostic": {
+    "gliss_library_source_commit": "6f85b8b1a2d835660d39d01d1d09dfcfabb1cdb5",
+    "source": "benchmarks/solovev/free_boundary/diagnose_profiles.f90",
+    "source_sha256": "2abaff0d0f13928d09c57a9c6b2bf92a0b5908ad71eefae95ae291ccc5cb13d7",
+    "qualifier_source": "benchmarks/solovev/free_boundary/qualify_export.py",
+    "qualifier_source_sha256": "52f4131a8d59726b36bab17ecf3573f34eefad63e3cd38547eb7ce10e8c7abc1"
+  },
+  "boundary_contract": {
+    "repository": "plasma/proj/stel/gvec-stability",
+    "commit": "822b2bb0296f48cedd246a67cc46ad69266a5cb7",
+    "path": "benchmarks/gvec/solovev/acceptance.json",
+    "checker_scope": "Schema 1 explicit s=1 boundary data, m=0..36, n=0, declared Wb edge flux derivatives; ratio compared with the analytic edge transform.",
+    "limits": {
+      "abs_toroidal_flux_slope_error_Wb": 1e-14,
+      "max_abs_export_iota_error": 1e-12,
+      "max_abs_implicit_boundary_error": 1e-07
+    }
+  },
+  "frozen_unmeasured_wall_window": {
+    "stable_half_widths": 0.1514,
+    "unstable_half_widths": 0.1535,
+    "analytic_half_width_m": 0.3526573415939913,
+    "stable_distance_m": 0.05339232151733029,
+    "unstable_distance_m": 0.054132901934677666,
+    "rationale": "Frozen from independent DCON center 0.15249 and historical 128-square-edge bias about -0.00049 before inspecting fresh GLISS wall results. No qualified wall result is claimed here.",
+    "planned_volume_angular_resolution": [
+      256,
+      8
+    ],
+    "planned_vacuum_edge_resolution": [
+      128,
+      128
+    ],
+    "planned_trial_poloidal_max": 8,
+    "planned_toroidal_mode": 1,
+    "planned_parity_class": 1,
+    "planned_degree": 2,
+    "planned_radial_cells": 48
+  }
+}
