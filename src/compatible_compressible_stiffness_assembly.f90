@@ -5,7 +5,7 @@ module compatible_compressible_stiffness_assembly
         phase_assembly_transformed
     use phase_factor_topology, only: phase_cosine, phase_sine
     use period_averaged_assembly, only: accumulate_period_averaged, &
-        period_masks
+        accumulate_period_averaged_tangent, period_masks
     use physical_constants, only: vacuum_permeability
     use three_component_kernel, only: compressible_divergence_value
     use two_component_kernel, only: bending_component_value, &
@@ -21,6 +21,7 @@ module compatible_compressible_stiffness_assembly
     real(dp), parameter :: two_pi = 2.0_dp * acos(-1.0_dp)
 
     public :: assemble_compatible_compressible_stiffness_surface
+    public :: assemble_compatible_pressure_stiffness_tangent
 
 contains
 
@@ -92,6 +93,123 @@ contains
         end if
         info = 0
     end subroutine assemble_compatible_compressible_stiffness_surface
+
+    ! Contract v1: only pressure fields 10, 11 and 13, drive and gamma*p
+    ! vary. Geometry, phases, basis and quadrature stay fixed. Differentiate
+    ! each response square with the full bilinear product rule.
+    subroutine assemble_compatible_pressure_stiffness_tangent(fields, drive, &
+            jacobian_radial, jacobian_theta, jacobian_zeta, gamma_pressure, &
+            fields_tangent, drive_tangent, gamma_tangent, trial_m, trial_n, &
+            parity, field_periods, h1, dh1, eta, l2, radial_weight, &
+            stiffness, terms, info)
+        real(dp), intent(in) :: fields(:, :, :), drive(:, :), gamma_pressure(:, :)
+        real(dp), intent(in) :: jacobian_radial(:, :), jacobian_theta(:, :)
+        real(dp), intent(in) :: jacobian_zeta(:, :), fields_tangent(:, :, :)
+        real(dp), intent(in) :: drive_tangent(:, :), gamma_tangent
+        integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
+        real(dp), intent(in) :: h1(:, :), dh1(:, :), eta(:, :), l2(:, :)
+        real(dp), intent(in) :: radial_weight
+        real(dp), intent(inout) :: stiffness(:, :), terms(:, :, :)
+        integer, intent(out) :: info
+        integer, parameter :: chunk_limit = 256
+        real(dp), allocatable :: cosine(:, :, :), sine(:, :, :)
+        real(dp), allocatable :: dc(:, :, :), ds(:, :, :), pc(:, :), ps(:, :)
+        real(dp), allocatable :: weight(:, :), dweight(:, :), term(:, :)
+        real(dp), allocatable :: plus(:, :), minus(:, :)
+        real(dp) :: response(5, 2, size(stiffness, 1))
+        real(dp) :: tangent(5, 2, size(stiffness, 1)), factors(5), angle
+        real(dp) :: angular_weight
+        logical :: mixed
+        integer :: columns, trials, points, chunk, first, count, point
+        integer :: j, k, trial, column, component
+
+        call validate_inputs(fields, drive, jacobian_radial, jacobian_theta, &
+            jacobian_zeta, gamma_pressure, trial_m, trial_n, parity, field_periods, &
+            h1, dh1, l2, radial_weight, phase_assembly_transformed, stiffness, &
+            info, terms)
+        if (info /= 0) return
+        info = -1
+        if (any(shape(fields_tangent) /= shape(fields))) return
+        if (any(shape(drive_tangent) /= shape(drive))) return
+        if (any(shape(eta) /= shape(l2))) return
+        if (.not. all(ieee_is_finite(eta))) return
+        if (.not. all(ieee_is_finite(fields_tangent))) return
+        if (.not. all(ieee_is_finite(drive_tangent))) return
+        if (.not. ieee_is_finite(gamma_tangent)) return
+        if (any(fields_tangent(:, :, :9) /= 0.0_dp)) return
+        if (any(fields_tangent(:, :, 12) /= 0.0_dp)) return
+        columns = size(stiffness, 1)
+        trials = size(trial_m)
+        points = size(fields, 1) * size(fields, 2)
+        chunk = min(chunk_limit, points)
+        angular_weight = radial_weight / real(points, dp)
+        allocate (cosine(chunk, columns, 5), sine(chunk, columns, 5), &
+            dc(chunk, columns, 5), ds(chunk, columns, 5), pc(chunk, columns), &
+            ps(chunk, columns), weight(chunk, 5), dweight(chunk, 5), &
+            term(columns, columns), plus(trials, trials), minus(trials, trials))
+        call period_masks(trial_n, field_periods, plus, minus, mixed)
+        do first = 1, points, chunk
+            count = min(chunk, points - first + 1)
+            cosine = 0.0_dp
+            sine = 0.0_dp
+            dc = 0.0_dp
+            ds = 0.0_dp
+            pc = 0.0_dp
+            ps = 0.0_dp
+            weight = 0.0_dp
+            dweight = 0.0_dp
+            do point = 1, count
+                j = modulo(first + point - 2, size(fields, 1)) + 1
+                k = (first + point - 2) / size(fields, 1) + 1
+                call build_response_coefficients(fields(j, k, :), &
+                    jacobian_radial(j, k), jacobian_theta(j, k), jacobian_zeta(j, k), &
+                    trial_m, trial_n, parity, field_periods, h1, dh1, eta, l2, response)
+                call build_response_coefficients(fields(j, k, :), &
+                    jacobian_radial(j, k), jacobian_theta(j, k), jacobian_zeta(j, k), &
+                    trial_m, trial_n, parity, field_periods, h1, dh1, eta, l2, &
+                    tangent, &
+                    fields_tangent(j, k, :))
+                call build_response_factors(drive(j, k), gamma_pressure(j, k), &
+                    fields(j, k, 7), factors)
+                weight(point, :) = angular_weight * factors
+                call build_response_factors(drive_tangent(j, k), gamma_tangent, &
+                    fields(j, k, 7), factors)
+                dweight(point, 4:5) = angular_weight * factors(4:5)
+                do column = 1, columns
+                    trial = modulo(column - 1, trials) + 1
+                    angle = two_pi * (real(trial_m(trial), dp) &
+                        * real(j - 1, dp) / real(size(fields, 1), dp) &
+                        - real(trial_n(trial), dp) * real(k - 1, dp) &
+                        / real(size(fields, 2) * field_periods, dp))
+                    pc(point, column) = cos(angle)
+                    ps(point, column) = sin(angle)
+                    do component = 1, 5
+                        cosine(point, column, component) = &
+                            response(component, 1, column)
+                        sine(point, column, component) = response(component, 2, column)
+                        dc(point, column, component) = tangent(component, 1, column)
+                        ds(point, column, component) = tangent(component, 2, column)
+                    end do
+                end do
+            end do
+            do component = 2, 5
+                term = 0.0_dp
+                if (component <= 3) then
+                    call accumulate_period_averaged_tangent(cosine(:, :, component), &
+                        sine(:, :, component), dc(:, :, component), &
+                        ds(:, :, component), &
+                        pc, ps, weight(:, component), plus, minus, mixed, term)
+                else
+                    call accumulate_period_averaged(cosine(:, :, component), &
+                        sine(:, :, component), pc, ps, dweight(:, component), &
+                        plus, minus, mixed, term)
+                end if
+                stiffness = stiffness + term
+                terms(:, :, component) = terms(:, :, component) + term
+            end do
+        end do
+        info = 0
+    end subroutine assemble_compatible_pressure_stiffness_tangent
 
     ! Period-averaged angular quadrature as matrix products over chunks of
     ! angular points; each energy term is one weighted channel.
@@ -242,12 +360,13 @@ contains
     ! derivative, eta and mu) and every basis function scales them.
     pure subroutine build_response_coefficients(fields, jacobian_radial, &
             jacobian_theta, jacobian_zeta, trial_m, trial_n, parity, &
-            field_periods, h1, dh1, eta, l2, responses)
+            field_periods, h1, dh1, eta, l2, responses, pressure_tangent)
         real(dp), intent(in) :: fields(:), jacobian_radial, jacobian_theta
         real(dp), intent(in) :: jacobian_zeta, h1(:, :), dh1(:, :)
         real(dp), intent(in) :: eta(:, :), l2(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
         real(dp), contiguous, intent(out) :: responses(:, :, :)
+        real(dp), optional, intent(in) :: pressure_tangent(:)
         real(dp) :: basis(9, 2), phase_coefficients(2)
         real(dp) :: unit_value(5, 2), unit_radial(5, 2), unit_eta(5, 2)
         real(dp) :: unit_mu(5, 2)
@@ -268,19 +387,19 @@ contains
                 / real(field_periods, dp), basis(xi_zeta, phase_cosine), &
                 basis(xi_zeta, phase_sine))
             call build_energy_responses(fields, jacobian_radial, &
-                jacobian_theta, jacobian_zeta, basis, unit_value)
+                jacobian_theta, jacobian_zeta, basis, unit_value, pressure_tangent)
             basis = 0.0_dp
             basis(xi_radial, parity(trial)) = 1.0_dp
             call build_energy_responses(fields, jacobian_radial, &
-                jacobian_theta, jacobian_zeta, basis, unit_radial)
+                jacobian_theta, jacobian_zeta, basis, unit_radial, pressure_tangent)
             call build_tangential_basis(trial_m(trial), trial_n(trial), &
                 parity(trial), field_periods, 1.0_dp, .true., basis)
             call build_energy_responses(fields, jacobian_radial, &
-                jacobian_theta, jacobian_zeta, basis, unit_eta)
+                jacobian_theta, jacobian_zeta, basis, unit_eta, pressure_tangent)
             call build_tangential_basis(trial_m(trial), trial_n(trial), &
                 parity(trial), field_periods, 1.0_dp, .false., basis)
             call build_energy_responses(fields, jacobian_radial, &
-                jacobian_theta, jacobian_zeta, basis, unit_mu)
+                jacobian_theta, jacobian_zeta, basis, unit_mu, pressure_tangent)
             do basis_index = 1, size(h1, 1)
                 column = (basis_index - 1) * trials + trial
                 responses(:, :, column) = h1(basis_index, trial) * unit_value &
@@ -345,12 +464,25 @@ contains
     end subroutine angular_derivative
 
     pure subroutine build_energy_responses(fields, jacobian_radial, &
-            jacobian_theta, jacobian_zeta, basis, responses)
+            jacobian_theta, jacobian_zeta, basis, responses, pressure_tangent)
         real(dp), intent(in) :: fields(:), jacobian_radial, jacobian_theta
         real(dp), intent(in) :: jacobian_zeta, basis(9, 2)
         real(dp), intent(out) :: responses(5, 2)
+        real(dp), optional, intent(in) :: pressure_tangent(:)
         real(dp) :: sqrtg_xi_radial, sqrtg_eta_theta, sqrtg_eta_zeta
         integer :: kind
+
+        if (present(pressure_tangent)) then
+            responses = 0.0_dp
+            do kind = phase_cosine, phase_sine
+                responses(2, kind) = -pressure_tangent(10) * basis(xi_value, kind) &
+                    / (fields(8) * sqrt(fields(9)))
+                responses(3, kind) = (-pressure_tangent(11) * basis(xi_value, kind) &
+                    + pressure_tangent(13) * (fields(1) * basis(xi_theta, kind) &
+                    + fields(2) * basis(xi_zeta, kind)) / fields(7)) / fields(8)
+            end do
+            return
+        end if
 
         do kind = phase_cosine, phase_sine
             sqrtg_xi_radial = jacobian_radial * basis(xi_value, kind) &
