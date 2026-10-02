@@ -126,7 +126,7 @@ contains
         real(dp) :: work_matrix(size(matrix, 1), size(matrix, 2))
         real(dp) :: work_rhs(size(rhs), 1), work(64 * size(rhs))
         real(dp) :: residual(size(rhs))
-        integer :: info
+        integer :: info, row, column
 
         interface
             subroutine dgels(trans, m, n, nrhs, a, lda, b, ldb, work, lwork, &
@@ -145,7 +145,15 @@ contains
             size(matrix, 1), work_rhs, size(rhs), work, size(work), info)
         if (info /= 0) error stop 'least-squares fit failed'
         solution = work_rhs(:size(matrix, 2), 1)
-        residual = matmul(matrix, solution) - rhs
+        residual = 0.0_dp
+        do column = 1, size(matrix, 2)
+            do row = 1, size(matrix, 1)
+                residual(row) = residual(row) + matrix(row, column) * solution(column)
+            end do
+        end do
+        do row = 1, size(rhs)
+            residual(row) = residual(row) - rhs(row)
+        end do
         if (maxval(abs(residual)) > 1.0e-11_dp * maxval(abs(rhs))) &
             error stop 'regular displacement is not in the discrete space'
     end subroutine least_squares

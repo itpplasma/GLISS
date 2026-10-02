@@ -1,7 +1,7 @@
 module compatible_axis_regularity
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use fourier_phase_kind, only: phase_cosine, phase_sine
+    use fourier_phase_kind, only: phase_sine
     use primitive_equilibrium_spline, only: primitive_equilibrium_spline_t
     use radial_cubic_spline, only: evaluate_radial_cubic_spline_field, &
         radial_cubic_spline_ok
