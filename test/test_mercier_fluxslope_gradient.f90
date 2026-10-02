@@ -28,7 +28,7 @@ program test_mercier_fluxslope_gradient
     real(dp) :: fd_toroidal, fd_poloidal, h, rel_err
     ! The cell-averaged Pfirsch-Schlueter response has a width that scales
     ! with Phi'; the gradients must include that dependence.
-    real(dp), parameter :: spreads(2) = [0.0_dp, 0.3_dp]
+    real(dp), parameter :: spreads(3) = [0.0_dp, 0.3_dp, 0.3_dp]
     real(dp) :: spread
     integer :: case
 
@@ -37,6 +37,9 @@ program test_mercier_fluxslope_gradient
         / real(size(surface%jacobian), dp)
     do case = 1, size(spreads)
     spread = spreads(case)
+    ! A regularized exact m=n resonance has zero beta but a nonzero
+    ! derivative. Re-solving perturbed pencils is an independent oracle.
+    if (case == 3) poloidal_base = flux_slope
     write (*, "(a, f6.3)") "iota spread               = ", spread
 
     call mercier_surface_terms(equilibrium, surface, theta, zeta, &

@@ -246,7 +246,7 @@ contains
         real(dp), allocatable :: beta_theta(:, :), beta_zeta(:, :)
         real(dp), allocatable :: mu0_j_dot_b(:, :), grad_psi(:, :)
         real(dp), allocatable :: b_squared(:, :)
-        type(harmonic_pair_t) :: beta_harmonics
+        type(harmonic_pair_t) :: beta_forcing
         real(dp) :: field_periods, psi_slope, psi_curvature
         real(dp) :: poloidal_flux_slope, d2v_dpsi2, current_slope_ratio
         real(dp) :: integral_xi, integral_inverse, integral_bsq
@@ -270,8 +270,8 @@ contains
         call solve_beta_derivatives(equilibrium, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
             poloidal_flux_slope, flux_slope, &
-            beta_values, beta_theta, beta_zeta, beta_harmonics, beta_info, &
-            spread)
+            beta_values, beta_theta, beta_zeta, info=beta_info, &
+            iota_spread=spread, beta_forcing=beta_forcing)
         if (beta_info /= mercier_ok) return
         mu0_j_dot_b = ((beta_zeta - covariant_zeta_slope) &
             * covariant_theta &
@@ -316,7 +316,7 @@ contains
             return
         end if
         call flux_beta_integral_derivatives(equilibrium, surface, theta, &
-            zeta, beta_harmonics, poloidal_flux_slope, flux_slope, &
+            zeta, beta_forcing, poloidal_flux_slope, flux_slope, &
             covariant_theta, covariant_zeta, mu0_j_dot_b, grad_psi, &
             b_squared, field_periods, n_grid, d_integral_mu0jb_toroidal, &
             d_integral_jbsq_toroidal, d_integral_mu0jb_poloidal, &
@@ -391,7 +391,7 @@ contains
     end function pressure_implicit_gradient
 
     subroutine flux_beta_integral_derivatives(equilibrium, surface, theta, &
-            zeta, beta_harmonics, poloidal_flux_slope, toroidal_flux_slope, &
+            zeta, beta_forcing, poloidal_flux_slope, toroidal_flux_slope, &
             covariant_theta, covariant_zeta, mu0_j_dot_b, grad_psi, &
             b_squared, field_periods, n_grid, d_integral_mu0jb_toroidal, &
             d_integral_jbsq_toroidal, d_integral_mu0jb_poloidal, &
@@ -399,7 +399,7 @@ contains
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
-        type(harmonic_pair_t), intent(in) :: beta_harmonics
+        type(harmonic_pair_t), intent(in) :: beta_forcing
         real(dp), intent(in) :: poloidal_flux_slope, toroidal_flux_slope
         real(dp), intent(in) :: covariant_theta, covariant_zeta
         real(dp), intent(in) :: mu0_j_dot_b(:, :), grad_psi(:, :)
@@ -412,12 +412,12 @@ contains
         real(dp), allocatable :: d_beta_theta(:, :), d_beta_zeta(:, :)
         real(dp), allocatable :: d_mu0_toroidal(:, :), d_mu0_poloidal(:, :)
 
-        call beta_flux_slope_derivative(equilibrium, beta_harmonics, &
+        call beta_flux_slope_derivative(equilibrium, beta_forcing, &
             poloidal_flux_slope, toroidal_flux_slope, 0.0_dp, 1.0_dp, &
             theta, zeta, d_beta_theta, d_beta_zeta, iota_spread)
         d_mu0_toroidal = (d_beta_zeta * covariant_theta &
             - d_beta_theta * covariant_zeta) / surface%jacobian
-        call beta_flux_slope_derivative(equilibrium, beta_harmonics, &
+        call beta_flux_slope_derivative(equilibrium, beta_forcing, &
             poloidal_flux_slope, toroidal_flux_slope, 1.0_dp, 0.0_dp, &
             theta, zeta, d_beta_theta, d_beta_zeta, iota_spread)
         d_mu0_poloidal = (d_beta_zeta * covariant_theta &
@@ -435,12 +435,12 @@ contains
             / (b_squared * grad_psi**3)) / n_grid
     end subroutine flux_beta_integral_derivatives
 
-    subroutine beta_flux_slope_derivative(equilibrium, beta_harmonics, &
+    subroutine beta_flux_slope_derivative(equilibrium, beta_forcing, &
             poloidal_flux_slope, toroidal_flux_slope, poloidal_weight, &
             toroidal_weight, theta, zeta, d_beta_theta, d_beta_zeta, &
             iota_spread)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
-        type(harmonic_pair_t), intent(in) :: beta_harmonics
+        type(harmonic_pair_t), intent(in) :: beta_forcing
         real(dp), intent(in) :: poloidal_flux_slope, toroidal_flux_slope
         real(dp), intent(in) :: poloidal_weight, toroidal_weight
         real(dp), intent(in) :: theta(:), zeta(:)
@@ -457,8 +457,8 @@ contains
         call magnetic_differential_modes(equilibrium%poloidal_modes, &
             equilibrium%toroidal_modes, size(theta), size(zeta), poloidal, &
             toroidal)
-        allocate (d_pair%cosine, mold=beta_harmonics%cosine)
-        allocate (d_pair%sine, mold=beta_harmonics%sine)
+        allocate (d_pair%cosine, mold=beta_forcing%cosine)
+        allocate (d_pair%sine, mold=beta_forcing%sine)
         scale = max(abs(toroidal_flux_slope), abs(poloidal_flux_slope))
         do idx_n = 1, size(toroidal)
             mode_n = real(toroidal(idx_n), dp)
@@ -468,24 +468,27 @@ contains
                     toroidal_flux_slope, denominator, mode_norm)
                 width = resonance_half_width(poloidal(idx_m), &
                     toroidal_flux_slope / scale, iota_spread)
-                if (abs(denominator) <= 4.0_dp * epsilon(1.0_dp) * mode_norm) then
+                if (mode_norm == 0.0_dp) then
                     d_pair%cosine(1, idx_m, idx_n) = 0.0_dp
                     d_pair%sine(1, idx_m, idx_n) = 0.0_dp
                 else
-                    ! beta = F D / (D^2 + w^2) with D = (m chi' - n Phi')/scale
-                    ! and w = |m| |Phi'| spread / (2 scale), so w scales with
-                    ! |Phi'| at fixed spread:
-                    ! d beta = beta [(w^2 - D^2) dD / D - 2 w dw] / (D^2 + w^2).
+                    ! Differentiate F D/(D^2+w^2) from its forcing. This is
+                    ! finite at D=0 for w>0, where d beta=F dD/w^2.
                     d_denominator = (poloidal_weight * mode_m &
                         - toroidal_weight * mode_n)
-                    factor = ((width**2 - denominator**2) / denominator &
-                        * (d_denominator / scale) - 2.0_dp * width**2 &
-                        * toroidal_weight / toroidal_flux_slope) &
-                        / (denominator**2 + width**2)
+                    if (width == 0.0_dp .and. abs(denominator) <= &
+                            4.0_dp * epsilon(1.0_dp) * mode_norm) then
+                        factor = 0.0_dp
+                    else
+                        factor = ((width**2 - denominator**2) &
+                            * (d_denominator / scale) - 2.0_dp * denominator &
+                            * width**2 * toroidal_weight / toroidal_flux_slope) &
+                            / (denominator**2 + width**2)**2
+                    end if
                     d_pair%cosine(1, idx_m, idx_n) = &
-                        beta_harmonics%cosine(1, idx_m, idx_n) * factor
+                        beta_forcing%cosine(1, idx_m, idx_n) * factor
                     d_pair%sine(1, idx_m, idx_n) = &
-                        beta_harmonics%sine(1, idx_m, idx_n) * factor
+                        beta_forcing%sine(1, idx_m, idx_n) * factor
                 end if
             end do
         end do

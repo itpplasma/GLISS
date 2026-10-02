@@ -520,7 +520,7 @@ contains
     subroutine solve_beta_derivatives(equilibrium, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
             poloidal_flux_slope, toroidal_flux_slope, beta_values, &
-            beta_theta, beta_zeta, beta_harmonics, info, iota_spread)
+            beta_theta, beta_zeta, beta_harmonics, info, iota_spread, beta_forcing)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         type(surface_data_t), intent(in) :: surface
         real(dp), intent(in) :: theta(:), zeta(:)
@@ -531,6 +531,7 @@ contains
         real(dp), allocatable, intent(out) :: beta_theta(:, :)
         real(dp), allocatable, intent(out) :: beta_zeta(:, :)
         type(harmonic_pair_t), intent(out), optional :: beta_harmonics
+        type(harmonic_pair_t), intent(out), optional :: beta_forcing
         integer, intent(out), optional :: info
         real(dp), intent(in), optional :: iota_spread
         type(harmonic_pair_t) :: beta_pair
@@ -539,7 +540,7 @@ contains
             equilibrium%toroidal_modes, surface, theta, zeta, &
             covariant_theta_slope, covariant_zeta_slope, pressure_slope, &
             poloidal_flux_slope, toroidal_flux_slope, beta_values, &
-            beta_theta, beta_zeta, beta_pair, info, iota_spread)
+            beta_theta, beta_zeta, beta_pair, info, iota_spread, beta_forcing)
         if (present(beta_harmonics)) beta_harmonics = beta_pair
     end subroutine solve_beta_derivatives
 
@@ -585,7 +586,7 @@ contains
             surface, theta, zeta, covariant_theta_slope, &
             covariant_zeta_slope, pressure_slope, poloidal_flux_slope, &
             toroidal_flux_slope, beta_values, beta_theta, beta_zeta, &
-            beta_harmonics, info, iota_spread)
+            beta_harmonics, info, iota_spread, beta_forcing)
         integer, intent(in) :: position_poloidal_modes(:)
         integer, intent(in) :: position_toroidal_modes(:)
         type(surface_data_t), intent(in) :: surface
@@ -597,6 +598,7 @@ contains
         real(dp), allocatable, intent(out) :: beta_theta(:, :)
         real(dp), allocatable, intent(out) :: beta_zeta(:, :)
         type(harmonic_pair_t), intent(out), optional :: beta_harmonics
+        type(harmonic_pair_t), intent(out), optional :: beta_forcing
         integer, intent(out), optional :: info
         real(dp), intent(in), optional :: iota_spread
         type(harmonic_pair_t) :: beta_pair
@@ -710,6 +712,14 @@ contains
         if (.not. all(ieee_is_finite(beta_theta))) return
         if (.not. all(ieee_is_finite(beta_zeta))) return
         if (present(beta_harmonics)) beta_harmonics = beta_pair
+        if (present(beta_forcing)) then
+            ! Keep the un-inverted Fourier forcing: beta itself is zero at
+            ! a regularized resonance and cannot determine its derivative.
+            allocate (beta_forcing%cosine, mold=beta_pair%cosine)
+            allocate (beta_forcing%sine, mold=beta_pair%sine)
+            beta_forcing%cosine(1, :, :) = -(rhs_sine / scale) / two_pi
+            beta_forcing%sine(1, :, :) = (rhs_cosine / scale) / two_pi
+        end if
         if (present(info)) info = mercier_ok
     end subroutine solve_beta_derivatives_modes
 
