@@ -175,6 +175,10 @@ contains
         full_h1 = size(complex%h1_knots) - complex%h1_degree - 1
         if (complex%l2_dofs /= full_h1 - 1) return
         if (size(complex%l2_knots) /= size(complex%h1_knots) - 2) return
+        ! The derivative sequence uses exactly the H1 knot vector with
+        ! its two outer knots removed; valid but different L2 knots break it.
+        if (any(complex%l2_knots /= &
+            complex%h1_knots(2:size(complex%h1_knots) - 1))) return
         if (size(complex%h1_basis_index) /= complex%h1_dofs) return
         if (size(complex%derivative, 1) /= complex%l2_dofs) return
         if (size(complex%derivative, 2) /= complex%h1_dofs) return

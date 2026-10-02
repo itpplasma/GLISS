@@ -1,7 +1,7 @@
 ! Manufactured convergence and exactness of the radial FEEC complex.
 !
-! For degree p the H1 space holds C^(p-1) splines of degree p and the L2
-! space their derivatives, splines of degree p-1. Their L2 projections of a
+! For degree p the H1 space holds C0 piecewise polynomials of degree p and
+! the L2 space their discontinuous degree-(p-1) derivatives. L2 projections of a
 ! smooth function converge in L2 like h^(p+1) and h^p, and d/ds of the H1
 ! projection converges like h^p. Monomials up to the space degree are
 ! reproduced to roundoff (the element oracle), and the derivative map is
