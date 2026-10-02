@@ -17,7 +17,8 @@ module period_averaged_assembly
     implicit none
     private
 
-    public :: accumulate_period_averaged, period_masks
+    public :: accumulate_period_averaged, accumulate_period_averaged_tangent
+    public :: period_masks
 
     interface
         subroutine dsyrk(uplo, trans, n, k, alpha, a, lda, beta, c, ldc)
@@ -28,6 +29,14 @@ module period_averaged_assembly
             real(dp), intent(in) :: a(lda, *)
             real(dp), intent(inout) :: c(ldc, *)
         end subroutine dsyrk
+        subroutine dsyr2k(uplo, trans, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: uplo, trans
+            integer, intent(in) :: n, k, lda, ldb, ldc
+            real(dp), intent(in) :: alpha, beta
+            real(dp), intent(in) :: a(lda, *), b(ldb, *)
+            real(dp), intent(inout) :: c(ldc, *)
+        end subroutine dsyr2k
     end interface
 
 contains
@@ -147,6 +156,82 @@ contains
             end do
         end subroutine real_rows
     end subroutine accumulate_period_averaged
+
+    ! Exact product rule at fixed weights, phases and field-period masks:
+    ! target += sum_p w_p <dR_a R_b + R_a dR_b>_periods.
+    subroutine accumulate_period_averaged_tangent(cosine_part, sine_part, &
+            cosine_tangent, sine_tangent, cosine_phase, sine_phase, weight, &
+            plus, minus, mixed, target)
+        real(dp), contiguous, intent(in) :: cosine_part(:, :), sine_part(:, :)
+        real(dp), contiguous, intent(in) :: cosine_tangent(:, :), sine_tangent(:, :)
+        real(dp), contiguous, intent(in) :: cosine_phase(:, :), sine_phase(:, :)
+        real(dp), contiguous, intent(in) :: weight(:)
+        real(dp), intent(in) :: plus(:, :), minus(:, :)
+        logical, intent(in) :: mixed
+        real(dp), intent(inout) :: target(:, :)
+        real(dp), allocatable :: scaled(:, :), tangent(:, :), product(:, :)
+        integer :: column_trial(size(cosine_part, 2)), order(size(weight))
+        integer :: positive, negative, rows, columns, p, a
+
+        columns = size(cosine_part, 2)
+        do a = 1, columns
+            column_trial(a) = modulo(a - 1, size(plus, 1)) + 1
+        end do
+        positive = 0
+        do p = 1, size(weight)
+            if (weight(p) <= 0.0_dp) cycle
+            positive = positive + 1
+            order(positive) = p
+        end do
+        negative = 0
+        do p = 1, size(weight)
+            if (weight(p) >= 0.0_dp) cycle
+            negative = negative + 1
+            order(positive + negative) = p
+        end do
+        rows = positive + negative
+        if (rows == 0) return
+        allocate (scaled(rows, columns), tangent(rows, columns), &
+            product(columns, columns))
+        call product_rule(.true.)
+        call add_masked(plus, product, column_trial, target)
+        if (.not. mixed) return
+        call product_rule(.false.)
+        call add_masked(minus, product, column_trial, target)
+
+    contains
+
+        subroutine product_rule(real_part)
+            logical, intent(in) :: real_part
+            real(dp) :: root, phase_c, phase_s
+            integer :: row, point, column
+
+            do column = 1, columns
+                do row = 1, rows
+                    point = order(row)
+                    root = sqrt(abs(weight(point)))
+                    if (real_part) then
+                        phase_c = cosine_phase(point, column)
+                        phase_s = sine_phase(point, column)
+                    else
+                        phase_c = sine_phase(point, column)
+                        phase_s = -cosine_phase(point, column)
+                    end if
+                    scaled(row, column) = root * (cosine_part(point, column) &
+                        * phase_c + sine_part(point, column) * phase_s)
+                    tangent(row, column) = root * (cosine_tangent(point, column) &
+                        * phase_c + sine_tangent(point, column) * phase_s)
+                end do
+            end do
+            product = 0.0_dp
+            if (positive > 0) call dsyr2k('U', 'T', columns, positive, 1.0_dp, &
+                scaled, rows, tangent, rows, 0.0_dp, product, columns)
+            if (negative > 0) call dsyr2k('U', 'T', columns, negative, -1.0_dp, &
+                scaled(positive + 1, 1), rows, tangent(positive + 1, 1), rows, &
+                1.0_dp, product, columns)
+        end subroutine product_rule
+
+    end subroutine accumulate_period_averaged_tangent
 
     ! Upper triangle of A_+^T A_+ - A_-^T A_- for the first positive and
     ! the next negative rows of scaled.

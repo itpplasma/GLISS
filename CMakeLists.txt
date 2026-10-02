@@ -973,6 +973,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_pressure_surface_derivatives PRIVATE gliss)
     add_test(NAME pressure_surface_derivatives COMMAND test_pressure_surface_derivatives)
 
+    add_executable(test_pressure_stiffness_tangent test/test_pressure_stiffness_tangent.f90)
+    target_link_libraries(test_pressure_stiffness_tangent PRIVATE gliss)
+    add_test(NAME pressure_stiffness_tangent COMMAND test_pressure_stiffness_tangent
+        ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
+
     add_executable(test_fixed_boundary_spectrum
         test/test_fixed_boundary_spectrum.f90)
     target_link_libraries(test_fixed_boundary_spectrum PRIVATE
