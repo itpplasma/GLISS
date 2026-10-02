@@ -19,6 +19,15 @@ For example, an M=8, N=0 position table admits a 64 x 8 grid; M=16, N=0
 requires at least 97 x 8, and a 128 x 8 grid satisfies that requirement.
 The separate displacement-product bandwidth checks also apply.
 
+The native axisymmetric convenience routine and CLI keep their default
+64 x 8 grid. For higher-bandwidth exports, the CLI accepts
+`--angular NTHETA NZETA` and reports the chosen grid in its CSV result.
+The public Solov'ev regeneration runner derives an admitted grid from the
+retained export and displacement truncations; its M=24 default uses 256 x 8.
+Python callers needing an explicit axisymmetric comparison grid can pass
+the same mode family to `solve_cas3d_marginality` with `angular_theta` and
+`angular_zeta`.
+
 Python constructors generate uniform grids from `angular_theta` and
 `angular_zeta`. The direct native `solve_beta_derivatives_modes` interface
 requires each angle array to cover one complete uniform period, expressed

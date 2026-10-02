@@ -13,6 +13,18 @@ q0s=("$@")
 venv=${GVEC_VENV:-$out/venv}
 ns=${NS:-64}; export_m=${EXPORT_M:-24}; mmax=${MMAX:-8}; degree=${DEGREE:-2}
 bin=${GLISS_BIN:-$repo/build/fo/bin}; threads=${THREADS:-4}
+# Preserve the export and trial truncations while admitting the cubic MDE
+# forcing and the displacement products. Round upward to a power of two.
+case $export_m:$mmax in
+    *[!0-9:]*|:*|*:) echo "EXPORT_M and MMAX must be integers" >&2; exit 2 ;;
+esac
+required_theta=$((6 * 10#$export_m + 1))
+trial_theta=$((2 * 10#$mmax + 10#$export_m + 1))
+if [ "$trial_theta" -gt "$required_theta" ]; then required_theta=$trial_theta; fi
+angular_theta=64
+while [ "$angular_theta" -lt "$required_theta" ]; do
+    angular_theta=$((2 * angular_theta))
+done
 
 if [ ! -x "$venv/bin/pygvec" ]; then
     python3 -m venv "$venv"
@@ -22,7 +34,7 @@ if [ ! -x "$venv/bin/pygvec" ]; then
     patch -d "$package" -p3 < "$here/gvec-1.5.0-cas3d.patch"
 fi
 csv=$out/gliss_solovev.csv
-echo "q0,negative_count,lowest_eigenvalue,certificate,force_balance_residual" > "$csv"
+echo "q0,negative_count,lowest_eigenvalue,certificate,force_balance_residual,angular_theta,angular_zeta" > "$csv"
 for q0 in "${q0s[@]}"; do
     run=$out/q$q0
     "$venv/bin/python" "$here/make_gvec_input.py" "$q0" "$run"
@@ -31,9 +43,10 @@ for q0 in "${q0s[@]}"; do
     (cd "$run" && OMP_NUM_THREADS=$threads "$venv/bin/pygvec" to-cas3d --ns "$ns" \
         --MN_out "$export_m" 0 --winding -1 -o export.nc > export.log 2>&1)
     OMP_NUM_THREADS=$threads OPENBLAS_NUM_THREADS=1 "$bin/gliss_axisymmetric" \
-        "$run/export.nc" 1 "$mmax" --degree "$degree" > "$run/gliss.log"
+        "$run/export.nc" 1 "$mmax" --degree "$degree" \
+        --angular "$angular_theta" 8 > "$run/gliss.log"
     tail -1 "$run/gliss.log" | awk -F, -v q="$q0" \
-        '{print q "," $11 "," $8 "," $9 "," $12}' >> "$csv"
+        '{print q "," $11 "," $8 "," $9 "," $12 "," $14 "," $15}' >> "$csv"
 done
 {
     git -C "$repo" rev-parse HEAD

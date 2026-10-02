@@ -12,6 +12,7 @@ program gliss_axisymmetric
     type(axisymmetric_spectrum_result_t) :: result
     character(len=1024) :: filename, message, token
     integer :: arguments, degree, info, poloidal_max, toroidal_mode
+    integer :: n_theta, n_zeta
     logical :: count_only
 
     interface
@@ -22,6 +23,18 @@ program gliss_axisymmetric
     end interface
 
     arguments = command_argument_count()
+    n_theta = 64
+    n_zeta = 8
+    if (arguments >= 6) then
+        call read_argument(arguments - 2, "option", token)
+        if (trim(token) == "--angular") then
+            call read_integer_argument(arguments - 1, "NTHETA", n_theta)
+            call read_integer_argument(arguments, "NZETA", n_zeta)
+            if (n_theta < 8 .or. n_zeta < 8) &
+                call fail_usage("NTHETA and NZETA must be at least 8")
+            arguments = arguments - 3
+        end if
+    end if
     if (arguments < 3 .or. arguments > 6) &
         call fail_usage("expected three arguments plus an optional rule")
     call read_argument(1, "EXPORT_FILE", filename)
@@ -54,7 +67,8 @@ program gliss_axisymmetric
     call read_gvec_cas3d_file(trim(filename), equilibrium, info)
     if (info /= reader_ok) call fail("equilibrium export could not be read")
     call compute_axisymmetric_spectrum(equilibrium, toroidal_mode, &
-        poloidal_max, degree, .not. count_only, result, info, message)
+        poloidal_max, degree, .not. count_only, result, info, message, &
+        angular_theta=n_theta, angular_zeta=n_zeta)
     if (info == axisymmetric_spectrum_invalid_input .and. &
         index(message, "aliases") > 0) &
         call fail_usage("MMAX aliases the fixed angular quadrature")
@@ -63,14 +77,15 @@ program gliss_axisymmetric
     write (*, "(a)") "chart_metric,field_periods,toroidal_mode," // &
         "poloidal_max,modes,radial_surfaces,parity_class," // &
         "lowest_eigenvalue,inertia_certificate,eigenpair_residual," // &
-        "negative_count,force_balance_residual,degree"
-    write (*, "(l1, 6(a, i0), 3(a, es24.16), a, i0, a, es24.16, a, i0)") &
+        "negative_count,force_balance_residual,degree,angular_theta,angular_zeta"
+    write (*, "(l1, 6(a, i0), 3(a, es24.16), a, i0, a, es24.16, 3(a, i0))") &
         equilibrium%has_chart_metric, ",", equilibrium%field_periods, ",", &
         toroidal_mode, ",", poloidal_max, ",", result%mode_count, ",", &
         result%radial_surfaces, ",", result%parity_class, ",", &
         result%lowest_eigenvalue, ",", result%certificate, ",", &
         result%eigenpair_residual, ",", result%negative_count, ",", &
-        result%force_balance_residual, ",", result%degree
+        result%force_balance_residual, ",", result%degree, ",", &
+        result%angular_theta, ",", result%angular_zeta
 
 contains
 
@@ -80,7 +95,7 @@ contains
         write (error_unit, "(a)") "gliss_axisymmetric: " // trim(message)
         write (error_unit, "(a)") &
             "usage: gliss_axisymmetric EXPORT_FILE N MMAX " // &
-            "[--degree DEGREE] [--count-only]"
+            "[--degree DEGREE] [--count-only] [--angular NTHETA NZETA]"
         call terminate_process(2_c_int)
     end subroutine fail_usage
 
