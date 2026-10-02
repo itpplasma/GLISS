@@ -62,11 +62,18 @@ A `StabilityProblem` assembles the compressible fixed-boundary operator with
 physical mass for both stellarator-symmetry parity classes. Eigenvalues are
 omega^2 in s^-2.
 
+The magnetic differential equation projects cubic position-harmonic products.
+Its angular grid must exceed six times the largest absolute stored equilibrium
+harmonic index in each direction. These Solov'ev exports contain poloidal
+harmonics through m = 8, so the examples use 64 poloidal points; their
+axisymmetric position has n = 0. The vacuum edge mesh has its own resolution
+and is independent of this volume projection grid.
+
 ```python
 modes = [(0, 1), (1, -1), (1, 1)]
 with gliss.Equilibrium(stable) as equilibrium:
     with gliss.StabilityProblem(
-        equilibrium, modes, degree=1, angular_theta=32, angular_zeta=8
+        equilibrium, modes, degree=1, angular_theta=64, angular_zeta=8
     ) as problem:
         result = problem.solve()
         lowest = result.classes[0]
@@ -127,7 +134,7 @@ lowest_free = {}
 with gliss.Equilibrium(stable) as equilibrium:
     for wall in (None, 0.03):
         with gliss.StabilityProblem(
-            equilibrium, free_modes, degree=2, angular_theta=24,
+            equilibrium, free_modes, degree=2, angular_theta=64,
             angular_zeta=8, vacuum=gliss.VacuumModel((24, 12), wall),
         ) as problem:
             lowest_free[wall] = problem.solve_class(1)
