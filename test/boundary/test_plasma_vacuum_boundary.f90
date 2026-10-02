@@ -234,7 +234,16 @@ contains
         ! Select the largest independently assembled cross entry. A boundary
         ! displacement using both parities has the full quadratic form;
         ! the separated principal blocks would lose exactly twice this entry.
-        position = maxloc(abs(shifted(:modes, modes + 1:)))
+        position = 1
+        do k = 1, modes
+            do i = 1, modes
+                if (abs(shifted(i, modes + k)) &
+                    > abs(shifted(position(1), modes + position(2)))) then
+                    position(1) = i
+                    position(2) = k
+                end if
+            end do
+        end do
         boundary = 0.0_dp
         boundary(position(1)) = 1.0_dp
         boundary(modes + position(2)) = 1.0_dp
