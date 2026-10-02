@@ -1,7 +1,8 @@
 module variable_spectrum_analysis
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use variable_block_tridiagonal, only: variable_block_tridiagonal_t
+    use variable_block_tridiagonal, only: variable_block_tridiagonal_t, &
+        variable_pencil_scale
     use variable_generalized_solver, only: validate_variable_pencil, &
         variable_generalized_inertia, variable_generalized_ok
     implicit none
@@ -186,7 +187,10 @@ contains
         real(dp), intent(inout) :: shift
         real(dp), intent(in) :: direction
         integer, intent(out) :: count, info
+        real(dp) :: origin, delta, left, right
+        integer :: attempt, left_count, left_info, right_count, right_info
 
+        origin = shift
         call variable_generalized_inertia(stiffness, mass, shift, count, info, &
             validated=.true.)
         if (info == variable_generalized_ok) then
@@ -198,9 +202,37 @@ contains
             validated=.true.)
         if (info == variable_generalized_ok) then
             info = variable_spectrum_ok
-        else
-            info = variable_spectrum_invalid
+            return
         end if
+        ! An unresolved radial pivot can affect more than one ULP. Probe
+        ! both sides with increasing separation; equal reliable counts
+        ! certify the original shift without silently moving the floor
+        ! across a physical eigenvalue. Different counts remain unresolved.
+        shift = origin
+        delta = min(16.0_dp * epsilon(1.0_dp) &
+            * max(abs(origin), variable_pencil_scale(stiffness, mass)), &
+            0.25_dp * abs(origin))
+        do attempt = 1, 12
+            left = origin - delta
+            right = origin + delta
+            call variable_generalized_inertia(stiffness, mass, left, &
+                left_count, left_info, validated=.true.)
+            call variable_generalized_inertia(stiffness, mass, right, &
+                right_count, right_info, validated=.true.)
+            if (left_info == variable_generalized_ok &
+                .and. right_info == variable_generalized_ok) then
+                if (left_count == right_count) then
+                    count = left_count
+                    info = variable_spectrum_ok
+                    return
+                end if
+                exit
+            end if
+            if (delta >= 0.25_dp * abs(origin)) exit
+            delta = min(16.0_dp * delta, 0.25_dp * abs(origin))
+        end do
+        count = -1
+        info = variable_spectrum_invalid
     end subroutine directed_inertia
 
     subroutine resolve_singular_probe(stiffness, mass, shift, base_count, &

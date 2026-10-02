@@ -155,6 +155,8 @@ contains
         allocate (diagonal(n), offdiagonal(max(1, n - 1)), tau(max(1, n - 1)), &
             work(64 * n), stat=allocation_status)
         if (allocation_status /= 0) return
+        ! DSYTRD leaves E untouched for n = 1; keep its dummy entry defined.
+        offdiagonal = 0.0_dp
         info = dense_spectrum_invalid
         call dpotrf("U", n, dense_m, n, status)
         if (status /= 0) return

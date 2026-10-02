@@ -263,7 +263,8 @@ gliss_status gliss_terpsichore_pseudoplasma(
  * degree selects the compatible radial FEEC degree from 1 through 4.
  * solve_eigenpair is 0 for inertia only or 1 for the certified lowest pair.
  * negative_count counts eigenvalues below -zero_floor, where zero_floor is
- * 1024 eps max_i |K_ii|/M_ii, a roundoff floor relative to the pencil scale.
+ * 1024 eps ||D^-1/2 K D^-1/2||_inf, where D = diag(M), a unit-independent
+ * scale estimate (not a spectral enclosure for nondiagonal M).
  * Set result->struct_size to sizeof(*result). The result is unchanged on
  * failure. */
 gliss_status gliss_axisymmetric_spectrum(
@@ -300,7 +301,8 @@ gliss_status gliss_axisymmetric_spectrum_v2(
  * mode. degree must be between 1 and 4. parity_class must be 1 or 2.
  * solve_eigenpair is 0 for inertia only or 1 for the certified lowest pair.
  * negative_count counts eigenvalues below -zero_floor, where zero_floor is
- * 1024 eps max_i |K_ii|/M_ii, a roundoff floor relative to the pencil scale.
+ * 1024 eps ||D^-1/2 K D^-1/2||_inf, where D = diag(M), a unit-independent
+ * scale estimate (not a spectral enclosure for nondiagonal M).
  * Set result->struct_size to sizeof(*result). The result is unchanged on
  * failure. */
 gliss_status gliss_cas3d_marginality(

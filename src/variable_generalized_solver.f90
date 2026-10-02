@@ -7,6 +7,7 @@ module variable_generalized_solver
         apply_variable_block_tridiagonal, factorize_variable_shifted, &
         solve_variable_factored, validate_variable_blocks, &
         variable_block_factor_t, variable_block_ok, &
+        variable_block_singular, variable_block_to_dense, &
         variable_block_tridiagonal_t, variable_matrix_block_t, &
         variable_pencil_scale
     implicit none
@@ -16,6 +17,9 @@ module variable_generalized_solver
     integer, parameter, public :: variable_generalized_invalid = -1
     integer, parameter, public :: variable_generalized_mass_not_spd = -2
     integer, parameter, public :: variable_generalized_no_convergence = -3
+    ! At most 8 MiB per dense matrix; larger pencils retain sparse storage
+    ! and report a failed probe if radial pivoting cannot resolve the shift.
+    integer, parameter :: global_pivot_limit = 1024
 
     public :: iterate_variable_generalized_eigenvalue
     public :: variable_generalized_diagnostics
@@ -210,12 +214,40 @@ contains
         end if
         call form_generalized_shift(stiffness, mass, shift, shifted)
         call factorize_variable_shifted(shifted, 0.0_dp, factor, info)
+        if (info == variable_block_singular) then
+            call retry_global_pivoting(shifted, factor, info)
+        else if (info == variable_block_ok) then
+            if (.not. factor%count_reliable) &
+                call retry_global_pivoting(shifted, factor, info)
+        end if
         if (info /= variable_block_ok) then
             info = variable_generalized_invalid
             return
         end if
         info = variable_generalized_ok
     end subroutine factorize_generalized_shift
+
+    ! A singular or unresolved radial Schur block need not mean that the
+    ! whole shifted matrix is singular. Global Bunch-Kaufman pivoting can
+    ! cross radial boundaries; retain the exact shift and use it for both
+    ! inertia and inverse iteration, with a fixed allocation ceiling.
+    subroutine retry_global_pivoting(shifted, factor, info)
+        type(variable_block_tridiagonal_t), intent(in) :: shifted
+        type(variable_block_factor_t), intent(inout) :: factor
+        integer, intent(inout) :: info
+        type(variable_block_tridiagonal_t) :: global
+        real(dp), allocatable :: dense(:, :)
+        integer :: n
+
+        n = sum(shifted%widths)
+        if (n > global_pivot_limit .or. size(shifted%widths) == 1) return
+        call variable_block_to_dense(shifted, dense, info)
+        if (info /= variable_block_ok) return
+        allocate (global%widths(1), global%diagonal(1), global%lower(0))
+        global%widths = n
+        call move_alloc(dense, global%diagonal(1)%values)
+        call factorize_variable_shifted(global, 0.0_dp, factor, info)
+    end subroutine retry_global_pivoting
 
     ! Matching symmetric blocks and a positive definite mass.
     subroutine validate_variable_pencil(stiffness, mass, info)
@@ -553,9 +585,9 @@ contains
     end subroutine absolute_shifted_action
 
     pure function pencil_roundoff(stiffness, mass) result(roundoff)
-        ! Eigenvalues of a pencil stored in double precision are resolved
-        ! only to O(eps ||M^-1 K||); tolerances near zero use this floor
-        ! instead of an absolute one so that they are unit independent.
+        ! Estimate the eigenvalue resolution using the diagonally mass-scaled
+        ! stiffness norm; this is unit independent and includes off-diagonal
+        ! energy. It is not a spectral enclosure for an arbitrary SPD mass.
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
         real(dp) :: roundoff
 

@@ -566,22 +566,54 @@ contains
     end function valid_dense_input
 
     pure function variable_pencil_scale(stiffness, mass) result(scale)
-        ! Every |K_ii|/M_ii is the modulus of a Rayleigh quotient of the
-        ! pencil, so the maximum is a lower bound on the spectral radius of
-        ! M^-1 K for SPD M. Eigenvalue tolerances are relative to it.
+        ! Infinity norm of D^-1/2 K D^-1/2, D = diag(M). This diagonal
+        ! mass scaling includes off-diagonal stiffness, unlike diagonal
+        ! Rayleigh quotients, and is invariant under unit rescaling. It is
+        ! an estimate of the pencil scale, not a spectral enclosure for a
+        ! nondiagonal mass. Only one block row is visited at a time.
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
-        real(dp) :: scale
-        integer :: block, i
+        real(dp) :: scale, row_sum, left_scale, right_scale
+        integer :: block, i, j
 
         scale = 0.0_dp
         do block = 1, size(stiffness%widths)
             do i = 1, stiffness%widths(block)
                 if (mass%diagonal(block)%values(i, i) <= 0.0_dp) cycle
-                scale = max(scale, abs(stiffness%diagonal(block)%values(i, i)) &
-                    / mass%diagonal(block)%values(i, i))
+                left_scale = sqrt(mass%diagonal(block)%values(i, i))
+                row_sum = 0.0_dp
+                do j = 1, stiffness%widths(block)
+                    right_scale = sqrt(mass%diagonal(block)%values(j, j))
+                    row_sum = row_sum &
+                        + scaled_entry(stiffness%diagonal(block)%values(i, j))
+                end do
+                if (block > 1) then
+                    do j = 1, stiffness%widths(block - 1)
+                        right_scale = sqrt(mass%diagonal(block - 1)%values(j, j))
+                        row_sum = row_sum &
+                            + scaled_entry(stiffness%lower(block - 1)%values(i, j))
+                    end do
+                end if
+                if (block < size(stiffness%widths)) then
+                    do j = 1, stiffness%widths(block + 1)
+                        right_scale = sqrt(mass%diagonal(block + 1)%values(j, j))
+                        row_sum = row_sum &
+                            + scaled_entry(stiffness%lower(block)%values(j, i))
+                    end do
+                end if
+                scale = max(scale, row_sum)
             end do
         end do
         scale = max(scale, tiny(1.0_dp))
+    contains
+        pure function scaled_entry(entry) result(scaled)
+            real(dp), intent(in) :: entry
+            real(dp) :: scaled
+
+            ! Divide by the larger square root first to avoid intermediate
+            ! overflow when one mass diagonal is large and the other tiny.
+            scaled = abs(entry) / max(left_scale, right_scale) &
+                / min(left_scale, right_scale)
+        end function scaled_entry
     end function variable_pencil_scale
 
 end module variable_block_tridiagonal
