@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Advance the development package to 0.0.3 so ABI 4 and operator revision 4
+  are distinct from the published 0.0.2 release. Release tags and published
+  distributions retain their original versions.
+
 - Preserve the full vacuum cross-parity matrix when an enclosing wall breaks
   stellarator symmetry. The public free-boundary problem selects coupled
   class 0 automatically; explicitly separated native requests fail closed.

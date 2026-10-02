@@ -14,7 +14,7 @@ module gliss_capi
     implicit none
     private
 
-    character(len=*), parameter :: version_string = "0.0.2"
+    character(len=*), parameter :: version_string = "0.0.3"
     integer(c_int), parameter :: abi_version_number = 4
     integer(c_int), parameter :: discretization_revision_number = 4
     public :: gliss_version_c

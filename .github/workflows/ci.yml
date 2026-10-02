@@ -110,7 +110,7 @@ jobs:
           from pathlib import Path
           import gliss
 
-          assert gliss.version() == gliss.__version__ == "0.0.2"
+          assert gliss.version() == gliss.__version__ == "0.0.3"
           assert (Path(gliss.get_include()) / "gliss.h").is_file()
           PY
 

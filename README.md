@@ -33,13 +33,15 @@ own directory, selected with the version menu. `docs/` holds the Sphinx
 sources (`make -C docs html`, with `sphinx` and `myst-parser` installed). The
 `docs` workflow builds the site from the installed wheel after running every
 quickstart block against it, checks links, and publishes it to the
-`gh-pages` branch with `ci/publish_docs.py`; GitHub Pages serves that branch
-once it is enabled in the repository settings.
+`gh-pages` branch with `ci/publish_docs.py`. The complete versioned site is
+uploaded as a Pages artifact and deployed by the workflow.
 
 ## Python
 
-The Python package is the primary user interface. Install it with
-`python -m pip install gliss`; version 0.0.2 provides reusable
+The Python package is the primary user interface. The published 0.0.2 release
+installs with `python -m pip install gliss`. For the development 0.0.3 API
+described here, install this checkout with `python -m pip install .`.
+It provides reusable
 `Equilibrium` and fixed-boundary `StabilityProblem` contexts with typed,
 certified lowest-eigenpair results, opt-in full spectra with per-pair
 diagnostics, deterministic full-spectrum run containers, and atomic versioned
@@ -62,9 +64,9 @@ See the [Python guide](python/README.md) for examples, conventions, input and
 output contracts, direct VMEC conversion, and the optional SIMSOPT adapter.
 
 Release 0.0.2 provides a manylinux x86-64 wheel and a source distribution.
-The source includes the physical free-boundary solve; clean-install macOS
-validation and the complete force-balanced equilibrium-to-spectrum derivative
-chain remain tracked work.
+The development source includes the physical free-boundary solve and hosted
+macOS wheel validation. The complete force-balanced equilibrium-to-spectrum
+derivative chain and free-boundary physical acceptance remain tracked work.
 Asymmetric equilibria take the coupled parity operator, and precomputed
 BOOZ_XFORM files convert with `convert_boozer`.
 

@@ -12,7 +12,7 @@ import sys
 from contextlib import ExitStack
 from importlib.resources import as_file, files
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 _ABI_VERSION = 4
 _LIBRARY_NAME = "gliss_c"
