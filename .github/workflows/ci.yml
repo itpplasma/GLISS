@@ -30,6 +30,27 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+  gfortran-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran cmake ninja-build \
+            libopenblas-dev libnetcdf-dev pkg-config
+      - name: Configure with runtime checks
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_Fortran_COMPILER=gfortran \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_Fortran_FLAGS_DEBUG="-O1 -g -fcheck=all -fbacktrace" \
+            -DGLISS_REQUIRE_OPENBLAS=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Test with runtime checks
+        run: ctest --test-dir build --output-on-failure
+
   lint:
     runs-on: ubuntu-latest
     steps:

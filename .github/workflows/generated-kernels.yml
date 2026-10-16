@@ -65,9 +65,20 @@ jobs:
             fortsym = builtins.getFlake ("path:" + toString ./fortsym-src);
             system = builtins.currentSystem;
             pkgs = import fortsym.inputs.nixpkgs { inherit system; };
+            runtimeLibraries = with pkgs; [
+              symengine flint mpfr gmp libmpc netcdf openblas
+              (lib.getLib gfortran.cc) (lib.getLib stdenv.cc.cc)
+            ];
+            runtimeClosure = pkgs.closureInfo { rootPaths = runtimeLibraries; };
           in pkgs.mkShell {
             inputsFrom = [ fortsym.devShells.${system}.default ];
             packages = [ pkgs.netcdf pkgs.openblas ];
+            GLISS_CODEGEN_RUNTIME_LIBRARIES = pkgs.lib.makeLibraryPath runtimeLibraries;
+            GLISS_CODEGEN_RUNTIME_ROOTS = pkgs.lib.concatStringsSep "\n"
+              (map toString runtimeLibraries);
+            GLISS_CODEGEN_RUNTIME_CLOSURE = "${runtimeClosure}/store-paths";
+            GLISS_CODEGEN_LDD = "${pkgs.glibc.bin}/bin/ldd";
+            GLISS_CODEGEN_NIXPKGS_REVISION = fortsym.inputs.nixpkgs.rev;
           }
           NIX
       - name: Build and install pinned FortSym
@@ -77,6 +88,7 @@ jobs:
             {
               git rev-parse HEAD
               git -C fortsym-src rev-parse HEAD
+              printf "nixpkgs=%s\n" "$GLISS_CODEGEN_NIXPKGS_REVISION"
               sha256sum fortsym-src/flake.lock
               command -v gfortran
               gfortran --version
@@ -97,17 +109,34 @@ jobs:
       - name: Build native generators and check exact reproduction
         run: |
           nix develop --impure --file .codegen-shell.nix --command bash -euo pipefail -c '
-            library_path="$GITHUB_WORKSPACE/fortsym-prefix/lib"
-            for flag in $NIX_LDFLAGS; do
-              case "$flag" in
-                -L*) library_path="$library_path:${flag#-L}" ;;
-              esac
-            done
-            export LD_LIBRARY_PATH="$library_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            library_path="$GITHUB_WORKSPACE/fortsym-prefix/lib:$GLISS_CODEGEN_RUNTIME_LIBRARIES"
+            while IFS= read -r store_path; do
+              if [ -d "$store_path/lib" ]; then
+                library_path="$library_path:$store_path/lib"
+              fi
+            done < "$GLISS_CODEGEN_RUNTIME_CLOSURE"
+            export LD_LIBRARY_PATH="$library_path"
+            {
+              printf "Declared Nix runtime roots:\n%s\n" "$GLISS_CODEGEN_RUNTIME_ROOTS"
+              printf "Transitive Nix runtime closure:\n"
+              cat "$GLISS_CODEGEN_RUNTIME_CLOSURE"
+              printf "Resolved library search path:\n%s\n" "$LD_LIBRARY_PATH"
+            } > codegen-runtime-provenance.txt
             cmake -S . -B build-codegen -G Ninja \
               -DCMAKE_BUILD_TYPE=Release -DCMAKE_Fortran_COMPILER=gfortran \
               -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/fortsym-prefix" \
               -DGLISS_ENABLE_CODEGEN=ON -DGLISS_REQUIRE_OPENBLAS=ON
+            cmake --build build-codegen --parallel 2 --target \
+              gliss_physical_mass_gen gliss_pressure_adjoint_gen gliss_energy_gen
+            for generator in physical_mass pressure_adjoint energy; do
+              printf "\nLoader dependencies: %s\n" "$generator" >> codegen-runtime-provenance.txt
+              "$GLISS_CODEGEN_LDD" "build-codegen/gliss_${generator}_gen" \
+                >> codegen-runtime-provenance.txt
+            done
+            if grep -q "=> not found" codegen-runtime-provenance.txt; then
+              cat codegen-runtime-provenance.txt
+              exit 1
+            fi
             cmake --build build-codegen --target gliss_check_generated --parallel 2
             ctest --test-dir build-codegen -L codegen --output-on-failure
           '
@@ -117,6 +146,7 @@ jobs:
           name: generated-kernel-evidence
           path: |
             codegen-provenance.txt
+            codegen-runtime-provenance.txt
             gen/fortsym-revision.txt
             fortsym-src/flake.lock
             build-codegen/generated-kernels/
