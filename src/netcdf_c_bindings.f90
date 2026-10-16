@@ -16,9 +16,11 @@ module netcdf_c_bindings
     public :: c_nc_def_var
     public :: c_nc_enddef
     public :: c_nc_get_att_text
+    public :: c_nc_get_att_double
     public :: c_nc_get_var_double
     public :: c_nc_get_var_int
     public :: c_nc_inq_attlen
+    public :: c_nc_inq_atttype
     public :: c_nc_inq_dimid
     public :: c_nc_inq_dimlen
     public :: c_nc_inq_dimname
@@ -27,6 +29,7 @@ module netcdf_c_bindings
     public :: c_nc_inq_varndims
     public :: c_nc_open
     public :: c_nc_put_att_text
+    public :: c_nc_put_att_int
     public :: c_nc_put_var_double
     public :: c_nc_put_var_int
 
@@ -129,6 +132,24 @@ module netcdf_c_bindings
             integer(c_int) :: status
         end function c_nc_inq_attlen
 
+        function c_nc_inq_atttype(ncid, varid, name, xtype) bind(c, &
+                name="nc_inq_atttype") result(status)
+            import :: c_char, c_int
+            integer(c_int), value :: ncid, varid
+            character(c_char), intent(in) :: name(*)
+            integer(c_int), intent(out) :: xtype
+            integer(c_int) :: status
+        end function c_nc_inq_atttype
+
+        function c_nc_get_att_double(ncid, varid, name, value) bind(c, &
+                name="nc_get_att_double") result(status)
+            import :: c_char, c_int, c_ptr
+            integer(c_int), value :: ncid, varid
+            character(c_char), intent(in) :: name(*)
+            type(c_ptr), value :: value
+            integer(c_int) :: status
+        end function c_nc_get_att_double
+
         function c_nc_get_att_text(ncid, varid, name, value) bind(c, &
                 name="nc_get_att_text") result(status)
             import :: c_char, c_int, c_ptr
@@ -167,6 +188,16 @@ module netcdf_c_bindings
             type(c_ptr), value :: value
             integer(c_int) :: status
         end function c_nc_put_att_text
+
+        function c_nc_put_att_int(ncid, varid, name, xtype, length, value) &
+                bind(c, name="nc_put_att_int") result(status)
+            import :: c_char, c_int, c_size_t, c_ptr
+            integer(c_int), value :: ncid, varid, xtype
+            character(c_char), intent(in) :: name(*)
+            integer(c_size_t), value :: length
+            type(c_ptr), value :: value
+            integer(c_int) :: status
+        end function c_nc_put_att_int
 
         function c_nc_enddef(ncid) bind(c, name="nc_enddef") result(status)
             import :: c_int

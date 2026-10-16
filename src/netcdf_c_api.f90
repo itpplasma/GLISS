@@ -1,4 +1,5 @@
 module netcdf_c_api
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_c_binding, only: c_char, c_double, c_int, c_loc, &
         c_null_char, c_null_ptr, c_size_t
     use netcdf_c_bindings
@@ -20,6 +21,8 @@ module netcdf_c_api
     public :: nc_def_variable
     public :: nc_end_definitions
     public :: nc_get_global_text
+    public :: nc_get_attribute_text
+    public :: nc_get_attribute_integer
     public :: nc_get_integer
     public :: nc_get_real
     public :: nc_inquire_dimension_id
@@ -31,6 +34,8 @@ module netcdf_c_api
     public :: nc_open_read
     public :: nc_open_write
     public :: nc_put_global_text
+    public :: nc_put_attribute_text
+    public :: nc_put_attribute_integer
     public :: nc_put_integer
     public :: nc_put_real
 
@@ -222,6 +227,15 @@ contains
         integer, intent(in) :: ncid
         character(len=*), intent(in) :: name
         character(len=*), intent(out) :: value
+
+        status = nc_get_attribute_text(ncid, nc_global, name, value)
+    end function nc_get_global_text
+
+    integer function nc_get_attribute_text(ncid, varid, name, value) &
+            result(status)
+        integer, intent(in) :: ncid, varid
+        character(len=*), intent(in) :: name
+        character(len=*), intent(out) :: value
         character(c_char), allocatable, target :: buffer(:)
         character(c_char), allocatable :: c_name(:)
         integer(c_size_t) :: length
@@ -229,7 +243,7 @@ contains
 
         value = ""
         call build_c_string(name, c_name)
-        status = c_nc_inq_attlen(int(ncid, c_int), int(nc_global, c_int), &
+        status = c_nc_inq_attlen(int(ncid, c_int), int(varid, c_int), &
             c_name, length)
         if (status /= nc_noerr) return
         if (length > len(value)) then
@@ -238,13 +252,53 @@ contains
         end if
         if (length == 0) return
         allocate (buffer(int(length)))
-        status = c_nc_get_att_text(int(ncid, c_int), int(nc_global, c_int), &
+        status = c_nc_get_att_text(int(ncid, c_int), int(varid, c_int), &
             c_name, c_loc(buffer(1)))
         if (status /= nc_noerr) return
         do index = 1, int(length)
             value(index:index) = buffer(index)
         end do
-    end function nc_get_global_text
+    end function nc_get_attribute_text
+
+    integer function nc_get_attribute_integer(ncid, varid, name, value) &
+            result(status)
+        integer, intent(in) :: ncid, varid
+        character(len=*), intent(in) :: name
+        integer, intent(out) :: value
+        character(c_char), allocatable :: c_name(:)
+        integer(c_int) :: xtype
+        integer(c_size_t) :: length
+        real(c_double), target :: number
+
+        value = 0
+        call build_c_string(name, c_name)
+        status = c_nc_inq_attlen(int(ncid, c_int), int(varid, c_int), &
+            c_name, length)
+        if (status /= nc_noerr) return
+        status = -1
+        if (length /= 1_c_size_t) return
+        status = c_nc_inq_atttype(int(ncid, c_int), int(varid, c_int), &
+            c_name, xtype)
+        if (status /= nc_noerr) return
+        status = -1
+        ! NetCDF numeric primitive types are NC_BYTE through NC_UINT64,
+        ! excluding NC_CHAR. Strings, compounds and user types are invalid.
+        select case (xtype)
+        case (1, 3:11)
+        case default
+            return
+        end select
+        status = c_nc_get_att_double(int(ncid, c_int), int(varid, c_int), &
+            c_name, c_loc(number))
+        if (status /= nc_noerr) return
+        status = -1
+        if (.not. ieee_is_finite(number)) return
+        if (number > real(huge(value), c_double)) return
+        if (number < -real(huge(value), c_double) - 1.0_c_double) return
+        if (number /= anint(number)) return
+        value = int(number)
+        status = nc_noerr
+    end function nc_get_attribute_integer
 
     integer function nc_def_dimension(ncid, name, length, dimid) result(status)
         integer, intent(in) :: ncid, length
@@ -291,6 +345,14 @@ contains
     integer function nc_put_global_text(ncid, name, value) result(status)
         integer, intent(in) :: ncid
         character(len=*), intent(in) :: name, value
+
+        status = nc_put_attribute_text(ncid, nc_global, name, value)
+    end function nc_put_global_text
+
+    integer function nc_put_attribute_text(ncid, varid, name, value) &
+            result(status)
+        integer, intent(in) :: ncid, varid
+        character(len=*), intent(in) :: name, value
         character(c_char), allocatable, target :: c_value(:)
         character(c_char), allocatable :: c_name(:)
         integer :: index, length
@@ -299,16 +361,29 @@ contains
         call build_c_string(name, c_name)
         if (length == 0) then
             status = c_nc_put_att_text(int(ncid, c_int), &
-                int(nc_global, c_int), c_name, 0_c_size_t, c_null_ptr)
+                int(varid, c_int), c_name, 0_c_size_t, c_null_ptr)
             return
         end if
         allocate (c_value(length))
         do index = 1, length
             c_value(index) = value(index:index)
         end do
-        status = c_nc_put_att_text(int(ncid, c_int), int(nc_global, c_int), &
+        status = c_nc_put_att_text(int(ncid, c_int), int(varid, c_int), &
             c_name, int(length, c_size_t), c_loc(c_value(1)))
-    end function nc_put_global_text
+    end function nc_put_attribute_text
+
+    integer function nc_put_attribute_integer(ncid, varid, name, value) &
+            result(status)
+        integer, intent(in) :: ncid, varid, value
+        character(len=*), intent(in) :: name
+        character(c_char), allocatable :: c_name(:)
+        integer(c_int), target :: c_value
+
+        call build_c_string(name, c_name)
+        c_value = int(value, c_int)
+        status = c_nc_put_att_int(int(ncid, c_int), int(varid, c_int), &
+            c_name, 4_c_int, 1_c_size_t, c_loc(c_value))
+    end function nc_put_attribute_integer
 
     integer function nc_end_definitions(ncid) result(status)
         integer, intent(in) :: ncid

@@ -13,15 +13,12 @@ module plasma_vacuum_boundary
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use boundary_mesh_geometry, only: periodic_surface_is_embedded
-    use cartesian_harmonic_spline, only: cartesian_harmonic_ok, &
-        cartesian_jet_grid_t, evaluate_cartesian_harmonic_spline
-    use field_periodic_cartesian, only: convert_field_periodic_jet, &
-        field_periodic_cartesian_ok
+    use cartesian_harmonic_spline, only: cartesian_jet_grid_t
     use fourier_phase_kind, only: phase_cosine, phase_sine
     use physical_constants, only: vacuum_permeability
+    use primitive_boundary_geometry, only: evaluate_primitive_boundary, &
+        primitive_boundary_ok
     use primitive_equilibrium_spline, only: primitive_equilibrium_spline_t
-    use radial_cubic_spline, only: evaluate_radial_cubic_spline_field, &
-        radial_cubic_spline_ok
     use scalar_potential_vacuum, only: assemble_exterior_vacuum, &
         edge_triangle_centroids, vacuum_bie_not_nested, vacuum_bie_ok
     use trial_space_topology, only: trial_component_normal, &
@@ -90,9 +87,8 @@ contains
         integer, intent(out) :: info
         type(cartesian_jet_grid_t) :: jet
         real(dp), allocatable :: theta(:), zeta(:)
-        real(dp) :: area(3), length, profiles(3), seconds(3)
+        real(dp) :: area(3), length
         real(dp) :: tangent_u(3), tangent_v(3)
-        real(dp) :: slopes(3)
         integer :: i, k, local_info, orientation
 
         info = plasma_vacuum_invalid
@@ -108,15 +104,8 @@ contains
             zeta(k) = real(spline%field_periods * (k - 1), dp) / real(nv, dp)
         end do
         info = plasma_vacuum_geometry_error
-        call evaluate_cartesian_harmonic_spline(spline%radial_grid, &
-            spline%position, 1.0_dp, theta, zeta, jet, local_info)
-        if (local_info /= cartesian_harmonic_ok) return
-        call convert_field_periodic_jet(zeta, spline%field_periods, &
-            spline%winding, jet, local_info)
-        if (local_info /= field_periodic_cartesian_ok) return
-        call evaluate_radial_cubic_spline_field(spline%radial_grid, &
-            spline%profiles, 1.0_dp, profiles, slopes, seconds, local_info)
-        if (local_info /= radial_cubic_spline_ok) return
+        call evaluate_primitive_boundary(spline, theta, zeta, jet, fp, ft, local_info)
+        if (local_info /= primitive_boundary_ok) return
         allocate (surface(3, nu, nv), normal(3, nu, nv))
         do k = 1, nv
             do i = 1, nu
@@ -136,8 +125,6 @@ contains
         if (.not. periodic_surface_is_embedded(surface, orientation)) return
         ! The BIE triangles have the opposite winding to tangent_u x tangent_v.
         if (orientation > 0) normal = -normal
-        fp = -slopes(2)
-        ft = -slopes(1)
         if (.not. ieee_is_finite(fp) .or. .not. ieee_is_finite(ft)) return
         if (fp == 0.0_dp .and. ft == 0.0_dp) return
         info = plasma_vacuum_ok

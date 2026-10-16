@@ -21,7 +21,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  released-guides:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: v0.0.1
+            commit: a2cfece6748bd03ea943aba75a3f14eeb9442bbb
+          - tag: v0.0.2
+            commit: b994f51aa9ebe1a5e03bad2c72c6fde730fcaa1b
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: "2"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the released package and guide
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.tag }}
+          path: release-source
+      - name: Install native and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran cmake ninja-build \
+            libopenblas-dev libnetcdf-dev pkg-config
+          python -m pip install --upgrade pip build
+      - name: Build and install the exact released package
+        run: |
+          test "$(git -C release-source rev-parse HEAD)" = "${{ matrix.commit }}"
+          python -m build --wheel --outdir "$RUNNER_TEMP/release-wheel" release-source
+          python -m venv "$RUNNER_TEMP/release-docs"
+          "$RUNNER_TEMP/release-docs/bin/pip" install \
+            "$RUNNER_TEMP"/release-wheel/*.whl sphinx myst-parser
+      - name: Execute and build the historical guide
+        run: |
+          unset GLISS_LIB PYTHONPATH
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/release-docs/bin/python" \
+            "$GITHUB_WORKSPACE/ci/build_release_docs.py" \
+            --source "$GITHUB_WORKSPACE/release-source" \
+            --tag "${{ matrix.tag }}" --commit "${{ matrix.commit }}" \
+            --fixture "$GITHUB_WORKSPACE/test/data/solovev_q1.035.nc" \
+            --switcher "$GITHUB_WORKSPACE/docs/_static/versions.js" \
+            --output "$RUNNER_TEMP/release-html/${{ matrix.tag }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-release-${{ matrix.tag }}
+          path: ${{ runner.temp }}/release-html/
+          if-no-files-found: error
+
   publish:
+    needs: released-guides
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,6 +122,12 @@ jobs:
           /tmp/docs/bin/sphinx-build -W -b html "$GITHUB_WORKSPACE/docs" /tmp/html
           /tmp/docs/bin/sphinx-build -W -b linkcheck "$GITHUB_WORKSPACE/docs" \
             /tmp/linkcheck
+      - name: Collect the tag-built release guides
+        uses: actions/download-artifact@v4
+        with:
+          pattern: docs-release-*
+          merge-multiple: true
+          path: /tmp/release-docs
       - name: Publish to gh-pages
         run: |
           git config user.name "github-actions[bot]"
@@ -82,7 +140,8 @@ jobs:
             git -C /tmp/site checkout --orphan gh-pages
             git -C /tmp/site rm -rf --quiet --ignore-unmatch .
           fi
-          python ci/publish_docs.py /tmp/html "${{ steps.version.outputs.name }}" /tmp/site
+          python ci/publish_docs.py /tmp/html "${{ steps.version.outputs.name }}" \
+            /tmp/site --releases /tmp/release-docs
           git -C /tmp/site add -A
           if git -C /tmp/site diff --cached --quiet; then
             echo "documentation unchanged"

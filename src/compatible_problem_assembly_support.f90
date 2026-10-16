@@ -14,6 +14,7 @@ module compatible_problem_assembly_support
     public :: apply_tangential_axis_weight
     public :: build_active_indices
     public :: build_uniform_breaks
+    public :: build_problem_breaks
     public :: evaluate_generalized_eigenpair
     public :: mode_table_is_unique
     public :: quadratic_form
@@ -196,6 +197,51 @@ contains
         end do
         info = compatible_support_ok
     end subroutine build_uniform_breaks
+
+    ! An explicit mesh is independent of the equilibrium sample grid. A
+    ! positive cell request must agree with it; zero keeps the derived size.
+    subroutine build_problem_breaks(default_intervals, breaks, info, &
+            radial_cells, radial_breaks)
+        integer, intent(in) :: default_intervals
+        real(dp), allocatable, intent(out) :: breaks(:)
+        integer, intent(out) :: info
+        integer, optional, intent(in) :: radial_cells
+        real(dp), optional, intent(in) :: radial_breaks(:)
+        integer :: intervals, allocation_status
+
+        info = compatible_support_invalid
+        intervals = default_intervals
+        if (present(radial_cells)) then
+            if (radial_cells < 0 .or. radial_cells == 1) return
+            if (radial_cells > 0) intervals = radial_cells
+        end if
+        if (present(radial_breaks)) then
+            if (size(radial_breaks) < 3) return
+            if (.not. all(ieee_is_finite(radial_breaks))) return
+            if (radial_breaks(1) /= 0.0_dp) return
+            if (radial_breaks(size(radial_breaks)) /= 1.0_dp) return
+            if (any(radial_breaks(2:) <= &
+                radial_breaks(:size(radial_breaks) - 1))) return
+            if (present(radial_cells)) then
+                if (radial_cells > 0) then
+                    if (radial_cells /= size(radial_breaks) - 1) return
+                end if
+            end if
+            allocate (breaks, source=radial_breaks, stat=allocation_status)
+        else
+            if (intervals < 2) return
+            allocate (breaks(intervals + 1), stat=allocation_status)
+        end if
+        if (allocation_status /= 0) then
+            info = compatible_support_allocation
+            return
+        end if
+        if (present(radial_breaks)) then
+            info = compatible_support_ok
+        else
+            call build_uniform_breaks(intervals, breaks, info)
+        end if
+    end subroutine build_problem_breaks
 
     subroutine evaluate_generalized_eigenpair(stiffness, mass, vector, &
             eigenvalue, kinetic, potential, residual, info)

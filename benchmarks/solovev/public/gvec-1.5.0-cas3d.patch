@@ -1,4 +1,3 @@
-
 --- a/python/gvec/fourier.py
 +++ b/python/gvec/fourier.py
 @@ -207,11 +207,13 @@
@@ -8,19 +7,141 @@
 -    c[0, -N:] = 0  # zero out the negative toroidal indices
 +    if N > 0:  # c[0, -0:] would erase the whole m=0 row
 +        c[0, -N:] = 0  # zero out the negative toroidal indices
- 
+
      s = -2 * xf.imag
      s = np.roll(s, -1, axis=1)[:, ::-1]  # invert the toroidal indices
 -    s[0, -N:] = 0  # zero out the negative toroidal indices
 +    if N > 0:  # c[0, -0:] would erase the whole m=0 row
 +        s[0, -N:] = 0  # zero out the negative toroidal indices
- 
+
      if x.shape[1] % 2 == 0:
          # remove the extra toroidal harmonic if the input has an even number of points
-
 --- a/python/gvec/scripts/cas3d.py
 +++ b/python/gvec/scripts/cas3d.py
-@@ -154,8 +154,24 @@
+@@ -89,6 +89,112 @@
+ )
+
+ # === Main function === #
++
++
++def _set_boozer_position_frame(ev, winding):
++    # The Fourier reconstruction uses zeta_B, so both volume and exact-edge
++    # positions must be rotated by that same angle.
++    x = ev.pos.sel(xyz="x")
++    y = ev.pos.sel(xyz="y")
++    dims = ev.pos.sel(xyz="z").dims
++    ev["xhat"] = (np.cos(winding * ev.zeta_B) * x + np.sin(winding * ev.zeta_B) * y).transpose(*dims)
++    ev["yhat"] = (-np.sin(winding * ev.zeta_B) * x + np.cos(winding * ev.zeta_B) * y).transpose(*dims)
++    ev["zhat"] = ev.pos.sel(xyz="z")
++    ev["winding"] = xr.DataArray(winding, attrs=dict(long_name="signed winding number", symbol="w"))
++    for i in "xyz":
++        ev[f"{i}hat"].attrs = dict(long_name=f"field periodic {i}-coordinate", symbol=rf"\hat{{{i}}}")
++
++
++def _boundary_flux_slopes(state: State, flip: Literal["pol", "tor"]) -> tuple[float, float]:
++    if flip not in ["pol", "tor"]:
++        raise ValueError(f"Invalid flip option: {flip}. Expected 'pol' or 'tor'.")
++    slopes = {}
++    for quantity in ["Phi", "chi"]:
++        values = np.asarray(
++            state.evaluate_rho2_profile(quantity, np.array([1.0]), deriv=1),
++            dtype=np.float64,
++        )
++        if values.shape != (1,) or not np.isfinite(values[0]):
++            raise ValueError(f"Nonfinite boundary derivative for {quantity}.")
++        slopes[quantity] = 2 * np.pi * values[0]
++    if flip == "tor":
++        slopes["Phi"] *= -1
++    else:
++        slopes["chi"] *= -1
++    return slopes["Phi"], slopes["chi"]
++
++
++def _evaluate_boundary_surface(
++    state: State,
++    MN_out: tuple[int, int],
++    MNfactor: int,
++    sampling: int,
++    winding: int,
++    reparam: bool,
++) -> xr.Dataset:
++    boundary = EvaluationsBoozer(
++        [1.0],
++        sampling * MN_out[0] + 1,
++        sampling * MN_out[1] + 1,
++        state=state,
++        radial_derivative=False,
++        MNfactor=MNfactor,
++    )
++    state.compute(boundary, "N_FP", "pos")
++    if reparam:
++        result = surface.init_surface(boundary.pos, boundary.N_FP, ift="fft", winding=winding)
++    else:
++        _set_boozer_position_frame(boundary, winding)
++        result = boundary
++    return result[["winding", "xhat", "yhat", "zhat"]]
++
++
++def _add_boundary_export(
++    output: xr.Dataset,
++    boundary: xr.Dataset,
++    state: State,
++    flip: Literal["pol", "tor"],
++    stellsym: bool,
++) -> None:
++    boundary_ft = compute.ev2ft(boundary, quiet=True).sel(m=output.m, n=output.n)
++    if stellsym:
++        coefficient_names = ["xhat_mnc", "yhat_mns", "zhat_mns"]
++    else:
++        coefficient_names = [
++            f"{name}_{suffix}" for name in ["xhat", "yhat", "zhat"] for suffix in ["mnc", "mns"]
++        ]
++    for name in coefficient_names:
++        value = boundary_ft[name].isel(rad=0, drop=True)
++        value.attrs = dict(value.attrs)
++        value.attrs["long_name"] = f"plasma-boundary {value.attrs['long_name']}"
++        value.attrs["units"] = "m"
++        output[f"boundary_{name}"] = value
++    dphi_ds, dchi_ds = _boundary_flux_slopes(state, flip)
++    output["boundary_s"] = xr.DataArray(
++        1.0,
++        attrs=dict(
++            long_name="plasma-vacuum interface radial coordinate",
++            symbol="s_b",
++            units="1",
++        ),
++    )
++    output["boundary_dPhi_ds"] = xr.DataArray(
++        dphi_ds,
++        attrs=dict(
++            long_name="boundary toroidal flux derivative",
++            symbol="dPhi/ds",
++            units="Wb",
++        ),
++    )
++    output["boundary_dchi_ds"] = xr.DataArray(
++        dchi_ds,
++        attrs=dict(
++            long_name="boundary poloidal flux derivative",
++            symbol="dchi/ds",
++            units="Wb",
++        ),
++    )
++    output.attrs["boundary_schema_version"] = 1
+
+
+ def gvec_to_cas3d(
+@@ -128,6 +234,9 @@
+             state=state,
+             MNfactor=MNfactor,
+         )
++        boundary = _evaluate_boundary_surface(
++            state, MN_out, MNfactor, sampling, winding, reparam
++        )
+
+         q_geo = [
+             "g_tt_B",
+@@ -154,8 +263,13 @@
          else:
              progress.update(1)
              progress.set_description("computing geometric quantities...")
@@ -32,31 +153,29 @@
 +            ev["g_rz_B"] = xr.dot(ev.e_rho_B, ev.e_zeta_B, dim="xyz")
 +            ev["g_rt_B"].attrs = dict(long_name="radial-poloidal metric", symbol="g_{rt}")
 +            ev["g_rz_B"].attrs = dict(long_name="radial-toroidal metric", symbol="g_{rz}")
-+            # rotate by the Boozer angle zeta_B (not the logical zeta), so that
-+            # x = cos(w zeta_B) xhat - sin(w zeta_B) yhat reconstructs positions
-+            x = ev.pos.sel(xyz="x")
-+            y = ev.pos.sel(xyz="y")
-+            zeta_B = ev.zeta_B
-+            dims = ev.pos.sel(xyz="z").dims
-+            ev["xhat"] = (np.cos(winding * zeta_B) * x + np.sin(winding * zeta_B) * y).transpose(*dims)
-+            ev["yhat"] = (-np.sin(winding * zeta_B) * x + np.cos(winding * zeta_B) * y).transpose(*dims)
-+            ev["zhat"] = ev.pos.sel(xyz="z")
-+            ev["winding"] = xr.DataArray(winding, attrs=dict(long_name="signed winding number", symbol="w"))
-+            for i in "xyz":
-+                ev[f"{i}hat"].attrs = dict(long_name=f"field periodic {i}-coordinate", symbol=rf"\hat{{{i}}}")
- 
++            _set_boozer_position_frame(ev, winding)
+
          # Quantities of interest (computed from equilibrium)
          progress.update(1)
-@@ -180,7 +196,7 @@
+@@ -180,7 +294,7 @@
              ev = ev[q_vol]
              ds = xr.merge([ev, surf])
          else:
 -            ev = ev[q_vol + q_geo + q_surf]
 +            ev = ev[q_vol + q_geo + q_surf + ["g_rt_B", "g_rz_B"]]
              ds = ev
- 
+
          # change coordinate convention: (s,θ,ζ), left-handed, with s,θ,ζ ∈ [0,1) and ζ normalized to one field period
-@@ -220,6 +236,10 @@
+@@ -197,6 +311,8 @@
+         out.attrs = ds.attrs
+         for var in ["N_FP", "mod_B", "p", "beta_avg", "winding", "xhat", "yhat", "zhat"]:
+             out[var] = ds[var]
++        # The coordinate reversal changes the signed frame winding too.
++        out["winding"] = xr.DataArray(winding, attrs=dict(ds.winding.attrs))
+
+         # geometry
+         out["Jac"] = ds.Jac_B * (drho * dtheta * dzeta) ** (-1)
+@@ -220,6 +336,10 @@
              long_name="toroidal component of the metric tensor",
              symbol=r"g_{\zeta\zeta}",
          )
@@ -67,8 +186,20 @@
          out["II_tt"] = dtheta ** (-2) * ds.II_tt_B
          out["II_tt"].attrs = dict(
              long_name="poloidal component of the second fundamental form",
-@@ -300,7 +320,7 @@
- 
+@@ -281,9 +401,11 @@
+         if flip == "pol":
+             out = out.assign_coords(theta_B=(-out.theta_B) % (2 * np.pi))
+             out = out.sortby("theta_B")
++            boundary = boundary.assign_coords(theta_B=(-boundary.theta_B) % (2 * np.pi)).sortby("theta_B")
+         elif flip == "tor":
+             out = out.assign_coords(zeta_B=(-out.zeta_B) % (2 * np.pi / state.nfp))
+             out = out.sortby("zeta_B")
++            boundary = boundary.assign_coords(zeta_B=(-boundary.zeta_B) % (2 * np.pi / state.nfp)).sortby("zeta_B")
+
+         # Fourier transform
+         progress.update(1)
+@@ -300,7 +422,7 @@
+
          if stellsym:
              radial = [var for var in ft.data_vars if "m" not in ft[var].dims]
 -            odd = ["yhat", "zhat"]
@@ -76,12 +207,20 @@
              even = [var for var in out.data_vars if var not in odd and var not in radial]
              odd = [f"{var}_mns" for var in odd]
              even = [f"{var}_mnc" for var in even]
-@@ -338,6 +358,8 @@
+@@ -316,6 +438,7 @@
+         out["s"] = out.rho**2
+         out.s.attrs = dict(long_name="radial coordinate, normalized toroidal flux", symbol="s")
+         ft = ft.swap_dims({"rad": "s"}).reset_coords("rho")
++        _add_boundary_export(ft, boundary, state, flip, stellsym)
+
+         # Set metadata
+         ft.attrs["gvec_version"] = __version__
+@@ -338,6 +461,8 @@
              "θ is the poloidal angle and ζ is the toroidal angle, normalized to one field period. "
          )
          ft.attrs["stellarator_symmetry"] = str(stellsym)
 +        if not reparam:
 +            ft.attrs["position_frame"] = "xhat,yhat rotated by winding*zeta_B"
- 
+
          # Save to netCDF
          progress.update(1)

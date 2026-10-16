@@ -33,6 +33,12 @@ if [ ! -x "$venv/bin/pygvec" ]; then
     package=$("$venv/bin/python" -c 'import gvec, os; print(os.path.dirname(gvec.__file__))')
     patch -d "$package" -p3 < "$here/gvec-1.5.0-cas3d.patch"
 fi
+if ! "$venv/bin/python" -c \
+    'from gvec.scripts.cas3d import _boundary_flux_slopes, _evaluate_boundary_surface, _add_boundary_export' \
+    >/dev/null 2>&1; then
+    echo "GVEC_VENV lacks the current true-edge export patch; use a fresh venv." >&2
+    exit 1
+fi
 csv=$out/gliss_solovev.csv
 echo "q0,negative_count,lowest_eigenvalue,certificate,force_balance_residual,angular_theta,angular_zeta" > "$csv"
 for q0 in "${q0s[@]}"; do

@@ -22,6 +22,23 @@ physical assumptions. An eigenpair certificate concerns the assembled
 matrix pencil. It does not certify equilibrium force balance, edge matching,
 or convergence of the volume and vacuum discretizations.
 
+GVEC exports may supply explicit interface data in addition to the ordinary
+interior half-grid. Native ingestion accepts numeric
+`boundary_schema_version=1`, scalar `boundary_s=1` with units `1`, and
+`boundary_dPhi_ds` and `boundary_dchi_ds` with units `Wb`. The six
+`boundary_{xhat,yhat,zhat}_{mnc,mns}` arrays use the existing `(m,n)` Fourier
+grid and units `m`; stellarator symmetry permits the unused sine/cosine
+complements to be omitted. Positions use the declared Boozer position frame.
+The vacuum operator uses these positions and independently evaluated flux
+derivatives directly. Interior geometry and profile splines retain their
+half-grid contract. Malformed or unsupported declarations fail ingestion.
+
+Without an explicit boundary declaration, the legacy path extrapolates the
+interior splines to `s=1`. That behavior remains available, but its accuracy
+requires separate qualification. Schema 1 supplies no edge pressure or matched
+exterior field, so its presence alone does not certify the physical assumptions
+above.
+
 The vacuum boundary mesh and volume angular quadrature are independent.
 Use admitted [volume angular grids](angular_grids.md), then refine the
 radial mesh, displacement mode range and vacuum edge mesh separately.
@@ -33,7 +50,7 @@ requires the coupled parity operator so its cross-parity stiffness is retained.
 The native toroidal-harmonic oracle checks absolute vacuum energies with
 and without a wall. The public Solov'ev benchmark compares a critical
 conformal wall distance with DCON and studies discretization convergence.
-The October 2 export qualification found that the current ordinary GVEC
+The October 2 export qualification found that an ordinary GVEC
 half-grid export does not meet the frozen native edge flux-slope and
 rotational-transform limits. The complete quantitative plasma-vacuum
 acceptance case therefore remains open; the vacuum oracle alone does not

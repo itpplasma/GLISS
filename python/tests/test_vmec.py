@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 import numpy as np
 import pytest
@@ -38,7 +39,26 @@ class _Transform:
 
 
 class _BoozModule:
+    __version__ = "0.0.9"
     Booz_xform = _Transform
+
+
+def _write_boozer_metadata(path, label="C++/Python booz_xform development version"):
+    with netcdf_file(path, "w") as file:
+        if label is not None:
+            values = np.frombuffer(label.encode("ascii"), dtype="S1")
+            file.createDimension("version_length", values.size)
+            file.createVariable("version", "c", ("version_length",))[:] = values
+
+
+def _write_vmec_metadata(path, **overrides):
+    values = dict(nfp=3, ns=16, ier_flag=0, lasym=0, lrfp=0,
+                  signgs=-1, betatotal=0.02)
+    values.update(overrides)
+    with netcdf_file(path, "w") as file:
+        file.createDimension("radius", 16)
+        for name, value in values.items():
+            file.createVariable(name, "d", ())[...] = value
 
 
 def _geometry(m_max=2, n_max=1, force_balance=0.0, symmetric=True):
@@ -182,11 +202,7 @@ def test_convert_vmec_is_atomic_and_writes_reader_schema(tmp_path, monkeypatch):
     source.write_bytes(b"input")
     destination = tmp_path / "converted.nc"
     transform = _Transform()
-    monkeypatch.setattr(
-        vmec,
-        "_dependencies",
-        lambda: (type("Module", (), {"Booz_xform": lambda: transform}), netcdf_file),
-    )
+    _stub_dependencies(monkeypatch, transform)
     monkeypatch.setattr(vmec, "_metadata", lambda path, reader: (0.02, True))
     monkeypatch.setattr(vmec, "convert_geometry", lambda *args: _geometry())
 
@@ -222,6 +238,8 @@ def test_convert_vmec_is_atomic_and_writes_reader_schema(tmp_path, monkeypatch):
         assert file.variables["g_st_mns"].data.shape == (5, 3, 3)
         assert int(file.vmec_signgs) == -1
         assert file.booz_xform_source == b""
+        assert file.booz_xform_source_version == b""
+        assert file.booz_xform_version == b"0.0.9"
         harmonics = [name for name in file.variables if name[-4:] in ("_mnc", "_mns")]
         assert len(harmonics) == 15
 
@@ -235,11 +253,7 @@ def test_convert_vmec_rejects_noncentered_radial_subsampling(
     destination = tmp_path / "converted.nc"
     transform = _Transform()
     transform.ns_in = available
-    monkeypatch.setattr(
-        vmec,
-        "_dependencies",
-        lambda: (type("Module", (), {"Booz_xform": lambda: transform}), netcdf_file),
-    )
+    _stub_dependencies(monkeypatch, transform)
     monkeypatch.setattr(vmec, "_metadata", lambda path, reader: (0.02, True))
 
     with pytest.raises(ValueError, match="radial_surfaces"):
@@ -428,7 +442,10 @@ def _stub_dependencies(monkeypatch, transform):
     monkeypatch.setattr(
         vmec,
         "_dependencies",
-        lambda: (type("Module", (), {"Booz_xform": lambda: transform}), netcdf_file),
+        lambda: (
+            type("Module", (_BoozModule,), {"Booz_xform": lambda: transform}),
+            netcdf_file,
+        ),
     )
 
 
@@ -465,9 +482,16 @@ def test_convert_vmec_rejects_symmetry_mismatch(tmp_path, monkeypatch):
     assert not (tmp_path / "out.nc").exists()
 
 
-def test_convert_boozer_reads_the_file_without_rerunning(tmp_path, monkeypatch):
+@pytest.mark.parametrize("producer", [
+    "C++/Python booz_xform development version",
+    "C++/Python booz_xform 0.0.9",
+    "C++/Python booz_xform 0.0.10",
+    "C++/Python booz_xform 0.0.9.post1",
+    "Boozer Transformation Code Version 2.0",
+])
+def test_convert_boozer_reads_the_file_without_rerunning(tmp_path, monkeypatch, producer):
     source = tmp_path / "boozmn.nc"
-    source.write_bytes(b"input")
+    _write_boozer_metadata(source, producer)
     destination = tmp_path / "converted.nc"
     transform = _Transform()
     _stub_dependencies(monkeypatch, transform)
@@ -482,7 +506,100 @@ def test_convert_boozer_reads_the_file_without_rerunning(tmp_path, monkeypatch):
     with netcdf_file(destination, "r", mmap=False) as file:
         assert file.creator == b"gliss.convert_boozer"
         assert file.booz_xform_source == b"boozmn.nc"
+        assert file.booz_xform_source_version == producer.encode("ascii")
+        assert file.booz_xform_version == b"0.0.9"
         assert float(file.variables["beta_avg"].data) == 0.03
+
+
+@pytest.mark.parametrize("producer", [
+    None, "unknown", "C++/Python booz_xform 0.0.8",
+    "C++/Python booz_xform 0.1.0", "Boozer Transformation Code Version 3.0",
+])
+@pytest.mark.parametrize("existing_output", [False, True])
+def test_convert_boozer_rejects_unsupported_producer(
+    tmp_path, monkeypatch, producer, existing_output
+):
+    source = tmp_path / "boozmn.nc"
+    _write_boozer_metadata(source, producer)
+    transform = _Transform()
+    _stub_dependencies(monkeypatch, transform)
+    destination = tmp_path / "converted.nc"
+    if existing_output:
+        destination.write_bytes(b"preserve this output")
+    with pytest.raises(ValueError, match="producer version"):
+        vmec.convert_boozer(
+            source, destination, beta_average=0.03, overwrite=existing_output
+        )
+    assert not hasattr(transform, "boozmn")
+    if existing_output:
+        assert destination.read_bytes() == b"preserve this output"
+    else:
+        assert not destination.exists()
+    assert not list(tmp_path.glob(".converted.nc.*.tmp"))
+
+
+@pytest.mark.parametrize("entry", ["convert_vmec", "convert_boozer"])
+@pytest.mark.parametrize("version", [None, "dev", "0.0.8", "0.1.0"])
+def test_vmec_import_rejects_unsupported_runtime(tmp_path, monkeypatch, entry, version):
+    source = tmp_path / "input.nc"
+    source.write_bytes(b"input")
+    module = type("Module", (_BoozModule,), {"__version__": version})
+    monkeypatch.setitem(sys.modules, "booz_xform", module)
+    options = {"beta_average": 0.03} if entry == "convert_boozer" else {}
+    with pytest.raises(ValueError, match="unsupported BOOZ_XFORM runtime version"):
+        getattr(vmec, entry)(source, tmp_path / "out.nc", **options)
+    assert not (tmp_path / "out.nc").exists()
+
+
+@pytest.mark.parametrize("version", ["0.0.9", "0.0.10", "0.0.9.post1"])
+def test_convert_vmec_records_supported_runtime(tmp_path, monkeypatch, version):
+    source = tmp_path / "wout.nc"
+    _write_vmec_metadata(source, lasym__logical__=0, lrfp__logical__=0)
+    module = type("Module", (_BoozModule,), {"__version__": version})
+    monkeypatch.setitem(sys.modules, "booz_xform", module)
+    monkeypatch.setattr(vmec, "convert_geometry", lambda *args: _geometry())
+    destination = tmp_path / "out.nc"
+    vmec.convert_vmec(source, destination, poloidal_max=2, toroidal_max=1)
+    with netcdf_file(destination, "r", mmap=False) as file:
+        assert file.booz_xform_version == version.encode("ascii")
+        assert file.booz_xform_source_version == b""
+
+
+@pytest.mark.parametrize("entry", ["convert_vmec", "convert_boozer"])
+@pytest.mark.parametrize(("field", "value", "match"), [
+    ("ier_flag", 0.5, "ier_flag must be an integer"),
+    ("ier_flag", np.nan, "ier_flag is not a finite scalar"),
+    ("ier_flag", 1, "failed equilibrium solve"),
+    ("lasym", 0.5, "lasym must be an integer"),
+    ("lasym", 2, "lasym must be 0 or 1"),
+    ("lasym__logical__", 1, "lasym__logical__ and lasym disagree"),
+    ("lrfp", 0.5, "lrfp must be an integer"),
+    ("lrfp", -1, "lrfp must be 0 or 1"),
+    ("lrfp__logical__", 1, "lrfp__logical__ and lrfp disagree"),
+    ("signgs", -1.5, "signgs must be an integer"),
+    ("signgs", np.inf, "signgs is not a finite scalar"),
+    ("signgs", 1, "signgs=-1 convention"),
+    ("nfp", 3.5, "nfp must be a positive integer"),
+    ("ns", 16.5, "ns must be an integer with at least six"),
+    ("ns", 17, "ns does not match its radius dimension"),
+])
+def test_vmec_import_rejects_malformed_metadata(
+    tmp_path, monkeypatch, entry, field, value, match
+):
+    parent = tmp_path / "wout.nc"
+    _write_vmec_metadata(parent, **{field: value})
+    transform = _Transform()
+    _stub_dependencies(monkeypatch, transform)
+    if entry == "convert_boozer":
+        source = tmp_path / "boozmn.nc"
+        _write_boozer_metadata(source)
+        options = {"wout_path": parent}
+    else:
+        source, options = parent, {}
+    with pytest.raises(ValueError, match=match):
+        getattr(vmec, entry)(source, tmp_path / "out.nc", **options)
+    assert not (tmp_path / "out.nc").exists()
+    assert not transform.ran
 
 
 @pytest.mark.parametrize(
@@ -504,7 +621,7 @@ def test_convert_boozer_rejects_invalid_parent_grid(
     tmp_path, monkeypatch, nfp, ns, radius, available, missing, match
 ):
     source = tmp_path / "boozmn.nc"
-    source.write_bytes(b"input")
+    _write_boozer_metadata(source)
     parent = tmp_path / "wout.nc"
     with netcdf_file(parent, "w") as file:
         file.createDimension("radius", radius)

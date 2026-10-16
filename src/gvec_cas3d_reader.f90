@@ -1,15 +1,19 @@
 module gvec_cas3d_reader
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use gvec_cas3d_netcdf, only: read_dimension, read_harmonic_component, &
+    use gvec_cas3d_netcdf, only: read_boundary_harmonic_component, &
+        read_dimension, read_harmonic_component, &
         read_integer_scalar, read_integer_vector, read_optional_real_vector, &
-        read_real_scalar, read_real_vector, reader_coordinate_error, &
+        read_real_scalar, read_real_scalar_units, read_real_vector, &
+        reader_coordinate_error, &
         reader_data_error, reader_ok, reader_open_error, &
         reader_position_frame_error, reader_schema_error
-    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
+    use gvec_cas3d_types, only: gvec_cas3d_boundary_t, &
+        gvec_cas3d_equilibrium_t, harmonic_pair_t, &
         radial_grid_full, radial_grid_half
-    use netcdf_c_api, only: nc_close_file, nc_enotatt, nc_get_global_text, &
-        nc_noerr, nc_open_read
+    use netcdf_c_api, only: nc_close_file, nc_enotatt, nc_enotvar, &
+        nc_get_attribute_integer, nc_get_global_text, nc_global, &
+        nc_inquire_variable_id, nc_noerr, nc_open_read
     implicit none
     private
 
@@ -65,7 +69,87 @@ contains
         if (info /= reader_ok) return
         call read_harmonics(ncid, radial_count, poloidal_count, &
             toroidal_count, equilibrium, info)
+        if (info /= reader_ok) return
+        call read_boundary(ncid, poloidal_count, toroidal_count, &
+            equilibrium%stellarator_symmetric, equilibrium%boundary, info)
     end subroutine read_file_contents
+
+    subroutine read_boundary(ncid, nm, nn, symmetric, boundary, info)
+        integer, intent(in) :: ncid, nm, nn
+        logical, intent(in) :: symmetric
+        type(gvec_cas3d_boundary_t), intent(out) :: boundary
+        integer, intent(out) :: info
+        character(len=21), parameter :: names(9) = [character(len=21) :: &
+            "boundary_s", "boundary_dPhi_ds", "boundary_dchi_ds", &
+            "boundary_xhat_mnc", "boundary_xhat_mns", &
+            "boundary_yhat_mnc", "boundary_yhat_mns", &
+            "boundary_zhat_mnc", "boundary_zhat_mns"]
+        real(dp) :: boundary_s
+        integer :: status, version, index, varid
+
+        status = nc_get_attribute_integer(ncid, nc_global, &
+            "boundary_schema_version", version)
+        if (status == nc_enotatt) then
+            info = reader_schema_error
+            do index = 1, size(names)
+                status = nc_inquire_variable_id(ncid, trim(names(index)), varid)
+                if (status /= nc_enotvar) return
+            end do
+            info = reader_ok
+            return
+        end if
+        info = reader_schema_error
+        if (status /= nc_noerr) return
+        if (version /= 1) return
+        boundary%schema_version = version
+        call read_real_scalar_units(ncid, "boundary_s", "1", boundary_s, info)
+        if (info /= reader_ok) return
+        info = reader_schema_error
+        if (boundary_s /= 1.0_dp) return
+        call read_real_scalar_units(ncid, "boundary_dPhi_ds", "Wb", &
+            boundary%toroidal_flux_slope, info)
+        if (info /= reader_ok) return
+        info = reader_data_error
+        if (boundary%toroidal_flux_slope == 0.0_dp) return
+        call read_real_scalar_units(ncid, "boundary_dchi_ds", "Wb", &
+            boundary%poloidal_flux_slope, info)
+        if (info /= reader_ok) return
+        call read_boundary_pair(ncid, "boundary_xhat", nm, nn, &
+            .true., .not. symmetric, boundary%xhat, info)
+        if (info /= reader_ok) return
+        call read_boundary_pair(ncid, "boundary_yhat", nm, nn, &
+            .not. symmetric, .true., boundary%yhat, info)
+        if (info /= reader_ok) return
+        call read_boundary_pair(ncid, "boundary_zhat", nm, nn, &
+            .not. symmetric, .true., boundary%zhat, info)
+        if (info /= reader_ok) return
+        if (symmetric) then
+            info = reader_schema_error
+            if (any(boundary%xhat%sine /= 0.0_dp)) return
+            if (any(boundary%yhat%cosine /= 0.0_dp)) return
+            if (any(boundary%zhat%cosine /= 0.0_dp)) return
+        end if
+        info = reader_ok
+    end subroutine read_boundary
+
+    subroutine read_boundary_pair(ncid, name, nm, nn, require_cosine, &
+            require_sine, pair, info)
+        integer, intent(in) :: ncid, nm, nn
+        character(len=*), intent(in) :: name
+        logical, intent(in) :: require_cosine, require_sine
+        type(harmonic_pair_t), intent(out) :: pair
+        integer, intent(out) :: info
+        logical :: has_cosine, has_sine
+
+        call read_boundary_harmonic_component(ncid, trim(name) // "_mnc", &
+            nm, nn, pair%cosine, has_cosine, info)
+        if (info /= reader_ok) return
+        call read_boundary_harmonic_component(ncid, trim(name) // "_mns", &
+            nm, nn, pair%sine, has_sine, info)
+        if (info /= reader_ok) return
+        if (require_cosine .and. .not. has_cosine) info = reader_schema_error
+        if (require_sine .and. .not. has_sine) info = reader_schema_error
+    end subroutine read_boundary_pair
 
     subroutine read_schema_metadata(ncid, schema_version, info)
         integer, intent(in) :: ncid

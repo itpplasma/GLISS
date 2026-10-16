@@ -3,8 +3,8 @@ program test_gvec_cas3d_writer
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use cylinder_fixture, only: create_cylinder_fixture
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
-    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
-        radial_grid_full
+    use gvec_cas3d_types, only: gvec_cas3d_boundary_t, &
+        gvec_cas3d_equilibrium_t, harmonic_pair_t, radial_grid_full
     use gvec_cas3d_writer, only: write_gvec_cas3d_file, writer_invalid, &
         writer_ok, writer_open_error
     implicit none
@@ -77,6 +77,9 @@ program test_gvec_cas3d_writer
     call read_gvec_cas3d_file(full_file, roundtrip, info)
     call require(info == reader_ok, "full-grid round-trip read failed")
     call require_equal(full, roundtrip)
+
+    call test_boundary_roundtrip(source, plain)
+    call test_invalid_boundary(source, plain, invalid_file)
 
     invalid = source
     invalid%pressure(1) = ieee_value(0.0_dp, ieee_quiet_nan)
@@ -162,7 +165,191 @@ contains
             actual%b_contravariant_theta, "B_contra_t")
         call require_pair(expected%b_contravariant_zeta, &
             actual%b_contravariant_zeta, "B_contra_z")
+        call require_boundary_equal(expected%boundary, actual%boundary)
     end subroutine require_equal
+
+    subroutine test_boundary_roundtrip(asymmetric_source, symmetric_source)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: asymmetric_source
+        type(gvec_cas3d_equilibrium_t), intent(in) :: symmetric_source
+        type(gvec_cas3d_equilibrium_t) :: expected, actual
+        character(len=64) :: filename
+        integer :: status, symmetry
+
+        do symmetry = 0, 1
+            write (filename, '("writer_boundary_",i0,"_",i0,".nc")') &
+                symmetry, get_process_id()
+            if (symmetry == 0) then
+                expected = asymmetric_source
+            else
+                expected = symmetric_source
+                expected%stellarator_symmetric = .true.
+            end if
+            call set_boundary(expected)
+            if (symmetry == 1) expected%boundary%poloidal_flux_slope = 0.0_dp
+            call write_gvec_cas3d_file(filename, expected, status)
+            call require(status == writer_ok, "boundary write failed")
+            call read_gvec_cas3d_file(filename, actual, status)
+            call require(status == reader_ok, "boundary round-trip read failed")
+            call require_equal(expected, actual)
+            call delete_file(filename)
+
+            expected = actual
+            call write_gvec_cas3d_file(filename, expected, status)
+            call require(status == writer_ok, "boundary rewrite failed")
+            call read_gvec_cas3d_file(filename, actual, status)
+            call require(status == reader_ok, "boundary rewrite read failed")
+            call require_equal(expected, actual)
+            call delete_file(filename)
+        end do
+    end subroutine test_boundary_roundtrip
+
+    subroutine set_boundary(equilibrium)
+        type(gvec_cas3d_equilibrium_t), intent(inout) :: equilibrium
+        integer :: nm, nn, poloidal, toroidal
+        real(dp) :: coefficient
+
+        nm = size(equilibrium%poloidal_modes)
+        nn = size(equilibrium%toroidal_modes)
+        equilibrium%boundary%schema_version = 1
+        equilibrium%boundary%toroidal_flux_slope = -1.25_dp
+        equilibrium%boundary%poloidal_flux_slope = 0.375_dp
+        allocate (equilibrium%boundary%xhat%cosine(1, nm, nn), &
+            equilibrium%boundary%xhat%sine(1, nm, nn), &
+            equilibrium%boundary%yhat%cosine(1, nm, nn), &
+            equilibrium%boundary%yhat%sine(1, nm, nn), &
+            equilibrium%boundary%zhat%cosine(1, nm, nn), &
+            equilibrium%boundary%zhat%sine(1, nm, nn))
+        do toroidal = 1, nn
+            do poloidal = 1, nm
+                coefficient = real(poloidal + 8 * toroidal, dp) / 16.0_dp
+                equilibrium%boundary%xhat%cosine(1, poloidal, toroidal) = &
+                    coefficient
+                equilibrium%boundary%xhat%sine(1, poloidal, toroidal) = &
+                    -coefficient / 2.0_dp
+                equilibrium%boundary%yhat%cosine(1, poloidal, toroidal) = &
+                    coefficient / 4.0_dp
+                equilibrium%boundary%yhat%sine(1, poloidal, toroidal) = &
+                    -coefficient / 8.0_dp
+                equilibrium%boundary%zhat%cosine(1, poloidal, toroidal) = &
+                    coefficient / 16.0_dp
+                equilibrium%boundary%zhat%sine(1, poloidal, toroidal) = &
+                    -coefficient / 32.0_dp
+            end do
+        end do
+        if (equilibrium%stellarator_symmetric) then
+            equilibrium%boundary%xhat%sine = 0.0_dp
+            equilibrium%boundary%yhat%cosine = 0.0_dp
+            equilibrium%boundary%zhat%cosine = 0.0_dp
+        end if
+    end subroutine set_boundary
+
+    subroutine test_invalid_boundary(asymmetric_source, symmetric_source, filename)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: asymmetric_source
+        type(gvec_cas3d_equilibrium_t), intent(in) :: symmetric_source
+        character(len=*), intent(in) :: filename
+        type(gvec_cas3d_equilibrium_t) :: valid, bad
+        integer :: nm, nn, coordinate
+
+        valid = asymmetric_source
+        call set_boundary(valid)
+        nm = size(valid%poloidal_modes)
+        nn = size(valid%toroidal_modes)
+
+        bad = valid
+        bad%boundary%schema_version = 2
+        call require_invalid_boundary(bad, filename, "unsupported boundary schema")
+        bad = valid
+        bad%boundary%toroidal_flux_slope = 0.0_dp
+        call require_invalid_boundary(bad, filename, "zero boundary toroidal slope")
+        bad = valid
+        bad%boundary%toroidal_flux_slope = ieee_value(0.0_dp, ieee_quiet_nan)
+        call require_invalid_boundary(bad, filename, &
+            "nonfinite boundary toroidal slope")
+        bad = valid
+        bad%boundary%poloidal_flux_slope = ieee_value(0.0_dp, ieee_quiet_nan)
+        call require_invalid_boundary(bad, filename, &
+            "nonfinite boundary poloidal slope")
+        bad = valid
+        deallocate (bad%boundary%xhat%cosine)
+        allocate (bad%boundary%xhat%cosine(2, nm, nn), source=0.0_dp)
+        call require_invalid_boundary(bad, filename, "boundary radial dimension")
+        bad = valid
+        deallocate (bad%boundary%yhat%sine)
+        call require_invalid_boundary(bad, filename, &
+            "missing boundary sine coefficients")
+        bad = valid
+        deallocate (bad%boundary%zhat%cosine)
+        allocate (bad%boundary%zhat%cosine(1, nm + 1, nn), source=0.0_dp)
+        call require_invalid_boundary(bad, filename, "boundary mode dimension")
+        bad = valid
+        bad%boundary%yhat%sine(1, 1, 1) = ieee_value(0.0_dp, ieee_quiet_nan)
+        call require_invalid_boundary(bad, filename, "nonfinite boundary coefficient")
+
+        valid = symmetric_source
+        valid%stellarator_symmetric = .true.
+        call set_boundary(valid)
+        do coordinate = 1, 3
+            bad = valid
+            select case (coordinate)
+            case (1); bad%boundary%xhat%sine(1, 1, 1) = 0.25_dp
+            case (2); bad%boundary%yhat%cosine(1, 1, 1) = 0.25_dp
+            case (3); bad%boundary%zhat%cosine(1, 1, 1) = 0.25_dp
+            end select
+            call require_invalid_boundary(bad, filename, "boundary symmetry violation")
+        end do
+
+        bad = asymmetric_source
+        allocate (bad%boundary%xhat%cosine(1, nm, nn), source=0.0_dp)
+        call require_invalid_boundary(bad, filename, &
+            "unversioned boundary coefficients")
+        bad = asymmetric_source
+        bad%boundary%toroidal_flux_slope = 1.0_dp
+        call require_invalid_boundary(bad, filename, &
+            "unversioned boundary toroidal slope")
+        bad = asymmetric_source
+        bad%boundary%poloidal_flux_slope = 1.0_dp
+        call require_invalid_boundary(bad, filename, &
+            "unversioned boundary poloidal slope")
+    end subroutine test_invalid_boundary
+
+    subroutine require_invalid_boundary(equilibrium, filename, name)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        character(len=*), intent(in) :: filename, name
+        integer :: status
+
+        call write_gvec_cas3d_file(filename, equilibrium, status)
+        call require(status == writer_invalid, name // " was accepted")
+        call require(.not. file_exists(filename), name // " created output")
+    end subroutine require_invalid_boundary
+
+    subroutine require_boundary_equal(expected, actual)
+        type(gvec_cas3d_boundary_t), intent(in) :: expected, actual
+
+        call require(actual%schema_version == expected%schema_version, &
+            "boundary schema changed")
+        call require(actual%toroidal_flux_slope == expected%toroidal_flux_slope, &
+            "boundary toroidal flux slope changed")
+        call require(actual%poloidal_flux_slope == expected%poloidal_flux_slope, &
+            "boundary poloidal flux slope changed")
+        if (expected%schema_version == 0) then
+            call require(.not. allocated(actual%xhat%cosine), &
+                "round trip gained boundary x cosine coefficients")
+            call require(.not. allocated(actual%xhat%sine), &
+                "round trip gained boundary x sine coefficients")
+            call require(.not. allocated(actual%yhat%cosine), &
+                "round trip gained boundary y cosine coefficients")
+            call require(.not. allocated(actual%yhat%sine), &
+                "round trip gained boundary y sine coefficients")
+            call require(.not. allocated(actual%zhat%cosine), &
+                "round trip gained boundary z cosine coefficients")
+            call require(.not. allocated(actual%zhat%sine), &
+                "round trip gained boundary z sine coefficients")
+            return
+        end if
+        call require_pair(expected%xhat, actual%xhat, "boundary xhat")
+        call require_pair(expected%yhat, actual%yhat, "boundary yhat")
+        call require_pair(expected%zhat, actual%zhat, "boundary zhat")
+    end subroutine require_boundary_equal
 
     subroutine require_pair(expected, actual, name)
         type(harmonic_pair_t), intent(in) :: expected, actual

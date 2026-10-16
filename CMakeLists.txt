@@ -81,7 +81,7 @@ if(NOT LAPACK_FOUND)
     set(BLA_VENDOR "Generic")
     find_package(LAPACK REQUIRED)
 endif()
-find_package(OpenMP REQUIRED COMPONENTS Fortran)
+include(cmake/GLISSOpenMP.cmake)
 message(STATUS "GLISS BLAS/LAPACK vendor: ${BLA_VENDOR}")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NETCDF_C REQUIRED IMPORTED_TARGET netcdf)
@@ -162,6 +162,7 @@ add_library(gliss
     src/three_component_kernel.f90
     src/two_component_kernel.f90
     src/boundary/boundary_mesh_geometry.f90
+    src/boundary/primitive_boundary_geometry.f90
     src/boundary/scalar_potential_vacuum.f90
     src/boundary/plasma_vacuum_boundary.f90
     src/vacuum_schur.f90
@@ -194,7 +195,7 @@ add_library(gliss
     src/symmetric_eigensolver.f90)
 target_link_libraries(gliss PUBLIC
     LAPACK::LAPACK
-    OpenMP::OpenMP_Fortran
+    GLISS::OpenMP_Fortran
     PkgConfig::NETCDF_C)
 set_target_properties(gliss PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules"
@@ -338,6 +339,11 @@ set_target_properties(gliss_terpsichore_pseudoplasma_stiffness PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
 if(BUILD_TESTING)
+    add_executable(test_parallel_blas test/test_parallel_blas.f90)
+    target_link_libraries(test_parallel_blas PRIVATE gliss)
+    add_test(NAME parallel_blas COMMAND test_parallel_blas)
+    set_tests_properties(parallel_blas PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=2")
+
     function(add_spectrum_cli_rejection name expected)
         add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
             -DPROGRAM=$<TARGET_FILE:gliss_spectrum>
@@ -403,6 +409,11 @@ if(BUILD_TESTING)
     add_executable(test_beta_resonance test/test_beta_resonance.f90)
     target_link_libraries(test_beta_resonance PRIVATE gliss)
     add_test(NAME beta_resonance COMMAND test_beta_resonance)
+
+    add_executable(test_radial_mesh_control test/test_radial_mesh_control.f90)
+    target_link_libraries(test_radial_mesh_control PRIVATE gliss)
+    add_test(NAME radial_mesh_control COMMAND test_radial_mesh_control
+        ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
 
     add_executable(test_local_mode test/test_local_mode.f90)
     target_link_libraries(test_local_mode PRIVATE gliss)
@@ -1045,6 +1056,8 @@ if(BUILD_TESTING)
     target_link_libraries(test_pressure_stiffness_tangent PRIVATE gliss)
     add_test(NAME pressure_stiffness_tangent COMMAND test_pressure_stiffness_tangent
         ${CMAKE_CURRENT_SOURCE_DIR}/test/data)
+    set_tests_properties(pressure_stiffness_tangent PROPERTIES
+        ENVIRONMENT "OMP_NUM_THREADS=2")
 
     add_executable(test_fixed_boundary_spectrum
         test/test_fixed_boundary_spectrum.f90)

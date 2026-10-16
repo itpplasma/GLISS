@@ -18,7 +18,7 @@ program test_plasma_vacuum_boundary
         fixed_boundary_wall, &
         solve_fixed_boundary_class, solve_fixed_boundary_full_spectrum
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
-    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
+    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t
     use plasma_vacuum_boundary, only: build_plasma_boundary_surface, &
         plasma_vacuum_geometry_error, plasma_vacuum_model_t, &
         plasma_vacuum_ok, vacuum_wall_conformal, &
@@ -48,12 +48,55 @@ program test_plasma_vacuum_boundary
         equilibrium, info)
     call require(info == reader_ok, "fixture read failed")
     call test_edge_surface()
+    call test_true_edge_export()
     call test_wall_ordering_and_energy()
     call test_wall_parity_coupling()
     call test_rejections()
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine test_true_edge_export()
+        ! Fresh public analytic Solov'ev q0=1.5, GVEC native force <=1e-10.
+        ! Constants are the independent Decimal80 positive-series reference,
+        ! rather than values reconstructed from the imported flux profiles.
+        real(dp), parameter :: exact_flux = &
+            0.707167955307641101367244024889350287_dp
+        real(dp), parameter :: exact_q = &
+            2.576058910296802175534660440404489880_dp
+        type(gvec_cas3d_equilibrium_t) :: edge_equilibrium
+        type(primitive_equilibrium_spline_t) :: spline
+        real(dp), allocatable :: surface(:, :, :), normal(:, :, :)
+        real(dp) :: fp, ft, radius, implicit_flux, max_error
+        integer :: i, k
+
+        call read_gvec_cas3d_file(trim(directory)//"/solovev_q1.5_edge.nc", &
+            edge_equilibrium, info)
+        call require(info == reader_ok, "true-edge producer fixture read failed")
+        call require(edge_equilibrium%boundary%schema_version == 1, &
+            "true-edge producer fixture lost its explicit declaration")
+        call fit_primitive_equilibrium(edge_equilibrium, spline, info)
+        call require(info == primitive_equilibrium_ok, "true-edge fixture fit failed")
+        call build_plasma_boundary_surface(spline, 97, 12, surface, normal, &
+            fp, ft, info)
+        call require(info == plasma_vacuum_ok, "true-edge fixture boundary failed")
+        call require(abs(-ft - exact_flux) <= 1.0e-14_dp, &
+            "native true-edge toroidal flux slope failed the frozen limit")
+        call require(abs(fp / ft + 1.0_dp / exact_q) <= 1.0e-12_dp, &
+            "native true-edge transform failed the frozen limit")
+        max_error = 0.0_dp
+        do k = 1, size(surface, 3)
+            do i = 1, size(surface, 2)
+                radius = norm2(surface(1:2, i, k))
+                implicit_flux = ((radius * surface(3, i, k) / 1.6_dp)**2 &
+                    + (radius**2 - 1.0_dp)**2 / 4.0_dp) / 0.33_dp**2
+                max_error = max(max_error, abs(implicit_flux - 1.0_dp))
+            end do
+        end do
+        call require(max_error <= 1.0e-7_dp, &
+            "native true-edge positions failed the independent analytic surface")
+        ! No equilibrium exterior-field matching or wall crossing is asserted.
+    end subroutine test_true_edge_export
 
     subroutine test_triangle_pair_embedding()
         real(dp) :: first(3, 3), second(3, 3)
@@ -223,7 +266,102 @@ contains
         call require(info == fixed_boundary_vacuum, &
             "a free boundary on a doubly covered edge was accepted")
         call test_rigid_boundary_admission(cylinder)
+        call test_explicit_boundary(cylinder)
     end subroutine test_multiple_cover_rejected
+
+    subroutine test_explicit_boundary(cylinder)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: cylinder
+        type(gvec_cas3d_equilibrium_t) :: explicit
+        type(primitive_equilibrium_spline_t) :: spline
+        real(dp), allocatable :: surface(:, :, :), normal(:, :, :)
+        real(dp), allocatable :: rotated(:, :, :), rotated_normal(:, :, :)
+        real(dp) :: fp, ft, theta, phi, exact(3), exact_normal(3)
+        real(dp), parameter :: major = 4.0_dp, minor = 0.7_dp
+        integer :: i, k, m0, m1, n0, np, nn
+
+        explicit = cylinder
+        explicit%winding = 0
+        m0 = findloc(explicit%poloidal_modes, 0, dim=1)
+        m1 = findloc(explicit%poloidal_modes, 1, dim=1)
+        n0 = findloc(explicit%toroidal_modes, 0, dim=1)
+        np = findloc(explicit%toroidal_modes, 1, dim=1)
+        nn = findloc(explicit%toroidal_modes, -1, dim=1)
+        explicit%boundary%schema_version = 1
+        explicit%boundary%toroidal_flux_slope = 0.7_dp
+        explicit%boundary%poloidal_flux_slope = -0.3_dp
+        call allocate_boundary_pair(explicit%boundary%xhat, &
+            size(explicit%poloidal_modes), size(explicit%toroidal_modes))
+        call allocate_boundary_pair(explicit%boundary%yhat, &
+            size(explicit%poloidal_modes), size(explicit%toroidal_modes))
+        call allocate_boundary_pair(explicit%boundary%zhat, &
+            size(explicit%poloidal_modes), size(explicit%toroidal_modes))
+        explicit%boundary%xhat%cosine(1, m0, nn) = major
+        explicit%boundary%xhat%cosine(1, m1, np) = minor / 2.0_dp
+        explicit%boundary%xhat%cosine(1, m1, nn) = minor / 2.0_dp
+        explicit%boundary%yhat%sine(1, m0, nn) = major
+        explicit%boundary%yhat%sine(1, m1, np) = -minor / 2.0_dp
+        explicit%boundary%yhat%sine(1, m1, nn) = minor / 2.0_dp
+        explicit%boundary%zhat%sine(1, m1, n0) = minor
+        ! The sampled plasma and declared edge deliberately differ. This
+        ! detects falling back to extrapolation or substituting stored iota.
+        explicit%xhat%cosine(:, m0, n0) = 10.0_dp
+        explicit%rotational_transform = 9.0_dp
+        call fit_primitive_equilibrium(explicit, spline, info)
+        call require(info == primitive_equilibrium_ok, "explicit-edge fit failed")
+        call build_plasma_boundary_surface(spline, 12, 24, surface, normal, &
+            fp, ft, info)
+        call require(info == plasma_vacuum_ok, "explicit edge was rejected")
+        call require(fp == 0.3_dp .and. ft == -0.7_dp, &
+            "explicit flux slopes were replaced by extrapolated flux or iota")
+        do k = 1, size(surface, 3)
+            phi = 2.0_dp * acos(-1.0_dp) * real(k - 1, dp) &
+                / real(size(surface, 3), dp)
+            do i = 1, size(surface, 2)
+                theta = 2.0_dp * acos(-1.0_dp) * real(i - 1, dp) &
+                    / real(size(surface, 2), dp)
+                exact(1) = (major + minor * cos(theta)) * cos(phi)
+                exact(2) = (major + minor * cos(theta)) * sin(phi)
+                exact(3) = minor * sin(theta)
+                exact_normal(1) = cos(theta) * cos(phi)
+                exact_normal(2) = cos(theta) * sin(phi)
+                exact_normal(3) = sin(theta)
+                call require(norm2(surface(:, i, k) - exact) < 1.0e-12_dp, &
+                    "explicit boundary differs from the analytic torus")
+                call require(norm2(normal(:, i, k) - exact_normal) < 1.0e-12_dp, &
+                    "explicit boundary normal differs from the analytic torus")
+            end do
+        end do
+
+        ! The same surface in its rotating frame checks the explicit-data
+        ! frame conversion separately from reconstruction of toroidal modes.
+        explicit%winding = 1
+        explicit%boundary%xhat%cosine = 0.0_dp
+        explicit%boundary%yhat%sine = 0.0_dp
+        explicit%boundary%xhat%cosine(1, m0, n0) = major
+        explicit%boundary%xhat%cosine(1, m1, n0) = minor
+        call fit_primitive_equilibrium(explicit, spline, info)
+        call require(info == primitive_equilibrium_ok, "rotating-edge fit failed")
+        call build_plasma_boundary_surface(spline, 12, 24, rotated, &
+            rotated_normal, fp, ft, info)
+        call require(info == plasma_vacuum_ok, "rotating-frame edge was rejected")
+        call require(maxval(abs(surface - rotated)) < 1.0e-12_dp &
+            .and. maxval(abs(normal - rotated_normal)) < 1.0e-12_dp, &
+            "explicit rotating frame changed positions or normals")
+        spline%boundary%schema_version = 2
+        call build_plasma_boundary_surface(spline, 12, 24, rotated, &
+            rotated_normal, fp, ft, info)
+        call require(info == plasma_vacuum_geometry_error, &
+            "unsupported explicit edge schema fell back to legacy extrapolation")
+    end subroutine test_explicit_boundary
+
+    subroutine allocate_boundary_pair(pair, nm, nn)
+        type(harmonic_pair_t), intent(out) :: pair
+        integer, intent(in) :: nm, nn
+
+        allocate (pair%cosine(1, nm, nn), pair%sine(1, nm, nn))
+        pair%cosine = 0.0_dp
+        pair%sine = 0.0_dp
+    end subroutine allocate_boundary_pair
 
     subroutine test_rigid_boundary_admission(cylinder)
         type(gvec_cas3d_equilibrium_t), intent(in) :: cylinder

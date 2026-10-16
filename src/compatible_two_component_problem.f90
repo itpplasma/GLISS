@@ -15,7 +15,7 @@ module compatible_two_component_problem
         compatible_cell_trace_t, compatible_radial_point_trace_t
     use compatible_problem_assembly_support, only: apply_stored_power, &
         apply_tangential_axis_weight, &
-        build_active_indices, build_uniform_breaks, &
+        build_active_indices, build_problem_breaks, &
         compatible_support_allocation, compatible_support_ok, &
         mode_table_is_unique, scale_matrix, surface_preserves_parity, &
         scale_tensor, scatter_matrix, sum_tensor, symmetrize_matrix, &
@@ -87,7 +87,7 @@ contains
 
     subroutine evaluate_compatible_two_component_vector(intervals, mode_m, &
             mode_n, stored_power, eta_stored_power, parity_class, degree, &
-            coordinates, vector, normal, eta, info, axis_tie)
+            coordinates, vector, normal, eta, info, axis_tie, radial_breaks)
         integer, intent(in) :: intervals, mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:), eta_stored_power(:)
         integer, intent(in) :: parity_class, degree
@@ -95,6 +95,7 @@ contains
         real(dp), allocatable, intent(out) :: normal(:, :), eta(:, :)
         integer, intent(out) :: info
         type(axis_tie_t), optional, intent(in) :: axis_tie
+        real(dp), optional, intent(in) :: radial_breaks(:)
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
         real(dp), allocatable :: breaks(:), derivatives(:, :), dh1(:)
@@ -125,14 +126,15 @@ contains
         do vector_index = 1, size(vector)
             if (.not. ieee_is_finite(vector(vector_index))) return
         end do
-        allocate (breaks(intervals + 1), parity(size(mode_m)), &
+        allocate (parity(size(mode_m)), &
             normal_rank(size(mode_m)), eta_rank(size(mode_m)), &
             stat=allocation_status)
         if (allocation_status /= 0) then
             info = compatible_problem_allocation_error
             return
         end if
-        call build_uniform_breaks(intervals, breaks, local_info)
+        call build_problem_breaks(intervals, breaks, local_info, &
+            radial_cells=intervals, radial_breaks=radial_breaks)
         if (local_info /= compatible_support_ok) return
         call build_radial_feec_complex(breaks, degree, .true., .true., &
             complex, local_info)
@@ -235,7 +237,7 @@ contains
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
             problem, info, trace_cells, trace, density_kg_m3, &
             radial_quadrature_policy, sparse_storage, axis_conforming, &
-            radial_cells, eta_stored_power)
+            radial_cells, eta_stored_power, radial_breaks)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
@@ -255,6 +257,7 @@ contains
         ! of the equilibrium surfaces (0 or absent: one cell per surface).
         real(dp), optional, intent(in) :: eta_stored_power(:)
         integer, optional, intent(in) :: radial_cells
+        real(dp), optional, intent(in) :: radial_breaks(:)
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(trial_space_topology_t) :: topology
@@ -310,12 +313,14 @@ contains
                 problem%eta_axis_power(size(stored_power) + 1:) = eta_stored_power
         end if
         problem%coupled = parity_class == 0
-        intervals = size(equilibrium%s)
-        if (present(radial_cells)) then
-            if (radial_cells < 0) return
-            if (radial_cells > 0) intervals = radial_cells
+        call build_problem_breaks(size(equilibrium%s), breaks, local_info, &
+            radial_cells, radial_breaks)
+        if (local_info /= compatible_support_ok) then
+            if (local_info == compatible_support_allocation) &
+                info = compatible_problem_allocation_error
+            return
         end if
-        if (intervals < 2) return
+        intervals = size(breaks) - 1
         if (present(trace_cells) .neqv. present(trace)) return
         if (present(trace_cells)) then
             if (.not. trace_cells_are_valid(trace_cells, intervals)) return
@@ -325,15 +330,12 @@ contains
                 return
             end if
         end if
-        allocate (breaks(intervals + 1), &
-            normal_rank(size(trial_m)), eta_rank(size(trial_m)), &
+        allocate (normal_rank(size(trial_m)), eta_rank(size(trial_m)), &
             stat=allocation_status)
         if (allocation_status /= 0) then
             info = compatible_problem_allocation_error
             return
         end if
-        call build_uniform_breaks(intervals, breaks, local_info)
-        if (local_info /= compatible_support_ok) return
         call build_radial_feec_complex(breaks, degree, .true., .true., &
             complex, local_info)
         if (local_info /= radial_feec_ok) return

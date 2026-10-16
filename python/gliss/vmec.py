@@ -2,6 +2,7 @@
 
 import operator
 import os
+import re
 import tempfile
 import warnings
 from pathlib import Path
@@ -69,14 +70,66 @@ def _dependencies():
         raise ImportError(
             "VMEC import requires the optional dependencies; install gliss[vmec]"
         ) from error
+    _check_booz_version(getattr(booz_xform, "__version__", None), "runtime version")
     return booz_xform, netcdf_file
+
+
+def _check_booz_version(value: Any, description: str) -> None:
+    # Match the released dependency range without accepting an unqualified
+    # development runtime. BOOZ's historical file labels are handled separately.
+    match = (
+        re.fullmatch(r"0\.0\.([0-9]+)(?:\.post[0-9]+)?", value)
+        if isinstance(value, str) else None
+    )
+    if match is None or int(match.group(1)) < 9:
+        raise ValueError(
+            f"unsupported BOOZ_XFORM {description} {value!r}; "
+            "GLISS requires a released booz_xform>=0.0.9,<0.1"
+        )
+
+
+def _boozmn_version(path: Path, netcdf_file: Any) -> str:
+    """Validate and retain the producer label omitted by read_boozmn."""
+    try:
+        file = netcdf_file(path, "r", mmap=False)
+    except (OSError, TypeError, ValueError) as error:
+        raise ValueError(f"cannot read BOOZ_XFORM metadata from {path}") from error
+    with file:
+        if "version" not in file.variables:
+            raise ValueError("BOOZ_XFORM file is missing its producer version")
+        values = np.asarray(file.variables["version"].data)
+        if values.ndim != 1 or values.dtype != np.dtype("S1"):
+            raise ValueError("BOOZ_XFORM producer version must be an ASCII string")
+        try:
+            label = values.tobytes().decode("ascii").rstrip("\0 ")
+        except UnicodeDecodeError as error:
+            raise ValueError(
+                "BOOZ_XFORM producer version must be an ASCII string"
+            ) from error
+    # These are the legacy Fortran format and the label emitted by the
+    # supported 0.0.9 C++ writer, whose library lacks the version macro.
+    if label in {
+        "Boozer Transformation Code Version 2.0",
+        "C++/Python booz_xform development version",
+    }:
+        return label
+    prefix = "C++/Python booz_xform "
+    if not label.startswith(prefix):
+        raise ValueError(f"unsupported BOOZ_XFORM producer version {label!r}")
+    _check_booz_version(label[len(prefix):], "producer version")
+    return label
 
 
 def _scalar(file: Any, name: str) -> float:
     if name not in file.variables:
         raise ValueError(f"VMEC wout file is missing {name}")
     value = np.asarray(file.variables[name].data)
-    if value.size != 1 or not np.isfinite(value.item()):
+    if (
+        value.size != 1
+        or not np.issubdtype(value.dtype, np.number)
+        or not np.isrealobj(value)
+        or not np.isfinite(value.item())
+    ):
         raise ValueError(f"VMEC wout variable {name} is not a finite scalar")
     return float(value.item())
 
@@ -88,6 +141,29 @@ def _scalar_alias(file: Any, *names: str) -> float:
     raise ValueError(f"VMEC wout file is missing {' or '.join(names)}")
 
 
+def _integer_scalar(file: Any, *names: str) -> int:
+    values = []
+    for name in names:
+        if name in file.variables:
+            value = _scalar(file, name)
+            if value != np.floor(value):
+                raise ValueError(f"VMEC wout variable {name} must be an integer")
+            values.append(int(value))
+    if not values:
+        raise ValueError(f"VMEC wout file is missing {' or '.join(names)}")
+    if any(value != values[0] for value in values[1:]):
+        raise ValueError(f"VMEC wout variables {' and '.join(names)} disagree")
+    return values[0]
+
+
+def _logical_scalar(file: Any, *names: str) -> bool:
+    value = _integer_scalar(file, *names)
+    if value not in (0, 1):
+        name = next(name for name in names if name in file.variables)
+        raise ValueError(f"VMEC wout variable {name} must be 0 or 1")
+    return bool(value)
+
+
 def _metadata(
     path: Path, netcdf_file: Any, transform: Any = None
 ) -> Tuple[float, bool]:
@@ -97,24 +173,24 @@ def _metadata(
     except (OSError, TypeError, ValueError) as error:
         raise ValueError(f"cannot read standard VMEC NetCDF file {path}") from error
     with file:
-        if int(_scalar(file, "ier_flag")) != 0:
+        if _integer_scalar(file, "ier_flag") != 0:
             raise ValueError("VMEC wout reports a failed equilibrium solve")
-        symmetric = int(_scalar_alias(file, "lasym__logical__", "lasym")) == 0
-        if int(_scalar_alias(file, "lrfp__logical__", "lrfp")) != 0:
+        symmetric = not _logical_scalar(file, "lasym__logical__", "lasym")
+        if _logical_scalar(file, "lrfp__logical__", "lrfp"):
             raise ValueError("GLISS does not support reversed-field-pinch VMEC output")
-        if int(_scalar(file, "signgs")) != -1:
+        if _integer_scalar(file, "signgs") != _VMEC_SIGNGS:
             raise ValueError("GLISS requires the standard VMEC signgs=-1 convention")
+        nfp = _scalar(file, "nfp")
+        ns = _scalar(file, "ns")
+        if nfp < 1 or nfp != np.floor(nfp):
+            raise ValueError("VMEC wout nfp must be a positive integer")
+        if ns < 6 or ns != np.floor(ns):
+            raise ValueError(
+                "VMEC wout ns must be an integer with at least six points"
+            )
+        if file.dimensions.get("radius") != ns:
+            raise ValueError("VMEC wout ns does not match its radius dimension")
         if transform is not None:
-            nfp = _scalar(file, "nfp")
-            ns = _scalar(file, "ns")
-            if nfp < 1 or nfp != int(nfp):
-                raise ValueError("VMEC wout nfp must be a positive integer")
-            if ns < 6 or ns != int(ns):
-                raise ValueError(
-                    "VMEC wout ns must be an integer with at least six points"
-                )
-            if file.dimensions.get("radius") != ns:
-                raise ValueError("VMEC wout ns does not match its radius dimension")
             if transform.nfp != nfp:
                 raise ValueError(
                     "BOOZ_XFORM nfp does not match the parent VMEC wout nfp"
@@ -155,6 +231,7 @@ def _write(
     booz_xform_version: str = "unknown",
     creator: str = "gliss.convert_vmec",
     boozmn_source: str = "",
+    boozmn_version: str = "",
 ) -> None:
     n_modes = np.concatenate((np.arange(n_max + 1), np.arange(-n_max, 0)))
     with netcdf_file(path, "w", version=2) as file:
@@ -169,6 +246,7 @@ def _write(
         file.creator = creator.encode("ascii")
         file.vmec_signgs = np.int32(_VMEC_SIGNGS)
         file.booz_xform_source = boozmn_source.encode("utf-8")
+        file.booz_xform_source_version = boozmn_version.encode("ascii")
         file.vmec_source = source_name.encode("utf-8")
         file.booz_xform_mboz = transform_resolution[0]
         file.booz_xform_nboz = transform_resolution[1]
@@ -253,6 +331,7 @@ def _convert_transform(
     source_name: str,
     creator: str,
     boozmn_source: str = "",
+    boozmn_version: str = "",
 ) -> Path:
     """Check and atomically write a transform that has Boozer spectra."""
     if bool(transform.asym) == stellarator_symmetric:
@@ -308,6 +387,7 @@ def _convert_transform(
             getattr(booz_xform, "__version__", "unknown"),
             creator,
             boozmn_source,
+            boozmn_version,
         )
         os.replace(temporary, destination)
     finally:
@@ -416,6 +496,12 @@ def convert_boozer(
     precomputed transform. The same geometric and force-balance gates as
     :func:`convert_vmec` apply, and both entry points produce identical
     exports for the same transform.
+
+    Supported producer labels are the legacy Fortran ``Version 2.0`` and
+    C++/Python ``booz_xform`` releases >=0.0.9,<0.1, including the historical
+    ``development version`` label emitted by the 0.0.9 writer. The exact
+    producer label is retained as ``booz_xform_source_version``; the reader
+    runtime version is recorded separately as ``booz_xform_version``.
     """
     source_path = _path(input_path, "input_path", True)
     destination = _path(output_path, "output_path", False)
@@ -441,6 +527,7 @@ def convert_boozer(
         raise TypeError("beta_average must be a real number")
     elif not np.isfinite(beta_average) or beta_average < 0.0:
         raise ValueError("beta_average must be finite and nonnegative")
+    producer_version = _boozmn_version(source_path, netcdf_file)
     transform = booz_xform.Booz_xform()
     transform.verbose = 0
     try:
@@ -465,6 +552,7 @@ def convert_boozer(
         "" if parent_path is None else parent_path.name,
         "gliss.convert_boozer",
         source_path.name,
+        producer_version,
     )
 
 

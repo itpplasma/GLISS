@@ -57,6 +57,8 @@ def toolchain(library, build_dir):
         "CMAKE_Fortran_FLAGS_RELEASE", "CMAKE_Fortran_FLAGS_RELWITHDEBINFO",
         "BLAS_LIBRARIES", "BLAS_blas_LIBRARY", "BLAS_openblas_LIBRARY",
         "OpenMP_Fortran_FLAGS", "CMAKE_EXE_LINKER_FLAGS", "CMAKE_SHARED_LINKER_FLAGS",
+        "GLISS_OPENMP_RUNTIME", "GLISS_OPENMP_SELECTED_LIBRARY",
+        "OpenMP_Fortran_LIB_NAMES", "OpenMP_omp_LIBRARY",
     )
     compiler = cache.get("CMAKE_Fortran_COMPILER")
     inspection = ["otool", "-L", str(library)] if sys.platform == "darwin" else [
@@ -88,6 +90,22 @@ def toolchain(library, build_dir):
         "affected_compile_commands": compile_commands,
         "metadata_limit": None if cache else "Build cache unavailable; compiler flags unknown.",
     }
+
+
+def blas_runtime(library):
+    """Query the linked OpenBLAS without changing its process-wide settings."""
+    result = {}
+    for name in ("openblas_get_parallel", "openblas_get_num_threads", "openblas_get_config"):
+        try:
+            function = getattr(library, name)
+        except AttributeError:
+            continue
+        function.argtypes = []
+        function.restype = ctypes.c_char_p if name.endswith("config") else ctypes.c_int
+        value = function()
+        result[name] = value.decode("ascii") if isinstance(value, bytes) else value
+    result["scope"] = "Read outside a parallel region; actual BLAS team size can differ inside assembly."
+    return result
 
 
 def check_status(status, error):
@@ -227,6 +245,7 @@ def main():
                              if sys.platform == "darwin" else command_output(["lscpu"])},
                 "toolchain": toolchain(library, args.build_dir or library.parent),
                 "thread_environment": {name: os.environ.get(name) for name in THREAD_VARIABLES},
+                "blas_runtime": blas_runtime(problem._library),
                 "python": {"version": platform.python_version(), "numpy": np.__version__},
                 "configuration": {"modes": args.mode or [(1, 1)], "parity": parity,
                                   "degree": args.degree, "radial_cells": args.radial_cells,

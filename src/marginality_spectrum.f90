@@ -2,7 +2,8 @@ module marginality_spectrum
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, &
         ieee_quiet_nan, ieee_value
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
-    use compatible_problem_assembly_support, only: angular_grid_aliases
+    use compatible_problem_assembly_support, only: angular_grid_aliases, &
+        build_problem_breaks, compatible_support_ok
     use compatible_two_component_problem, only: &
         build_compatible_two_component_problem, compatible_problem_ok, &
         compatible_problem_asymmetric, &
@@ -85,7 +86,7 @@ contains
 
     subroutine compute_marginality_spectrum(equilibrium, mode_m, mode_n, &
             normal_stored_power, parity_class, degree, n_theta, n_zeta, &
-            solve_eigenpair, result, info, message, radial_cells)
+            solve_eigenpair, result, info, message, radial_cells, radial_breaks)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: normal_stored_power(:)
@@ -97,13 +98,31 @@ contains
         ! Uniform radial cells in s of the finite-element space, independent
         ! of the equilibrium surfaces (0 or absent: one cell per surface).
         integer, optional, intent(in) :: radial_cells
+        real(dp), optional, intent(in) :: radial_breaks(:)
+        real(dp), allocatable :: breaks(:)
+        integer :: mesh_info
+
+        result = marginality_spectrum_result_t()
+        if (.not. allocated(equilibrium%s)) then
+            info = marginality_spectrum_invalid
+            message = "equilibrium radial grid is not allocated"
+            return
+        end if
+        call build_problem_breaks(size(equilibrium%s), breaks, mesh_info, &
+            radial_cells, radial_breaks)
+        if (mesh_info /= compatible_support_ok) then
+            info = marginality_spectrum_invalid
+            message = "radial mesh must increase strictly from 0 to 1 " &
+                // "and agree with the requested cell count"
+            return
+        end if
 
         call compute_spectrum(equilibrium, mode_m, mode_n, &
             normal_stored_power, size(mode_m), parity_class, degree, &
             n_theta, n_zeta, solve_eigenpair, &
             marginality_normalization_perpendicular_l2, n_theta, n_zeta, &
             1.0_dp, marginality_quadrature_gauss, &
-            cell_count(equilibrium, radial_cells), result, info, message)
+            size(breaks) - 1, result, info, message, radial_breaks=breaks)
     end subroutine compute_marginality_spectrum
 
     subroutine compute_phase_envelope_spectrum(equilibrium, base_m, base_n, &
@@ -214,7 +233,7 @@ contains
             reported_mode_count, parity_class, degree, n_theta, n_zeta, &
             solve_eigenpair, normalization_policy, coefficient_n_theta, &
             coefficient_n_zeta, reference_length, radial_quadrature_policy, &
-            radial_cells, result, info, message, coefficient_map)
+            radial_cells, result, info, message, coefficient_map, radial_breaks)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:), reported_mode_count
         real(dp), intent(in) :: stored_power(:)
@@ -228,6 +247,7 @@ contains
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
         type(cas3d_phase_envelope_map_t), optional, intent(in) :: coefficient_map
+        real(dp), optional, intent(in) :: radial_breaks(:)
         type(compatible_two_component_problem_t) :: problem
         type(field_profile_identity_result_t) :: identities
         type(marginality_spectrum_result_t) :: quotient_result
@@ -237,6 +257,16 @@ contains
         integer :: quotient_negative_count
 
         result = marginality_spectrum_result_t()
+        if (present(radial_breaks)) then
+            if (normalization_policy /= &
+                marginality_normalization_perpendicular_l2 .or. &
+                radial_quadrature_policy /= marginality_quadrature_gauss) then
+                info = marginality_spectrum_invalid
+                message = "explicit radial meshes require physical " &
+                    // "perpendicular mass and Gauss quadrature"
+                return
+            end if
+        end if
         call validate_inputs(equilibrium, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, normalization_policy, &
             coefficient_n_theta, coefficient_n_zeta, reference_length, &
@@ -252,7 +282,7 @@ contains
                 n_zeta, problem, info, &
                 radial_quadrature_policy=radial_quadrature_policy, &
                 sparse_storage=.true., axis_conforming=.false., &
-                radial_cells=radial_cells)
+                radial_cells=radial_cells, radial_breaks=radial_breaks)
         else
             ! The positive norm is the physical perpendicular kinetic form
             ! at unit mass density, bounded on the energy space; the plain
@@ -262,7 +292,8 @@ contains
                 mode_m, mode_n, stored_power, parity_class, degree, n_theta, &
                 n_zeta, problem, info, density_kg_m3=1.0_dp, &
                 radial_quadrature_policy=radial_quadrature_policy, &
-                sparse_storage=.true., radial_cells=radial_cells)
+                sparse_storage=.true., radial_cells=radial_cells, &
+                radial_breaks=radial_breaks)
         end if
         if (info == compatible_problem_asymmetric) then
             info = marginality_spectrum_asymmetric

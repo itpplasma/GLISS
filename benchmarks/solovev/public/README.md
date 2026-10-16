@@ -80,6 +80,30 @@ These are not GLISS defects; they are tracked in GLISS until reported to GVEC.
    parity; after item 4 the odd `g_st`, `g_sz` must use the sine parity.
 
 The patch fixes 1, 2, 4 and 5; `run.sh` passes `--winding -1` for 3.
+It also exports the actual `s=1` surface and directly evaluated flux
+derivatives in the optional boundary schema, using the same Boozer position
+frame as the interior. The ordinary half-grid arrays remain unchanged.
+The schema helper follows GVEC `1e6040f37`; the position-frame correction
+also applies to the edge. Reused environments with the old patch must be
+replaced; `run.sh` checks for the current boundary-export helpers.
+
+The redistributable `test/data/solovev_q1.5_edge.nc` is a fresh q0=1.5
+example with 64 half-grid surfaces and M=36, from a 32-element, degree-5
+GVEC state. After a bounded serial continuation, an independent native
+reload measured a maximum force residual of `9.624e-11`, below the requested
+`1e-10` tolerance. Its provenance records the original mixed OpenMP runtime
+limitation, exact serial residuals, and producer and consumer-patch identities.
+From the repository root, qualify the declared interface independently with:
+
+```sh
+python benchmarks/solovev/free_boundary/qualify_export.py \
+  test/data/solovev_q1.5_edge.parameter.toml test/data/solovev_q1.5_edge.nc \
+  --require-explicit-boundary
+```
+
+This checks the frozen edge flux, transform and implicit-surface limits with
+an independent 80-digit reference and a corrupted-geometry control. It does
+not qualify exterior equilibrium matching or a physical wall crossing.
 
 ## Radial convergence
 
@@ -97,7 +121,9 @@ density, so eigenvalues are omega^2 in s^-2:
 
 The conforming axis space ([#35](https://github.com/itpplasma/GLISS/issues/35))
 ties the leading |m|=1 coefficients of xi^s and eta and integrates the axis
-element in sqrt(s), so every degree converges monotonically from above.
+element in sqrt(s). The tabulated sequences decrease toward the limiting
+value; selective reduced compression quadrature does not establish general
+eigenvalue upper bounds or guarantee monotone convergence.
 Richardson extrapolation of degree 3 gives -345.69; its successive
 differences fall by 10.3 and 9.8 (order 3.3), degree 2 approaches third
 order, and degree 1 converges at order 1.3 to 1.4 and resolves the

@@ -1,0 +1,245 @@
+{
+  "description": "Public analytic GPEC Solovev q0=1.5 fixed-boundary equilibrium with separately evaluated s=1 plasma-boundary harmonics and magnetic flux slopes.",
+  "license": "MIT (GVEC producer and GLISS public analytic fixture generator)",
+  "gvec_source": "https://gitlab.mpcdf.mpg.de/gvec-group/gvec.git",
+  "gvec_revision": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+  "gvec_package_version": "1.5.0",
+  "gvec_boundary_schema_reference": "1e6040f37080823cf829fba4116defd21582d0fe",
+  "position_frame_contract_reference": "9700b2611e084859e88cdf5ba2fde36a7f3fb842",
+  "consumer_patch": "benchmarks/solovev/public/gvec-1.5.0-cas3d.patch",
+  "consumer_patch_sha256": "543956649a8063da1078643d8588dd551d376a1eb9f8018452cf578481ce022e",
+  "generator": "benchmarks/solovev/public/make_gvec_input.py",
+  "generator_sha256": "dc3caa9c0023928ce57cffbf284f209f8d5aaa5e923a903ce29a6fbb48ee97ba",
+  "analytic_reference_sha256": "2e8fa43f0f1dfdf543c28be70e5546c91242d378158636f8a526244c6ec936b3",
+  "fixture_sha256": "2959c3f694339a1c5d3c5ed22c6e96b2e3b47c8a7d72194ed26576df28b244e4",
+  "input_sha256": "bccb6c868575ea7090ff5700174e21e16b50ac825325cc4a121c2ccd27cefd36",
+  "final_parameter_sha256": "041ccf234633361a054177e96f8e755da56bb3e5257467dcd92b3e6faeb6a92f",
+  "final_state_sha256": "afb70027c57bf7667adba28de779c4fde0cb0b9e76fe570fc1e38ad276fccb38",
+  "producer_binary_sha256": "b400a40c1ec5e466315c2625ee32b45bb85804a69192791a359dd7e25698bef7",
+  "input": {
+    "q0": 1.5,
+    "modes": 32,
+    "radial_elements": 32,
+    "degree": 5,
+    "force_tolerance": 1e-10
+  },
+  "export": {
+    "radial_surfaces": 64,
+    "poloidal_max": 36,
+    "toroidal_max": 0,
+    "sampling": 4,
+    "MNfactor": 5,
+    "winding": -1,
+    "flip": "pol",
+    "stellarator_symmetry": false,
+    "boundary_schema_version": 1,
+    "boundary_s": 1.0
+  },
+  "build": {
+    "compiler": "GNU Fortran 16.1.0 Homebrew",
+    "python": "3.12.13",
+    "blas": "OpenBLAS",
+    "fortran_release_flags": "-fdefault-real-8 -fdefault-double-8 -fbackslash -ffree-line-length-0 -DGNU -fopenmp -O3 -march=native -finline-functions -fPIC",
+    "original_requested_omp_num_threads": 2,
+    "original_requested_openblas_num_threads": 1,
+    "openblas_parallel_mode": "USE_OPENMP (openblas_get_parallel=2)",
+    "original_actual_blas_threads": "Not independently established: OPENBLAS_NUM_THREADS does not independently control the linked OpenMP OpenBLAS build.",
+    "runtime_limitation": "The producer loaded GNU libgomp and Homebrew OpenBLAS libomp. Concurrent BLAS calls with these mixed OpenMP runtimes were subsequently found unreliable. Original solve convergence is therefore qualified by the serial recheck below; these results do not qualify concurrent execution.",
+    "serial_requested_omp_num_threads": 1,
+    "serial_requested_openblas_num_threads": 1,
+    "serial_observed_openblas_threads": 1,
+    "serial_export_environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  },
+  "solve": {
+    "seconds": 117.3,
+    "iterations": 10485,
+    "reported_max_force": 1e-10,
+    "reported_max_force_description": "Rounded original solve log; not a precise bound.",
+    "original_serial_recheck": {
+      "method": "Native initial logging row after EvalForce at original loaded final state, before the first minimizer update; maxIter=1 isolated diagnostic",
+      "omp_threads": 1,
+      "requested_openblas_num_threads": 1,
+      "openblas_get_num_threads": 1,
+      "openblas_get_parallel": 2,
+      "initial_iteration": 0.0,
+      "initial_native_force_components": {
+        "normF_X1": 2.33102733156371e-12,
+        "normF_X2": 2.71874620405546e-12,
+        "normF_LA": 1.00029858464621e-10
+      },
+      "initial_native_max_force": 1.00029858464621e-10,
+      "force_tolerance": 1e-10,
+      "force_gate_passed": false,
+      "seconds": 0.08415025006979704,
+      "original_state_sha256": "6e7cb81779c97c3c8ade7e6c1a65303b789638bf0a911fa5aec690705d41990b",
+      "diagnostic_parameter_sha256": "df7f619e9160ee4402d3899cc8310a310a76038929099000b8385aae195ff07a",
+      "native_log_sha256": "561c99c2a68f1514f63ce89c7d8e6db2b003573fe54c0c2b1a19d91bdc665c55"
+    },
+    "serial_continuation": {
+      "method": "Bounded serial continuation of the unchanged original final state, maxIter=250 and margin target9e-11",
+      "omp_threads": 1,
+      "requested_openblas_num_threads": 1,
+      "initial_native_force_components": {
+        "normF_X1": 2.33102733156371e-12,
+        "normF_X2": 2.71874620405546e-12,
+        "normF_LA": 1.00029858464621e-10
+      },
+      "last_logged_native_force_components": {
+        "normF_X1": 2.26555462036542e-12,
+        "normF_X2": 2.76616536460676e-12,
+        "normF_LA": 9.61609545457019e-11
+      },
+      "last_logged_iteration": 250.0,
+      "seconds": 4.341196791967377,
+      "original_state_sha256": "6e7cb81779c97c3c8ade7e6c1a65303b789638bf0a911fa5aec690705d41990b",
+      "continued_state_sha256": "afb70027c57bf7667adba28de779c4fde0cb0b9e76fe570fc1e38ad276fccb38",
+      "continuation_parameter_sha256": "041ccf234633361a054177e96f8e755da56bb3e5257467dcd92b3e6faeb6a92f",
+      "native_log_sha256": "8db808742fd45df5b9887ab02898f2abbf40d68901fbb4fb7a297f6adcdd5edf",
+      "target_tolerance_reached_before_iteration_limit": false,
+      "accepted_tolerance": 1e-10
+    },
+    "serial_continuation_recheck": {
+      "method": "Native initial logging row after independently reloading saved bounded serial continuation, before any further update",
+      "omp_threads": 1,
+      "requested_openblas_num_threads": 1,
+      "openblas_get_num_threads": 1,
+      "openblas_get_parallel": 2,
+      "initial_iteration": 0.0,
+      "initial_native_force_components": {
+        "normF_X1": 2.26542043186968e-12,
+        "normF_X2": 2.76536882642174e-12,
+        "normF_LA": 9.62385322106369e-11
+      },
+      "initial_native_max_force": 9.62385322106369e-11,
+      "force_tolerance": 1e-10,
+      "force_gate_passed": true,
+      "seconds": 0.07746929186396301,
+      "continued_state_sha256": "afb70027c57bf7667adba28de779c4fde0cb0b9e76fe570fc1e38ad276fccb38",
+      "diagnostic_parameter_sha256": "af3bca2e01ac8d242c71c929cb797d00b2580fa6aa1949bacb58e170ace42be3",
+      "native_log_sha256": "9b18265c4e691ad3d8150b0a574d3ad2cf5124fc25a42ff4f552d2f5b64eb874"
+    },
+    "accepted_max_force": 9.62385322106369e-11,
+    "accepted_force_gate_passed": true
+  },
+  "native_profile_checks": {
+    "Phi_s_chain_rule_max_abs_error": 1.3877787807814457e-17,
+    "chi_s_chain_rule_max_abs_error": 4.579669976578771e-16,
+    "p_s_chain_rule_max_abs_error": 4.94765117764473e-10,
+    "native_flux_ratio_iota_max_abs_error": 1.2045919817182948e-14,
+    "boundary_dPhi_ds_Wb": 0.7071679553076413,
+    "boundary_dchi_ds_Wb": -0.2745154439135813,
+    "boundary_p_Pa": 0.0,
+    "boundary_dp_ds_Pa": -51572.257673405664,
+    "exported_boundary_flux_ratio_plus_native_iota": -1.2045919817182948e-14
+  },
+  "qualification": {
+    "qualifier": "benchmarks/solovev/free_boundary/qualify_export.py",
+    "qualifier_sha256": "b0d542330455bd10fd6766954f5a8f7f87a2e5a08f13f14c0fdf09b968068e3b",
+    "theta_points": 32768,
+    "explicit_boundary": {
+      "method": "declared s=1 Fourier positions and native profile derivatives",
+      "abs_toroidal_flux_slope_error_wb": 1.9863275597511065e-16,
+      "max_abs_export_iota_error": 1.199040866595169e-14,
+      "max_abs_implicit_boundary_error": 3.757341104915213e-10,
+      "corrupted_implicit_boundary_error": 0.07992466507492968,
+      "frozen_export_limits": {
+        "abs_toroidal_flux_slope_error_wb": 1e-14,
+        "max_abs_export_iota_error": 1e-12,
+        "max_abs_implicit_boundary_error": 1e-07
+      },
+      "failed_export_metrics": [],
+      "corrupted_boundary_rejected": true
+    },
+    "halfgrid_implicit_vs_chi_max_abs_error": 7.431036196103857e-09,
+    "halfgrid_extrapolated_flux_ratio_error": 1.348102401932394e-07,
+    "acceptance_source": "https://gitlab.tugraz.at/plasma/proj/stel/gvec-stability/-/blob/822b2bb0296f48cedd246a67cc46ad69266a5cb7/benchmarks/gvec/solovev/acceptance.json",
+    "acceptance_scope": "boundary_export_limits; independent reference recomputed locally without importing CAS-generated data"
+  },
+  "limits": "These checks qualify sampled analytic geometry and exported flux conventions. They do not establish physical matching to a vacuum field or a free-boundary spectrum.",
+  "reproduction": {
+    "environment": "Install gvec==1.5.0 and apply the named consumer patch using patch -p3 in the installed gvec package directory.",
+    "input_command": "python benchmarks/solovev/public/make_gvec_input.py 1.5 WORK --modes 32 --elements 32 --degree 5 --tolerance 1e-10",
+    "solve_command": "cd WORK && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 OMP_DYNAMIC=FALSE pygvec run parameter.toml",
+    "export_command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 OMP_DYNAMIC=FALSE pygvec to-cas3d --rundir WORK --ns 64 --MN_out 36 0 --MNfactor 5 --sampling 4 --flip pol --winding -1 -o WORK/export.nc",
+    "qualify_command": "python benchmarks/solovev/free_boundary/qualify_export.py WORK/parameter.toml WORK/export.nc --theta-points 32768 --require-explicit-boundary",
+    "reproducibility": "Floating point data require numerical agreement; producer timestamps and metadata need not reproduce the fixture byte hash.",
+    "original_solve_command": "cd WORK && OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=1 pygvec run parameter.toml",
+    "serial_continuation": "Reload the original final state using test/data/solovev_q1.5_edge.continuation.ini with OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1, OMP_DYNAMIC=FALSE. The bounded 250-step continuation used a 9e-11 margin target; it hit the iteration limit and its separately reloaded force satisfies the original 1e-10 acceptance tolerance."
+  },
+  "gvec_boundary_schema_source": "https://gitlab.mpcdf.mpg.de/calbert/gvec/-/blob/1e6040f37080823cf829fba4116defd21582d0fe/python/gvec/scripts/cas3d.py",
+  "original_fixture_sha256": "4b2cbf0bdfc612b1015ea79dd9b417683fff785eb0715ccf01652e2d2471a97f",
+  "original_final_parameter_sha256": "03a9bc0b21d349ab4fafc173b4a5f0ecd9797efed47165737154e9a64bf944ff",
+  "original_final_state_sha256": "6e7cb81779c97c3c8ade7e6c1a65303b789638bf0a911fa5aec690705d41990b",
+  "final_parameter_file": "test/data/solovev_q1.5_edge.continuation.ini",
+  "input_file_role": "Original public analytic generator input, unchanged; the separate final native continuation parameters record the serial restart controls.",
+  "original_volume_export_identical_to_previous_patched_producer": true,
+  "serial_export_comparison": {
+    "identical_variables": 12,
+    "total_variables": 51,
+    "boundary_position_harmonic_max_abs_difference": 1.8603563134433898e-11,
+    "volume_position_harmonic_max_abs_difference": 1.0117580666497983e-10,
+    "largest_variable_differences": {
+      "g_sz_mns": {
+        "identical": false,
+        "max_abs_difference": 7.173724086428912e-07,
+        "max_abs_difference_over_max_1_original": 7.173724086428912e-07,
+        "changed_values": 2304,
+        "total_values": 2368
+      },
+      "g_st_mns": {
+        "identical": false,
+        "max_abs_difference": 5.461123428474046e-07,
+        "max_abs_difference_over_max_1_original": 5.461123428474046e-07,
+        "changed_values": 2304,
+        "total_values": 2368
+      },
+      "II_zz_mnc": {
+        "identical": false,
+        "max_abs_difference": 1.9406079898587336e-07,
+        "max_abs_difference_over_max_1_original": 4.47313662143842e-09,
+        "changed_values": 2368,
+        "total_values": 2368
+      },
+      "g_st_mnc": {
+        "identical": false,
+        "max_abs_difference": 4.449761987518097e-09,
+        "max_abs_difference_over_max_1_original": 4.449761987518097e-09,
+        "changed_values": 2368,
+        "total_values": 2368
+      },
+      "g_sz_mnc": {
+        "identical": false,
+        "max_abs_difference": 1.995857435471075e-09,
+        "max_abs_difference_over_max_1_original": 1.995857435471075e-09,
+        "changed_values": 2368,
+        "total_values": 2368
+      },
+      "II_tt_mnc": {
+        "identical": false,
+        "max_abs_difference": 2.6583043946648566e-08,
+        "max_abs_difference_over_max_1_original": 8.032687186016058e-10,
+        "changed_values": 2368,
+        "total_values": 2368
+      },
+      "II_tz_mnc": {
+        "identical": false,
+        "max_abs_difference": 1.1733652868772815e-09,
+        "max_abs_difference_over_max_1_original": 4.3264339550908577e-10,
+        "changed_values": 2368,
+        "total_values": 2368
+      },
+      "g_tz_mnc": {
+        "identical": false,
+        "max_abs_difference": 1.7159991760884452e-09,
+        "max_abs_difference_over_max_1_original": 3.762124319722489e-10,
+        "changed_values": 2368,
+        "total_values": 2368
+      }
+    },
+    "reference": "Original fixture hash recorded above, before the serial continuation."
+  }
+}

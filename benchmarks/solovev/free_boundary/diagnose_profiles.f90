@@ -27,6 +27,7 @@ program benchmark_boundary_profiles
     if (info /= reader_ok) error stop 'read failed'
     call fit_primitive_equilibrium(equilibrium, spline, info)
     if (info /= primitive_equilibrium_ok) error stop 'fit failed'
+    write (*, '(a,i0)') 'explicit boundary schema=', spline%boundary%schema_version
     call build_plasma_boundary_surface(spline, 128, 128, surface, normal, &
         fp, ft, info)
     if (info /= plasma_vacuum_ok) error stop 'boundary failed'
@@ -44,4 +45,11 @@ program benchmark_boundary_profiles
     write (*, '(a,es26.18)') 'stored iota edge spline=', iota_edge
     write (*, '(a,es26.18)') 'ratio minus stored iota=', fp / ft - iota_edge
     write (*, '(a,es26.18)') 'native edge pressure Pa=', profiles(3)
+    if (spline%boundary%schema_version == 1) then
+        write (*, '(a,es26.18)') 'declared boundary dPhi/ds=', &
+            spline%boundary%toroidal_flux_slope
+        write (*, '(a,es26.18)') 'declared boundary dchi/ds=', &
+            spline%boundary%poloidal_flux_slope
+        write (*, '(a)') 'Pressure above is the interior-spline extrapolation.'
+    end if
 end program benchmark_boundary_profiles

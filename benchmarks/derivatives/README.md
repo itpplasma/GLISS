@@ -31,8 +31,11 @@ no timing pass threshold.
 The JSON records individual times and their distribution, separate setup
 stages, agreement errors, gradient, input/library/runner hashes, source
 revision and dirty status, linked-library paths/hashes, host, Python/NumPy,
-and the OpenMP/BLAS thread environment. Set thread counts explicitly in each
-fresh process when comparing scaling. CMake cache and affected compilation
+and the OpenMP/BLAS thread environment. It also queries the linked OpenBLAS
+parallel mode and configured thread count outside a parallel region; these
+are distinct from the actual team size inside assembly. OpenMP-built OpenBLAS
+ignores `OPENBLAS_NUM_THREADS` and must share GLISS's OpenMP runtime. Set thread
+counts explicitly in each fresh process when comparing scaling. CMake cache and affected compilation
 commands are recorded when available; `--build-dir` locates them for an
 installed library. These files describe the contemporary build and are not
 embedded binary attestations. The library hash must stay fixed during a run.

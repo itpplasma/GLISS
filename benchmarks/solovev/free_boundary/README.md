@@ -38,6 +38,14 @@ ingestion and equilibrium exterior matching are qualified. See the
 The fresh independent DCON refinement confirms its crossing near 0.152488;
 it does not qualify GLISS's imported equilibrium.
 
+The October 16 explicit-edge fixture in `test/data/solovev_q1.5_edge.nc`
+passes the original export limits: toroidal flux-slope error `1.99e-16` Wb,
+transform error `1.20e-14`, and implicit-boundary error `3.75e-10`. The
+independent qualifier and native boundary regression use the declared s=1
+data while retaining the interior half-grid. This resolves the export and
+ingestion defect for that fixture. Current-free exterior matching and a
+fresh quantitative wall-window comparison remain required.
+
 The GLISS numbers below are historical results obtained with 64 x 8 angular
 quadrature and the approximate half-width 0.35245 m, before the cubic MDE
 forcing admission rule was enforced and that normalization was corrected. That

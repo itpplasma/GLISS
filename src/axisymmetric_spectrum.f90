@@ -40,7 +40,7 @@ contains
 
     subroutine compute_axisymmetric_spectrum(equilibrium, toroidal_mode, &
             poloidal_max, degree, solve_eigenpair, result, info, &
-            message, radial_cells, angular_theta, angular_zeta)
+            message, radial_cells, angular_theta, angular_zeta, radial_breaks)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: toroidal_mode, poloidal_max, degree
         logical, intent(in) :: solve_eigenpair
@@ -50,6 +50,7 @@ contains
         ! Uniform radial cells (0 or absent: one cell per surface).
         integer, optional, intent(in) :: radial_cells
         integer, optional, intent(in) :: angular_theta, angular_zeta
+        real(dp), optional, intent(in) :: radial_breaks(:)
         type(marginality_spectrum_result_t) :: general
         integer, allocatable :: mode_m(:), mode_n(:)
         real(dp), allocatable :: normal_stored_power(:)
@@ -67,14 +68,16 @@ contains
         parity_class = 1
         call compute_marginality_spectrum(equilibrium, mode_m, mode_n, &
             normal_stored_power, parity_class, degree, n_theta, n_zeta, &
-            solve_eigenpair, general, general_info, message, radial_cells)
+            solve_eigenpair, general, general_info, message, radial_cells, &
+            radial_breaks)
         if (general_info == marginality_spectrum_asymmetric) then
             ! An up-down asymmetric equilibrium couples the sine-parity
             ! family to its cosine partner; parity class 0 assembles both.
             parity_class = 0
             call compute_marginality_spectrum(equilibrium, mode_m, mode_n, &
                 normal_stored_power, parity_class, degree, n_theta, n_zeta, &
-                solve_eigenpair, general, general_info, message, radial_cells)
+                solve_eigenpair, general, general_info, message, radial_cells, &
+                radial_breaks)
         end if
         if (general_info /= marginality_spectrum_ok) then
             if (general_info == marginality_spectrum_invalid) then

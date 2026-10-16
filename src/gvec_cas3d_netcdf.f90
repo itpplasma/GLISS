@@ -1,7 +1,8 @@
 module gvec_cas3d_netcdf
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use netcdf_c_api, only: nc_enotvar, nc_get_integer, nc_get_real, &
+    use netcdf_c_api, only: nc_enotvar, nc_get_attribute_text, &
+        nc_get_integer, nc_get_real, &
         nc_inquire_dimension_id, nc_inquire_dimension_length, &
         nc_inquire_dimension_name, nc_inquire_variable_dimensions, &
         nc_inquire_variable_id, nc_inquire_variable_rank, nc_noerr
@@ -17,14 +18,90 @@ module gvec_cas3d_netcdf
 
     public :: read_dimension
     public :: read_harmonic_component
+    public :: read_boundary_harmonic_component
     public :: read_integer_scalar
     public :: read_integer_vector
     public :: read_optional_real_vector
     public :: read_real_scalar
+    public :: read_real_scalar_units
     public :: read_real_tensor
     public :: read_real_vector
 
 contains
+
+    subroutine read_boundary_harmonic_component(ncid, name, nm, nn, &
+            values, present, info)
+        integer, intent(in) :: ncid, nm, nn
+        character(len=*), intent(in) :: name
+        real(dp), allocatable, intent(out) :: values(:, :, :)
+        logical, intent(out) :: present
+        integer, intent(out) :: info
+        real(dp), allocatable :: file_values(:, :, :)
+        character(len=1) :: dimension_names(2)
+        integer :: counts(2)
+        integer :: status, varid, poloidal, toroidal
+
+        present = .false.
+        status = nc_inquire_variable_id(ncid, name, varid)
+        if (status == nc_enotvar) then
+            allocate (values(1, nm, nn))
+            values = 0.0_dp
+            info = reader_ok
+            return
+        end if
+        info = reader_data_error
+        if (status /= nc_noerr) return
+        dimension_names(1) = "m"
+        dimension_names(2) = "n"
+        counts(1) = nm
+        counts(2) = nn
+        call require_variable_dimensions(ncid, varid, dimension_names, counts, info)
+        if (info /= reader_ok) return
+        call require_units(ncid, varid, "m", info)
+        if (info /= reader_ok) return
+        allocate (file_values(nn, nm, 1))
+        status = nc_get_real(ncid, varid, file_values)
+        info = reader_data_error
+        if (status /= nc_noerr) return
+        if (.not. all(ieee_is_finite(file_values))) return
+        allocate (values(1, nm, nn))
+        do toroidal = 1, nn
+            do poloidal = 1, nm
+                values(1, poloidal, toroidal) = file_values(toroidal, poloidal, 1)
+            end do
+        end do
+        present = .true.
+        info = reader_ok
+    end subroutine read_boundary_harmonic_component
+
+    subroutine read_real_scalar_units(ncid, name, units, value, info)
+        integer, intent(in) :: ncid
+        character(len=*), intent(in) :: name, units
+        real(dp), intent(out) :: value
+        integer, intent(out) :: info
+        integer :: status, varid
+
+        call read_real_scalar(ncid, name, value, info)
+        if (info /= reader_ok) return
+        status = nc_inquire_variable_id(ncid, name, varid)
+        info = reader_data_error
+        if (status /= nc_noerr) return
+        call require_units(ncid, varid, units, info)
+    end subroutine read_real_scalar_units
+
+    subroutine require_units(ncid, varid, expected, info)
+        integer, intent(in) :: ncid, varid
+        character(len=*), intent(in) :: expected
+        integer, intent(out) :: info
+        character(len=32) :: units
+        integer :: status
+
+        info = reader_schema_error
+        status = nc_get_attribute_text(ncid, varid, "units", units)
+        if (status /= nc_noerr) return
+        if (trim(units) /= expected) return
+        info = reader_ok
+    end subroutine require_units
 
     subroutine read_harmonic_component(ncid, name, ns, nm, nn, values, &
             present, info)

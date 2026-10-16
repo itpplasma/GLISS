@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Measure errors of the public R0=1, a=.33, e=1.6, F=1 Solov'ev family.
 
-This reports generator input, stored half-grid data and an independent
-SciPy estimate of GLISS's edge extrapolation. It does not admit an export
-or certify physical matching of the plasma to the vacuum.
+This reports generator input, stored half-grid data, an independent SciPy
+estimate of GLISS's edge extrapolation, and optional declared true-edge data.
+The explicit-edge gate checks three frozen export limits. It does not certify
+physical matching of the plasma to the vacuum.
 """
 import argparse
 from decimal import Decimal, localcontext
@@ -24,6 +25,8 @@ parser.add_argument("parameter", type=Path)
 parser.add_argument("export", type=Path)
 parser.add_argument("--q0", type=float, default=1.5)
 parser.add_argument("--theta-points", type=int, default=32768)
+parser.add_argument("--require-explicit-boundary", action="store_true",
+                    help="require schema-1 edge data and the frozen export limits")
 args = parser.parse_args()
 if args.theta_points < 256:
     parser.error("use at least 256 angular points")
@@ -208,12 +211,84 @@ edge = {
     "shape_parameter_matched_distance_max_m": maximum(np.hypot(re - edge_exact_r,
                                                                ze - edge_exact_z)),
 }
+explicit_edge = None
+boundary_version = getattr(data, "boundary_schema_version", None)
+if boundary_version is not None:
+    if boundary_version != 1:
+        raise ValueError("boundary_schema_version must equal 1")
+    if not np.array_equal(modes, np.arange(37)):
+        raise ValueError("the frozen boundary gate requires m=0 through 36")
+    for name, units in (("boundary_s", "1"), ("boundary_dPhi_ds", "Wb"),
+                        ("boundary_dchi_ds", "Wb")):
+        variable = data[name]
+        if variable.dimensions != () or getattr(variable, "units", None) != units:
+            raise ValueError(f"{name} must be scalar with units={units!r}")
+        if not np.isfinite(variable[...]).item():
+            raise ValueError(f"{name} must be finite")
+    if float(data["boundary_s"][...]) != 1.0:
+        raise ValueError("boundary_s must equal 1")
+
+    def explicit_coefficients(name, suffix):
+        variable_name = f"boundary_{name}_{suffix}"
+        if variable_name not in data.variables:
+            symmetric = getattr(data, "stellarator_symmetry", None) == "True"
+            omitted = ((name == "xhat" and suffix == "mns")
+                       or (name in ("yhat", "zhat") and suffix == "mnc"))
+            if symmetric and omitted:
+                return np.zeros((len(modes), 1))
+            raise ValueError(f"{variable_name} is required")
+        variable = data[variable_name]
+        if variable.dimensions != ("m", "n"):
+            raise ValueError(f"{variable_name} must have dimensions (m,n)")
+        if getattr(variable, "units", None) != "m":
+            raise ValueError(f"{variable_name} must declare units='m'")
+        values = np.asarray(variable[:])
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"{variable_name} must be finite")
+        return values
+
+    def explicit_positions(x_shift=0.0):
+        positions = []
+        for name in ("xhat", "yhat", "zhat"):
+            c = explicit_coefficients(name, "mnc")[:, 0].copy()
+            z = explicit_coefficients(name, "mns")[:, 0]
+            if name == "xhat":
+                c[0] += x_shift
+            positions.append(c @ cosine + z @ sine)
+        return positions
+
+    boundary_x, boundary_y, boundary_z = explicit_positions()
+    boundary_phi_slope = float(data["boundary_dPhi_ds"][...])
+    if boundary_phi_slope == 0.0:
+        raise ValueError("boundary_dPhi_ds must be nonzero")
+    boundary_iota = -float(data["boundary_dchi_ds"][...]) / boundary_phi_slope
+    corrupted_x, corrupted_y, corrupted_z = explicit_positions(0.01)
+    explicit_edge = {
+        "method": "declared s=1 Fourier positions and native profile derivatives",
+        "abs_toroidal_flux_slope_error_wb": float(abs(
+            Decimal(str(boundary_phi_slope)) - edge_flux_decimal)),
+        "max_abs_export_iota_error": abs(boundary_iota - float(1 / edge_q_decimal)),
+        "max_abs_implicit_boundary_error": maximum(
+            implicit(np.hypot(boundary_x, boundary_y), boundary_z) - 1),
+        "corrupted_implicit_boundary_error": maximum(
+            implicit(np.hypot(corrupted_x, corrupted_y), corrupted_z) - 1),
+    }
+    limits = {"abs_toroidal_flux_slope_error_wb": 1e-14,
+              "max_abs_export_iota_error": 1e-12,
+              "max_abs_implicit_boundary_error": 1e-7}
+    explicit_edge["frozen_export_limits"] = limits
+    explicit_edge["failed_export_metrics"] = [
+        name for name, limit in limits.items() if explicit_edge[name] > limit]
+    explicit_edge["corrupted_boundary_rejected"] = (
+        explicit_edge["corrupted_implicit_boundary_error"]
+        > limits["max_abs_implicit_boundary_error"])
 summary = {
     "export_sha256": hashlib.sha256(export_bytes).hexdigest(),
     "parameter_sha256": hashlib.sha256(parameter_bytes).hexdigest(),
     "qualifier_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     "q0": args.q0, "theta_points": args.theta_points,
-    "explicit_boundary_schema_version": getattr(data, "boundary_schema_version", None),
+    "explicit_boundary_schema_version": (None if boundary_version is None
+                                          else int(boundary_version)),
     "reference": {
         "phi_edge_Wb_decimal80": str(edge_flux_decimal),
         "q_edge_decimal80": str(edge_q_decimal), "psi0": psi0, "p0_Pa": p0,
@@ -223,9 +298,10 @@ summary = {
     "generator_input": generator,
     "export_halfgrid": halfgrid,
     "reconstructed_edge_estimate": edge,
+    "explicit_boundary": explicit_edge,
     "domain_notes": [
-        "No acceptance decision or matched exterior-field qualification is made.",
-        "Export contains half-grid surfaces; edge metrics use native-equivalent extrapolation.",
+        "No physical acceptance decision or matched exterior-field qualification is made.",
+        "Interior half-grid splines and declared true-edge data are reported separately.",
         "Cylindrical R=hypot(xhat,yhat); positive analytic iota is minus flipped export iota.",
         "Parameter-matched shape distances are not nearest-point distances.",
         "Exported iota and reconstructed chi'/Phi' are separate quantities.",
@@ -233,3 +309,11 @@ summary = {
 }
 data.close()
 print(json.dumps(summary, indent=2))
+if args.require_explicit_boundary:
+    if explicit_edge is None:
+        raise SystemExit("explicit boundary schema-1 data are required")
+    if explicit_edge["failed_export_metrics"]:
+        raise SystemExit("explicit boundary export failed: "
+                         + ", ".join(explicit_edge["failed_export_metrics"]))
+    if not explicit_edge["corrupted_boundary_rejected"]:
+        raise SystemExit("corrupted boundary control passed")

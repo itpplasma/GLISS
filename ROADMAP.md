@@ -58,12 +58,12 @@ issue whose broader requested acceptance remains unmet.
 | ID | Work package | Dependencies | Current execution |
 | --- | --- | --- | --- |
 | K | Generated physical mathematics | Independent equations and oracle | Mass, magnetic/fluid energy and pressure reverse leaves implemented |
-| G | Geometry and figure-eight admission | Declared embedding contract | Sampled mesh admission implemented; physical GVEC candidate running |
-| V | Discretization and physical qualification | Qualified input and K | Off-knot torus and physical dilation regressions pass; degree-1 study active |
+| G | Geometry and figure-eight admission | Declared embedding contract | Strong GVEC N2-12 is now primary; QUASR is a weak-shape control |
+| V | Discretization and physical qualification | Qualified input and K | Explicit-edge ingestion and optional radial meshes implemented; uniform degree-1 criterion unmet |
 | D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse passes; generic equilibrium response unavailable |
 | S | Sparse backend selection | Reliable backend capabilities | Native LDLT lacks public inertia reliability API; retain block-LAPACK |
 | P | Performance qualification | Accepted workload and accuracy | Pressure reverse benchmark implemented and measured |
-| R | Reproducible release and evidence | Applicable gates above | Native/Python/codegen/optimized and eight Enzyme gates pass |
+| R | Reproducible release and evidence | Applicable gates above | 177 native and 388 Python tests pass with two threads; Linux exact reproduction passes |
 
 ### K: FortSym-generated kernels
 
@@ -113,11 +113,18 @@ issue whose broader requested acceptance remains unmet.
 - [ ] Resolve #35's degree-1 q0=1.035 instability criterion at 64 cells; repeat
   higher-degree convergence on qualified equilibria. Reduced compression
   quadrature does not establish general eigenvalue upper bounds.
+- [x] Expose an optional validated native radial mesh, preserving uniform
+  defaults and carrying the same mesh through pressure JVP/VJP. Radius grading
+  improves degree-1 approximation but does not satisfy the original uniform
+  criterion or resolve the narrow marginal interval at degree 1.
 - [ ] Converge the Solov'ev marginal interval and resolved QAS/LI383 controls;
   separate equilibrium error, regularized resonance behavior and FEEC error.
 - [ ] For physical free boundary (#8), repair true-edge export/ingestion and
   qualify zero edge pressure, tangential-field continuity and current-free
   exterior matching before wall/angular/edge-mesh refinement acceptance.
+- [x] Add an optional strict true-edge schema and independently qualified
+  Solov'ev fixture. Explicit boundary geometry and native flux derivatives
+  drive vacuum-interface construction; legacy half-grid input remains supported.
 - [ ] Obtain missing original CAS3D decks/normalizations (#11) and complete
   MISHKA/CASTOR branch/subspace transfer (#12). Matrix replay alone does not
   qualify the independently assembled physical operator.
@@ -184,6 +191,11 @@ replace a reliable inertia method with pivot-perturbed LU.
   for broader acceptance left after #13/#18/#19/#22/#33 bounded closures.
 - [ ] Finish #10 metadata/version controls and installed LI383 acceptance, #30
   upstream GVEC reporting, and #15 immutable released-version documentation.
+- [x] Reject malformed/fractional/inconsistent VMEC metadata and unsupported
+  BOOZ versions before conversion; retain producer and runtime versions separately.
+- [x] Build archived 0.0.1/0.0.2 guides from their immutable tags and execute
+  their examples against the corresponding installed native wheels. Hosted
+  deployment and public URLs must pass before closing #15.
 - [ ] Maintain this roadmap and the bounded source inventory at integration;
   completed file accounting must not be presented as completed equation review.
 
@@ -197,8 +209,13 @@ installed FortSym consumer exposed missing deployment/runtime dependencies;
 the upstream repair also passes a relocated-package expression, derivative
 and emission oracle. Ordinary GLISS builds remain CAS-free.
 
-GNU 16.1 Release builds with `-O3 -Werror=array-temporaries` pass all 175 native
-tests. Python passes 332 tests with two optional skips. All eight Enzyme gates
+The first wave passed 175 GNU 16.1 Release tests with
+`-O3 -Werror=array-temporaries`, 332 Python tests with two optional skips, and
+175 GNU bounds/runtime-check tests. Mandatory runtime-check CI also passes.
+The integrated edge/mesh/metadata wave passes 177 native tests and 388 Python
+tests with two optional skips, with two OpenMP threads and a shared compatible
+OpenMP runtime. Native backend and pressure-action regressions explicitly
+exercise two workers. All eight Enzyme gates
 pass with LLVM/Flang 22.1.8 and Enzyme 0.0.277 after deferring scheduling
 optimizations until after differentiation. New controls cover
 off-knot torus jets through M36, sampled boundary contacts and rigid motions,
@@ -211,27 +228,62 @@ platform to avoid amplified upstream roundoff differences.
 
 The pressure benchmark in `benchmarks/derivatives/` records repeated timings,
 inputs, library/toolchain hashes and thread settings. On this Apple Silicon
-host, the small Solov'ev workload measured median reverse/cardinal costs of
-14.5/283 ms with one OpenMP thread, and 9.50/186 ms with two, both using one
-BLAS thread. Component agreement passes; the measured improvement is about
-19.5x for this case. These figures do not establish general optimality or
+host, five repetitions with a shared LLVM runtime measured median
+reverse/cardinal costs of 14.54/290.68 ms with one OpenMP thread and
+9.02/178.86 ms with two. Component agreement passes; improvement is about
+20.0x/19.8x for this case. The runtime repair removes a reproduced corruption
+caused by mixing GNU libgomp with OpenBLAS's LLVM libomp. CMake admits the actual
+GNU/LLVM combination using a concurrent BLAS and OpenMP feature oracle, resolves
+the locked conda runtime from its declared loader paths, and rejects conflicting
+overrides. `OPENBLAS_NUM_THREADS=1` does not control OpenMP-built OpenBLAS;
+the benchmark now queries its actual configuration (one/two threads outside
+assembly in these runs). These figures do not establish general optimality or
 qualified figure-eight performance.
 
 Active dependencies remain explicit:
 
 - Fo's configured `--no-build` CMake-reply race is repaired upstream at
-  `2f979d1`; nested SELECT RANK scanning also needs a FortFront repair and
-  original-consumer recheck before resuming the resident integration lane.
-- The public QUASR 189686 NFP=2 boundary/coils are a hash-pinned figure-eight
-  vacuum candidate. A fresh pinned GVEC solve and independent residual,
-  embedding and refinement evidence are in progress. Archived N2-12 outputs
-  inspected so far are not converged reference states.
-- Physical free-boundary qualification needs true-edge producer data; interior
-  half-grid extrapolation cannot establish the required matching tolerance.
+  `2f979d1`, and FortFront nested SELECT RANK scanning at `07bfbb4`.
+  The rebuilt installed Fo passes the original GLISS build and lint checks;
+  its resident lane exposed the separate mixed-runtime BLAS failure above,
+  now repaired in GLISS's runtime selection.
+- The public QUASR 189686 NFP=2 boundary/coils are a hash-pinned weakly folded
+  control (SHA256 `4bba5c53be41d29798d93faa4ee8bad91fe57f3a8ce094648bd09c883e52038e`).
+  A 20,000-iteration GVEC `c0dc66f` attempt fails its frozen coefficient-force
+  and current/iota goals; the independently evaluated force/current RMS are
+  approximately 0.00495/0.00219 against goals of 0.0001. The producer shares
+  the mixed-runtime limitation, so no fixture or convergence claim is promoted.
+  Serial residual reevaluation confirms the physical failure. GVEC's tutorial
+  calls this case figure-eight-like; independent axis geometry shows much weaker
+  folding than its N2-12 reference. The primary qualification target is now the
+  actual GVEC N2-12 G-frame and boundary, with fresh serial producer solves;
+  stronger published inclination cases remain desirable where input data exist.
+- Explicit true-edge Solov'ev export now meets frozen flux/transform/geometry
+  bounds: errors 1.99e-16 Wb, 1.20e-14 and 3.75e-10, with a corrupted geometry
+  control rejected. Native ingestion, round trips and boundary reconstruction
+  pass. Interior-volume-to-edge convergence, tangential-field continuity and
+  a matched current-free exterior remain required for physical free boundary.
+- Uniform-flux degree 1 at 64 cells gives positive lambda for q0=1.035;
+  radius grading detects that instability but still misses the narrower
+  marginal endpoint. No axis-quadrature defect was found: an independent
+  Cartesian/logarithmic energy oracle agrees to 3.4e-16 relative. Fresh explicit
+  exports at q0=1.039062/1.039843 preserve the unstable/stable bracket under
+  serial execution: radius-graded degrees 2/3/4 give negative/positive lambda,
+  as does the unchanged uniform degree-2 default. Radius-graded degree 1 gives
+  positive lambda at both endpoints, so #35 remains open. The independent
+  volume force-balance indicator is approximately 1.70e-5 and is separate from
+  the producer's reported coefficient-force tolerance of 1e-10.
 - GVEC exposes equilibrium energy/force but no raw constrained residual
   Jacobian, transpose or implicit design-response API. Those interfaces and
   differentiated export/reconstruction remain required for generic gradients.
 - FortSparse native LDLT currently has no public reliable-inertia interface;
   adding it to GLISS now would not improve the required certified solves.
-- Original CAS3D decks, the chosen common VMEC/GVEC figure-eight reference and
-  the external `gvec-stability` repository remain unavailable locally.
+- The external `gvec-stability` repository is now accessible at `822b2bb`;
+  recovered Brezellator and historical TERPSICHORE assets supply bounded
+  controls, not a qualified common figure-eight. Original CAS3D decks and the
+  chosen common VMEC/GVEC figure-eight reference remain missing.
+- Hosted macOS wheels pass for the generated-kernel wave. Linux regeneration
+  CI exposed a runtime-library discovery defect before any proof. The repaired
+  workflow passes all 170 exact identities, byte-exact outputs and 3/3 CTests
+  on an x86_64 Linux host with the locked GNU 15.3 Nix toolchain. Hosted
+  reproduction of the repaired workflow remains a required publication gate.

@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - CMakeLists.txt
+      - cmake/**
       - gen/**
       - src/**
       - test/**
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - CMakeLists.txt
+      - cmake/**
       - gen/**
       - src/**
       - test/**
@@ -77,7 +79,7 @@ jobs:
             GLISS_CODEGEN_RUNTIME_ROOTS = pkgs.lib.concatStringsSep "\n"
               (map toString runtimeLibraries);
             GLISS_CODEGEN_RUNTIME_CLOSURE = "${runtimeClosure}/store-paths";
-            GLISS_CODEGEN_LDD = "${pkgs.glibc.bin}/bin/ldd";
+            GLISS_CODEGEN_LOADER = pkgs.stdenv.cc.bintools.dynamicLinker;
             GLISS_CODEGEN_NIXPKGS_REVISION = fortsym.inputs.nixpkgs.rev;
           }
           NIX
@@ -110,17 +112,15 @@ jobs:
         run: |
           nix develop --impure --file .codegen-shell.nix --command bash -euo pipefail -c '
             library_path="$GITHUB_WORKSPACE/fortsym-prefix/lib:$GLISS_CODEGEN_RUNTIME_LIBRARIES"
-            while IFS= read -r store_path; do
-              if [ -d "$store_path/lib" ]; then
-                library_path="$library_path:$store_path/lib"
-              fi
-            done < "$GLISS_CODEGEN_RUNTIME_CLOSURE"
+            # Dependency RUNPATHs resolve the remaining closure. Exposing every
+            # closure /lib would inject Nix libc into host interpreter scripts.
             export LD_LIBRARY_PATH="$library_path"
             {
               printf "Declared Nix runtime roots:\n%s\n" "$GLISS_CODEGEN_RUNTIME_ROOTS"
               printf "Transitive Nix runtime closure:\n"
               cat "$GLISS_CODEGEN_RUNTIME_CLOSURE"
               printf "Resolved library search path:\n%s\n" "$LD_LIBRARY_PATH"
+              printf "Pinned ELF interpreter:\n%s\n" "$GLISS_CODEGEN_LOADER"
             } > codegen-runtime-provenance.txt
             cmake -S . -B build-codegen -G Ninja \
               -DCMAKE_BUILD_TYPE=Release -DCMAKE_Fortran_COMPILER=gfortran \
@@ -130,8 +130,9 @@ jobs:
               gliss_physical_mass_gen gliss_pressure_adjoint_gen gliss_energy_gen
             for generator in physical_mass pressure_adjoint energy; do
               printf "\nLoader dependencies: %s\n" "$generator" >> codegen-runtime-provenance.txt
-              "$GLISS_CODEGEN_LDD" "build-codegen/gliss_${generator}_gen" \
-                >> codegen-runtime-provenance.txt
+              "$GLISS_CODEGEN_LOADER" --library-path "$library_path" \
+                --list "build-codegen/gliss_${generator}_gen" \
+                >> codegen-runtime-provenance.txt 2>&1
             done
             if grep -q "=> not found" codegen-runtime-provenance.txt; then
               cat codegen-runtime-provenance.txt

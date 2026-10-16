@@ -7,7 +7,8 @@ module primitive_equilibrium_spline
         fit_cartesian_harmonic_spline
     use field_periodic_cartesian, only: convert_field_periodic_jet, &
         field_periodic_cartesian_ok
-    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, radial_grid_half
+    use gvec_cas3d_types, only: boundary_is_valid, gvec_cas3d_boundary_t, &
+        gvec_cas3d_equilibrium_t, radial_grid_half
     use primitive_geometry_grid, only: build_primitive_geometry_grid, &
         primitive_geometry_grid_allocation_error, primitive_geometry_grid_ok, &
         primitive_geometry_grid_t
@@ -28,6 +29,8 @@ module primitive_equilibrium_spline
         type(radial_cubic_spline_grid_t) :: radial_grid
         type(cartesian_harmonic_spline_t) :: position
         type(radial_cubic_spline_field_t) :: profiles
+        ! Optional true-edge data do not alter the interior half-grid splines.
+        type(gvec_cas3d_boundary_t) :: boundary
     end type primitive_equilibrium_spline_t
 
     public :: evaluate_primitive_equilibrium
@@ -77,6 +80,7 @@ contains
         if (local_info /= radial_cubic_spline_ok) return
         spline%field_periods = equilibrium%field_periods
         spline%winding = equilibrium%winding
+        spline%boundary = equilibrium%boundary
         info = primitive_equilibrium_ok
     end subroutine fit_primitive_equilibrium
 
@@ -146,6 +150,10 @@ contains
             .and. allocated(equilibrium%pressure)
         if (.not. valid) return
         count = size(equilibrium%s)
+        valid = boundary_is_valid(equilibrium%boundary, &
+            size(equilibrium%poloidal_modes), size(equilibrium%toroidal_modes), &
+            equilibrium%stellarator_symmetric)
+        if (.not. valid) return
         valid = count >= 4 &
             .and. size(equilibrium%toroidal_flux) == count &
             .and. size(equilibrium%poloidal_flux) == count &

@@ -70,8 +70,10 @@ contains
 
     ! Analytic geometry, rather than knot interpolation or another production
     ! geometry routine, is the oracle. Tiny high-m input errors reproduce the
-    ! roundoff-amplification trigger of #19; the radial and angular queries are
-    ! shifted away from the input knots and ordinary equispaced sample points.
+    ! roundoff-amplification trigger of #19. The perturbation is smooth in s:
+    ! mesh-index oscillations have second derivatives growing like h^(-2),
+    ! which would change the exact geometry under the radial refinement.
+    ! Queries avoid the input knots and ordinary equispaced angular points.
     subroutine check_off_knot_torus_sweep()
         integer, parameter :: truncations(4) = [16, 24, 28, 36]
         integer, parameter :: resolutions(2) = [64, 128]
@@ -164,9 +166,11 @@ contains
             equilibrium%yhat%sine(surface, 2, 3) = -0.5_dp * radius
             equilibrium%zhat%sine(surface, 2, 2) = radius
             equilibrium%xhat%cosine(surface, poloidal_max + 1, 2) = &
-                1.0e-16_dp * sin(7.0_dp * real(surface, dp))
+                1.0e-16_dp * equilibrium%s(surface) &
+                * sin(7.0_dp * equilibrium%s(surface))
             equilibrium%zhat%sine(surface, poloidal_max + 1, 2) = &
-                1.0e-16_dp * cos(3.0_dp * real(surface, dp))
+                1.0e-16_dp * equilibrium%s(surface) &
+                * cos(3.0_dp * equilibrium%s(surface))
         end do
     end subroutine build_sweep_torus
 

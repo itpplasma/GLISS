@@ -1,11 +1,13 @@
 module gvec_cas3d_writer
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t, &
+    use gvec_cas3d_types, only: boundary_is_valid, gvec_cas3d_equilibrium_t, &
+        harmonic_pair_t, &
         radial_grid_full, radial_grid_half
     use netcdf_c_api, only: nc_close_file, nc_create_netcdf4_exclusive, &
         nc_def_dimension, nc_def_scalar, nc_def_variable, nc_double, &
-        nc_end_definitions, nc_int64, nc_noerr, nc_put_global_text, &
+        nc_end_definitions, nc_global, nc_int64, nc_noerr, &
+        nc_put_attribute_integer, nc_put_attribute_text, nc_put_global_text, &
         nc_put_integer, nc_put_real
     implicit none
     private
@@ -31,6 +33,8 @@ module gvec_cas3d_writer
         integer :: rho = -1, s = -1
         integer :: profiles(profile_count) = -1
         integer :: pairs(2, pair_count) = -1
+        integer :: boundary_scalars(3) = -1
+        integer :: boundary_pairs(2, 3) = -1
     end type writer_ids_t
 
     public :: write_gvec_cas3d_file
@@ -63,7 +67,7 @@ contains
         type(writer_ids_t), intent(inout) :: ids
         integer, intent(out) :: info
         integer :: dimensions(3), dim_s, dim_m, dim_n, index
-        integer :: vector_dimension(1)
+        integer :: vector_dimension(1), boundary_dimensions(2)
 
         info = writer_netcdf_error
         if (nc_def_dimension(ids%ncid, "s", size(equilibrium%s), dim_s) &
@@ -104,6 +108,14 @@ contains
             if (nc_def_variable(ids%ncid, trim(pair_names(index)) // "_mns", &
                 nc_double, dimensions, ids%pairs(2, index)) /= nc_noerr) return
         end do
+        if (equilibrium%boundary%schema_version == 1) then
+            boundary_dimensions(1) = dim_m
+            boundary_dimensions(2) = dim_n
+            call define_boundary(equilibrium%stellarator_symmetric, &
+                boundary_dimensions, ids, info)
+            if (info /= writer_ok) return
+            info = writer_netcdf_error
+        end if
         if (nc_put_global_text(ids%ncid, "gliss_schema", &
             "gvec-cas3d-export") /= nc_noerr) return
         if (nc_put_global_text(ids%ncid, "gliss_schema_version", "1") &
@@ -118,6 +130,48 @@ contains
         if (nc_end_definitions(ids%ncid) /= nc_noerr) return
         info = writer_ok
     end subroutine define_file
+
+    subroutine define_boundary(symmetric, dimensions, ids, info)
+        logical, intent(in) :: symmetric
+        integer, intent(in) :: dimensions(2)
+        type(writer_ids_t), intent(inout) :: ids
+        integer, intent(out) :: info
+        character(len=17), parameter :: scalar_names(3) = &
+            [character(len=17) :: "boundary_s", "boundary_dPhi_ds", &
+            "boundary_dchi_ds"]
+        character(len=13), parameter :: names(3) = &
+            [character(len=13) :: "boundary_xhat", "boundary_yhat", "boundary_zhat"]
+        character(len=4), parameter :: suffixes(2) = ["_mnc", "_mns"]
+        integer :: index, component
+
+        info = writer_netcdf_error
+        if (nc_put_attribute_integer(ids%ncid, nc_global, &
+            "boundary_schema_version", 1) /= nc_noerr) return
+        do index = 1, 3
+            if (nc_def_scalar(ids%ncid, trim(scalar_names(index)), &
+                nc_double, ids%boundary_scalars(index)) /= nc_noerr) return
+            if (index == 1) then
+                if (nc_put_attribute_text(ids%ncid, ids%boundary_scalars(index), &
+                    "units", "1") /= nc_noerr) return
+            else
+                if (nc_put_attribute_text(ids%ncid, ids%boundary_scalars(index), &
+                    "units", "Wb") /= nc_noerr) return
+            end if
+            do component = 1, 2
+                if (symmetric) then
+                    if (index == 1 .and. component == 2) cycle
+                    if (index > 1 .and. component == 1) cycle
+                end if
+                if (nc_def_variable(ids%ncid, trim(names(index)) // &
+                    suffixes(component), nc_double, dimensions, &
+                    ids%boundary_pairs(component, index)) /= nc_noerr) return
+                if (nc_put_attribute_text(ids%ncid, &
+                    ids%boundary_pairs(component, index), "units", "m") &
+                    /= nc_noerr) return
+            end do
+        end do
+        info = writer_ok
+    end subroutine define_boundary
 
     subroutine write_file(equilibrium, ids, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
@@ -146,8 +200,52 @@ contains
                 ids%pairs(:, index), info)
             if (info /= writer_ok) return
         end do
+        if (equilibrium%boundary%schema_version == 1) then
+            call write_boundary(equilibrium, ids, info)
+            if (info /= writer_ok) return
+        end if
         info = writer_ok
     end subroutine write_file
+
+    subroutine write_boundary(equilibrium, ids, info)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        type(writer_ids_t), intent(in) :: ids
+        integer, intent(out) :: info
+
+        info = writer_netcdf_error
+        if (nc_put_real(ids%ncid, ids%boundary_scalars(1), 1.0_dp) &
+            /= nc_noerr) return
+        if (nc_put_real(ids%ncid, ids%boundary_scalars(2), &
+            equilibrium%boundary%toroidal_flux_slope) /= nc_noerr) return
+        if (nc_put_real(ids%ncid, ids%boundary_scalars(3), &
+            equilibrium%boundary%poloidal_flux_slope) /= nc_noerr) return
+        call write_boundary_pair(ids%ncid, ids%boundary_pairs(:, 1), &
+            equilibrium%boundary%xhat, info)
+        if (info /= writer_ok) return
+        call write_boundary_pair(ids%ncid, ids%boundary_pairs(:, 2), &
+            equilibrium%boundary%yhat, info)
+        if (info /= writer_ok) return
+        call write_boundary_pair(ids%ncid, ids%boundary_pairs(:, 3), &
+            equilibrium%boundary%zhat, info)
+    end subroutine write_boundary
+
+    subroutine write_boundary_pair(ncid, ids, pair, info)
+        integer, intent(in) :: ncid, ids(2)
+        type(harmonic_pair_t), intent(in) :: pair
+        integer, intent(out) :: info
+        real(dp), allocatable :: file_values(:, :, :)
+
+        info = writer_netcdf_error
+        if (ids(1) >= 0) then
+            call file_order(pair%cosine, file_values)
+            if (nc_put_real(ncid, ids(1), file_values) /= nc_noerr) return
+        end if
+        if (ids(2) >= 0) then
+            call file_order(pair%sine, file_values)
+            if (nc_put_real(ncid, ids(2), file_values) /= nc_noerr) return
+        end if
+        info = writer_ok
+    end subroutine write_boundary_pair
 
     subroutine write_profiles(equilibrium, ids, info)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
@@ -243,6 +341,9 @@ contains
         if (.not. valid_coordinates(equilibrium)) return
         if (.not. valid_modes(equilibrium)) return
         if (.not. valid_profiles(equilibrium)) return
+        if (.not. boundary_is_valid(equilibrium%boundary, &
+            size(equilibrium%poloidal_modes), size(equilibrium%toroidal_modes), &
+            equilibrium%stellarator_symmetric)) return
         expected_shape(1) = size(equilibrium%s)
         expected_shape(2) = size(equilibrium%poloidal_modes)
         expected_shape(3) = size(equilibrium%toroidal_modes)

@@ -17,7 +17,7 @@ module compatible_three_component_problem
     use compatible_problem_assembly_support, only: apply_stored_power, &
         surface_preserves_parity, &
         apply_tangential_axis_weight, build_active_indices, &
-        build_uniform_breaks, &
+        build_problem_breaks, &
         compatible_support_allocation, compatible_support_ok, &
         mode_table_is_unique, replicate_indexed_values, scatter_matrix, &
         sum_tensor, symmetrize_matrix, symmetrize_tensor
@@ -143,7 +143,8 @@ contains
     subroutine build_compatible_three_component_problem(equilibrium, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, problem, info, vacuum, &
-            sparse_storage, vacuum_energy, radial_cells, pressure_direction)
+            sparse_storage, vacuum_energy, radial_cells, pressure_direction, &
+            radial_breaks)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:)
@@ -162,6 +163,8 @@ contains
         ! absent: one cell per equilibrium surface).
         integer, optional, intent(in) :: radial_cells
         real(dp), optional, intent(in) :: pressure_direction(:)
+        ! Explicit finite-element breaks in s, including 0 and 1.
+        real(dp), optional, intent(in) :: radial_breaks(:)
         integer, allocatable :: parity(:), trial_m(:), trial_n(:)
         real(dp), allocatable :: trial_power(:)
         integer :: allocation_status, count
@@ -199,7 +202,8 @@ contains
         call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             trial_m, trial_n, trial_power, parity, degree, n_theta, n_zeta, &
             problem, info, vacuum, vacuum_energy, &
-            radial_cells=radial_cells, pressure_direction=pressure_direction)
+            radial_cells=radial_cells, pressure_direction=pressure_direction, &
+            radial_breaks=radial_breaks)
     end subroutine build_compatible_three_component_problem
 
     ! Pressure-sample parameterization v1, in Pa on equilibrium%s. All geometry,
@@ -210,7 +214,7 @@ contains
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
             parity_class, &
             degree, n_theta, n_zeta, pressure_direction, problem, info, &
-            sparse_storage, radial_cells)
+            sparse_storage, radial_cells, radial_breaks)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity_class, degree
@@ -220,6 +224,7 @@ contains
         integer, intent(out) :: info
         logical, optional, intent(in) :: sparse_storage
         integer, optional, intent(in) :: radial_cells
+        real(dp), optional, intent(in) :: radial_breaks(:)
 
         info = compatible_three_component_invalid
         if (.not. allocated(equilibrium%pressure)) return
@@ -230,7 +235,7 @@ contains
             density_kg_m3, mode_m, mode_n, stored_power, parity_class, &
             degree, n_theta, n_zeta, problem, info, sparse_storage=sparse_storage, &
             radial_cells=radial_cells, &
-            pressure_direction=pressure_direction)
+            pressure_direction=pressure_direction, radial_breaks=radial_breaks)
     end subroutine build_compatible_pressure_stiffness_tangent
 
     ! Contract the imported fixed-geometry pressure derivative against a
@@ -240,7 +245,7 @@ contains
     subroutine build_compatible_pressure_trace_gradient(equilibrium, &
             adiabatic_index, density, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, vectors, gradient, info, &
-            radial_cells)
+            radial_cells, radial_breaks)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density, stored_power(:)
         integer, intent(in) :: mode_m(:), mode_n(:), parity_class
@@ -249,6 +254,7 @@ contains
         real(dp), allocatable, intent(out) :: gradient(:)
         integer, intent(out) :: info
         integer, optional, intent(in) :: radial_cells
+        real(dp), optional, intent(in) :: radial_breaks(:)
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(compatible_three_component_problem_t) :: problem
@@ -257,7 +263,7 @@ contains
         real(dp), allocatable :: breaks(:), theta(:), zeta(:), trial_power(:)
         real(dp), allocatable :: coordinates(:), weights(:), value_bar(:), slope_bar(:)
         integer, allocatable :: trial_m(:), trial_n(:), parity(:), kinds(:)
-        integer :: allocation_status, count, intervals, local_info, threads
+        integer :: allocation_status, count, local_info, threads
         integer :: first, last, entry, orientation, batch_size
 
         info = compatible_three_component_invalid
@@ -268,15 +274,16 @@ contains
         if (any(equilibrium%pressure <= 0.0_dp)) return
         if (size(vectors, 2) < 1) return
         if (.not. all(ieee_is_finite(vectors))) return
-        intervals = size(equilibrium%s)
-        if (present(radial_cells)) then
-            if (radial_cells < 0) return
-            if (radial_cells > 0) intervals = radial_cells
+        call build_problem_breaks(size(equilibrium%s), breaks, local_info, &
+            radial_cells, radial_breaks)
+        if (local_info /= compatible_support_ok) then
+            if (local_info == compatible_support_allocation) &
+                info = compatible_three_component_allocation_error
+            return
         end if
-        if (intervals < 2) return
         count = size(mode_m)
         if (parity_class == 0) count = 2 * count
-        allocate (breaks(intervals + 1), trial_m(count), trial_n(count), &
+        allocate (trial_m(count), trial_n(count), &
             trial_power(count), parity(count), stat=allocation_status)
         if (allocation_status /= 0) then
             info = compatible_three_component_allocation_error
@@ -289,8 +296,6 @@ contains
             parity(entry) = parity_class
             if (parity_class == 0) parity(entry) = (entry - 1) / size(mode_m) + 1
         end do
-        call build_uniform_breaks(intervals, breaks, local_info)
-        if (local_info /= compatible_support_ok) return
         call build_radial_feec_complex(breaks, degree, .true., .true., &
             complex, local_info)
         if (local_info /= radial_feec_ok) return
@@ -354,7 +359,7 @@ contains
     subroutine build_compatible_three_component_classes(equilibrium, &
             adiabatic_index, density_kg_m3, mode_m, mode_n, stored_power, &
             degree, n_theta, n_zeta, cosine_problem, sine_problem, info, &
-            vacuum, sparse_storage, vacuum_energy, radial_cells)
+            vacuum, sparse_storage, vacuum_energy, radial_cells, radial_breaks)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:)
@@ -367,6 +372,7 @@ contains
         logical, optional, intent(in) :: sparse_storage
         real(dp), optional, intent(in) :: vacuum_energy(:, :)
         integer, optional, intent(in) :: radial_cells
+        real(dp), optional, intent(in) :: radial_breaks(:)
         integer, allocatable :: parity(:)
         real(dp), allocatable :: computed_vacuum(:, :)
         integer :: modes
@@ -405,18 +411,21 @@ contains
                 mode_m, mode_n, stored_power, parity, degree, n_theta, &
                 n_zeta, cosine_problem, info, vacuum, &
                 vacuum_energy(:modes, :modes), sine_problem, &
-                vacuum_energy(modes + 1:, modes + 1:), radial_cells)
+                vacuum_energy(modes + 1:, modes + 1:), radial_cells, &
+                radial_breaks=radial_breaks)
         else if (present(vacuum)) then
             call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
                 mode_m, mode_n, stored_power, parity, degree, n_theta, &
                 n_zeta, cosine_problem, info, vacuum, &
                 computed_vacuum(:modes, :modes), sine_problem, &
-                computed_vacuum(modes + 1:, modes + 1:), radial_cells)
+                computed_vacuum(modes + 1:, modes + 1:), radial_cells, &
+                radial_breaks=radial_breaks)
         else
             call build_trials(equilibrium, adiabatic_index, density_kg_m3, &
                 mode_m, mode_n, stored_power, parity, degree, n_theta, &
                 n_zeta, cosine_problem, info, vacuum, &
-                sine_problem=sine_problem, radial_cells=radial_cells)
+                sine_problem=sine_problem, radial_cells=radial_cells, &
+                radial_breaks=radial_breaks)
         end if
     end subroutine build_compatible_three_component_classes
 
@@ -493,7 +502,7 @@ contains
     subroutine build_trials(equilibrium, adiabatic_index, density_kg_m3, &
             mode_m, mode_n, stored_power, parity, degree, n_theta, n_zeta, &
             problem, info, vacuum, vacuum_energy, sine_problem, &
-            sine_vacuum_energy, radial_cells, pressure_direction)
+            sine_vacuum_energy, radial_cells, pressure_direction, radial_breaks)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         real(dp), intent(in) :: adiabatic_index, density_kg_m3
         integer, intent(in) :: mode_m(:), mode_n(:), parity(:)
@@ -508,28 +517,23 @@ contains
         real(dp), optional, intent(in) :: sine_vacuum_energy(:, :)
         integer, optional, intent(in) :: radial_cells
         real(dp), optional, intent(in) :: pressure_direction(:)
+        real(dp), optional, intent(in) :: radial_breaks(:)
         type(radial_cubic_spline_field_t), allocatable :: pressure_tangent
         type(primitive_equilibrium_spline_t) :: spline
         type(radial_feec_complex_t) :: complex
         type(class_setup_t) :: setup, sine_setup
         real(dp), allocatable :: breaks(:), theta(:), zeta(:), direction(:, :)
         integer, allocatable :: sine_parity(:)
-        integer :: allocation_status, intervals, local_info
+        integer :: local_info
 
         info = compatible_three_component_invalid
-        intervals = size(equilibrium%s)
-        if (present(radial_cells)) then
-            if (radial_cells < 0) return
-            if (radial_cells > 0) intervals = radial_cells
-        end if
-        if (intervals < 2) return
-        allocate (breaks(intervals + 1), stat=allocation_status)
-        if (allocation_status /= 0) then
-            info = compatible_three_component_allocation_error
+        call build_problem_breaks(size(equilibrium%s), breaks, local_info, &
+            radial_cells, radial_breaks)
+        if (local_info /= compatible_support_ok) then
+            if (local_info == compatible_support_allocation) &
+                info = compatible_three_component_allocation_error
             return
         end if
-        call build_uniform_breaks(intervals, breaks, local_info)
-        if (local_info /= compatible_support_ok) return
         call build_radial_feec_complex(breaks, degree, .true., &
             .not. present(vacuum), complex, local_info)
         if (local_info /= radial_feec_ok) return

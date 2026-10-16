@@ -1,6 +1,7 @@
 program test_gvec_cas3d_reader
     use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
-    use, intrinsic :: iso_c_binding, only: c_int
+    use, intrinsic :: iso_c_binding, only: c_char, c_double, c_int, &
+        c_null_char, c_size_t
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, &
         reader_coordinate_error, reader_data_error, reader_ok, &
@@ -9,8 +10,9 @@ program test_gvec_cas3d_reader
         gvec_cas3d_equilibrium_t, radial_grid_full, radial_grid_half
     use netcdf_c_api, only: nc_close_file, nc_create_netcdf4, &
         nc_def_dimension, nc_def_scalar, nc_def_variable, nc_double, &
-        nc_end_definitions, nc_inquire_variable_id, nc_int64, nc_noerr, &
-        nc_open_write, nc_put_global_text, nc_put_integer, nc_put_real
+        nc_end_definitions, nc_global, nc_inquire_variable_id, nc_int64, &
+        nc_noerr, nc_open_write, nc_put_attribute_integer, &
+        nc_put_attribute_text, nc_put_global_text, nc_put_integer, nc_put_real
     implicit none
 
     integer, parameter :: field_count = 13
@@ -34,6 +36,16 @@ program test_gvec_cas3d_reader
             import :: c_int
             integer(c_int) :: process_id
         end function get_process_id
+
+        function put_double_attribute(ncid, varid, name, xtype, length, &
+                values) bind(c, name="nc_put_att_double") result(status)
+            import :: c_char, c_double, c_int, c_size_t
+            integer(c_int), value :: ncid, varid, xtype
+            character(c_char), intent(in) :: name(*)
+            integer(c_size_t), value :: length
+            real(c_double), intent(in) :: values(*)
+            integer(c_int) :: status
+        end function put_double_attribute
     end interface
 
     type :: fixture_ids_t
@@ -42,6 +54,9 @@ program test_gvec_cas3d_reader
         integer :: m = -1, n = -1, rho = -1, s = -1
         integer :: profiles(profile_count) = -1
         integer :: pairs(2, field_count) = -1
+        integer :: boundary_case = 0
+        integer :: boundary_s = -1, boundary_phi = -1, boundary_chi = -1
+        integer :: boundary_pairs(2, 3) = -1
     end type fixture_ids_t
 
     type(gvec_cas3d_equilibrium_t) :: equilibrium
@@ -140,6 +155,8 @@ program test_gvec_cas3d_reader
     call require(info == reader_schema_error, &
         "unknown position frame was accepted")
 
+    call test_boundary_schema()
+
     call delete_fixture(half_file)
     call delete_fixture(full_file)
     call delete_fixture(symmetric_file)
@@ -162,6 +179,10 @@ contains
         real(dp), parameter :: expected_s(ns) = [1.0_dp / 6.0_dp, &
             1.0_dp / 2.0_dp, 5.0_dp / 6.0_dp]
 
+        call require(state%boundary%schema_version == 0, &
+            "legacy fixture gained a boundary declaration")
+        call require(.not. allocated(state%boundary%xhat%cosine), &
+            "legacy fixture gained boundary coefficients")
         call require(state%field_periods == 5, "field periods are wrong")
         call require(state%winding == 1, "winding is wrong")
         call require(abs(state%beta_average - 0.025_dp) < 1.0e-14_dp, &
@@ -181,23 +202,24 @@ contains
     end subroutine verify_half_fixture
 
     subroutine create_fixture(filename, grid_kind, symmetric, corrupt, &
-            schema_version, position_frame, include_position_frame)
+            schema_version, position_frame, include_position_frame, boundary_case)
         character(len=*), intent(in) :: filename
         integer, intent(in) :: grid_kind
         logical, intent(in) :: symmetric, corrupt
         integer, intent(in), optional :: schema_version
         character(len=*), intent(in), optional :: position_frame
         logical, intent(in), optional :: include_position_frame
+        integer, intent(in), optional :: boundary_case
         type(fixture_ids_t) :: ids
 
         call define_fixture(filename, grid_kind, symmetric, corrupt, ids, &
-            schema_version, position_frame, include_position_frame)
+            schema_version, position_frame, include_position_frame, boundary_case)
         call write_fixture(grid_kind, ids)
         call require_netcdf(nc_close_file(ids%ncid))
     end subroutine create_fixture
 
     subroutine define_fixture(filename, grid_kind, symmetric, corrupt, ids, &
-            schema_version, position_frame, include_position_frame)
+            schema_version, position_frame, include_position_frame, boundary_case)
         character(len=*), intent(in) :: filename
         integer, intent(in) :: grid_kind
         logical, intent(in) :: symmetric, corrupt
@@ -205,6 +227,7 @@ contains
         integer, intent(in), optional :: schema_version
         character(len=*), intent(in), optional :: position_frame
         logical, intent(in), optional :: include_position_frame
+        integer, intent(in), optional :: boundary_case
         integer :: dimensions(3), dim_s, dim_m, dim_n
         character(len=16) :: version_text
         logical :: write_position_frame
@@ -250,6 +273,10 @@ contains
                     "position_frame", &
                     "xhat,yhat rotated by winding*zeta_B"))
             end if
+        end if
+        if (present(boundary_case)) then
+            ids%boundary_case = boundary_case
+            call define_boundary_fixture(ids, dim_s, dim_m, dim_n, symmetric)
         end if
         call require_netcdf(nc_end_definitions(ids%ncid))
     end subroutine define_fixture
@@ -342,6 +369,7 @@ contains
                 profile_values))
         end do
         call write_harmonics(ids)
+        if (ids%boundary_case /= 0) call write_boundary_fixture(ids)
     end subroutine write_fixture
 
     subroutine radial_coordinates(grid_kind, s_values, rho_values)
@@ -390,6 +418,216 @@ contains
             end if
         end do
     end subroutine write_harmonics
+
+    subroutine test_boundary_schema()
+        character(len=64) :: filename
+        character(len=96) :: message
+        integer :: test_case, expected
+        logical :: symmetric
+
+        write (filename, '("reader_boundary_",i0,".nc")') get_process_id()
+        do test_case = 1, 33
+            symmetric = any(test_case == [2, 3, 16])
+            call create_fixture(filename, radial_grid_half, symmetric, &
+                .false., boundary_case=test_case)
+            call read_gvec_cas3d_file(filename, equilibrium, info)
+            expected = reader_schema_error
+            select case (test_case)
+            case (1:3, 25)
+                expected = reader_ok
+            case (8:10, 15)
+                expected = reader_data_error
+            end select
+            write (message, '("boundary fixture ",i0," had status ",i0)') &
+                test_case, info
+            call require(info == expected, trim(message))
+            if (expected == reader_ok) then
+                call require(equilibrium%boundary%schema_version == 1, &
+                    "boundary schema was not identified")
+                call require(equilibrium%boundary%toroidal_flux_slope == &
+                    -2.5_dp, "boundary toroidal flux slope changed")
+                call require(equilibrium%boundary%poloidal_flux_slope == &
+                    0.75_dp, "boundary poloidal flux slope changed")
+                call require(all(shape(equilibrium%boundary%xhat%cosine) &
+                    == [1, nm, nn]), "boundary harmonic shape is wrong")
+                call require(equilibrium%boundary%xhat%cosine(1, 2, 3) &
+                    == 123.0_dp, "boundary harmonic ordering is wrong")
+                call require(equilibrium%boundary%yhat%sine(1, 2, 3) &
+                    == -223.0_dp, "boundary sine ordering is wrong")
+                if (symmetric) then
+                    call require(all(equilibrium%boundary%xhat%sine == &
+                        0.0_dp), "boundary even complement is not zero")
+                    call require(all(equilibrium%boundary%yhat%cosine == &
+                        0.0_dp), "boundary odd complement is not zero")
+                    call require(all(equilibrium%boundary%zhat%cosine == &
+                        0.0_dp), "boundary z complement is not zero")
+                end if
+            end if
+            call delete_fixture(filename)
+        end do
+    end subroutine test_boundary_schema
+
+    subroutine define_boundary_fixture(ids, dim_s, dim_m, dim_n, symmetric)
+        type(fixture_ids_t), intent(inout) :: ids
+        integer, intent(in) :: dim_s, dim_m, dim_n
+        logical, intent(in) :: symmetric
+        character(len=4), parameter :: names(3) = ["xhat", "yhat", "zhat"]
+        character(len=4), parameter :: suffixes(2) = ["_mnc", "_mns"]
+        integer :: field, component, test_case, dimensions(2), variable
+        integer :: vector_dimension(1)
+        logical :: odd, complement
+
+        test_case = ids%boundary_case
+        dimensions(1) = dim_m
+        dimensions(2) = dim_n
+        vector_dimension(1) = dim_m
+        ! A lone extension variable also requires an explicit declaration.
+        if (test_case == 4 .or. test_case >= 26) then
+            if (test_case == 4) then
+                call define_boundary_scalar(ids%ncid, "boundary_s", &
+                    "1", ids%boundary_s)
+            else if (test_case == 26) then
+                call define_boundary_scalar(ids%ncid, "boundary_dPhi_ds", &
+                    "Wb", ids%boundary_phi)
+            else if (test_case == 27) then
+                call define_boundary_scalar(ids%ncid, "boundary_dchi_ds", &
+                    "Wb", ids%boundary_chi)
+            else
+                field = 1 + (test_case - 28) / 2
+                component = 1 + modulo(test_case - 28, 2)
+                call require_netcdf(nc_def_variable(ids%ncid, &
+                    "boundary_" // names(field) // suffixes(component), &
+                    nc_double, dimensions, &
+                    ids%boundary_pairs(component, field)))
+            end if
+            return
+        end if
+        call define_boundary_version(ids%ncid, test_case)
+        if (test_case == 17) then
+            call require_netcdf(nc_def_variable(ids%ncid, "boundary_s", &
+                nc_double, vector_dimension, ids%boundary_s))
+            call require_netcdf(nc_put_attribute_text(ids%ncid, &
+                ids%boundary_s, "units", "1"))
+        else
+            call define_boundary_scalar(ids%ncid, "boundary_s", &
+                "1", ids%boundary_s)
+        end if
+        call define_boundary_scalar(ids%ncid, "boundary_dPhi_ds", &
+            "Wb", ids%boundary_phi)
+        call define_boundary_scalar(ids%ncid, "boundary_dchi_ds", &
+            "Wb", ids%boundary_chi)
+        if (test_case == 12) call require_netcdf(nc_put_attribute_text( &
+            ids%ncid, ids%boundary_phi, "units", "T"))
+        if (test_case == 14) dimensions(1) = dim_s
+        if (test_case == 20) then
+            dimensions(1) = dim_n
+            dimensions(2) = dim_m
+        end if
+        do field = 1, 3
+            odd = field /= 1
+            do component = 1, 2
+                complement = (odd .eqv. (component == 1))
+                if (symmetric .and. complement) then
+                    if (.not. any(test_case == [3, 16])) cycle
+                end if
+                if (test_case == 7 .and. field == 3 .and. component == 2) cycle
+                if (test_case == 13 .and. field == 1 .and. component == 1) then
+                    call require_netcdf(nc_def_variable(ids%ncid, &
+                        "boundary_xhat_mnc", nc_double, vector_dimension, variable))
+                else
+                    call require_netcdf(nc_def_variable(ids%ncid, &
+                        "boundary_" // names(field) // suffixes(component), &
+                        nc_double, dimensions, variable))
+                end if
+                ids%boundary_pairs(component, field) = variable
+                if (test_case == 19 .and. field == 1 .and. component == 1) cycle
+                call require_netcdf(nc_put_attribute_text(ids%ncid, &
+                    variable, "units", "m"))
+                if (test_case == 11 .and. field == 1 .and. component == 1) &
+                    call require_netcdf(nc_put_attribute_text(ids%ncid, &
+                    variable, "units", "cm"))
+            end do
+        end do
+    end subroutine define_boundary_fixture
+
+    subroutine define_boundary_scalar(ncid, name, units, variable)
+        integer, intent(in) :: ncid
+        character(len=*), intent(in) :: name, units
+        integer, intent(out) :: variable
+
+        call require_netcdf(nc_def_scalar(ncid, name, nc_double, variable))
+        call require_netcdf(nc_put_attribute_text(ncid, variable, "units", units))
+    end subroutine define_boundary_scalar
+
+    subroutine define_boundary_version(ncid, test_case)
+        integer, intent(in) :: ncid, test_case
+        real(c_double) :: values(2)
+        integer :: length
+
+        select case (test_case)
+        case (5)
+            call require_netcdf(nc_put_attribute_integer(ncid, nc_global, &
+                "boundary_schema_version", 2))
+        case (6)
+            call require_netcdf(nc_put_attribute_text(ncid, nc_global, &
+                "boundary_schema_version", "1"))
+        case (21:25)
+            values = 1.0_dp
+            length = 1
+            if (test_case == 21) values(1) = 1.5_dp
+            if (test_case == 22) values(1) = ieee_value(0.0_dp, ieee_quiet_nan)
+            if (test_case == 23) values(1) = huge(0.0_dp)
+            if (test_case == 24) length = 2
+            call require_netcdf(int(put_double_attribute(int(ncid, c_int), &
+                int(nc_global, c_int), "boundary_schema_version" // &
+                c_null_char, int(nc_double, c_int), int(length, c_size_t), &
+                values)))
+        case default
+            call require_netcdf(nc_put_attribute_integer(ncid, nc_global, &
+                "boundary_schema_version", 1))
+        end select
+    end subroutine define_boundary_version
+
+    subroutine write_boundary_fixture(ids)
+        type(fixture_ids_t), intent(in) :: ids
+        real(dp) :: values(nn * max(nm, ns)), scalar_values(nm), phi, chi
+        integer :: field, component, poloidal, toroidal, test_case
+        logical :: complement
+
+        test_case = ids%boundary_case
+        scalar_values = 1.0_dp
+        if (test_case == 18) scalar_values = 0.99_dp
+        if (ids%boundary_s >= 0) call require_netcdf(nc_put_real(ids%ncid, &
+            ids%boundary_s, scalar_values))
+        phi = -2.5_dp
+        chi = 0.75_dp
+        if (test_case == 8) phi = ieee_value(0.0_dp, ieee_quiet_nan)
+        if (test_case == 9) phi = 0.0_dp
+        if (test_case == 10) chi = ieee_value(0.0_dp, ieee_quiet_nan)
+        if (ids%boundary_phi >= 0) call require_netcdf(nc_put_real(ids%ncid, &
+            ids%boundary_phi, phi))
+        if (ids%boundary_chi >= 0) call require_netcdf(nc_put_real(ids%ncid, &
+            ids%boundary_chi, chi))
+        do field = 1, 3
+            do component = 1, 2
+                if (ids%boundary_pairs(component, field) < 0) cycle
+                values = 0.0_dp
+                do poloidal = 1, nm
+                    do toroidal = 1, nn
+                        values(toroidal + nn * (poloidal - 1)) = &
+                            real(100 * field + 10 * poloidal + toroidal, dp)
+                    end do
+                end do
+                if (component == 2) values = -values
+                complement = ((field /= 1) .eqv. (component == 1))
+                if (test_case == 3 .and. complement) values = 0.0_dp
+                if (test_case == 15 .and. field == 1 .and. component == 1) &
+                    values(1) = ieee_value(0.0_dp, ieee_quiet_nan)
+                call require_netcdf(nc_put_real(ids%ncid, &
+                    ids%boundary_pairs(component, field), values))
+            end do
+        end do
+    end subroutine write_boundary_fixture
 
     subroutine overwrite_pressure_with_nan(filename)
         character(len=*), intent(in) :: filename
