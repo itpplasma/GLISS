@@ -1,0 +1,276 @@
+{
+  "status": "Frozen original field is not stationary in the enriched trial spaces; no physical qualification",
+  "producer_commit": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+  "state_sha256": "9b8bcf7da8ee46e320416f83922fc0b9cd202aa3dc6ffc83a48b87d9cbd912d5",
+  "no_minimization": true,
+  "omp_threads": 1,
+  "common_quadrature": {
+    "radial_gauss_points_per_cell": 15,
+    "theta": 55,
+    "zeta_per_period": 199
+  },
+  "transfer_contract": "Nested degree-5 clamped spline spaces under uniform 6-to12 subdivision; Fourier embedding retains all original modes and zeros additions. Native interpolation must preserve evaluations to floating-point precision.",
+  "source_contracts": [
+    "src/base/base.F90:182-183 Fourier embedding then spline transfer",
+    "src/base/fbase.F90:622-643 zero additional modes and copy retained modes",
+    "src/base/sbase.F90:981-1003 evaluate old spline at target interpolation points, then target initDOF",
+    "src/functionals/mhd3d/mhd3d_evalfunc.F90:528 negative energy variation; :849 BC RHS; :865 unpreconditioned X strong BC"
+  ],
+  "cases": [
+    {
+      "name": "base",
+      "elements": 6,
+      "m": 6,
+      "n": 20,
+      "parameterfile": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/base.ini",
+      "statefile": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/refined-fresh-agd/GVEC_N2_12_refined-fresh-agd_gvec_stages/0-00/GVEC_N2_12_refined-fresh-agd_State_0001_00014500.dat",
+      "position_max_difference_m": 0.0,
+      "B_max_difference_T": 0.0,
+      "boundary_position_max_difference_m": 0.0,
+      "transfer_check_passed": true,
+      "radial_points": 57,
+      "theta_points": 17,
+      "zeta_points_per_period": 73,
+      "mu0_energy": 0.029318342573991536,
+      "BC_applied_raw_X1_X2_norms": [
+        8.31448709766816e-09,
+        5.6711285028427265e-09
+      ],
+      "added_angular_X1_X2_norms": [
+        0.0,
+        0.0
+      ],
+      "m_above6_X1_X2_norms": [
+        0.0,
+        0.0
+      ],
+      "physical_abs_n_above40_X1_X2_norms": [
+        0.0,
+        0.0
+      ],
+      "energy_absolute_difference_from_base": 0.0
+    },
+    {
+      "name": "radial",
+      "elements": 12,
+      "m": 6,
+      "n": 20,
+      "parameterfile": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/radial.ini",
+      "statefile": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/refined-fresh-agd/GVEC_N2_12_refined-fresh-agd_gvec_stages/0-00/GVEC_N2_12_refined-fresh-agd_State_0001_00014500.dat",
+      "position_max_difference_m": 3.692639165456277e-16,
+      "B_max_difference_T": 2.7660168381113708e-14,
+      "boundary_position_max_difference_m": 0.0,
+      "transfer_check_passed": true,
+      "radial_points": 57,
+      "theta_points": 17,
+      "zeta_points_per_period": 73,
+      "mu0_energy": 0.02931834257399152,
+      "BC_applied_raw_X1_X2_norms": [
+        6.6317424958851105e-06,
+        4.685396983398543e-06
+      ],
+      "added_angular_X1_X2_norms": [
+        0.0,
+        0.0
+      ],
+      "m_above6_X1_X2_norms": [
+        0.0,
+        0.0
+      ],
+      "physical_abs_n_above40_X1_X2_norms": [
+        0.0,
+        0.0
+      ],
+      "energy_absolute_difference_from_base": 1.3877787807814457e-17
+    },
+    {
+      "name": "angular",
+      "elements": 6,
+      "m": 10,
+      "n": 30,
+      "parameterfile": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/angular.ini",
+      "statefile": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/refined-fresh-agd/GVEC_N2_12_refined-fresh-agd_gvec_stages/0-00/GVEC_N2_12_refined-fresh-agd_State_0001_00014500.dat",
+      "position_max_difference_m": 0.0,
+      "B_max_difference_T": 0.0,
+      "boundary_position_max_difference_m": 0.0,
+      "transfer_check_passed": true,
+      "radial_points": 57,
+      "theta_points": 17,
+      "zeta_points_per_period": 73,
+      "mu0_energy": 0.029318342573991536,
+      "BC_applied_raw_X1_X2_norms": [
+        5.0381312397212134e-05,
+        4.179171525982428e-05
+      ],
+      "added_angular_X1_X2_norms": [
+        5.038131171113738e-05,
+        4.1791714875038716e-05
+      ],
+      "m_above6_X1_X2_norms": [
+        5.454824583371268e-06,
+        4.916246972580519e-06
+      ],
+      "physical_abs_n_above40_X1_X2_norms": [
+        5.0175111684154587e-05,
+        4.161415575651873e-05
+      ],
+      "energy_absolute_difference_from_base": 0.0
+    },
+    {
+      "name": "combined",
+      "elements": 12,
+      "m": 10,
+      "n": 30,
+      "parameterfile": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/combined.ini",
+      "statefile": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/refined-fresh-agd/GVEC_N2_12_refined-fresh-agd_gvec_stages/0-00/GVEC_N2_12_refined-fresh-agd_State_0001_00014500.dat",
+      "position_max_difference_m": 3.692639165456277e-16,
+      "B_max_difference_T": 2.7660168381113708e-14,
+      "boundary_position_max_difference_m": 0.0,
+      "transfer_check_passed": true,
+      "radial_points": 57,
+      "theta_points": 17,
+      "zeta_points_per_period": 73,
+      "mu0_energy": 0.02931834257399152,
+      "BC_applied_raw_X1_X2_norms": [
+        5.006290242699552e-05,
+        3.8652845767623446e-05
+      ],
+      "added_angular_X1_X2_norms": [
+        4.962171088226536e-05,
+        3.836781908114723e-05
+      ],
+      "m_above6_X1_X2_norms": [
+        5.757873460537272e-06,
+        5.136534384796535e-06
+      ],
+      "physical_abs_n_above40_X1_X2_norms": [
+        4.938934549750677e-05,
+        3.814973412626766e-05
+      ],
+      "energy_absolute_difference_from_base": 1.3877787807814457e-17
+    }
+  ],
+  "angular_retained_coefficient_max_difference_from_base": 0.0,
+  "selected_admissible_added_modes": [
+    {
+      "variable": 1,
+      "m": 1,
+      "radial_index": 10,
+      "raw_gradient": -1.893604545037019e-05,
+      "physical_n": 46,
+      "n_per_field_period": 23,
+      "centered_differences": [
+        {
+          "step": 0.0001,
+          "negative_energy_derivative": -1.8955960533889593e-05
+        },
+        {
+          "step": 3e-05,
+          "negative_energy_derivative": -1.8937835732461366e-05
+        },
+        {
+          "step": 1e-05,
+          "negative_energy_derivative": -1.8936243892375693e-05
+        }
+      ],
+      "richardson_negative_energy_derivative": -1.8936044912364985e-05,
+      "richardson_relative_difference_from_raw_gradient": 2.841169797708094e-08
+    },
+    {
+      "variable": 2,
+      "m": 1,
+      "radial_index": 10,
+      "raw_gradient": -1.61678290013645e-05,
+      "physical_n": 44,
+      "n_per_field_period": 22,
+      "centered_differences": [
+        {
+          "step": 0.0001,
+          "negative_energy_derivative": -1.6169892022577237e-05
+        },
+        {
+          "step": 3e-05,
+          "negative_energy_derivative": -1.6168014670137065e-05
+        },
+        {
+          "step": 1e-05,
+          "negative_energy_derivative": -1.6167849524462152e-05
+        }
+      ],
+      "richardson_negative_energy_derivative": -1.616782888125279e-05,
+      "richardson_relative_difference_from_raw_gradient": 7.429056058007488e-09
+    }
+  ],
+  "interpretation": "Exact nested-space transfer is supported by source construction and roundoff-level position/B/boundary/energy checks. Nonzero added toroidal interior basis energy derivatives establish weak residual components outside the original M6/N20 trial space. Radial refinement also reveals weak residual. All reported coefficient norms depend on basis and BC coordinates; they are not comparable physical errors, complement norms, or coercivity bounds. No claim that all physical residual is explained.",
+  "availability": "Scratch-only diagnostic source/outputs under /tmp/gliss-gvec-real-figure8-20261016/trial-enrichment; no portable harness or new fixture committed.",
+  "artifacts": [
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/base.ini",
+      "sha256": "44ea22c9ec01b18536389a5699627d3b98a189373dfce9414a3556c284fd0d4f"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/radial.ini",
+      "sha256": "ebd46a9c1c48a168b2963f35e45499039a4e06a20e202f166b56e2fd208d0aea"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/combined.ini",
+      "sha256": "276e320a1d188b85be9ee42afdd6f7b8ad819002c7789aab96ad4da91d7aa236"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/angular.ini",
+      "sha256": "a6582dc633ee060a077c478c5fe22a90dd0db848289377063303c70905fe6202"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/combined-gradients.dat",
+      "sha256": "28a5ea1ce6de707a49487b2f4d5cdd3c6744858d1350814d9e1adb5f4a8a0c39"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/radial-gradients.dat",
+      "sha256": "7b67c6b01e73218e39088603b9babcdc2ebeb66e4d58140ca89bde7797ef6014"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/base-gradients.dat",
+      "sha256": "77a507abb70cb6048dc5ff34470badee88a89ba9ea98a9c02f83b3068fa8b85c"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/angular-gradients.dat",
+      "sha256": "696d8375c74457db1af59eeb85d39279ed20d331091915a6086cda91c2952111"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/radial-gradient.log",
+      "sha256": "d67018fe8a76b7878010d45f1914a06206771099119b0b9d05d978dae1c2f075"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/combined-gradient.log",
+      "sha256": "acd8bfb104872c79c1a813ecdfacc7c76bead7477031c5bd687d3de879ae0271"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/angular-gradient.log",
+      "sha256": "8d795368af2f3c1c7cff5cc87eb27fe888359e837a1782c257763e08509e538a"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/base-gradient.log",
+      "sha256": "0e46d725987e6c7d8a729787bc745d61ce4576af04a7b7555a2a4093529b6376"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/gradient.f90",
+      "sha256": "64ddb53a05dd949b65d0be2bd62b4a89b553a95e5fddda00b66ace0d354e9284"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/check_transfer.py",
+      "sha256": "bea02abc49a40c9e13ea16d82a75c4953efe3967e833b6424d633ac4ea1ee0a0"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/selected_energy_fd.f90",
+      "sha256": "5193885c6ce04ca5c856d27bd6d0bb11b6a506c93f71a11b8d14e03044305466"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/selected-energy-fd.log",
+      "sha256": "7580eeb150facb52153b5533b1e51de57b327b906e5902710910588e2483be51"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/trial-enrichment/transfer.json",
+      "sha256": "4d8ed4ca8a8f5bfc59d63e75589fb5033b6781e958a03db9a5fc59e78626fd41"
+    }
+  ]
+}

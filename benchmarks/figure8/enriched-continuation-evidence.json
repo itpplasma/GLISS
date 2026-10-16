@@ -1,0 +1,163 @@
+{
+  "status": "Bounded enriched continuation ended without coefficient or physical acceptance; no promotion",
+  "producer_commit": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+  "wall_seconds": 600.214529416,
+  "retained_iteration": 800,
+  "original_state_sha256": "9b8bcf7da8ee46e320416f83922fc0b9cd202aa3dc6ffc83a48b87d9cbd912d5",
+  "original_state_unchanged": true,
+  "resolution": {
+    "elements": 12,
+    "m": 10,
+    "n": 30,
+    "degree": 5,
+    "quadrature_points": [
+      55,
+      199
+    ],
+    "radial_gauss_points_per_cell": 15,
+    "minimizer": 10
+  },
+  "coefficient_force": 5.73217577735284e-08,
+  "coefficient_goal": 1e-08,
+  "coefficient_goal_passed": false,
+  "boundary_position_max_error_m": 1.0209827278361288e-14,
+  "boundary_goal_m": 1e-12,
+  "boundary_goal_passed": true,
+  "profiles": {
+    "boundary_position_max_error_m": 1.0209827278361288e-14,
+    "pressure_Pa": 0.0,
+    "iota": 0.7,
+    "strong_figure8_shape_preserved": true
+  },
+  "physical_relative_RMS": 0.003643112847608682,
+  "physical_goal": 0.0001,
+  "physical_goal_passed": false,
+  "previous_physical_RMS": 0.009641389228836745,
+  "physical_RMS_improvement_factor": 2.64647010184307,
+  "last_two_grid_relative_RMS_change": 1.1127587363460317e-10,
+  "physical_quadrature_refinement": [
+    {
+      "quadrature_per_cell_theta_zeta": [
+        8,
+        65,
+        199
+      ],
+      "volume_m3": 0.6884559800876274,
+      "normalization_N_per_m3": 100443.36392579932,
+      "force_relative_L1": 0.0016928370853090996,
+      "force_relative_RMS": 0.0036431128543197816,
+      "force_relative_max": 0.19906894647038376,
+      "jacobian_min": 3.242480149673493e-05,
+      "cartesian_vs_metric_current_max_A_per_m2": 2.9114271159012902e-08,
+      "pressure_slope_max": 0.0,
+      "vacuum_current_relative_RMS": 0.024278580518676256
+    },
+    {
+      "quadrature_per_cell_theta_zeta": [
+        10,
+        81,
+        263
+      ],
+      "volume_m3": 0.6884559800876275,
+      "normalization_N_per_m3": 100443.36404093793,
+      "force_relative_L1": 0.0016935871765034907,
+      "force_relative_RMS": 0.0036431128472032915,
+      "force_relative_max": 0.20874768900492932,
+      "jacobian_min": 2.1306845893545827e-05,
+      "cartesian_vs_metric_current_max_A_per_m2": 4.0537708222110364e-08,
+      "pressure_slope_max": 0.0,
+      "vacuum_current_relative_RMS": 0.024278580518290495
+    },
+    {
+      "quadrature_per_cell_theta_zeta": [
+        12,
+        97,
+        327
+      ],
+      "volume_m3": 0.6884559800876274,
+      "normalization_N_per_m3": 100443.36402246015,
+      "force_relative_L1": 0.001693024658513057,
+      "force_relative_RMS": 0.003643112847608682,
+      "force_relative_max": 0.21366007060782996,
+      "jacobian_min": 1.5057053384522277e-05,
+      "cartesian_vs_metric_current_max_A_per_m2": 5.1665417197919204e-08,
+      "pressure_slope_max": 0.0,
+      "vacuum_current_relative_RMS": 0.024278580518248997
+    }
+  ],
+  "finite_difference_step_sweep": [
+    {
+      "central_difference_step": 0.0003,
+      "force_relative_point_RMS": 0.0030098134313025857,
+      "analytic_vs_difference_force_relative_RMS": 6.839706067322201e-07
+    },
+    {
+      "central_difference_step": 0.0001,
+      "force_relative_point_RMS": 0.003009807817950746,
+      "analytic_vs_difference_force_relative_RMS": 7.60198698555459e-08
+    },
+    {
+      "central_difference_step": 3e-05,
+      "force_relative_point_RMS": 0.0030098073802488842,
+      "analytic_vs_difference_force_relative_RMS": 6.6793693719550726e-09
+    },
+    {
+      "central_difference_step": 1e-05,
+      "force_relative_point_RMS": 0.0030098070058937106,
+      "analytic_vs_difference_force_relative_RMS": 1.7879592922288425e-09
+    }
+  ],
+  "current_curl_contract": "Physical residual uses Cartesian curl of B via coordinate gradients/derivatives, independently compared with metric current and centered finite differences.",
+  "current_free_vacuum_claim": false,
+  "full_equilibrium_qualification": false,
+  "native_GLISS_compatibility_tested_for_this_state": false,
+  "limits": [
+    "One bounded continuation at higher trial resolution improves sampled physical residual but does not establish equilibrium-family convergence.",
+    "Neither frozen coefficient1e-8 nor physical RMS1e-4 gate passed.",
+    "Positive off-axis sampled Jacobian does not establish full nestedness/axis regularity.",
+    "Existing private GLISS compatibility evidence refers to the earlier fresh medium state; this final enriched state was not exported or promoted."
+  ],
+  "scratch_only": true,
+  "artifacts": [
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/evidence/final-trial-enrichment.json",
+      "sha256": "ebf1af925d4fac479468c1dfdee9eb99fda33531832672a4f3433a1ebcbe5fc0"
+    },
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/evidence/enriched-fresh-agd.json",
+      "sha256": "810f1517e235ca22595c2f9d7c98059a08479e82bc284b7d110a373c977ccddc"
+    },
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/evidence/enriched-fresh-agd-physical.json",
+      "sha256": "8f988c8ff1b3f3d277eae4bc1f5b5ee76b6287116a00cd91c05225fbe4497ea8"
+    },
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/evidence/enriched-boundary-preservation.json",
+      "sha256": "464d9d1da762be50732b835bba429e740b91d4d59d94f407d00abda3dc795993"
+    },
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/run_enriched_case.py",
+      "sha256": "489e7bbd76d4cce1ce625bcb73cc66692792cf0baa4afa3505e3d657f50f0eef"
+    },
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/run_enriched_bounded.py",
+      "sha256": "de73da83ec15fdf5ce99e3c9f950792be371c9cc38b662aeb88798e2680eeefe"
+    },
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/diagnose_enriched_candidate.py",
+      "sha256": "43aa1c36189faa4f36f909bc4a58f610acc6b1515d7d9b85a07ed49a38f913b4"
+    },
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/check_enriched_boundary.py",
+      "sha256": "cd58ef6ffa5091a982bdfc8d5c1282923b070eaa4c4e3e5660ec7a21ab4ec04d"
+    },
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/enriched-fresh-agd/GVEC_N2_12_enriched-fresh-agd_gvec_stages/0-00/GVEC_N2_12_enriched-fresh-agd_State_0002_00000800.dat",
+      "sha256": "afc5bed2e1ccde6479504948fa0cca2b24f2b6361f0b1be3fbe8dcbdfe4efe33"
+    },
+    {
+      "path": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/enriched-fresh-agd/GVEC_N2_12_enriched-fresh-agd_gvec_stages/0-00/parameter.ini",
+      "sha256": "60ec1df0ef872c42e80d14655bfed307324f6b44c5635f7ac86068fb9b3f4add"
+    }
+  ]
+}

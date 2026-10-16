@@ -47,6 +47,25 @@ relative. These checks establish neither a full physical-residual decomposition
 nor a continuous-force error bound, and establish no GVEC force bug. Their probe
 sources and full reports remain explicitly identified scratch artifacts.
 
+`trial-enrichment-evidence.json` tests the same frozen field in larger spaces,
+without minimization. Nested transfer preserves sampled position within
+3.69e-16 m, magnetic field within 2.77e-14 T and energy within 1.39e-17.
+The original angular coefficients retain their raw gradients exactly; newly
+added toroidal modes carry substantial gradients. Two added interior modes
+have energy derivatives of -1.894e-5 and -1.617e-5, confirmed by centered energy
+differences and extrapolation within 3e-8 relative. Radial refinement also
+reveals unresolved weak residual. This establishes missing trial-space
+stationarity; coefficient norms remain coordinate dependent and supply no
+physical-force error bound.
+
+`enriched-continuation-evidence.json` records the single 600-second continuation
+in that larger M10/N30, twelve-cell space. At retained iteration 800, coefficient
+force is 5.73e-8 against 1e-8 and physical RMS is 0.003643 against 1e-4.
+Physical RMS improves by 2.65x; the two finest diagnostic grids agree within
+1.12e-10 relative. Boundary error remains 1.02e-14 m and profiles are preserved.
+Neither force goal passes. This state has no GLISS export or spectrum and is
+not promoted as an acceptance fixture.
+
 ## Prepare and attempt a solve
 
 The executed environment was Python 3.12.13, GNU Fortran 16.1.0, OpenBLAS and

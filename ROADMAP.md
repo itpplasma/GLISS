@@ -326,6 +326,18 @@ Active dependencies remain explicit:
   These cancellation-sensitive projections establish no force-definition bug,
   full residual decomposition or continuous-force error bound. The benchmark's
   `force-norm-evidence.json` preserves contracts, values and scratch provenance.
+  Frozen-field enrichment to M10/N30 preserves position, field and energy to
+  roundoff but exposes added toroidal-mode energy derivatives of -1.894e-5 and
+  -1.617e-5. Centered differences with extrapolation agree within 3e-8 relative.
+  Radial enrichment also exposes weak residual. The state is not stationary
+  in these larger spaces; coefficient norms still supply no physical-error
+  bound. `trial-enrichment-evidence.json` preserves the transfer and FD checks.
+  One 600-second M10/N30, twelve-cell continuation then reaches coefficient
+  force 5.73e-8 and physical RMS 0.003643: both fixed goals still fail, despite
+  a 2.65x physical improvement and 1.12e-10 relative diagnostic-grid agreement.
+  Boundary error stays 1.02e-14 m and profiles are preserved. The final state
+  is not exported or promoted; `enriched-continuation-evidence.json` records
+  the bounded attempt and controls.
   Producer coefficient convergence must also pass independent physical force
   residuals and resolution sweeps before any fixture or spectrum is qualified.
 - Explicit true-edge Solov'ev export now meets frozen flux/transform/geometry

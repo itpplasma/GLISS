@@ -267,6 +267,19 @@
       "evidence": "force-norm-evidence.json",
       "sha256": "6bc03677e0c907832b1fff596f22449973bacc054296b438f954860dc15910ae",
       "scope": "Four selected weak projections and unlike norm definitions; physical qualification remains failed."
+    },
+    "trial_enrichment_diagnostic": {
+      "evidence": "trial-enrichment-evidence.json",
+      "sha256": "ebf1af925d4fac479468c1dfdee9eb99fda33531832672a4f3433a1ebcbe5fc0",
+      "scope": "Frozen state; verified nested-space transfer and two added-mode energy derivatives. No physical-error norm bound."
     }
+  },
+  "N2_12_enriched": {
+    "evidence": "enriched-continuation-evidence.json",
+    "sha256": "8fc49efc5c8a1966ad603d2d3ed18306485fb75a9a222b7a57f2a2e8f70ce97b",
+    "coefficient_goal_passed": false,
+    "physical_force_goal_passed": false,
+    "physical_force_RMS": 0.003643112847608682,
+    "scope": "One 600-second continuation in the enriched space; improved force residual, neither acceptance goal passed. Scratch native state, no GLISS export or spectrum."
   }
 }
