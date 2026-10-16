@@ -14,7 +14,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "source_inventory.jsonl"
 EVIDENCE = ROOT / "ci/source_inventory_evidence.json"
-EXTENSIONS = {".f90", ".py", ".sh", ".c", ".h", ".cmake", ".yml", ".js", ".lock"}
+EXTENSIONS = {".f90", ".inc", ".py", ".sh", ".c", ".h", ".cmake", ".yml", ".js", ".lock"}
 EXPLICIT = {"CMakeLists.txt", "fpm.toml", ".github/manylinux.Dockerfile",
             "benchmarks/figure8/native/CMakeLists.txt",
             "docs/Makefile", "pyproject.toml", "python/gliss/closure_manifest.json",
@@ -74,7 +74,7 @@ def inspect_source(path, source):
     data = {"modules": [], "procedures": [], "c_abi_symbols": [],
             "c_binding_definitions": [],
             "imports": [], "parse_findings": []}
-    if path.endswith(".f90"):
+    if path.endswith((".f90", ".inc")):
         data["modules"] = re.findall(r"^\s*module\s+(?!procedure\b|function\b|subroutine\b)(\w+)",
                                      source, re.M | re.I)
         interface_depth = 0
@@ -91,6 +91,10 @@ def inspect_source(path, source):
             match = re.match(r"\s*use\b\s*(?:,\s*(?:non_)?intrinsic\s*)?(?:::)?\s*(\w+)", line, re.I)
             if match:
                 data["imports"].append({"name": match[1].lower(), "line": number, "kind": "fortran_use"})
+            match = re.match(r"\s*include\s*['\"]([^'\"]+)['\"]", line, re.I)
+            if match:
+                data["imports"].append({"name": match[1], "line": number,
+                                        "kind": "fortran_include"})
             if not re.match(r"\s*(end|module|interface)\b", line, re.I):
                 match = re.search(r"\b(subroutine|function)\s+(\w+)\s*\(", line, re.I)
                 if match:
@@ -178,6 +182,17 @@ def records(base):
 
     for name, data in inspected.items():
         for imported in data["imports"]:
+            if imported["kind"] == "fortran_include":
+                included = (ROOT / name).parent / imported["name"]
+                try:
+                    provider = included.resolve().relative_to(ROOT).as_posix()
+                except ValueError:
+                    provider = ""
+                if provider in sources:
+                    link(name, provider, imported["kind"], imported["name"], imported["line"])
+                else:
+                    external[name].append(imported)
+                continue
             named_providers = abi_providers if imported["kind"] == "c_external_binding_declaration" else providers
             matches = named_providers.get(imported["name"], [])
             if matches:

@@ -127,8 +127,9 @@ jobs:
               -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/fortsym-prefix" \
               -DGLISS_ENABLE_CODEGEN=ON -DGLISS_REQUIRE_OPENBLAS=ON
             cmake --build build-codegen --parallel 2 --target \
-              gliss_physical_mass_gen gliss_pressure_adjoint_gen gliss_energy_gen
-            for generator in physical_mass pressure_adjoint energy; do
+              gliss_physical_mass_gen gliss_pressure_adjoint_gen gliss_energy_gen \
+              gliss_geometry_gen
+            for generator in physical_mass pressure_adjoint energy geometry; do
               printf "\nLoader dependencies: %s\n" "$generator" >> codegen-runtime-provenance.txt
               "$GLISS_CODEGEN_LOADER" --library-path "$library_path" \
                 --list "build-codegen/gliss_${generator}_gen" \

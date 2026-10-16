@@ -48,7 +48,7 @@ if(NOT EXISTS "${ENZYME_PLUGIN}")
 endif()
 
 function(add_enzyme_fortran_test target)
-    cmake_parse_arguments(ARG "" "" "SOURCES" ${ARGN})
+    cmake_parse_arguments(ARG "" "" "SOURCES;DEPENDENCIES" ${ARGN})
     if(NOT ARG_SOURCES)
         message(FATAL_ERROR "add_enzyme_fortran_test requires SOURCES")
     endif()
@@ -60,6 +60,16 @@ function(add_enzyme_fortran_test target)
         else()
             list(APPEND _absolute_sources
                 "${CMAKE_CURRENT_SOURCE_DIR}/${_source}")
+        endif()
+    endforeach()
+
+    set(_absolute_dependencies "")
+    foreach(_dependency IN LISTS ARG_DEPENDENCIES)
+        if(IS_ABSOLUTE "${_dependency}")
+            list(APPEND _absolute_dependencies "${_dependency}")
+        else()
+            list(APPEND _absolute_dependencies
+                "${CMAKE_CURRENT_SOURCE_DIR}/${_dependency}")
         endif()
     endforeach()
 
@@ -89,12 +99,14 @@ endfunction()
 set(IR_FILES \"\")
 set(index 0)
 foreach(source IN LISTS SOURCES)
+    get_filename_component(source_directory \"\${source}\" DIRECTORY)
     set(ir \"\${WORK}/stage_\${index}.ll\")
     # Defer scheduling optimizations until after AD, as recommended by Enzyme:
     # https://enzyme.mit.edu/getting_started/UsingEnzyme/
     # Pre-AD vectorization can obscure Fortran descriptor member types.
     run_checked(\${FLANG} -O2 -fno-vectorize -fno-slp-vectorize
         -fno-unroll-loops -fPIC -module-dir \${MODULES} -I\${MODULES}
+        -I\${source_directory}
         -S -emit-llvm \${source} -o \${ir})
     list(APPEND IR_FILES \${ir})
     math(EXPR index \"\${index} + 1\")
@@ -111,7 +123,7 @@ run_checked(\${FLANG} -O2 \${differentiated} -o \${EXECUTABLE})
     add_custom_command(
         OUTPUT "${_executable}"
         COMMAND "${CMAKE_COMMAND}" -P "${_driver}"
-        DEPENDS ${_absolute_sources} "${_driver}"
+        DEPENDS ${_absolute_sources} ${_absolute_dependencies} "${_driver}"
         VERBATIM)
     add_custom_target(${target}_build ALL DEPENDS "${_executable}")
     add_test(NAME ${target} COMMAND "${_executable}")

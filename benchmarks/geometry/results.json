@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "baseline_revision": "f2da7f4301e9207db38d3fd5fc3c1488b344fb56",
+  "baseline_git_file_sha256": "4820ecc176ae492c060af8a19f62ec7a774f20e55f8ad6ada7fa38e1fe2d8aac",
+  "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+  "compiler_path": "/opt/homebrew/bin/gfortran",
+  "flags": [
+    "-O3",
+    "-ffree-line-length-none",
+    "-Igenerated"
+  ],
+  "host": {
+    "cpu": "Apple M3 Ultra",
+    "architecture": "arm64",
+    "system": "Darwin",
+    "release": "25.6.0",
+    "macos": "26.6.2"
+  },
+  "source_sha256": {
+    "cartesian_primitive_geometry.f90": "df60acd8358cd804d6d498b9ef6cec642c5a744429f2c4368257e63fe8b9a5a0",
+    "generated/gliss_geometry_generated.f90": "3ef822af1b572fb38a151ba0ba4dec239c9a62cdc47e1898e87a4c3ab455034a",
+    "generated/gliss_geometry_primal.inc": "f8b2fc05d8d3deb080faa0d18b78e1bf84f1f5c85b5475ab65f6d4da27bfc208",
+    "cartesian_primitive_geometry_original.f90": "9daf9ec91bb10b157be76115ead1eefbba46c56a56736a82876d0190c2a6a5b2",
+    "geometry_timing.f90": "2d0e60e72bfbbd32296f2ec96d62ffc296f6680e4e46dd4f0a2894b8f6e3eecb"
+  },
+  "repository_source_sha256": {
+    "src/cartesian_primitive_geometry.f90": "df60acd8358cd804d6d498b9ef6cec642c5a744429f2c4368257e63fe8b9a5a0",
+    "src/generated/gliss_geometry_generated.f90": "3ef822af1b572fb38a151ba0ba4dec239c9a62cdc47e1898e87a4c3ab455034a",
+    "src/generated/gliss_geometry_primal.inc": "f8b2fc05d8d3deb080faa0d18b78e1bf84f1f5c85b5475ab65f6d4da27bfc208",
+    "benchmarks/geometry/benchmark.f90": "2d0e60e72bfbbd32296f2ec96d62ffc296f6680e4e46dd4f0a2894b8f6e3eecb"
+  },
+  "executable_sha256": "b87e1d4d62b728694eb68360cc0f4f6d8a9e9acf3e80fed07ee379d6976b8dc1",
+  "commands": [
+    [
+      "/opt/homebrew/bin/gfortran",
+      "-O3",
+      "-ffree-line-length-none",
+      "-Igenerated",
+      "-c",
+      "cartesian_primitive_geometry_original.f90"
+    ],
+    [
+      "/opt/homebrew/bin/gfortran",
+      "-O3",
+      "-ffree-line-length-none",
+      "-Igenerated",
+      "-c",
+      "generated/gliss_geometry_generated.f90"
+    ],
+    [
+      "/opt/homebrew/bin/gfortran",
+      "-O3",
+      "-ffree-line-length-none",
+      "-Igenerated",
+      "-c",
+      "cartesian_primitive_geometry.f90"
+    ],
+    [
+      "/opt/homebrew/bin/gfortran",
+      "-O3",
+      "-ffree-line-length-none",
+      "-Igenerated",
+      "-c",
+      "geometry_timing.f90"
+    ],
+    [
+      "/opt/homebrew/bin/gfortran",
+      "-O3",
+      "-ffree-line-length-none",
+      "-Igenerated",
+      "cartesian_primitive_geometry_original.o",
+      "gliss_geometry_generated.o",
+      "cartesian_primitive_geometry.o",
+      "geometry_timing.o",
+      "-o",
+      "geometry_timing_actual_product"
+    ]
+  ],
+  "OMP_NUM_THREADS": "1",
+  "started_unix": 1792187316.89714,
+  "elapsed_seconds": 4.5765299797058105,
+  "scope": "Serial regular-point value kernel on this host; not application throughput or a universal performance claim.",
+  "measurement": {
+    "original_seconds": {
+      "minimum": 0.195643,
+      "median": 0.198593,
+      "maximum": 0.209332
+    },
+    "current_seconds": {
+      "minimum": 0.192329,
+      "median": 0.192735,
+      "maximum": 0.19541
+    },
+    "ratio_current_to_original": 0.9705024849818473,
+    "original_ns_per_call": 23.6741304397583,
+    "current_ns_per_call": 22.975802421569824,
+    "maximum_normalized_output_difference": 1.4432899320127035e-15,
+    "minimum_normalized_frame_determinant": 0.5943126286144103,
+    "negative_orientation_samples": 2048,
+    "calls_per_timed_block": 8388608,
+    "trials": 11,
+    "original_times_seconds": [
+      0.209332,
+      0.196651,
+      0.199658,
+      0.199422,
+      0.198394,
+      0.199013,
+      0.197516,
+      0.195736,
+      0.195643,
+      0.198593,
+      0.199034
+    ],
+    "current_times_seconds": [
+      0.19324,
+      0.192336,
+      0.192329,
+      0.193437,
+      0.192735,
+      0.192675,
+      0.192527,
+      0.193064,
+      0.192683,
+      0.195069,
+      0.19541
+    ],
+    "checksums": [
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ],
+      [
+        64635838.39577645,
+        64635838.39577645
+      ]
+    ]
+  },
+  "recorded_harness_filename": "geometry_timing.f90",
+  "quiet_slot": "No concurrent GVEC evaluation, Fo build/test, or GLISS audit."
+}

@@ -111,3 +111,40 @@ gliss_energy_gen src/generated energy-identities.json \
 The generated module is also included in the corresponding Enzyme checks.
 Independent native energy and derivative tests remain necessary; algebraic
 identities alone do not establish discretization or cross-code agreement.
+
+## Cartesian primitive geometry
+
+`gliss_geometry_gen.f90` derives the metric, signed Jacobian and its three
+coordinate derivatives directly from Cartesian dot and cross products. It also
+derives magnetic components from the flux slopes and angular metric, and the
+oriented second fundamental form from the normalized angular cross product.
+Each family has value, JVP and VJP leaves. The generator uses the same
+directory/report/revision arguments as physical mass. The production primitive
+geometry builder calls these leaves and retains input and regularity guards.
+The generator also emits `gliss_geometry_primal.inc`, shared by the generated
+module and the primitive geometry builder. This places identical value leaves
+in the caller's compilation unit so ordinary optimized builds can inline them.
+The reproduction gate checks both emitted files; no link-time optimization is
+required to remove these pointwise call and packing costs.
+
+The packed arguments and results are:
+
+| Family | Inputs | Results |
+| --- | --- | --- |
+| Polynomial | Nine Cartesian three-vectors: `r_s`, `r_theta`, `r_zeta`, `r_ss`, `r_s_theta`, `r_s_zeta`, `r_theta_theta`, `r_theta_zeta`, `r_zeta_zeta` | `g_ss`, `g_s_theta`, `g_s_zeta`, `g_theta_theta`, `g_theta_zeta`, `g_zeta_zeta`, `J`, `J_s`, `J_theta`, `J_zeta`, angular cross product |
+| Field | `g_theta_theta`, `g_theta_zeta`, `g_zeta_zeta`, `J`, `Phi_s`, `chi_s`, `1/nfp` | `B^theta`, `B^zeta`, `B_theta`, `B_zeta`, `abs(B)` |
+| Second form | Angular cross product and three angular second-derivative vectors; separate scalar orientation | `II_theta_theta`, `II_theta_zeta`, `II_zeta_zeta` |
+
+Position jets use metres and dimensionless coordinates; flux slopes use Wb.
+Tangents use the input packing and units, and cotangents use the result packing.
+The field-period count is discrete: physical tangents freeze `1/nfp`. The second
+form freezes `orientation=sign(J)` within either nonzero signed chart. The field
+leaves require a positive angular metric and nonzero field; curvature requires
+nonzero angular area. The production builder rejects invalid inputs and returns
+zeroed geometry on failure.
+
+The independent native regression uses a quadratic Cartesian map, determinant
+finite differences, Cartesian magnetic vectors, three differentiation steps,
+scalar-contraction reverse checks, both orientations and physical scaling.
+These local derivatives do not supply a force-balanced equilibrium response or
+the complete geometry-to-spectrum design chain.

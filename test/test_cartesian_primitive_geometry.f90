@@ -28,6 +28,7 @@ program test_cartesian_primitive_geometry
     call check_orientation_change(geometry)
     call check_second_form_tangent_invariance(geometry)
     call check_invalid_inputs()
+    call check_large_regular_geometry()
     write (*, "(a)") "PASS"
 
 contains
@@ -165,6 +166,40 @@ contains
             .and. invalid%mod_b == 0.0_dp, &
             "failed construction returned partial geometry")
     end subroutine check_invalid_inputs
+
+    subroutine check_large_regular_geometry()
+        type(primitive_geometry_point_t) :: actual
+        real(dp), parameter :: radial(3) = [1.0e150_dp, 0.0_dp, 0.0_dp]
+        real(dp), parameter :: theta(3) = [0.0_dp, 1.0e75_dp, 0.0_dp]
+        real(dp), parameter :: zeta(3) = [0.0_dp, 0.0_dp, 1.0e75_dp]
+        real(dp), parameter :: zero(3) = 0.0_dp
+        real(dp), parameter :: theta_theta(3) = [1.0e200_dp, 0.0_dp, 0.0_dp]
+        integer :: status
+
+        ! Every original caller guard and the Cartesian magnetic vector are
+        ! finite. Squaring J or multiplying metric by flux before division
+        ! would overflow despite the unit Cartesian field components.
+        call build_fixture(radial, theta, zeta, zero, zero, zero, zero, &
+            zero, zero, 1.0e225_dp, -2.0e225_dp, actual, status, field_periods=2)
+        call require(status == primitive_geometry_ok, &
+            "large regular geometry was rejected")
+        call require(close(actual%signed_jacobian / 1.0e300_dp, 1.0_dp) &
+            .and. close(actual%mod_b, sqrt(2.0_dp)), &
+            "large regular geometry magnitude differs")
+        call require(close(actual%b_contravariant(1) / 1.0e-75_dp, 1.0_dp) &
+            .and. close(actual%b_contravariant(2) / 1.0e-75_dp, -1.0_dp) &
+            .and. close(actual%b_covariant(1) / 1.0e75_dp, 1.0_dp) &
+            .and. close(actual%b_covariant(2) / 1.0e75_dp, -1.0_dp), &
+            "large regular geometry field components differ")
+        call build_fixture(radial, theta, zeta, zero, zero, zero, theta_theta, &
+            zero, zero, 1.0e225_dp, -2.0e225_dp, actual, status, field_periods=2)
+        call require(status == primitive_geometry_ok, &
+            "large regular curvature was rejected")
+        call require(close(actual%second_form(1, 1) / 1.0e200_dp, 1.0_dp) &
+            .and. actual%second_form(1, 2) == 0.0_dp &
+            .and. actual%second_form(2, 2) == 0.0_dp, &
+            "large regular curvature differs")
+    end subroutine check_large_regular_geometry
 
     subroutine build_fixture(local_rs, local_rt, local_rz, local_rss, &
             local_rst, local_rsz, local_rtt, local_rtz, local_rzz, &

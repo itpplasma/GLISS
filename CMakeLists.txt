@@ -28,7 +28,7 @@ if(GLISS_ENABLE_CODEGEN)
     # toolchain, and compilation plus exact reproduction are the native gates.
     add_custom_target(gliss_regenerate_kernels)
     add_custom_target(gliss_check_generated)
-    foreach(kernel physical_mass pressure_adjoint energy)
+    foreach(kernel physical_mass pressure_adjoint energy geometry)
         add_executable(gliss_${kernel}_gen gen/gliss_${kernel}_gen.f90)
         target_link_libraries(gliss_${kernel}_gen PRIVATE fortsym::fortsym)
         set(codegen_arguments
@@ -97,8 +97,12 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     endif()
 endif()
 
+set_source_files_properties(src/generated/gliss_geometry_primal.inc
+    PROPERTIES HEADER_FILE_ONLY TRUE)
 add_library(gliss
     src/generated/gliss_energy_generated.f90
+    src/generated/gliss_geometry_generated.f90
+    src/generated/gliss_geometry_primal.inc
     src/generated/gliss_physical_mass_generated.f90
     src/generated/gliss_pressure_adjoint_generated.f90
     src/gvec_cas3d_adapter.f90
@@ -889,6 +893,9 @@ if(BUILD_TESTING)
     target_link_libraries(test_cartesian_primitive_geometry PRIVATE gliss)
     add_test(NAME cartesian_primitive_geometry
         COMMAND test_cartesian_primitive_geometry)
+    add_executable(test_generated_geometry test/test_generated_geometry.f90)
+    target_link_libraries(test_generated_geometry PRIVATE gliss)
+    add_test(NAME generated_geometry COMMAND test_generated_geometry)
 
     add_executable(test_cartesian_harmonic_spline
         test/test_cartesian_harmonic_spline.f90)
@@ -1228,6 +1235,13 @@ endif()
 option(GLISS_ENABLE_ENZYME "Build Enzyme derivative checks" OFF)
 if(GLISS_ENABLE_ENZYME)
     include(cmake/EnzymeFortran.cmake)
+    add_enzyme_fortran_test(enzyme_generated_geometry_gradient
+        DEPENDENCIES
+            src/generated/gliss_geometry_primal.inc
+        SOURCES
+            src/generated/gliss_geometry_generated.f90
+            test/enzyme_generated_geometry_fixture.f90
+            test/enzyme_generated_geometry_gradient.f90)
     add_enzyme_fortran_test(enzyme_drive_gradient
         SOURCES
             src/physical_constants.f90

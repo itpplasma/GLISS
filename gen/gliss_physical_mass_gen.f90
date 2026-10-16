@@ -17,7 +17,7 @@ program gliss_physical_mass_gen
     implicit none
 
     character(*), parameter :: default_revision = &
-        'c9b1ec1a0eaf20d5fcde47853498eeb3508715ba'
+        '2f0571e39f36a0606b3ae150c8b3b3df92ce6750'
     character(len=24), parameter :: names(13) = [character(len=24) :: &
         'flux_t_slope', 'flux_p_slope', 'current_i', 'current_j', &
         'signed_sqrtg', 'bmag', 'grad_s2', 'signed_sigma_tilde', &

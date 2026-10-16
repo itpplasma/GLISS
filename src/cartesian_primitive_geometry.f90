@@ -23,6 +23,10 @@ module cartesian_primitive_geometry
 
 contains
 
+    ! Share the generated value leaves in this compilation unit so the native
+    ! compiler can inline the pointwise build without link-time optimization.
+    include 'generated/gliss_geometry_primal.inc'
+
     subroutine build_primitive_geometry_point(position_s, position_theta, &
             position_zeta, position_ss, position_s_theta, position_s_zeta, &
             position_theta_theta, position_theta_zeta, position_zeta_zeta, &
@@ -39,8 +43,10 @@ contains
         type(primitive_geometry_point_t), intent(out) :: geometry
         integer, intent(out) :: info
         type(primitive_geometry_point_t) :: candidate
-        real(dp) :: angular_cross(3), area, frame_scale, normal(3)
-        real(dp) :: field_squared
+        real(dp) :: polynomial_input(27), polynomial_value(13)
+        real(dp) :: field_input(7), field_value(5)
+        real(dp) :: second_input(12), second_value(3)
+        real(dp) :: angular_cross(3), area, frame_scale, field_squared
 
         geometry = primitive_geometry_point_t()
         info = primitive_geometry_invalid
@@ -49,109 +55,66 @@ contains
             position_zeta, position_ss, position_s_theta, position_s_zeta, &
             position_theta_theta, position_theta_zeta, position_zeta_zeta, &
             toroidal_flux_slope, poloidal_flux_slope)) return
-        call cross_product3(position_theta, position_zeta, angular_cross)
+        polynomial_input(1:3) = position_s
+        polynomial_input(4:6) = position_theta
+        polynomial_input(7:9) = position_zeta
+        polynomial_input(10:12) = position_ss
+        polynomial_input(13:15) = position_s_theta
+        polynomial_input(16:18) = position_s_zeta
+        polynomial_input(19:21) = position_theta_theta
+        polynomial_input(22:24) = position_theta_zeta
+        polynomial_input(25:27) = position_zeta_zeta
+        call generated_geometry_polynomial(polynomial_input, polynomial_value)
+        angular_cross = polynomial_value(11:13)
         area = sqrt(dot_product(angular_cross, angular_cross))
         frame_scale = vector_norm(position_s) * vector_norm(position_theta) &
             * vector_norm(position_zeta)
         if (.not. ieee_is_finite(area) .or. &
             .not. ieee_is_finite(frame_scale)) return
         if (area <= tiny(1.0_dp) .or. frame_scale <= tiny(1.0_dp)) return
-        candidate%signed_jacobian = dot_product(position_s, angular_cross)
+        candidate%signed_jacobian = polynomial_value(7)
         if (abs(candidate%signed_jacobian) <= 128.0_dp * epsilon(1.0_dp) &
             * frame_scale) return
-        call build_metric(position_s, position_theta, position_zeta, &
-            candidate%metric)
-        call build_jacobian_derivatives(position_s, position_theta, &
-            position_zeta, position_ss, position_s_theta, position_s_zeta, &
-            position_theta_theta, position_theta_zeta, position_zeta_zeta, &
-            candidate%jacobian_s, candidate%jacobian_theta, &
-            candidate%jacobian_zeta)
-        candidate%b_contravariant(1) = -poloidal_flux_slope &
-            / (real(field_periods, dp) * candidate%signed_jacobian)
-        candidate%b_contravariant(2) = -toroidal_flux_slope &
-            / candidate%signed_jacobian
-        candidate%b_covariant(1) = dot_product(candidate%metric(2, 2:3), &
-            candidate%b_contravariant)
-        candidate%b_covariant(2) = dot_product(candidate%metric(3, 2:3), &
-            candidate%b_contravariant)
+        candidate%metric(1, 1) = polynomial_value(1)
+        candidate%metric(1, 2) = polynomial_value(2)
+        candidate%metric(2, 1) = polynomial_value(2)
+        candidate%metric(1, 3) = polynomial_value(3)
+        candidate%metric(3, 1) = polynomial_value(3)
+        candidate%metric(2, 2) = polynomial_value(4)
+        candidate%metric(2, 3) = polynomial_value(5)
+        candidate%metric(3, 2) = polynomial_value(5)
+        candidate%metric(3, 3) = polynomial_value(6)
+        candidate%jacobian_s = polynomial_value(8)
+        candidate%jacobian_theta = polynomial_value(9)
+        candidate%jacobian_zeta = polynomial_value(10)
+        field_input(1:3) = polynomial_value(4:6)
+        field_input(4) = candidate%signed_jacobian
+        field_input(5) = toroidal_flux_slope
+        field_input(6) = poloidal_flux_slope
+        field_input(7) = 1.0_dp / real(field_periods, dp)
+        call generated_geometry_field(field_input, field_value)
+        candidate%b_contravariant = field_value(1:2)
+        candidate%b_covariant = field_value(3:4)
         field_squared = dot_product(candidate%b_contravariant, &
             candidate%b_covariant)
         if (.not. ieee_is_finite(field_squared) .or. &
             field_squared <= 0.0_dp) return
-        candidate%mod_b = sqrt(field_squared)
-        normal = sign(1.0_dp, candidate%signed_jacobian) &
-            * angular_cross / area
-        candidate%second_form(1, 1) = dot_product(normal, &
-            position_theta_theta)
-        candidate%second_form(1, 2) = dot_product(normal, &
-            position_theta_zeta)
-        candidate%second_form(2, 1) = candidate%second_form(1, 2)
-        candidate%second_form(2, 2) = dot_product(normal, &
-            position_zeta_zeta)
+        candidate%mod_b = field_value(5)
+        second_input(1:3) = angular_cross
+        second_input(4:6) = position_theta_theta
+        second_input(7:9) = position_theta_zeta
+        second_input(10:12) = position_zeta_zeta
+        call generated_geometry_second_form(second_input, &
+            sign(1.0_dp, candidate%signed_jacobian), second_value)
+        candidate%second_form(1, 1) = second_value(1)
+        candidate%second_form(1, 2) = second_value(2)
+        candidate%second_form(2, 1) = second_value(2)
+        candidate%second_form(2, 2) = second_value(3)
         if (.not. candidate_is_finite(candidate)) return
+        if (candidate%mod_b <= 0.0_dp) return
         geometry = candidate
         info = primitive_geometry_ok
     end subroutine build_primitive_geometry_point
-
-    pure subroutine build_metric(position_s, position_theta, position_zeta, &
-            metric)
-        real(dp), intent(in) :: position_s(3), position_theta(3)
-        real(dp), intent(in) :: position_zeta(3)
-        real(dp), intent(out) :: metric(3, 3)
-        real(dp) :: basis(3, 3)
-        integer :: first, second
-
-        basis(:, 1) = position_s
-        basis(:, 2) = position_theta
-        basis(:, 3) = position_zeta
-        do second = 1, 3
-            do first = 1, second
-                metric(first, second) = dot_product(basis(:, first), &
-                    basis(:, second))
-                metric(second, first) = metric(first, second)
-            end do
-        end do
-    end subroutine build_metric
-
-    pure subroutine build_jacobian_derivatives(position_s, position_theta, &
-            position_zeta, position_ss, position_s_theta, position_s_zeta, &
-            position_theta_theta, position_theta_zeta, position_zeta_zeta, &
-            jacobian_s, jacobian_theta, jacobian_zeta)
-        real(dp), intent(in) :: position_s(3), position_theta(3)
-        real(dp), intent(in) :: position_zeta(3), position_ss(3)
-        real(dp), intent(in) :: position_s_theta(3), position_s_zeta(3)
-        real(dp), intent(in) :: position_theta_theta(3)
-        real(dp), intent(in) :: position_theta_zeta(3)
-        real(dp), intent(in) :: position_zeta_zeta(3)
-        real(dp), intent(out) :: jacobian_s, jacobian_theta, jacobian_zeta
-        real(dp) :: product(3)
-
-        call cross_product3(position_theta, position_zeta, product)
-        jacobian_s = dot_product(position_ss, product)
-        jacobian_theta = dot_product(position_s_theta, product)
-        jacobian_zeta = dot_product(position_s_zeta, product)
-        call cross_product3(position_s_theta, position_zeta, product)
-        jacobian_s = jacobian_s + dot_product(position_s, product)
-        call cross_product3(position_theta, position_s_zeta, product)
-        jacobian_s = jacobian_s + dot_product(position_s, product)
-        call cross_product3(position_theta_theta, position_zeta, product)
-        jacobian_theta = jacobian_theta + dot_product(position_s, product)
-        call cross_product3(position_theta, position_theta_zeta, product)
-        jacobian_theta = jacobian_theta + dot_product(position_s, product)
-        call cross_product3(position_theta_zeta, position_zeta, product)
-        jacobian_zeta = jacobian_zeta + dot_product(position_s, product)
-        call cross_product3(position_theta, position_zeta_zeta, product)
-        jacobian_zeta = jacobian_zeta + dot_product(position_s, product)
-    end subroutine build_jacobian_derivatives
-
-    pure subroutine cross_product3(left, right, product)
-        real(dp), intent(in) :: left(3), right(3)
-        real(dp), intent(out) :: product(3)
-
-        product(1) = left(2) * right(3) - left(3) * right(2)
-        product(2) = left(3) * right(1) - left(1) * right(3)
-        product(3) = left(1) * right(2) - left(2) * right(1)
-    end subroutine cross_product3
 
     pure function vector_norm(vector) result(norm)
         real(dp), intent(in) :: vector(3)

@@ -57,12 +57,12 @@ issue whose broader requested acceptance remains unmet.
 
 | ID | Work package | Dependencies | Current execution |
 | --- | --- | --- | --- |
-| K | Generated physical mathematics | Independent equations and oracle | Mass, magnetic/fluid energy and pressure reverse leaves implemented |
+| K | Generated physical mathematics | Independent equations and oracle | Mass, magnetic/fluid energy, pressure reverse and Cartesian primitive geometry leaves implemented |
 | G | Geometry and figure-eight admission | Declared embedding contract | Strong GVEC N2-12 is now primary; QUASR is a weak-shape control |
 | V | Discretization and physical qualification | Qualified input and K | Explicit-edge ingestion and optional radial meshes implemented; uniform degree-1 criterion unmet |
 | D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse passes; generic equilibrium response unavailable |
 | S | Sparse backend selection | Reliable backend capabilities | Native LDLT lacks public inertia reliability API; retain block-LAPACK |
-| P | Performance qualification | Accepted workload and accuracy | Pressure reverse benchmark implemented and measured |
+| P | Performance qualification | Accepted workload and accuracy | Pressure reverse and Cartesian value benchmarks implemented and measured |
 | R | Reproducible release and evidence | Applicable gates above | 177 native and 388 Python tests pass with two threads; Linux exact reproduction passes |
 
 ### K: FortSym-generated kernels
@@ -76,6 +76,10 @@ issue whose broader requested acceptance remains unmet.
   magnetic/fluid energies, plus pressure/spline reverse leaves.
   Retain exact identity evidence before floating-point lowering; randomized
   probes are numerical evidence, not algebraic proof.
+- [x] Generate Cartesian metric, signed Jacobian/coordinate derivatives,
+  magnetic components/magnitude and second-form values with local JVP/VJP.
+  Preserve range-safe evaluation, both signed charts, frozen NFP/orientation
+  and independent all-input derivative and extreme-scale regressions.
 - [ ] Preserve independent Cartesian/metric energy oracles; cover all active
   argument directions, both orientations, symmetry, scaling and transpose
   duality. Cross-check symbolic derivatives against Enzyme and step plateaus.
@@ -219,6 +223,26 @@ installed FortSym consumer exposed missing deployment/runtime dependencies;
 the upstream repair also passes a relocated-package expression, derivative
 and emission oracle. Ordinary GLISS builds remain CAS-free.
 
+The Cartesian primitive geometry wave pins published FortSym
+`2f0571e39f36a0606b3ae150c8b3b3df92ce6750`. Its new generator proves 778 exact
+identities, bringing the four suites to 948 with zero probes or failures.
+All four registered reproduction tests pass, including both geometry outputs.
+An opt-in upstream ordered-output schedule preserves field evaluation range;
+composed generated normal/contraction leaves preserve curvature range. The
+production builder retains its finite-input and regularity guards. A shared
+generated primal include permits ordinary optimized compiler inlining without
+link-time optimization; the public generated module retains value/JVP/VJP APIs.
+These are pointwise derivatives, with chart orientation and NFP held fixed;
+they do not supply the generic force-balanced equilibrium-to-spectrum chain.
+The new Enzyme geometry gate independently checks 372 derivative contractions
+against the generated JVP/VJP and Cartesian finite differences, covering every
+continuous local input in both signed charts and NFP 1/2/5. All nine integrated
+Enzyme gates pass with Flang/LLVM 22.1.8 and Enzyme 0.0.277. Changing only a
+private generated include correctly rebuilds this gate and fails its independent
+geometric oracle; restoring the include passes. Source accounting now includes
+Fortran includes and their references: 343 records, still zero completed
+whole-component equation reviews.
+
 The first wave passed 175 GNU 16.1 Release tests with
 `-O3 -Werror=array-temporaries`, 332 Python tests with two optional skips, and
 175 GNU bounds/runtime-check tests. Mandatory runtime-check CI also passes.
@@ -254,6 +278,14 @@ overrides. `OPENBLAS_NUM_THREADS=1` does not control OpenMP-built OpenBLAS;
 the benchmark now queries its actual configuration (one/two threads outside
 assembly in these runs). These figures do not establish general optimality or
 qualified figure-eight performance.
+
+The reproducible `benchmarks/geometry/` control compares the generated builder
+with the unchanged `f2da7f4` routine on 4096 regular nonorthogonal jets and both
+Jacobian signs. On the same Apple M3 Ultra/GNU16 host, eleven alternating pairs
+of 8,388,608 calls measure 0.192735/0.198593 seconds, a generated/original ratio
+of 0.97050. All 22 outputs agree within 1.45e-15 and consumed checksums match.
+This is comparable serial value-kernel performance on this workload, without
+LTO or fast-math; it does not establish application throughput or optimality.
 
 Active dependencies remain explicit:
 
