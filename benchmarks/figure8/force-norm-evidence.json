@@ -1,0 +1,162 @@
+{
+  "status": "unqualified equilibrium; frozen-state diagnostic only",
+  "producer_commit": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+  "state_sha256": "9b8bcf7da8ee46e320416f83922fc0b9cd202aa3dc6ffc83a48b87d9cbd912d5",
+  "no_minimization": true,
+  "omp_threads": 1,
+  "reported_norm_contract": "max of Euclidean norms of boundary-constrained and preconditioned coefficient arrays X1, X2, lambda",
+  "energy_contract": "Full-torus mu0 times magnetic energy at zero pressure; compare raw negative energy derivatives to mu0 times physical virtual work.",
+  "preconditioned_X1_X2_LA_norms": [
+    6.452356072940379e-10,
+    7.883778606106494e-10,
+    8.59266863797728e-09
+  ],
+  "BC_applied_unpreconditioned_X1_X2_norms": [
+    8.314380576806873e-09,
+    5.671225895317727e-09
+  ],
+  "basis_variations": {
+    "radial_index_fortran": 7,
+    "degree": 5,
+    "clamped_knots": "0 repeated6, 1/6,2/6,3/6,4/6,5/6, 1 repeated6",
+    "modes": [
+      [
+        "X1",
+        0,
+        0,
+        "cos"
+      ],
+      [
+        "X2",
+        1,
+        0,
+        "sin"
+      ],
+      [
+        "X1",
+        6,
+        40,
+        "cos"
+      ],
+      [
+        "X2",
+        6,
+        38,
+        "sin"
+      ]
+    ]
+  },
+  "raw_negative_energy_derivatives": [
+    -3.381264539192852e-11,
+    -4.047415180785663e-11,
+    1.1531273674445812e-11,
+    7.0403519181757126e-12
+  ],
+  "negative_energy_FD_richardson": [
+    -3.4643873418153186e-11,
+    -4.0939474033052486e-11,
+    1.1702155448360212e-11,
+    6.512441049396262e-12
+  ],
+  "virtual_work_native_grid": {
+    "grid": [
+      8,
+      27,
+      99
+    ],
+    "half_shift": 0.5,
+    "values": [
+      -3.381217127803443e-11,
+      -4.047253124664087e-11,
+      1.2089582848785521e-11,
+      7.420290925373373e-12
+    ]
+  },
+  "virtual_work_refined_grid": {
+    "grid": [
+      10,
+      65,
+      163
+    ],
+    "shift": 0.371,
+    "values": [
+      -3.380988182652149e-11,
+      -4.0474110533297685e-11,
+      1.2029217442964126e-11,
+      6.948445616208055e-12
+    ]
+  },
+  "virtual_work_refined_minus_native_grid": [
+    2.289451512940875e-15,
+    -1.5792866568178774e-15,
+    -6.036540582139528e-14,
+    -4.718453091653179e-13
+  ],
+  "maximum_absolute_refined_virtual_work_minus_raw_gradient": 4.979437685183141e-13,
+  "native_mu0_energy": 0.029318342573991706,
+  "physical_integral_mu0_energy": 0.029318342573991532,
+  "energy_absolute_difference": 1.734723475976807e-16,
+  "energy_relative_difference": 5.9168538316885615e-15,
+  "physical_force_RMS_N_per_m3": 968.4345349636899,
+  "physical_force_relative_RMS": 0.009641389228836745,
+  "radial_control": {
+    "points_per_cell": 15,
+    "angular_grid": [
+      27,
+      99
+    ],
+    "preconditioned_norms": [
+      6.452313007709872e-10,
+      7.883824142410735e-10,
+      8.59259520284601e-09
+    ]
+  },
+  "interpretation": "The four selected weak projections are consistent in absolute terms. Their small values involve strong cancellation, so few-percent relative differences of O(1e-11) projections are not a tight relative validation. No GVEC force bug follows from unlike norms.",
+  "unresolved": "Only four actual admissible basis variations were checked. No full admissible-space physical projection, complement decomposition, norm equivalence/coercivity constant, or continuous-residual error bound has been established. More resolved weak stationarity can coexist with an unresolved physical residual; these data do not establish a GVEC force bug.",
+  "source_contracts": [
+    "src/functionals/mhd3d/mhd3d_evalfunc.F90:517 mu0-scaled energy; :528 negative energy variation; :580 preconditioner rebuild; :651 Fourier projection; :667 spline assembly; :849 boundary constraints; :859 preconditioning; :1481 inverse application",
+    "src/functionals/mhd3d/sol_var_mhd3d.F90:247 plain per-variable sum of squares",
+    "python/gvec/core/run.py:545 max of logged three force norms",
+    "src/base/fbase.F90:300-319 half-shifted quadrature and nfp full-torus multiplier",
+    "src/base/sbase.F90:1362 boundary right-hand-side projection"
+  ],
+  "availability": "All new probe sources, binaries and full evidence remain scratch-only under /tmp/gliss-gvec-real-figure8-20261016; no new portable harness or state fixture was committed.",
+  "artifacts": [
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/evidence/final-force-norm-diagnostic.json",
+      "sha256": "f5e52ea138fe5b2b617abbb355b29e01e3309e9b7391e3f2b6d05a2475c019a3"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/evidence/final-virtual-work-projection.json",
+      "sha256": "b4bd88ac4a3496b89605d1a0a20563de47bcaf27d60dec29263774dce368d48c"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/virtual-work/native_gradient.f90",
+      "sha256": "f22a10e84ec1095320f66a70fdf5f9e78185347e6b9291dc3000391ded954d6e"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/virtual-work/physical_projection.py",
+      "sha256": "0a6aad6a6f799e3a2a242acd647361c956e880bb0336e73d649695d58ba60c74"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/virtual-work/native-gradient.log",
+      "sha256": "cb1a7f72946f0387b0f3d6533ce252ba7f1d03dc5b79c1c1f42319009938885a"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/virtual-work/native-gradient-high-quadrature.log",
+      "sha256": "263728d050494d00dc4f8d22ab44f06effdca970a621791794cafe3d9401a2e5"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/virtual-work/physical-projection.log",
+      "sha256": "ef02c4d75b8deabcdfa0aac33ef41b226bc79966b05ce7540ff3a9d6f29a700e"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/virtual-work/parameter-high-quadrature.ini",
+      "sha256": "ec3c1b3eaf5c8fd94b38b30787b2f7239a5cf8e154b0559a309a31e3bdd09a3a"
+    },
+    {
+      "path": "/tmp/gliss-gvec-real-figure8-20261016/virtual-work/native_gradient",
+      "sha256": "3d2df34b06064bc30e533916caf6ed4ebb0152d8141665248d9b52cdd589b3ce"
+    }
+  ]
+}

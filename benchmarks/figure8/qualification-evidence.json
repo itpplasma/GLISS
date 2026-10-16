@@ -262,6 +262,11 @@
       "goal": 1e-08,
       "probe_csv_sha256": "ac965b753ef7fbe74222b8d51739f8bd6a87adc18468a6fe2eee88f9a4682a71",
       "conclusion": "Angular doubling preserves the accepted coefficient norm to about 1e-5 relative. This probe does not support angular underintegration as the explanation of the final accepted coefficient goal. Physical force RMS remains 9.641389e-3 and unqualified; its cause is unresolved."
+    },
+    "force_norm_diagnostic": {
+      "evidence": "force-norm-evidence.json",
+      "sha256": "6bc03677e0c907832b1fff596f22449973bacc054296b438f954860dc15910ae",
+      "scope": "Four selected weak projections and unlike norm definitions; physical qualification remains failed."
     }
   }
 }

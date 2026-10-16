@@ -29,6 +29,17 @@ On that identical state, doubling angular quadrature to 55-by-199 changes the
 coefficient norm by only 1.02e-5 relative and preserves its pass. The remaining
 physical discrepancy is unresolved.
 
+`force-norm-evidence.json` records a frozen-state source and numerical check.
+GVEC reports the largest Euclidean norm of constrained, preconditioned
+Fourier/B-spline energy-gradient coefficients. The independent diagnostic
+reports normalized volume-RMS Cartesian force. Four selected admissible
+variations give physical virtual-work projections consistent with native raw
+gradients within 4.98e-13 absolute; the small projections involve substantial
+cancellation. The independent magnetic-energy integral agrees within 5.92e-15
+relative. These checks establish neither a full physical-residual decomposition
+nor a continuous-force error bound, and establish no GVEC force bug. Their probe
+sources and full reports remain explicitly identified scratch artifacts.
+
 ## Prepare and attempt a solve
 
 The executed environment was Python 3.12.13, GNU Fortran 16.1.0, OpenBLAS and

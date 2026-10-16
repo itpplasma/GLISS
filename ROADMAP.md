@@ -314,6 +314,13 @@ Active dependencies remain explicit:
   On the identical final state, doubling angular quadrature to 55x199 changes
   coefficient force by only 1.02e-5 relative; both values pass 1e-8. This does
   not support remaining angular underintegration as the physical-error cause.
+  Source inspection identifies the solver norm as constrained, preconditioned
+  Fourier/B-spline energy-gradient coefficients. Four selected admissible
+  physical virtual-work projections agree with raw native gradients within
+  4.98e-13 absolute; the energy integral agrees within 5.92e-15 relative.
+  These cancellation-sensitive projections establish no force-definition bug,
+  full residual decomposition or continuous-force error bound. The benchmark's
+  `force-norm-evidence.json` preserves contracts, values and scratch provenance.
   Producer coefficient convergence must also pass independent physical force
   residuals and resolution sweeps before any fixture or spectrum is qualified.
 - Explicit true-edge Solov'ev export now meets frozen flux/transform/geometry
