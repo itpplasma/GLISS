@@ -27,7 +27,12 @@ export FO_CACHE_DIR="$audit_worktree/.fo-cache"
 
 cd "$audit_worktree"
 fo clean --cache
-lint_report=$(fo lint --json)
+lint_status=0
+lint_report=$(fo lint --json) || lint_status=$?
+if ((lint_status > 1)); then
+    printf '%s\n' "$lint_report" >&2
+    exit "$lint_status"
+fi
 python3 -c '
 import json
 import sys
@@ -46,5 +51,8 @@ if report["count"]:
         )
     raise SystemExit(1)
 ' <<<"$lint_report"
+if ((lint_status != 0)); then
+    exit "$lint_status"
+fi
 fo build --flag '-O3 -Warray-temporaries -Werror=array-temporaries'
 fo test

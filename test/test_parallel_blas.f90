@@ -14,7 +14,25 @@ program test_parallel_blas
     integer :: previous_threads, actual_threads, job, row, column, repeat
     integer :: seed, total, team_size
     logical :: previous_dynamic, valid_team, finite_results
-    external :: dsyrk, zgemm
+
+    interface
+        subroutine dsyrk(uplo, trans, n, k, alpha, a, lda, beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: uplo, trans
+            integer, intent(in) :: n, k, lda, ldc
+            real(dp), intent(in) :: alpha, beta, a(lda, *)
+            real(dp), intent(inout) :: c(ldc, *)
+        end subroutine dsyrk
+
+        subroutine zgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
+                beta, c, ldc)
+            import :: dp
+            character(len=1), intent(in) :: transa, transb
+            integer, intent(in) :: m, n, k, lda, ldb, ldc
+            complex(dp), intent(in) :: alpha, beta, a(lda, *), b(ldb, *)
+            complex(dp), intent(inout) :: c(ldc, *)
+        end subroutine zgemm
+    end interface
 
     ! Each job owns disjoint contiguous buffers. This independently checks
     ! concurrent BLAS calls from the same OpenMP runtime as the application.
