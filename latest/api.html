@@ -100,8 +100,8 @@ poloidal flip are left-handed.</p>
 unresolved eigenvalue clusters must be selected; their basis rotations
 leave the trace unchanged. The exterior-gap gate is the numerical
 admission diagnostic used for material sensitivities, not a mesh or
-equilibrium convergence certificate. Constructing the gradient currently
-costs one exact tangent assembly per pressure sample.</p>
+equilibrium convergence certificate. Constructing the gradient contracts
+the energy in one quadrature sweep and applies the pressure-spline transpose.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -124,9 +124,10 @@ Equilibrium may already be closed. Returned arrays survive problem.close().</p>
 <dd><p>Return a pressure gradient for an isolated eigenvalue or complete cluster.</p>
 <p>The pressure domain is strictly positive at samples and assembly points;
 zero-width resonances require a valid full sample-direction domain.
-All other imported data and the assembly topology remain fixed. This
-exact reverse action currently uses ns tangent assemblies. For a single
-direction, spectral_pressure_jvp uses one assembly instead.</p>
+All other imported data and the assembly topology remain fixed. The
+reverse action contracts local energy responses before applying the
+pressure-spline transpose; spectral_pressure_jvp retains the independent
+tangent-matrix assembly for a single direction.</p>
 </dd></dl>
 
 <dl class="py function">
