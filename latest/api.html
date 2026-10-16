@@ -143,6 +143,11 @@ checked. Its field periods and radial-grid size must agree with the
 precomputed transform. The same geometric and force-balance gates as
 <a class="reference internal" href="#gliss.convert_vmec" title="gliss.convert_vmec"><code class="xref py py-func docutils literal notranslate"><span class="pre">convert_vmec()</span></code></a> apply, and both entry points produce identical
 exports for the same transform.</p>
+<p>Supported producer labels are the legacy Fortran <code class="docutils literal notranslate"><span class="pre">Version</span> <span class="pre">2.0</span></code> and
+C++/Python <code class="docutils literal notranslate"><span class="pre">booz_xform</span></code> releases &gt;=0.0.9,&lt;0.1, including the historical
+<code class="docutils literal notranslate"><span class="pre">development</span> <span class="pre">version</span></code> label emitted by the 0.0.9 writer. The exact
+producer label is retained as <code class="docutils literal notranslate"><span class="pre">booz_xform_source_version</span></code>; the reader
+runtime version is recorded separately as <code class="docutils literal notranslate"><span class="pre">booz_xform_version</span></code>.</p>
 </dd></dl>
 
 <dl class="py function">

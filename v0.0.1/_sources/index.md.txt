@@ -1,0 +1,29 @@
+# GLISS 0.0.1
+
+This archive preserves the Python guide shipped in tag `v0.0.1` at commit `a2cfece6748bd03ea943aba75a3f14eeb9442bbb`. Its APIs and conventions describe that historical package; subsequent releases contain corrections. For current work, use the [latest documentation](https://itpplasma.github.io/GLISS/latest/).
+
+[Tagged source](https://github.com/itpplasma/GLISS/tree/a2cfece6748bd03ea943aba75a3f14eeb9442bbb) and [archive provenance](source.json).
+
+```{toctree}
+:maxdepth: 2
+
+guide
+```
+
+## Executed release example
+
+CI builds and installs this tag's wheel, checks its Python and native versions, and runs the guide's Mercier call with the [public Solov'ev input](_static/solovev_q1.035.nc). The original guide remains unchanged; its other examples are historical user-input workflows and require the stated input files.
+
+```{doctest}
+>>> import gliss
+>>> gliss.__version__ == gliss.version() == '0.0.1'
+True
+>>> import numpy as np
+>>> from pathlib import Path
+>>> equilibrium_export = Path('_static/solovev_q1.035.nc')
+>>> s, d_mercier = gliss.mercier_profile(equilibrium_export)
+>>> s.ndim == d_mercier.ndim == 1 and s.size == d_mercier.size > 0
+True
+>>> bool(np.all(np.isfinite(s)) and np.all(np.isfinite(d_mercier)))
+True
+```

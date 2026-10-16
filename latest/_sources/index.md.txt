@@ -39,3 +39,10 @@ Unfinished
 
 Every code block in the quickstart is executed by the native test suite
 (`python/tests/test_docs.py`) against the Solov'ev fixtures in `test/data`.
+
+The version menu keeps this active `latest` manual separate from released
+documentation. The v0.0.1 and v0.0.2 archives preserve each tag's Python
+guide, with its historical APIs and conventions, and identify the exact
+source commit in `source.json`. Their version and Mercier examples execute
+against a wheel built from that same tag. Published release pages are
+immutable; subsequent corrections belong to the active manual.

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>gliss &#8212; GLISS 0.0.1 archive</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=d45e8c67"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="GLISS 0.0.1" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="gliss">
+<h1>gliss<a class="headerlink" href="#gliss" title="Link to this heading">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">gliss</span></code> is the Python interface to the Global Linear Ideal Stability Solver.
+Version 0.0.1 provides the Mercier stability diagnostic for GVEC/CAS3D NetCDF
+equilibrium exports. The Linux wheel contains the compiled Fortran library and
+uses a small, hand-written ISO C binding; no <code class="docutils literal notranslate"><span class="pre">f90wrap</span></code> dependency is required.</p>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>gliss
+</pre></div>
+</div>
+<p>NumPy is the only required Python dependency. The binary wheel also contains
+the native libraries needed by GLISS. Installing from source requires CMake,
+Ninja, and a Fortran compiler. LAPACK, PkgConfig, and the NetCDF C library are
+also required.</p>
+</section>
+<section id="mercier-profile">
+<h2>Mercier profile<a class="headerlink" href="#mercier-profile" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">gliss</span>
+
+<span class="n">s</span><span class="p">,</span> <span class="n">d_mercier</span> <span class="o">=</span> <span class="n">gliss</span><span class="o">.</span><span class="n">mercier_profile</span><span class="p">(</span>
+    <span class="n">Path</span><span class="p">(</span><span class="s2">"equilibrium_export.nc"</span><span class="p">),</span>
+    <span class="n">n_theta</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+    <span class="n">n_zeta</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">worst</span> <span class="o">=</span> <span class="n">gliss</span><span class="o">.</span><span class="n">mercier_objective</span><span class="p">(</span><span class="s2">"equilibrium_export.nc"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">s</span></code> and <code class="docutils literal notranslate"><span class="pre">d_mercier</span></code> are one-dimensional NumPy <code class="docutils literal notranslate"><span class="pre">float64</span></code> arrays with one entry
+per retained radial surface. GLISS uses the <code class="docutils literal notranslate"><span class="pre">D_Mercier</span></code> convention: positive
+values are unstable. <code class="docutils literal notranslate"><span class="pre">mercier_objective</span></code> returns <code class="docutils literal notranslate"><span class="pre">max(d_mercier)</span></code>, so a larger
+positive result is less stable.</p>
+<p>The input must be a regular file in the GVEC/CAS3D export format. Angular
+quadrature sizes must be positive integers. Invalid Python arguments raise
+<code class="docutils literal notranslate"><span class="pre">TypeError</span></code>, <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>, or <code class="docutils literal notranslate"><span class="pre">FileNotFoundError</span></code>; invalid exports and solver
+failures raise <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> with the native status code.</p>
+</section>
+<section id="simsopt">
+<h2>SIMSOPT<a class="headerlink" href="#simsopt" title="Link to this heading">¶</a></h2>
+<p>Install the optional dependency and import the adapter explicitly:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"gliss[simsopt]"</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">gliss.simsopt</span><span class="w"> </span><span class="kn">import</span> <span class="n">MercierPenalty</span>
+
+<span class="n">penalty</span> <span class="o">=</span> <span class="n">MercierPenalty</span><span class="p">(</span><span class="s2">"equilibrium_export.nc"</span><span class="p">)</span>
+<span class="n">value</span> <span class="o">=</span> <span class="n">penalty</span><span class="o">.</span><span class="n">J</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">MercierPenalty</span></code> is a leaf <code class="docutils literal notranslate"><span class="pre">Optimizable</span></code>. It has no equilibrium degrees of
+freedom and no analytic derivative in version 0.0.1. Update <code class="docutils literal notranslate"><span class="pre">export_path</span></code> after
+an external equilibrium solve before evaluating it again.</p>
+</section>
+<section id="native-library-and-abi">
+<h2>Native library and ABI<a class="headerlink" href="#native-library-and-abi" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">gliss.version()</span></code> reports the loaded native version. The Python package checks
+ABI version 1 before every native call and rejects an incompatible library.
+Platform wheels load their bundled library automatically. Developers can test
+a local build explicitly:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build<span class="w"> </span>-G<span class="w"> </span>Ninja
+cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--target<span class="w"> </span>gliss_c
+<span class="nv">GLISS_LIB</span><span class="o">=</span><span class="nv">$PWD</span>/build/libgliss_c.so<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s1">'import gliss; print(gliss.version())'</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">GLISS_LIB</span></code> deliberately overrides the bundled library. This is a development
+and debugging facility, not required for normal use.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">gliss</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mercier-profile">Mercier profile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#simsopt">SIMSOPT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#native-library-and-abi">Native library and ABI</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">GLISS 0.0.1</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/guide.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

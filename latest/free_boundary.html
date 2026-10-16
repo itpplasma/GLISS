@@ -56,6 +56,21 @@ not solve the equilibrium exterior matching problem or certify these
 physical assumptions. An eigenpair certificate concerns the assembled
 matrix pencil. It does not certify equilibrium force balance, edge matching,
 or convergence of the volume and vacuum discretizations.</p>
+<p>GVEC exports may supply explicit interface data in addition to the ordinary
+interior half-grid. Native ingestion accepts numeric
+<code class="docutils literal notranslate"><span class="pre">boundary_schema_version=1</span></code>, scalar <code class="docutils literal notranslate"><span class="pre">boundary_s=1</span></code> with units <code class="docutils literal notranslate"><span class="pre">1</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">boundary_dPhi_ds</span></code> and <code class="docutils literal notranslate"><span class="pre">boundary_dchi_ds</span></code> with units <code class="docutils literal notranslate"><span class="pre">Wb</span></code>. The six
+<code class="docutils literal notranslate"><span class="pre">boundary_{xhat,yhat,zhat}_{mnc,mns}</span></code> arrays use the existing <code class="docutils literal notranslate"><span class="pre">(m,n)</span></code> Fourier
+grid and units <code class="docutils literal notranslate"><span class="pre">m</span></code>; stellarator symmetry permits the unused sine/cosine
+complements to be omitted. Positions use the declared Boozer position frame.
+The vacuum operator uses these positions and independently evaluated flux
+derivatives directly. Interior geometry and profile splines retain their
+half-grid contract. Malformed or unsupported declarations fail ingestion.</p>
+<p>Without an explicit boundary declaration, the legacy path extrapolates the
+interior splines to <code class="docutils literal notranslate"><span class="pre">s=1</span></code>. That behavior remains available, but its accuracy
+requires separate qualification. Schema 1 supplies no edge pressure or matched
+exterior field, so its presence alone does not certify the physical assumptions
+above.</p>
 <p>The vacuum boundary mesh and volume angular quadrature are independent.
 Use admitted <a class="reference internal" href="angular_grids.html"><span class="std std-doc">volume angular grids</span></a>, then refine the
 radial mesh, displacement mode range and vacuum edge mesh separately.
@@ -66,7 +81,7 @@ requires the coupled parity operator so its cross-parity stiffness is retained.<
 <p>The native toroidal-harmonic oracle checks absolute vacuum energies with
 and without a wall. The public Solov’ev benchmark compares a critical
 conformal wall distance with DCON and studies discretization convergence.
-The October 2 export qualification found that the current ordinary GVEC
+The October 2 export qualification found that an ordinary GVEC
 half-grid export does not meet the frozen native edge flux-slope and
 rotational-transform limits. The complete quantitative plasma-vacuum
 acceptance case therefore remains open; the vacuum oracle alone does not

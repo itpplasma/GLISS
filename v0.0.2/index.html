@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>GLISS 0.0.2 &#8212; GLISS 0.0.2 archive</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=e3a6060d"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="gliss" href="guide.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="gliss-0-0-2">
+<h1>GLISS 0.0.2<a class="headerlink" href="#gliss-0-0-2" title="Link to this heading">¶</a></h1>
+<p>This archive preserves the Python guide shipped in tag <code class="docutils literal notranslate"><span class="pre">v0.0.2</span></code> at commit <code class="docutils literal notranslate"><span class="pre">b994f51aa9ebe1a5e03bad2c72c6fde730fcaa1b</span></code>. Its APIs and conventions describe that historical package; subsequent releases contain corrections. For current work, use the <a class="reference external" href="https://itpplasma.github.io/GLISS/latest/">latest documentation</a>.</p>
+<p><a class="reference external" href="https://github.com/itpplasma/GLISS/tree/b994f51aa9ebe1a5e03bad2c72c6fde730fcaa1b">Tagged source</a> and <a class="reference download internal" download="" href="_downloads/4c2fd57a33bc73e7c7beca1cab148532/source.json"><span class="xref download myst">archive provenance</span></a>.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="guide.html">gliss</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guide.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide.html#vmec-input">VMEC input</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide.html#terpsichore-compatibility-input">TERPSICHORE compatibility input</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide.html#axisymmetric-fixed-boundary-family">Axisymmetric fixed-boundary family</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide.html#general-3-d-marginality-family">General 3-D marginality family</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide.html#mercier-profile">Mercier profile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide.html#fixed-boundary-spectrum">Fixed-boundary spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide.html#simsopt">SIMSOPT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide.html#native-library-and-abi">Native library and ABI</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<section id="executed-release-example">
+<h2>Executed release example<a class="headerlink" href="#executed-release-example" title="Link to this heading">¶</a></h2>
+<p>CI builds and installs this tag’s wheel, checks its Python and native versions, and runs the guide’s Mercier call with the <a class="reference download internal" download="" href="_downloads/7b58cb8539620a33a3da5f0f8bf75ab9/solovev_q1.035.nc"><span class="xref download myst">public Solov’ev input</span></a>. The original guide remains unchanged; its other examples are historical user-input workflows and require the stated input files.</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">gliss</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gliss</span><span class="o">.</span><span class="n">__version__</span> <span class="o">==</span> <span class="n">gliss</span><span class="o">.</span><span class="n">version</span><span class="p">()</span> <span class="o">==</span> <span class="s1">'0.0.2'</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">equilibrium_export</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">'_static/solovev_q1.035.nc'</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">s</span><span class="p">,</span> <span class="n">d_mercier</span> <span class="o">=</span> <span class="n">gliss</span><span class="o">.</span><span class="n">mercier_profile</span><span class="p">(</span><span class="n">equilibrium_export</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">s</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="n">d_mercier</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">s</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="n">d_mercier</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="mi">0</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">bool</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">s</span><span class="p">))</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">d_mercier</span><span class="p">)))</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="guide.html">gliss</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+      <li>Next: <a href="guide.html" title="next chapter">gliss</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/index.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
