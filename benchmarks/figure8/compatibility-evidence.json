@@ -1,0 +1,82 @@
+{
+  "status": "Actual strong N2-12 geometry passed native GLISS ingestion; physical equilibrium and stability acceptance remain unqualified.",
+  "producer": {
+    "commit": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+    "patch": "benchmarks/solovev/public/gvec-1.5.0-cas3d.patch",
+    "patch_sha256": "543956649a8063da1078643d8588dd551d376a1eb9f8018452cf578481ce022e",
+    "exporter_sha256": "fd47e764eb721af33398dcfb5b1da88fe1177854a49e14cddf913b6c1661ec72",
+    "state_sha256": "fb1216009f267ce7c6b831aaffc807d155b33d350bb50f6952d7e5924c298aa4",
+    "export_sha256": "54b978f0dedf368aa849e1fbe4411ffd8eef406344f8c00093347613f916b777",
+    "export_options": {
+      "ns": 16,
+      "MN_out": [
+        8,
+        24
+      ],
+      "MNfactor": 3,
+      "sampling": 3,
+      "stellsym": true,
+      "flip": "tor",
+      "winding": 1,
+      "reparam": false
+    }
+  },
+  "frame_identity": {
+    "native_angle_rotated_hat_reconstruction_error_m": 0.007905816575814602,
+    "patched_boozer_angle_rotated_hat_reconstruction_error_m": 4.518280359883027e-16,
+    "status": "pointwise frame identity; no equilibrium qualification"
+  },
+  "native_GLISS": {
+    "source_base_commit": "4fc5ed6240b86f8222cf684773dc73411967d6fb",
+    "library_sha256": "900d54fd180057ae4e0a91a82bb6fcb2a11309448cfc1a1d4150b729c4d6485b",
+    "probe_sha256": "f2d033f00bfc6423be33b50f6f42d94d478d2ab17dd4645a6f38a727a8c47606",
+    "omp_threads": 2,
+    "field_periods": 2,
+    "boundary_schema": 1,
+    "reader_info": 0,
+    "spline_info": 0,
+    "off_knot_radial_s": [
+      0.0001,
+      0.001,
+      0.01,
+      0.05,
+      0.15,
+      0.37,
+      0.63,
+      0.89,
+      0.99
+    ],
+    "theta_points": 37,
+    "zeta_points_full_torus": 73,
+    "signed_J_range": [
+      -0.5748682257066,
+      -0.1573714823838
+    ],
+    "minimum_B_T": 0.2258306219406,
+    "sampled_PL_boundary_grids": [
+      [
+        25,
+        64
+      ],
+      [
+        33,
+        96
+      ],
+      [
+        49,
+        128
+      ]
+    ],
+    "PL_boundary_info": [
+      0,
+      0,
+      0
+    ],
+    "poloidal_flux_slope_Wb": -0.021991148578,
+    "toroidal_flux_slope_Wb": 0.03141592654,
+    "stability_spectrum_evaluated": false
+  },
+  "data_bundled": false,
+  "physical_force_RMS": 0.016520257041574286,
+  "physical_goal_passed": false
+}

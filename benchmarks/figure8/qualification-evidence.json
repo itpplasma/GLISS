@@ -1,0 +1,189 @@
+{
+  "status": "No candidate qualifies as a physical figure-eight acceptance fixture.",
+  "gvec_commit": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+  "acceptance_goals_sha256": "cf8e3d49b9504a8a41e58c7a691585a6fca1c5b64e1ffbe7b13a9c4c1eb3399d",
+  "N2_12_fresh": {
+    "role": "primary strong-folded geometry; fresh initialization, not truncated restart",
+    "resolution": {
+      "elements": 4,
+      "m": 4,
+      "n": 10,
+      "degree": 5,
+      "quadrature_points": [
+        13,
+        49
+      ],
+      "minimizer": 10
+    },
+    "omp_threads": 1,
+    "iterations": 20000,
+    "max_force": 3.49774697784327e-09,
+    "minimizer_goal_passed": true,
+    "boundary": {
+      "source_frame_sha256": "e3417b64285408f86180fc4b0f0c85d2e08e2c4c999e838123ba9f2add0361aa",
+      "samples_theta_zeta": [
+        65,
+        163
+      ],
+      "source_declared_symmetry_projection_removed_m": {
+        "X": 4.4551412517468414e-08,
+        "Y": 9.855487314138281e-08
+      },
+      "boundary_position_max_error_m": 1.0209827278361288e-14,
+      "tolerance_m": 1e-12,
+      "boundary_goal_passed": true
+    },
+    "physical_quadrature_refinement": [
+      {
+        "quadrature_per_cell_theta_zeta": [
+          6,
+          33,
+          99
+        ],
+        "volume_m3": 0.6884559800876132,
+        "normalization_N_per_m3": 100428.31626570779,
+        "force_relative_L1": 0.010039836965504268,
+        "force_relative_RMS": 0.01651397664823224,
+        "force_relative_max": 0.34052906640376557,
+        "jacobian_min": 0.00016531761286536732,
+        "cartesian_vs_metric_current_max_A_per_m2": 4.481011778054107e-09,
+        "pressure_slope_max": 0.0,
+        "vacuum_current_relative_RMS": 0.030954070684815236
+      },
+      {
+        "quadrature_per_cell_theta_zeta": [
+          8,
+          49,
+          131
+        ],
+        "volume_m3": 0.6884559800876273,
+        "normalization_N_per_m3": 100428.33483336674,
+        "force_relative_L1": 0.010035819201058595,
+        "force_relative_RMS": 0.01652026572247426,
+        "force_relative_max": 0.41612356438944564,
+        "jacobian_min": 9.72387214127099e-05,
+        "cartesian_vs_metric_current_max_A_per_m2": 7.675174103028934e-09,
+        "pressure_slope_max": 0.0,
+        "vacuum_current_relative_RMS": 0.030957158145484914
+      },
+      {
+        "quadrature_per_cell_theta_zeta": [
+          10,
+          65,
+          163
+        ],
+        "volume_m3": 0.6884559800876273,
+        "normalization_N_per_m3": 100428.32815960266,
+        "force_relative_L1": 0.010037841293838504,
+        "force_relative_RMS": 0.016520257041574286,
+        "force_relative_max": 0.45510335635593757,
+        "jacobian_min": 6.390392309805542e-05,
+        "cartesian_vs_metric_current_max_A_per_m2": 1.2120322446814375e-08,
+        "pressure_slope_max": 0.0,
+        "vacuum_current_relative_RMS": 0.030957154613240195
+      }
+    ],
+    "physical_force_goal_passed": false,
+    "vacuum_current_goal_applicable": false,
+    "state_sha256": "fb1216009f267ce7c6b831aaffc807d155b33d350bb50f6952d7e5924c298aa4",
+    "parameter_sha256": "5cf8f0627dab83dc688fb986b2a94d186d54f8702ea0f9f8750cd3a6383ee679",
+    "physical_report_sha256": "ab11d9a749332397f0727324f91c77f03388333531134b43bc24c581314aae20",
+    "producer_attribution": "GVEC N2-12 source frame; see protocol.json and geometry-evidence.json",
+    "artifacts_bundled": false
+  },
+  "QUASR189686_weak_control": {
+    "role": "weak exploratory shape; not strong-eight acceptance",
+    "iterations": 20000,
+    "max_force": 1.83551392233415e-07,
+    "rms_delta_iota": 5.513501034136479e-07,
+    "physical_serial_repeat_omp_threads": 1,
+    "physical_quadrature_refinement": [
+      {
+        "quadrature_per_cell_theta_zeta": [
+          6,
+          33,
+          49
+        ],
+        "volume_m3": 0.04934802200543289,
+        "normalization_N_per_m3": 14019324314.54328,
+        "force_relative_L1": 0.0031757722155291716,
+        "force_relative_RMS": 0.004952442725431935,
+        "force_relative_max": 0.06063209599034779,
+        "jacobian_min": 1.6832548000639025e-05,
+        "cartesian_vs_metric_current_max_A_per_m2": 3.0066678045231705e-07,
+        "pressure_slope_max": 0.0,
+        "vacuum_current_relative_RMS": 0.0021934977296466335
+      },
+      {
+        "quadrature_per_cell_theta_zeta": [
+          8,
+          49,
+          65
+        ],
+        "volume_m3": 0.04934802200543288,
+        "normalization_N_per_m3": 14019324317.87386,
+        "force_relative_L1": 0.003195921856926787,
+        "force_relative_RMS": 0.004952466310515847,
+        "force_relative_max": 0.07279602577156154,
+        "jacobian_min": 9.89972590736903e-06,
+        "cartesian_vs_metric_current_max_A_per_m2": 3.9963772691193606e-07,
+        "pressure_slope_max": 0.0,
+        "vacuum_current_relative_RMS": 0.0021935044233379344
+      },
+      {
+        "quadrature_per_cell_theta_zeta": [
+          10,
+          65,
+          81
+        ],
+        "volume_m3": 0.04934802200543286,
+        "normalization_N_per_m3": 14019324317.888172,
+        "force_relative_L1": 0.0031691086757940183,
+        "force_relative_RMS": 0.004952466318681109,
+        "force_relative_max": 0.07920476419666429,
+        "jacobian_min": 6.505619539005166e-06,
+        "cartesian_vs_metric_current_max_A_per_m2": 6.595010912763155e-07,
+        "pressure_slope_max": 0.0,
+        "vacuum_current_relative_RMS": 0.002193504424924545
+      }
+    ],
+    "physical_force_goal_passed": false,
+    "vacuum_current_goal_passed": false,
+    "state_sha256": "73d6c98728830ff2572444c64a73b7c0484d925767c1c34febfbe37cf4467862",
+    "physical_report_sha256": "15f0b28a8490274fb4c238b6474d12c5b6161a84395c21044f2f00c482f97d61",
+    "original_solve_backend": "OMP2 GNU libgomp plus Homebrew OpenBLAS libomp; parallel backend unqualified. Serial physical and FD arrays repeat exactly. No timing or convergence claim.",
+    "artifacts_bundled": false
+  },
+  "Brezellator_archived_control": {
+    "role": "complex three-fold pretzel, not the primary two-lobe geometry",
+    "producer_commit": "29044ad22327bb744c9b22bc8d6f4ccc6199b446",
+    "physical_serial_repeat_omp_threads": 1,
+    "physical_finest": {
+      "quadrature_per_cell_theta_zeta": [
+        10,
+        65,
+        325
+      ],
+      "volume_m3": 0.0064747463613118944,
+      "normalization_N_per_m3": 982128886.3566828,
+      "force_relative_L1": 3.429477675333476,
+      "force_relative_RMS": 5.676941877925076,
+      "force_relative_max": 43.50899970989666,
+      "jacobian_min": 6.407657197430092e-07,
+      "cartesian_vs_metric_current_max_A_per_m2": 1.759306591844578e-05,
+      "pressure_slope_max": 0.0,
+      "vacuum_current_relative_RMS": 2.043481280502753
+    },
+    "physical_force_goal_passed": false,
+    "physical_report_sha256": "38491e665f8c25f571244eaf7d6381f78b168c604fac6871cde3da1192b4e1d8",
+    "artifacts_bundled": false
+  },
+  "pending_qualification": [
+    "physical force goal at every refined equilibrium resolution",
+    "three equilibrium resolutions and eigenvalue convergence",
+    "global embedding, self-contact and nestedness",
+    "fresh supported Cartesian export with producer pin and schema checks",
+    "GLISS parity spectra and independent physical comparison"
+  ],
+  "stored_states_are_acceptance_fixtures": false
+}

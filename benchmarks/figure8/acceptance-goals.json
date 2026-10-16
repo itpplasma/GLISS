@@ -1,0 +1,13 @@
+{
+  "minimizer_max_force": 1e-8,
+  "picard_rms_delta_iota": 1e-8,
+  "picard_rms_iota_fit": 1e-8,
+  "physical_force_relative_rms": 1e-4,
+  "vacuum_current_relative_rms": 1e-4,
+  "boundary_position_max_error_m": 1e-12,
+  "positive_jacobian_off_axis": true,
+  "three_resolution_convergence_required": true,
+  "self_contact_and_nestedness_required": true,
+  "fresh_export_and_gliss_spectrum_required": true,
+  "scope": "Frozen candidate qualification goals; successful execution alone is not qualification."
+}

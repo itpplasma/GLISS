@@ -95,6 +95,10 @@ issue whose broader requested acceptance remains unmet.
 - [ ] Freeze a redistributable canonical figure-eight equilibrium, profiles,
   producer/export commits, conventions and input hashes. Qualify a moderate
   VMEC-admissible case separately from general GVEC Cartesian/G-frame geometry.
+  The primary candidate is the published GVEC N2-12 G-frame, rather than the
+  weakly folded QUASR tutorial case. Require fresh full-boundary initialization
+  and an independent off-knot boundary comparison before equilibrium acceptance;
+  restarting at larger Fourier bandwidth can retain the old truncated boundary.
 - [ ] Compare positions, fields, fluxes, metric/Jacobian and derivatives at
   independent off-knot points; converge radial and both angular resolutions,
   axis regularity, parity coupling and rational-surface treatment.
@@ -187,15 +191,20 @@ replace a reliable inertia method with pivot-perturbed LU.
   the optimized array-temporary audit; report optional skips distinctly.
 - [ ] Publish revision-bound acceptance manifests and minimal redistributable
   fixtures, preserving failed controls and unavailable external inputs.
-- [ ] Reconcile #14/#16/#17 closure-ready corrections and retain successor work
-  for broader acceptance left after #13/#18/#19/#22/#33 bounded closures.
-- [ ] Finish #10 metadata/version controls and installed LI383 acceptance, #30
-  upstream GVEC reporting, and #15 immutable released-version documentation.
+- [x] Close #16's tangential-space correction and #17's lowest-positive
+  bracketing correction after current native, runtime-check and Flang acceptance.
+  Broader degree-1 physical convergence remains tracked in #35.
+- [ ] Finish #14's current macOS installed-wheel matrix and retain successor
+  work for broader acceptance left after #13/#18/#19/#22/#33 bounded closures.
+- [ ] Complete native pointwise physical qualification beyond #10's passing
+  installed conversion/representation checks, resolve LI383 input accuracy,
+  and finish #30 upstream GVEC reporting.
 - [x] Reject malformed/fractional/inconsistent VMEC metadata and unsupported
   BOOZ versions before conversion; retain producer and runtime versions separately.
 - [x] Build archived 0.0.1/0.0.2 guides from their immutable tags and execute
   their examples against the corresponding installed native wheels. Hosted
-  deployment and public URLs must pass before closing #15.
+  deployment, public version URLs and exact tagged guide provenance pass at
+  `c70f6b8`, completing #15's released-version documentation acceptance.
 - [ ] Maintain this roadmap and the bounded source inventory at integration;
   completed file accounting must not be presented as completed equation review.
 
@@ -225,6 +234,9 @@ Dilation tests do not implement an arbitrary equilibrium-design derivative.
 The VMEC round-trip oracle retains its tolerances and frozen-reference checks,
 while strict serialization equivalence uses a transform produced on the same
 platform to avoid amplified upstream roundoff differences.
+Hosted GNU, Flang, GNU runtime checks, source Python, installed wheel/sdist,
+lint and documentation deployment pass at `c70f6b8`. Historical guides execute
+eight examples per tag and retain exact tagged-source and fixture provenance.
 
 The pressure benchmark in `benchmarks/derivatives/` records repeated timings,
 inputs, library/toolchain hashes and thread settings. On this Apple Silicon
@@ -256,8 +268,38 @@ Active dependencies remain explicit:
   Serial residual reevaluation confirms the physical failure. GVEC's tutorial
   calls this case figure-eight-like; independent axis geometry shows much weaker
   folding than its N2-12 reference. The primary qualification target is now the
-  actual GVEC N2-12 G-frame and boundary, with fresh serial producer solves;
-  stronger published inclination cases remain desirable where input data exist.
+  actual GVEC N2-12 G-frame and boundary, with fresh serial producer solves.
+  Independent guiding-curve measurements give inclinations of 13.43 degrees
+  for QUASR and 50.47 degrees for N2-12, with converged numerical writhe near
+  0.0534 and 0.4152 respectively. These are frame-curve measurements, not
+  magnetic-axis measurements from a qualified equilibrium. Both sampled
+  boundaries retain monotone cylindrical angle, so neither certifies the
+  angle-reversing domain. The stronger approximately 76-degree configurations
+  in the [figure-eight paper](https://arxiv.org/html/2411.16411v2) remain a
+  separate missing-input target.
+  N2-12's pinned file is byte-identical to the CC-BY-4.0
+  [G-Frame simulation archive](https://zenodo.org/records/14714598), SHA256
+  `e3417b64285408f86180fc4b0f0c85d2e08e2c4c999e838123ba9f2add0361aa`.
+  Its paper setup uses M2/N10 and two degree-5 radial cells; the current GVEC
+  CI smoke setup uses N5 and truncates the prescribed boundary. The archive's
+  available 400-iteration log explicitly reports nonconvergence and ships no
+  native restart state, so it is provenance rather than an acceptance oracle.
+  Fresh N10 initialization reproduces the symmetry-projected native boundary
+  to 1.02e-14 m; restarting from the N5 state retains a 4.66e-4 m discrepancy.
+  A fresh M4/N10, four-cell degree-5 serial solve reaches coefficient force
+  3.50e-9 against its 1e-8 goal, but its independent physical force RMS is
+  0.01652 against the frozen 1e-4 goal. Increasing the diagnostic angular
+  quadrature also raises the coefficient force to 2.94e-7; radial quadrature
+  doubling alone has negligible effect. Thus coefficient convergence is not
+  yet angular-quadrature convergence or physical equilibrium qualification.
+  A private true-edge export of this actual strong state passes GLISS native
+  reader/spline reconstruction and off-knot geometry at nine radial positions,
+  37 poloidal and 73 toroidal angles. Sampled piecewise-linear boundary
+  admission passes at 25x64, 33x96 and 49x128 angular resolutions. This is
+  executable geometry compatibility evidence; the failed physical state is
+  not promoted as a fixture or a stability-spectrum reference.
+  Producer coefficient convergence must also pass independent physical force
+  residuals and resolution sweeps before any fixture or spectrum is qualified.
 - Explicit true-edge Solov'ev export now meets frozen flux/transform/geometry
   bounds: errors 1.99e-16 Wb, 1.20e-14 and 3.75e-10, with a corrupted geometry
   control rejected. Native ingestion, round trips and boundary reconstruction
@@ -278,6 +320,16 @@ Active dependencies remain explicit:
   differentiated export/reconstruction remain required for generic gradients.
 - FortSparse native LDLT currently has no public reliable-inertia interface;
   adding it to GLISS now would not improve the required certified solves.
+- The installed Linux wheel passes genuine asymmetric VMEC/BOOZ conversion,
+  stored replay, native round trips and coupled-parity spectra. These establish
+  representation consistency. Independent Cartesian curl calculations following
+  the exported spline contract reduce sampled QA/asymmetric-LSP force residuals
+  from 0.0343/0.0120 to 0.00266/0.00214 with angular and radial refinement.
+  These use `Aminor*rms(curl(B) x B)/rms(|B|^2)`, a different normalization from
+  the N2 protocol; they exclude the axis patch and edge and still need direct
+  native pointwise comparison. LI383 Jacobian mismatch converges near 0.0858
+  against its unchanged 0.03 gate, with independent radial alternatives still
+  above 0.05. A resolved producer is required before assigning a converter fix.
 - The external `gvec-stability` repository is now accessible at `822b2bb`;
   recovered Brezellator and historical TERPSICHORE assets supply bounded
   controls, not a qualified common figure-eight. Original CAS3D decks and the
@@ -286,4 +338,4 @@ Active dependencies remain explicit:
   CI exposed a runtime-library discovery defect before any proof. The repaired
   workflow passes all 170 exact identities, byte-exact outputs and 3/3 CTests
   on an x86_64 Linux host with the locked GNU 15.3 Nix toolchain. Hosted
-  reproduction of the repaired workflow remains a required publication gate.
+  reproduction now also passes at `c70f6b8`.

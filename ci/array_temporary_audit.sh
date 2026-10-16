@@ -54,5 +54,5 @@ if report["count"]:
 if ((lint_status != 0)); then
     exit "$lint_status"
 fi
-fo build --flag '-O3 -Warray-temporaries -Werror=array-temporaries'
+fo build --release --flag '-O3 -Warray-temporaries -Werror=array-temporaries'
 fo test

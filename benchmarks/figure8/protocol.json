@@ -1,0 +1,30 @@
+{
+  "gvec_repository": "https://gitlab.mpcdf.mpg.de/gvec-group/gvec.git",
+  "gvec_commit": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+  "primary": {
+    "name": "N2.12-v3.1-hi",
+    "parameter": "test-CI/examples/axisNB_N2-12/parameter.ini",
+    "parameter_sha256": "e50a92c2aaa256897a4d4ee2b13018d337c88425b59d96c3f41e4b43a19301a7",
+    "frame": "test-CI/data/N2.12-v3.1-hi.nc",
+    "frame_sha256": "e3417b64285408f86180fc4b0f0c85d2e08e2c4c999e838123ba9f2add0361aa",
+    "research_dataset": "https://doi.org/10.5281/zenodo.14714598",
+    "research_dataset_license": "CC-BY-4.0",
+    "research_frame_member": "zenodo_data_frenet_paper_2024_01_21/N2.12-v3.1-hi.nc",
+    "research_frame_matches_gvec": true,
+    "published_resolution": "M2/N10, two degree-5 radial cells; archive log is not converged",
+    "default_initialization": "fresh M2/N10 with original frame and declared stellarator symmetry; CI M2/N5 truncates the edge",
+    "restart_contract": "Native restart transfers edge coefficients. Increased mode capacity does not restore the target boundary; independently check off-knot positions before restarting and after solving.",
+    "target": "zero pressure, fixed iota=+0.70; force-free, not a prescribed zero-current vacuum"
+  },
+  "weak_control": {
+    "name": "QUASR189686",
+    "url": "https://quasr.flatironinstitute.org/simsopt_serials/0189/serial0189686.json",
+    "sha256": "4bba5c53be41d29798d93faa4ee8bad91fe57f3a8ce094648bd09c883e52038e",
+    "bytes": 134086,
+    "producer_serialization": "SIMSOPT 1.5.1.dev119+gde67acf2.d20240603",
+    "license_record": "https://doi.org/10.5281/zenodo.13717741",
+    "license": "MIT",
+    "archive_membership_verified": false,
+    "role": "weakly folded exploratory control; not strong figure-eight acceptance"
+  }
+}

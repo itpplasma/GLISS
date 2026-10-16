@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.24)
+project(N2Compatibility LANGUAGES Fortran)
+enable_testing()
+get_filename_component(GLISS_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(GLISS_BUILD_DIR "" CACHE PATH "Existing verified GLISS build with library and modules")
+set(FIGURE8_EXPORT "" CACHE FILEPATH "Unqualified N2-12 diagnostic export")
+if(NOT EXISTS "${GLISS_BUILD_DIR}/libgliss.a" OR NOT EXISTS "${FIGURE8_EXPORT}")
+    message(FATAL_ERROR "Supply GLISS_BUILD_DIR and FIGURE8_EXPORT; this probe does not build GLISS")
+endif()
+set(BLA_VENDOR OpenBLAS CACHE STRING "BLAS used by the existing GLISS library")
+find_package(LAPACK REQUIRED)
+include("${GLISS_SOURCE_DIR}/cmake/GLISSOpenMP.cmake")
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(NETCDF_C REQUIRED IMPORTED_TARGET netcdf)
+add_library(gliss_native STATIC IMPORTED)
+set_target_properties(gliss_native PROPERTIES
+    IMPORTED_LOCATION "${GLISS_BUILD_DIR}/libgliss.a"
+    INTERFACE_INCLUDE_DIRECTORIES "${GLISS_BUILD_DIR}/modules")
+add_executable(check_compatibility check_compatibility.f90)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(check_compatibility PRIVATE -Wall -Wextra -Werror=array-temporaries -fcheck=all -g)
+endif()
+target_link_libraries(check_compatibility PRIVATE gliss_native
+    LAPACK::LAPACK GLISS::OpenMP_Fortran PkgConfig::NETCDF_C)
+add_test(NAME n2_geometry_compatibility COMMAND check_compatibility "${FIGURE8_EXPORT}")
+set_tests_properties(n2_geometry_compatibility PROPERTIES
+    TIMEOUT 180 ENVIRONMENT "OMP_NUM_THREADS=2;OPENBLAS_NUM_THREADS=1")

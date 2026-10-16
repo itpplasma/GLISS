@@ -1,0 +1,90 @@
+{
+  "status": "Independent frame guiding-curve geometry audit, not an equilibrium or acceptance certificate",
+  "method": {
+    "inclination": "At Fourier-refined y=0 roots, arctan2(abs(dz/dt),abs(dy/dt)); bowtie y-z convention of Plunk2411.16411v2 Fig1. Original sampled guiding curve, not measured equilibrium magnetic axis.",
+    "writhe": "Midpoint Gauss double integral at 256,512,1024 segments. Numerical convergence diagnostic, no exact topological claim.",
+    "phi_boundary": "Exact sampled-data periodic Fourier interpolation with separate original half-grid offsets,129theta and1024full-torus zeta points. Sampled signs, not smooth interval proof."
+  },
+  "source_revision": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+  "configurations": {
+    "N2.12-v3.1-hi.nc": {
+      "sha256": "e3417b64285408f86180fc4b0f0c85d2e08e2c4c999e838123ba9f2add0361aa",
+      "nfp": 2,
+      "guiding_curve_inclination_degrees": 50.47466288008628,
+      "writhe_256_512_1024": [
+        0.41495309505351735,
+        0.4151247921189821,
+        0.4151762631764815
+      ],
+      "bbox_ranges_xyz": [
+        2.1481312107444217,
+        0.878421895716693,
+        0.7854535398021655
+      ],
+      "axis_projection_crossings": {
+        "xy": 0,
+        "xz": 1,
+        "yz": 1,
+        "principal12": 0,
+        "principal13": 1,
+        "principal23": 1
+      },
+      "boundary_phi_derivative": {
+        "min_R": 0.08594055666110785,
+        "dphi_dzeta_min": 0.2440034018235659,
+        "dphi_dzeta_max": 9.914148199932404,
+        "negative_fraction": 0.0,
+        "negative_theta_fraction": 0.0,
+        "max_relative_tube_radius": 0.34936459534749725
+      }
+    },
+    "quasr-0189686-Gframe.nc": {
+      "sha256": "440181f7fb0844ae91d3511aad49d383d499658f975dc574eb07540b09119adb",
+      "nfp": 2,
+      "guiding_curve_inclination_degrees": 13.428191729151099,
+      "writhe_256_512_1024": [
+        0.05337295932238689,
+        0.053411355800470316,
+        0.05342257718922185
+      ],
+      "bbox_ranges_xyz": [
+        1.7346405319832912,
+        2.324566311824496,
+        0.25670414799002494
+      ],
+      "axis_projection_crossings": {
+        "xy": 0,
+        "xz": 1,
+        "yz": 1,
+        "principal12": 0,
+        "principal13": 1,
+        "principal23": 1
+      },
+      "boundary_phi_derivative": {
+        "min_R": 0.8036284564596922,
+        "dphi_dzeta_min": 0.8387034930272805,
+        "dphi_dzeta_max": 1.2001536876722088,
+        "negative_fraction": 0.0,
+        "negative_theta_fraction": 0.0,
+        "max_relative_tube_radius": 0.0795236405474065
+      }
+    }
+  },
+  "N2_provenance": {
+    "zenodo_record": "https://zenodo.org/records/14714598",
+    "license": "CC-BY-4.0",
+    "zip_filename": "zenodo_data_frenet_paper_2024_01_21.zip",
+    "zip_bytes": 163050026,
+    "zip_md5": "4e7921bff9ae21deb008c549f2d4a16e",
+    "zip_sha256": "1d9a8940bcd4a4ef99372924ecd0c8775a3623103ca64796f0a259b10c4fbcd8",
+    "entry": "zenodo_data_frenet_paper_2024_01_21/N2.12-v3.1-hi.nc",
+    "same_bytes_as_pinned_GVEC": true,
+    "producer_attribution": "G-frame and boundary generated from the NAE solution by G.G. Plunk, per archive README; NAE implementation unspecified",
+    "published_run_context": "2radial degree5; geometry/lambda M2/N10; p=0;iota=.7; publication states800iterations. Archive includes first400iteration log explicitly not converged, plus visualization output0001_400; no native restart state."
+  },
+  "limits": [
+    "Sampled guiding curves are not solved magnetic axes.",
+    "Both sampled boundary azimuth derivatives stay positive; no outside-cylindrical-chart claim.",
+    "N2-12 is the available approximately 50-degree fold, not the approximately 76-degree maximum-fold paper case."
+  ]
+}
