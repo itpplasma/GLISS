@@ -194,8 +194,9 @@ replace a reliable inertia method with pivot-perturbed LU.
 - [x] Close #16's tangential-space correction and #17's lowest-positive
   bracketing correction after current native, runtime-check and Flang acceptance.
   Broader degree-1 physical convergence remains tracked in #35.
-- [ ] Finish #14's current macOS installed-wheel matrix and retain successor
-  work for broader acceptance left after #13/#18/#19/#22/#33 bounded closures.
+- [x] Close #14 after both macOS native builds and all twelve installed-wheel
+  Python 3.9–3.14/architecture combinations pass at `c70f6b8`.
+  Broader scientific acceptance remains in the work packages above.
 - [ ] Complete native pointwise physical qualification beyond #10's passing
   installed conversion/representation checks, resolve LI383 input accuracy,
   and finish #30 upstream GVEC reporting.
@@ -237,6 +238,8 @@ platform to avoid amplified upstream roundoff differences.
 Hosted GNU, Flang, GNU runtime checks, source Python, installed wheel/sdist,
 lint and documentation deployment pass at `c70f6b8`. Historical guides execute
 eight examples per tag and retain exact tagged-source and fixture provenance.
+The official isolated optimized audit also passes at `78d1ee8`: clean Fo lint,
+strict Release array-temporary errors and all 177 registered default tests.
 
 The pressure benchmark in `benchmarks/derivatives/` records repeated timings,
 inputs, library/toolchain hashes and thread settings. On this Apple Silicon
@@ -255,10 +258,14 @@ qualified figure-eight performance.
 Active dependencies remain explicit:
 
 - Fo's configured `--no-build` CMake-reply race is repaired upstream at
-  `2f979d1`, and FortFront nested SELECT RANK scanning at `07bfbb4`.
-  The rebuilt installed Fo passes the original GLISS build and lint checks;
-  its resident lane exposed the separate mixed-runtime BLAS failure above,
-  now repaired in GLISS's runtime selection.
+  `2f979d1`, exact frozen CMake cache metadata at `614d951`, and FortFront nested
+  SELECT RANK scanning at `07bfbb4`. The installed Fo retains original cache
+  help/type/value metadata, including whitespace and literal characters, so
+  automatic OpenMP discovery remains distinct from an explicit override.
+  The old driver fails the focused behavioral regression and the repaired one
+  passes; the original GLISS resident lane passes all twelve affected gates at
+  `78d1ee8`. The separate mixed-runtime BLAS failure exposed by the lane is
+  repaired in GLISS's runtime selection.
 - The public QUASR 189686 NFP=2 boundary/coils are a hash-pinned weakly folded
   control (SHA256 `4bba5c53be41d29798d93faa4ee8bad91fe57f3a8ce094648bd09c883e52038e`).
   A 20,000-iteration GVEC `c0dc66f` attempt fails its frozen coefficient-force
@@ -298,6 +305,15 @@ Active dependencies remain explicit:
   admission passes at 25x64, 33x96 and 49x128 angular resolutions. This is
   executable geometry compatibility evidence; the failed physical state is
   not promoted as a fixture or a stability-spectrum reference.
+  A further bounded M6/N20, six-cell degree-5 continuation from the correct
+  boundary with 27x99 angular quadrature stopped at 540 seconds/14,500 steps.
+  Its coefficient force 8.59e-9 and boundary error 1.02e-14 m pass, while physical
+  RMS 0.00964139 still fails. The physical residual worsens from the 5,000-step
+  checkpoint's 0.00840334 despite decreasing coefficient force. This does not
+  establish continuous-force convergence; no final state or spectrum is promoted.
+  On the identical final state, doubling angular quadrature to 55x199 changes
+  coefficient force by only 1.02e-5 relative; both values pass 1e-8. This does
+  not support remaining angular underintegration as the physical-error cause.
   Producer coefficient convergence must also pass independent physical force
   residuals and resolution sweeps before any fixture or spectrum is qualified.
 - Explicit true-edge Solov'ev export now meets frozen flux/transform/geometry
@@ -334,7 +350,9 @@ Active dependencies remain explicit:
   recovered Brezellator and historical TERPSICHORE assets supply bounded
   controls, not a qualified common figure-eight. Original CAS3D decks and the
   chosen common VMEC/GVEC figure-eight reference remain missing.
-- Hosted macOS wheels pass for the generated-kernel wave. Linux regeneration
+- Hosted macOS wheels pass for the edge/runtime wave at `c70f6b8`, including
+  both native architectures and all twelve installed Python environments.
+  Linux regeneration
   CI exposed a runtime-library discovery defect before any proof. The repaired
   workflow passes all 170 exact identities, byte-exact outputs and 3/3 CTests
   on an x86_64 Linux host with the locked GNU 15.3 Nix toolchain. Hosted

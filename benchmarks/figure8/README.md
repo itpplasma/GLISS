@@ -19,6 +19,16 @@ physical force RMS was 0.0165203 against the frozen 1e-4 goal. The QUASR weak
 control and archived Brezellator also fail physical force balance. Increasing
 the physical diagnostic's quadrature is not equilibrium resolution convergence.
 
+A bounded continuation from the correct fresh boundary at M6/N20, six degree-5
+cells and 27-by-99 angular quadrature stopped after 540 seconds/14,500 steps.
+Coefficient force 8.59e-9 passes the frozen goal, but physical RMS 0.00964139
+still fails. It improves on the medium resolution but worsens from the 5,000-step
+checkpoint's 0.00840334 as coefficient force decreases. This does not establish
+continuous-force convergence. The final state has not been exported or promoted.
+On that identical state, doubling angular quadrature to 55-by-199 changes the
+coefficient norm by only 1.02e-5 relative and preserves its pass. The remaining
+physical discrepancy is unresolved.
+
 ## Prepare and attempt a solve
 
 The executed environment was Python 3.12.13, GNU Fortran 16.1.0, OpenBLAS and

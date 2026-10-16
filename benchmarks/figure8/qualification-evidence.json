@@ -185,5 +185,83 @@
     "fresh supported Cartesian export with producer pin and schema checks",
     "GLISS parity spectra and independent physical comparison"
   ],
-  "stored_states_are_acceptance_fixtures": false
+  "stored_states_are_acceptance_fixtures": false,
+  "N2_12_refined": {
+    "status": "540-second bounded refinement complete; remains UNQUALIFIED physical equilibrium",
+    "producer_commit": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+    "parameter_sha256": "2fe569c0c70d4a8dd16cacd68b26df2b389d8808fe310c9b023bad7c27abf2d9",
+    "state_sha256": "9b8bcf7da8ee46e320416f83922fc0b9cd202aa3dc6ffc83a48b87d9cbd912d5",
+    "elapsed_seconds": 540.2044852499384,
+    "iterations": 14500,
+    "resolution": {
+      "elements": 6,
+      "m": 6,
+      "n": 20,
+      "degree": 5,
+      "quadrature_points": [
+        27,
+        99
+      ],
+      "radial_gauss_points": 7,
+      "minimizer": 10
+    },
+    "coefficient_force": 8.59266888357993e-09,
+    "coefficient_goal": 1e-08,
+    "coefficient_goal_passed": true,
+    "native_strict_requested_tolerance": 1e-10,
+    "native_strict_tolerance_achieved": false,
+    "boundary_position_max_error_m": 1.0209827278361288e-14,
+    "boundary_position_goal_m": 1e-12,
+    "boundary_goal_passed": true,
+    "physical_force_RMS": 0.009641389228836745,
+    "physical_force_goal": 0.0001,
+    "physical_force_goal_passed": false,
+    "physical_quadrature": [
+      10,
+      65,
+      163
+    ],
+    "min_off_axis_J": 4.2612213921284324e-05,
+    "cartesian_vs_metric_current_max_A_per_m2": 2.3115085900241264e-08,
+    "FD_force_mismatch_final": 1.9380850649876834e-09,
+    "pressure_slope_max": 0.0,
+    "baseline_medium_RMS": 0.016520257041574286,
+    "checkpoint5000_RMS": 0.008403342088418525,
+    "note": "Physical residual improves relative to medium but increases from the 5000-step checkpoint while coefficient force decreases. Neither coefficient convergence nor monotonic continuous-force convergence is established across a resolution family.",
+    "geometry_compatibility_export_and_native_probe": "Previously frozen fresh-medium M4/N10 diagnostic only; final M6/N20 state has not been exported or promoted",
+    "omp_threads": 1,
+    "physical_report_sha256": "6746bd929c6e6500a9900c636ddcaf57472d17482cbbb433d7884bb34ece8e24",
+    "checkpoint5000_state_sha256": "8ce40e19f14d0f15d37de4c9fbc2f816f045edf1bb20f07fa8e3cd28c3c470fe",
+    "artifacts_bundled": false,
+    "fixed_state_angular_quadrature_diagnostic": {
+      "status": "fixed immutable final state; initialization force only; no continued solve",
+      "producer_commit": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+      "state_sha256": "9b8bcf7da8ee46e320416f83922fc0b9cd202aa3dc6ffc83a48b87d9cbd912d5",
+      "base_angular_points": [
+        27,
+        99
+      ],
+      "probe_angular_points": [
+        55,
+        199
+      ],
+      "radial_gauss_points": 7,
+      "base_coefficient_force": {
+        "normF_X1": 6.45235687034902e-10,
+        "normF_X2": 7.88377743093817e-10,
+        "normF_LA": 8.59266888357993e-09
+      },
+      "probe_initial_coefficient_force": {
+        "normF_X1": 6.45238520496891e-10,
+        "normF_X2": 7.88374453406071e-10,
+        "normF_LA": 8.5925813619224e-09
+      },
+      "max_force_relative_change": -1.0185619708641823e-05,
+      "base_goal_passed": true,
+      "probe_goal_passed": true,
+      "goal": 1e-08,
+      "probe_csv_sha256": "ac965b753ef7fbe74222b8d51739f8bd6a87adc18468a6fe2eee88f9a4682a71",
+      "conclusion": "Angular doubling preserves the accepted coefficient norm to about 1e-5 relative. This probe does not support angular underintegration as the explanation of the final accepted coefficient goal. Physical force RMS remains 9.641389e-3 and unqualified; its cause is unresolved."
+    }
+  }
 }
