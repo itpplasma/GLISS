@@ -57,22 +57,23 @@ issue whose broader requested acceptance remains unmet.
 
 | ID | Work package | Dependencies | Current execution |
 | --- | --- | --- | --- |
-| K | Generated physical mathematics | Independent equations and oracle | Physical-mass generator and derivatives in progress |
-| G | Geometry and figure-eight admission | Declared embedding contract | Rigid-motion-invariant boundary admission in progress |
-| V | Discretization and physical qualification | Qualified input and K | Production off-knot torus regression in progress |
-| D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse assembly in progress |
-| S | Sparse backend selection | Reliable backend capabilities | FortSparse readiness assessment; retain block-LAPACK reference |
-| P | Performance qualification | Accepted workload and accuracy | Existing architecture retained; baseline instrumentation pending |
-| R | Reproducible release and evidence | Applicable gates above | Roadmap/tracker reconciliation and integration checks |
+| K | Generated physical mathematics | Independent equations and oracle | Mass, magnetic/fluid energy and pressure reverse leaves implemented |
+| G | Geometry and figure-eight admission | Declared embedding contract | Sampled mesh admission implemented; physical GVEC candidate running |
+| V | Discretization and physical qualification | Qualified input and K | Off-knot torus and physical dilation regressions pass; degree-1 study active |
+| D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse passes; generic equilibrium response unavailable |
+| S | Sparse backend selection | Reliable backend capabilities | Native LDLT lacks public inertia reliability API; retain block-LAPACK |
+| P | Performance qualification | Accepted workload and accuracy | Pressure reverse benchmark implemented and measured |
+| R | Reproducible release and evidence | Applicable gates above | Native/Python/codegen/optimized and eight Enzyme gates pass |
 
 ### K: FortSym-generated kernels
 
 - [ ] Independently derive physical mass and divergence from the cited energy
   principle with explicit units, signs, orientation and admissible domains.
-- [ ] Add consumer-owned `gen/` sources and committed `src/generated/` output.
+- [x] Add consumer-owned `gen/` sources and committed `src/generated/` output.
   Pin FortSym/FortGen identities and add reproducible regeneration/diff checks;
   ordinary GLISS builds require no CAS and never hand-edit emitted code.
-- [ ] Emit values, coefficients and JVP/VJP contractions together where useful.
+- [x] Emit values, coefficients and JVP/VJP contractions for mass and local
+  magnetic/fluid energies, plus pressure/spline reverse leaves.
   Retain exact identity evidence before floating-point lowering; randomized
   probes are numerical evidence, not algebraic proof.
 - [ ] Preserve independent Cartesian/metric energy oracles; cover all active
@@ -85,9 +86,9 @@ issue whose broader requested acceptance remains unmet.
 
 ### G: geometry and figure-eight compatibility
 
-- [ ] Complete exact-torus off-knot primitive Jacobian/derivative sweeps at
+- [x] Complete exact-torus off-knot primitive Jacobian/derivative sweeps at
   M16/24/28/36 with fixed error bounds, radial refinement and corrupt controls.
-- [ ] Replace global-z projected winding as decisive vacuum admission. Check
+- [x] Replace global-z projected winding as decisive vacuum admission. Check
   the actual sampled piecewise-linear boundary for degeneracy, covering and
   self-contact, with rigid-translation/rotation controls and retained
   double-cover rejection. State the distinction from smooth off-grid embedding.
@@ -123,7 +124,7 @@ issue whose broader requested acceptance remains unmet.
 
 ### D: derivatives and optimization
 
-- [ ] Replace pressure VJP's per-sample tangent assemblies with a contracted
+- [x] Replace pressure VJP's per-sample tangent assemblies with a contracted
   reverse assembly and the exact spline transpose; retain tangent/cardinal
   actions as independent small-case oracles and measure gradient cost scaling.
 - [ ] Define design DOFs, constraints, units, gauges and fixed-topology domains.
@@ -186,10 +187,51 @@ replace a reliable inertia method with pivot-perturbed LU.
 - [ ] Maintain this roadmap and the bounded source inventory at integration;
   completed file accounting must not be presented as completed equation review.
 
-## First integration wave
+## Integrated evidence and active dependencies
 
-The active wave targets generated physical mass, exact pressure reverse actions,
-production off-knot torus controls and discrete boundary embedding admission.
-Each can be promoted independently once its affected checks pass. A canonical
-force-balanced figure-eight, missing external decks, upstream export repairs
-and full design derivatives remain separate acceptance dependencies.
+The first code wave includes three reproducible generated modules. At FortSym
+`c9b1ec1a0eaf20d5fcde47853498eeb3508715ba`, the strict suites prove 41 mass,
+103 energy and 26 pressure/spline identities, with zero probe substitutes or
+failures. All three registered reproduction tests pass byte for byte. The
+installed FortSym consumer exposed missing deployment/runtime dependencies;
+the upstream repair also passes a relocated-package expression, derivative
+and emission oracle. Ordinary GLISS builds remain CAS-free.
+
+GNU 16.1 Release builds with `-O3 -Werror=array-temporaries` pass all 175 native
+tests. Python passes 332 tests with two optional skips. All eight Enzyme gates
+pass with LLVM/Flang 22.1.8 and Enzyme 0.0.277 after deferring scheduling
+optimizations until after differentiation. New controls cover
+off-knot torus jets through M36, sampled boundary contacts and rigid motions,
+all local energy input directions, spline transpose duality, pressure trace
+rotation invariance and the exact physical-dilation spectrum/energy law.
+Dilation tests do not implement an arbitrary equilibrium-design derivative.
+The VMEC round-trip oracle retains its tolerances and frozen-reference checks,
+while strict serialization equivalence uses a transform produced on the same
+platform to avoid amplified upstream roundoff differences.
+
+The pressure benchmark in `benchmarks/derivatives/` records repeated timings,
+inputs, library/toolchain hashes and thread settings. On this Apple Silicon
+host, the small Solov'ev workload measured median reverse/cardinal costs of
+14.5/283 ms with one OpenMP thread, and 9.50/186 ms with two, both using one
+BLAS thread. Component agreement passes; the measured improvement is about
+19.5x for this case. These figures do not establish general optimality or
+qualified figure-eight performance.
+
+Active dependencies remain explicit:
+
+- Fo's configured `--no-build` CMake-reply race is repaired upstream at
+  `2f979d1`; nested SELECT RANK scanning also needs a FortFront repair and
+  original-consumer recheck before resuming the resident integration lane.
+- The public QUASR 189686 NFP=2 boundary/coils are a hash-pinned figure-eight
+  vacuum candidate. A fresh pinned GVEC solve and independent residual,
+  embedding and refinement evidence are in progress. Archived N2-12 outputs
+  inspected so far are not converged reference states.
+- Physical free-boundary qualification needs true-edge producer data; interior
+  half-grid extrapolation cannot establish the required matching tolerance.
+- GVEC exposes equilibrium energy/force but no raw constrained residual
+  Jacobian, transpose or implicit design-response API. Those interfaces and
+  differentiated export/reconstruction remain required for generic gradients.
+- FortSparse native LDLT currently has no public reliable-inertia interface;
+  adding it to GLISS now would not improve the required certified solves.
+- Original CAS3D decks, the chosen common VMEC/GVEC figure-eight reference and
+  the external `gvec-stability` repository remain unavailable locally.

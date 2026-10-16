@@ -6,6 +6,10 @@ later and is installed into fresh CPython 3.9–3.14 environments. The workflow
 uploads wheel artifacts for review; publication and platform support claims
 require successful hosted runs of the complete matrix.
 
+Both architectures and all twelve installed-wheel jobs passed at source
+revision `e89d6a5` in [hosted run 37038789323](https://github.com/itpplasma/GLISS/actions/runs/37038789323).
+Each new release candidate must pass the matrix again.
+
 The build uses GNU Fortran 14.3.0, Clang 19.1.7, NetCDF C 4.9.3 and
 OpenBLAS 0.3.30. The two `macos-*.lock` files fix every native package by URL
 and checksum, including compiler and OpenMP runtimes. Micromamba 2.9.0 installs
@@ -16,11 +20,20 @@ version.
 Delocate 0.13.0 copies native dependencies into each wheel and removes host
 run paths. Validation runs outside the checkout with library-path overrides
 unset. `check_macos_wheel.py` checks every bundled library's architecture,
-dependency paths and run paths, then compiles and runs the repository's C
-consumer against the installed header and library. `check_installed.py` runs
+requiring exactly the wheel's architecture, and verifies arm64 code signatures.
+It checks dependency paths and run paths, then compiles and runs the
+repository's C consumer against the installed header and library.
+`check_installed.py` runs
 the Python suite, including native Solov'ev stability and Mercier oracles,
 finite-difference derivative checks, persistence and executable quickstart
 examples. The existing Linux CI and manylinux release script run separately.
+
+The macOS release qualification policy requires the locked native toolchain,
+recorded build provenance, and passing native and installed-wheel checks.
+Each wheel is built once per architecture; byte-identical repeated macOS
+builds are not currently verified. This policy does not establish binary
+reproducibility across runner or Xcode updates. The Linux release script
+continues to require byte-identical repeated sdist and manylinux wheel builds.
 
 To update the native toolchain, solve both target platforms with micromamba
 using these direct specifications and review all changed packages:

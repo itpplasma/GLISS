@@ -1,6 +1,8 @@
 module radial_cubic_spline
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use gliss_pressure_adjoint_generated, only: gliss_spline_endpoint_vjp, &
+        gliss_spline_evaluation_vjp, gliss_spline_rhs_vjp
     implicit none
     private
 
@@ -33,6 +35,7 @@ module radial_cubic_spline
     public :: evaluate_radial_cubic_spline_field
     public :: fit_radial_cubic_spline
     public :: fit_radial_cubic_spline_field
+    public :: radial_cubic_spline_vjp
 
 contains
 
@@ -265,6 +268,97 @@ contains
         info = radial_cubic_spline_ok
     end subroutine evaluate_radial_cubic_spline_field
 
+    subroutine radial_cubic_spline_vjp(grid, coordinates, value_cotangent, &
+            slope_cotangent, gradient, info)
+        type(radial_cubic_spline_grid_t), intent(in) :: grid
+        real(dp), intent(in) :: coordinates(:), value_cotangent(:)
+        real(dp), intent(in) :: slope_cotangent(:)
+        real(dp), allocatable, intent(out) :: gradient(:)
+        integer, intent(out) :: info
+        real(dp), allocatable :: second_cotangent(:), rhs_cotangent(:)
+        real(dp) :: value_left, value_right, second_left, second_right
+        real(dp) :: value_center, adjacent, next
+        integer :: allocation_status, i, interior, left, node_count, points
+        logical :: ascending, descending
+
+        info = radial_cubic_spline_invalid
+        if (.not. grid_is_valid(grid)) return
+        points = size(coordinates)
+        if (size(value_cotangent) /= points) return
+        if (size(slope_cotangent) /= points) return
+        if (.not. all(ieee_is_finite(coordinates))) return
+        if (.not. all(ieee_is_finite(value_cotangent))) return
+        if (.not. all(ieee_is_finite(slope_cotangent))) return
+        if (any(coordinates < grid%domain_min)) return
+        if (any(coordinates > grid%domain_max)) return
+        node_count = size(grid%nodes)
+        interior = node_count - 2
+        allocate (gradient(node_count), second_cotangent(node_count), &
+            rhs_cotangent(interior), stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = radial_cubic_spline_allocation_error
+            return
+        end if
+        gradient = 0.0_dp
+        second_cotangent = 0.0_dp
+        ascending = .true.
+        descending = .true.
+        if (points > 1) then
+            ascending = all(coordinates(2:) >= coordinates(:points - 1))
+            descending = all(coordinates(2:) <= coordinates(:points - 1))
+        end if
+        left = 1
+        if (.not. ascending .and. descending) left = node_count - 1
+        ! Ordered schedules sweep once. Arbitrary schedules retain the primal
+        ! binary search, including its edge-interval extrapolation convention.
+        do i = 1, points
+            if (ascending) then
+                do while (left < node_count - 1)
+                    if (coordinates(i) < grid%nodes(left + 1)) exit
+                    left = left + 1
+                end do
+            else if (descending) then
+                do while (left > 1)
+                    if (coordinates(i) >= grid%nodes(left)) exit
+                    left = left - 1
+                end do
+            else
+                left = find_interval(grid%nodes, coordinates(i))
+            end if
+            call gliss_spline_evaluation_vjp(coordinates(i) - grid%nodes(left), &
+                grid%nodes(left + 1) - coordinates(i), grid%intervals(left), &
+                value_cotangent(i), slope_cotangent(i), value_left, value_right, &
+                second_left, second_right)
+            gradient(left) = gradient(left) + value_left
+            gradient(left + 1) = gradient(left + 1) + value_right
+            second_cotangent(left) = second_cotangent(left) + second_left
+            second_cotangent(left + 1) = &
+                second_cotangent(left + 1) + second_right
+        end do
+        ! The endpoint second derivatives are reconstructed from the first
+        ! and last two interior entries of the not-a-knot reduced solve.
+        call gliss_spline_endpoint_vjp(grid%intervals(1), grid%intervals(2), &
+            second_cotangent(1), adjacent, next)
+        rhs_cotangent = second_cotangent(2:node_count - 1)
+        rhs_cotangent(1) = rhs_cotangent(1) + adjacent
+        rhs_cotangent(2) = rhs_cotangent(2) + next
+        call gliss_spline_endpoint_vjp(grid%intervals(node_count - 1), &
+            grid%intervals(node_count - 2), second_cotangent(node_count), &
+            adjacent, next)
+        rhs_cotangent(interior) = rhs_cotangent(interior) + adjacent
+        rhs_cotangent(interior - 1) = rhs_cotangent(interior - 1) + next
+        call solve_factored_transpose(grid, rhs_cotangent)
+        do i = 1, interior
+            call gliss_spline_rhs_vjp(grid%intervals(i), grid%intervals(i + 1), &
+                rhs_cotangent(i), value_left, value_center, value_right)
+            gradient(i) = gradient(i) + value_left
+            gradient(i + 1) = gradient(i + 1) + value_center
+            gradient(i + 2) = gradient(i + 2) + value_right
+        end do
+        if (.not. all(ieee_is_finite(gradient))) return
+        info = radial_cubic_spline_ok
+    end subroutine radial_cubic_spline_vjp
+
     subroutine build_reduced_system(intervals, lower, diagonal, upper)
         real(dp), intent(in) :: intervals(:)
         real(dp), intent(out) :: lower(:), diagonal(:), upper(:)
@@ -323,6 +417,23 @@ contains
                 / grid%diagonal_factor(i)
         end do
     end subroutine solve_factored_system
+
+    subroutine solve_factored_transpose(grid, values)
+        type(radial_cubic_spline_grid_t), intent(in) :: grid
+        real(dp), intent(inout) :: values(:)
+        integer :: i
+
+        ! A = L U is generally nonsymmetric after the not-a-knot endpoint
+        ! elimination. Solve U^T first, followed by the unit-diagonal L^T.
+        values(1) = values(1) / grid%diagonal_factor(1)
+        do i = 2, size(values)
+            values(i) = (values(i) - grid%upper(i - 1) * values(i - 1)) &
+                / grid%diagonal_factor(i)
+        end do
+        do i = size(values) - 1, 1, -1
+            values(i) = values(i) - grid%lower_factor(i) * values(i + 1)
+        end do
+    end subroutine solve_factored_transpose
 
     subroutine solve_factored_field(grid, values)
         type(radial_cubic_spline_grid_t), intent(in) :: grid

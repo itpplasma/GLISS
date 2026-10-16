@@ -3,17 +3,18 @@
 `gliss` is the Python interface to the Global Linear Ideal Stability Solver.
 Development version 0.0.3 provides Mercier diagnostics, reusable equilibrium contexts,
 fixed-boundary stability problems, certified spectra and direct symmetric VMEC
-conversion. The Linux wheel
-contains the compiled Fortran library and uses a small, hand-written ISO C
-binding; no `f90wrap` dependency is required.
+conversion. Platform wheels contain the compiled Fortran library and use a
+small, hand-written ISO C binding; no `f90wrap` dependency is required.
 
 The supported production scope is fixed- and free-boundary FEEC. TERPSICHORE
 FORT.23/24 solves are compatibility replays for validation, and the public
 force-balanced equilibrium-to-spectrum design derivative chain is incomplete.
 Pressure-sample spectral derivatives at fixed imported geometry are available.
 Published version 0.0.2 ships a
-manylinux x86-64 wheel and source distribution. The development source adds
-hosted macOS wheel validation. Asymmetric equilibria are solved with the coupled parity operator, and
+manylinux x86-64 wheel and source distribution. Development wheels for macOS
+15.0 or later pass hosted validation on x86-64 and arm64 with CPython 3.9–3.14;
+see the [macOS wheel qualification policy](https://github.com/itpplasma/GLISS/blob/main/ci/macos-wheels.md).
+Asymmetric equilibria are solved with the coupled parity operator, and
 precomputed BOOZ_XFORM inputs convert.
 
 ## Installation

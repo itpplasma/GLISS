@@ -90,7 +90,11 @@ set(IR_FILES \"\")
 set(index 0)
 foreach(source IN LISTS SOURCES)
     set(ir \"\${WORK}/stage_\${index}.ll\")
-    run_checked(\${FLANG} -O2 -fPIC -module-dir \${MODULES} -I\${MODULES}
+    # Defer scheduling optimizations until after AD, as recommended by Enzyme:
+    # https://enzyme.mit.edu/getting_started/UsingEnzyme/
+    # Pre-AD vectorization can obscure Fortran descriptor member types.
+    run_checked(\${FLANG} -O2 -fno-vectorize -fno-slp-vectorize
+        -fno-unroll-loops -fPIC -module-dir \${MODULES} -I\${MODULES}
         -S -emit-llvm \${source} -o \${ir})
     list(APPEND IR_FILES \${ir})
     math(EXPR index \"\${index} + 1\")
@@ -99,7 +103,7 @@ endforeach()
 set(linked \"\${WORK}/linked.ll\")
 run_checked(\${LLVM_LINK} -S \${IR_FILES} -o \${linked})
 set(differentiated \"\${WORK}/enzyme.ll\")
-run_checked(\${OPT} -load-pass-plugin=\${PLUGIN} -passes=default<O2>,enzyme
+run_checked(\${OPT} -load-pass-plugin=\${PLUGIN} -passes=enzyme
     \${linked} -S -o \${differentiated})
 run_checked(\${FLANG} -O2 \${differentiated} -o \${EXECUTABLE})
 ")

@@ -41,8 +41,8 @@ def test_native_solovev_n1_stability_matches_dcon(
 ):
     # GPEC/DCON (tolerance 1e-8) puts the n=1 fixed-boundary marginal point of
     # this family between q0=1.0391 (unstable) and q0=1.0398 (stable). The
-    # conforming axis space bounds eigenvalues from above; degree 3 resolves
-    # the near-marginal kink on these 16-surface exports.
+    # degree-3 axis space resolves the near-marginal kink on these 16-surface
+    # exports. Reduced compression quadrature gives no general upper bound.
     with gliss.Equilibrium(test_data / f"solovev_q{name}.nc") as equilibrium:
         result = gliss.solve_axisymmetric(equilibrium, poloidal_max=6, degree=3)
     assert result.negative_count == int(unstable)

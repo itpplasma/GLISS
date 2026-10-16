@@ -1,5 +1,7 @@
 program test_plasma_vacuum_boundary
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
+    use boundary_mesh_geometry, only: periodic_surface_is_embedded, &
+        triangle_pair_is_embedded
     use cylinder_fixture, only: create_cylinder_fixture
     use compatible_three_component_problem, only: &
         build_compatible_three_component_classes, &
@@ -39,6 +41,8 @@ program test_plasma_vacuum_boundary
 
     call get_command_argument(1, directory)
     if (len_trim(directory) == 0) error stop "supply the fixture directory"
+    call test_triangle_pair_embedding()
+    call test_periodic_mesh_embedding()
     call test_multiple_cover_rejected()
     call read_gvec_cas3d_file(trim(directory)//"/solovev_q1.035.nc", &
         equilibrium, info)
@@ -50,6 +54,148 @@ program test_plasma_vacuum_boundary
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine test_triangle_pair_embedding()
+        real(dp) :: first(3, 3), second(3, 3)
+
+        first(:, 1) = [0.0_dp, 0.0_dp, 0.0_dp]
+        first(:, 2) = [1.0_dp, 0.0_dp, 0.0_dp]
+        first(:, 3) = [0.0_dp, 1.0_dp, 0.0_dp]
+        second = first
+        second(:, 3) = [0.0_dp, -1.0_dp, 0.0_dp]
+        call require(triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 2, 4]), "coplanar adjacent faces were rejected")
+        second(:, 3) = [0.5_dp, 0.25_dp, 0.0_dp]
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 2, 4]), "overlap beyond a shared edge was accepted")
+        second(3, 3) = 1.0_dp
+        call require(triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 2, 4]), "a noncoplanar crease was rejected")
+
+        second(:, 2) = [-1.0_dp, 0.0_dp, 0.0_dp]
+        second(:, 3) = [0.0_dp, -1.0_dp, 0.0_dp]
+        call require(triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 4, 5]), "disjoint coplanar vertex cones were rejected")
+        second(:, 2) = [1.0_dp, 1.0_dp, 0.0_dp]
+        second(:, 3) = [-1.0_dp, 1.0_dp, 0.0_dp]
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 4, 5]), "coplanar vertex-cone overlap was accepted")
+        second(:, 2) = [1.0_dp, 1.0_dp, 1.0_dp]
+        second(:, 3) = [1.0_dp, 1.0_dp, -1.0_dp]
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 4, 5]), "noncoplanar vertex-cone overlap was accepted")
+        second(1:2, 2:3) = -second(1:2, 2:3)
+        call require(triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 4, 5]), "separated noncoplanar vertex cones were rejected")
+        second(:, 2) = [1.0_dp, 0.0_dp, 1.0_dp]
+        second(:, 3) = [1.0_dp, 0.0_dp, -1.0_dp]
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 4, 5]), "a vertex-cone boundary-ray contact was accepted")
+        second(:, 2) = [1.0_dp, 1.0_dp, epsilon(1.0_dp)]
+        second(:, 3) = [1.0_dp, -1.0_dp, -epsilon(1.0_dp)]
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 4, 5]), "near-coplanar overlapping cones were accepted")
+
+        second = first
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [4, 5, 6]), "coincident faces with distinct nodes were accepted")
+        second(3, :) = 1.0_dp
+        call require(triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [4, 5, 6]), "separated faces were rejected")
+        second(:, 1) = [0.25_dp, 0.25_dp, -1.0_dp]
+        second(:, 2) = [0.25_dp, 0.25_dp, 1.0_dp]
+        second(:, 3) = [0.75_dp, 0.25_dp, 0.0_dp]
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [4, 5, 6]), "transversely crossing faces were accepted")
+        second = 0.1_dp + 0.1_dp * first
+        second(3, :) = 0.0_dp
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [4, 5, 6]), "coplanar containment was accepted")
+        second = -first
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [4, 5, 6]), "contact of distinct vertex IDs was accepted")
+
+        ! Crossing does not depend on the ratio of triangle sizes. A short
+        ! edge must not be discarded by a dimensional determinant cutoff.
+        first(:, 1) = [-1.0_dp, -1.0_dp, 0.0_dp]
+        first(:, 2) = [1.0_dp, -1.0_dp, 0.0_dp]
+        first(:, 3) = [0.0_dp, 1.0_dp, 0.0_dp]
+        second(:, 1) = [0.0_dp, -1.0e-14_dp, -1.0e-14_dp]
+        second(:, 2) = [0.0_dp, 1.0e-14_dp, -1.0e-14_dp]
+        second(:, 3) = [0.0_dp, 0.0_dp, 1.0e-14_dp]
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [4, 5, 6]), "a tiny triangle crossing a large face was accepted")
+        first(:, 1) = 0.0_dp
+        first(:, 2) = [1.0_dp, 0.0_dp, 0.0_dp]
+        first(:, 3) = [1.0_dp, 1.0e-8_dp, 0.0_dp]
+        second(:, 1) = 0.0_dp
+        second(:, 2) = [1.0_dp, 0.5e-8_dp, 1.0_dp]
+        second(:, 3) = [1.0_dp, 0.5e-8_dp, -1.0_dp]
+        call require(.not. triangle_pair_is_embedded(first, second, [1, 2, 3], &
+            [1, 4, 5]), "a crossing at a skinny shared-vertex face was accepted")
+    end subroutine test_triangle_pair_embedding
+
+    subroutine test_periodic_mesh_embedding()
+        integer, parameter :: mesh_u = 24, mesh_v = 48
+        real(dp) :: surface(3, mesh_u, mesh_v), changed(3, mesh_u, mesh_v)
+        real(dp) :: theta, phi, radius
+        integer :: i, k, orientation, original_orientation, start, finish, rate
+
+        do k = 1, mesh_v
+            phi = 2.0_dp * acos(-1.0_dp) * real(k - 1, dp) / real(mesh_v, dp)
+            do i = 1, mesh_u
+                theta = 2.0_dp * acos(-1.0_dp) * real(i - 1, dp) / real(mesh_u, dp)
+                radius = 3.0_dp + 0.5_dp * cos(theta)
+                surface(1, i, k) = radius * cos(phi)
+                surface(2, i, k) = radius * sin(phi)
+                surface(3, i, k) = 0.5_dp * sin(theta)
+            end do
+        end do
+        call system_clock(start, rate)
+        call require(periodic_surface_is_embedded(surface, original_orientation), &
+            "an embedded torus mesh was rejected")
+        call system_clock(finish)
+        write (*, '(a,f10.6,a)') 'edge embedding 2304 triangles: ', &
+            real(finish - start, dp) / real(rate, dp), ' seconds'
+        call require(periodic_surface_is_embedded( &
+            surface(:, 1:mesh_u:3, 1:mesh_v:12), orientation), &
+            "a coarse 8-by-4 embedded torus mesh was rejected")
+        changed = surface
+        changed(1, :, :) = changed(1, :, :) + 10.0_dp
+        call require(periodic_surface_is_embedded(changed, orientation), &
+            "translation changed mesh admission")
+        call require(orientation == original_orientation, &
+            "translation changed mesh orientation")
+        changed(1, :, :) = surface(3, :, :)
+        changed(2, :, :) = -surface(2, :, :)
+        changed(3, :, :) = surface(1, :, :)
+        call require(periodic_surface_is_embedded(changed, orientation), &
+            "rotation changed mesh admission")
+        call require(orientation == original_orientation, &
+            "rotation changed mesh orientation")
+        changed = 1.0e-6_dp * surface
+        call require(periodic_surface_is_embedded(changed, orientation), &
+            "uniform scaling changed mesh admission")
+        changed = surface(:, mesh_u:1:-1, :)
+        call require(periodic_surface_is_embedded(changed, orientation), &
+            "reversed mesh orientation was rejected")
+        call require(orientation == -original_orientation, &
+            "reversing a parameter did not reverse the orientation")
+
+        ! A global polynomial diffeomorphism sends the torus to a smooth
+        ! embedded surface with a figure-eight x-y projection. Its two lobes
+        ! remain separated in z; projected winding cannot admit this surface.
+        changed(1, :, :) = surface(1, :, :)
+        changed(2, :, :) = surface(3, :, :) &
+            + 2.0_dp * surface(1, :, :) * surface(2, :, :) / 3.0_dp
+        changed(3, :, :) = surface(2, :, :)
+        call require(periodic_surface_is_embedded(changed, orientation), &
+            "an embedded mesh with a figure-eight projection was rejected")
+        changed = surface
+        changed(:, :, mesh_v / 2 + 1:) = surface(:, :, :mesh_v / 2)
+        call require(.not. periodic_surface_is_embedded(changed, orientation), &
+            "a duplicate half of the periodic mesh was accepted")
+    end subroutine test_periodic_mesh_embedding
 
     subroutine test_multiple_cover_rejected()
         type(gvec_cas3d_equilibrium_t) :: cylinder
@@ -76,7 +222,85 @@ contains
             2.0_dp, 1.0_dp, [1, 2], [1, 1], 1, problem, info, vacuum=model)
         call require(info == fixed_boundary_vacuum, &
             "a free boundary on a doubly covered edge was accepted")
+        call test_rigid_boundary_admission(cylinder)
     end subroutine test_multiple_cover_rejected
+
+    subroutine test_rigid_boundary_admission(cylinder)
+        type(gvec_cas3d_equilibrium_t), intent(in) :: cylinder
+        type(gvec_cas3d_equilibrium_t) :: single, changed
+        type(primitive_equilibrium_spline_t) :: spline
+        real(dp), allocatable :: reference(:, :, :), reference_normal(:, :, :)
+        real(dp), allocatable :: surface(:, :, :), normal(:, :, :)
+        real(dp) :: fp, ft, reference_fp, reference_ft, ring(3), radius
+        integer :: zero_m, zero_n, negative_n, i, k
+
+        single = cylinder
+        single%winding = 0
+        call fit_primitive_equilibrium(single, spline, info)
+        call require(info == primitive_equilibrium_ok, "single-cover fit failed")
+        call build_plasma_boundary_surface(spline, 12, 24, reference, &
+            reference_normal, reference_fp, reference_ft, info)
+        call require(info == plasma_vacuum_ok, "single-cover torus was rejected")
+        do k = 1, size(reference, 3)
+            do i = 1, size(reference, 2)
+                radius = norm2(reference(1:2, i, k))
+                ring(1:2) = 3.0_dp * reference(1:2, i, k) / radius
+                ring(3) = 0.0_dp
+                call require(dot_product(reference_normal(:, i, k), &
+                    reference(:, i, k) - ring) > 0.0_dp, &
+                    "single-cover torus normals point inward")
+            end do
+        end do
+        zero_m = findloc(single%poloidal_modes, 0, dim=1)
+        zero_n = findloc(single%toroidal_modes, 0, dim=1)
+        negative_n = findloc(single%toroidal_modes, -1, dim=1)
+        changed = single
+        changed%xhat%cosine(:, zero_m, zero_n) = &
+            changed%xhat%cosine(:, zero_m, zero_n) + 10.0_dp
+        call fit_primitive_equilibrium(changed, spline, info)
+        call require(info == primitive_equilibrium_ok, "translated fit failed")
+        call build_plasma_boundary_surface(spline, 12, 24, surface, normal, &
+            fp, ft, info)
+        call require(info == plasma_vacuum_ok, "translated torus was rejected")
+        surface(1, :, :) = surface(1, :, :) - 10.0_dp
+        call require(maxval(abs(surface - reference)) < 1.0e-11_dp &
+            .and. maxval(abs(normal - reference_normal)) < 1.0e-11_dp, &
+            "translation changed boundary geometry or outward normals")
+        call require(abs(fp - reference_fp) + abs(ft - reference_ft) < 1.0e-12_dp, &
+            "translation changed boundary flux slopes")
+
+        ! A proper rigid rotation puts the torus axis along x rather than z.
+        changed = single
+        changed%xhat = single%zhat
+        changed%yhat%cosine = -single%yhat%cosine
+        changed%yhat%sine = -single%yhat%sine
+        changed%zhat = single%xhat
+        call fit_primitive_equilibrium(changed, spline, info)
+        call require(info == primitive_equilibrium_ok, "rotated fit failed")
+        call build_plasma_boundary_surface(spline, 12, 24, surface, normal, &
+            fp, ft, info)
+        call require(info == plasma_vacuum_ok, "rotated torus was rejected")
+        call require(maxval(abs(surface(1, :, :) - reference(3, :, :))) &
+            + maxval(abs(surface(2, :, :) + reference(2, :, :))) &
+            + maxval(abs(surface(3, :, :) - reference(1, :, :))) < 1.0e-11_dp, &
+            "rotation changed boundary positions")
+        call require(maxval(abs(normal(1, :, :) - reference_normal(3, :, :))) &
+            + maxval(abs(normal(2, :, :) + reference_normal(2, :, :))) &
+            + maxval(abs(normal(3, :, :) - reference_normal(1, :, :))) &
+            < 1.0e-11_dp, "rotation changed outward normals")
+
+        ! A spindle torus is physically self-intersecting, although its mean
+        ! projected ring winds once. Retain rejection beyond double covers.
+        changed = single
+        changed%xhat%cosine(:, zero_m, negative_n) = 0.2_dp
+        changed%yhat%sine(:, zero_m, negative_n) = 0.2_dp
+        call fit_primitive_equilibrium(changed, spline, info)
+        call require(info == primitive_equilibrium_ok, "spindle fit failed")
+        call build_plasma_boundary_surface(spline, 12, 24, surface, normal, &
+            fp, ft, info)
+        call require(info == plasma_vacuum_geometry_error, &
+            "a self-intersecting spindle torus was accepted")
+    end subroutine test_rigid_boundary_admission
 
     subroutine test_edge_surface()
         type(primitive_equilibrium_spline_t) :: spline
@@ -109,6 +333,10 @@ contains
                 call require(outward > 0.0_dp, "edge normal is not outward")
             end do
         end do
+        call build_plasma_boundary_surface(spline, 8, 4, surface, normal, &
+            fp, ft, info)
+        call require(info == plasma_vacuum_ok, &
+            "a coarse 8-by-4 Solov'ev edge was rejected")
     end subroutine test_edge_surface
 
     subroutine test_wall_ordering_and_energy()

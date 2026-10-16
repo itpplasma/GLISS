@@ -17,9 +17,9 @@ EVIDENCE = ROOT / "ci/source_inventory_evidence.json"
 EXTENSIONS = {".f90", ".py", ".sh", ".c", ".h", ".cmake", ".yml", ".js", ".lock"}
 EXPLICIT = {"CMakeLists.txt", "fpm.toml", ".github/manylinux.Dockerfile",
             "docs/Makefile", "pyproject.toml", "python/gliss/closure_manifest.json",
-            "ci/source_inventory_evidence.json"}
+            "ci/source_inventory_evidence.json", "gen/fortsym-revision.txt"}
 PREFIXES = ("src/", "app/", "include/", "python/gliss/", "python/tests/",
-            "benchmarks/", "ci/", ".github/", "cmake/", "test/", "docs/")
+            "benchmarks/", "ci/", ".github/", "cmake/", "test/", "docs/", "gen/")
 
 
 def git(*args):
@@ -37,6 +37,12 @@ def paths():
 def role(path):
     if path == "ci/source_inventory_evidence.json":
         return "audit_metadata"
+    if path == "gen/fortsym-revision.txt":
+        return "symbolic_dependency_pin"
+    if path.startswith("gen/"):
+        return "symbolic_generator" if path.endswith(".f90") else "generation_verifier"
+    if path.startswith("src/generated/"):
+        return "generated_native_kernel"
     if path.startswith("src/"):
         return "c_abi_implementation" if path.rsplit("/", 1)[-1].startswith("gliss_") else "native_library"
     if path.startswith("include/"):
@@ -178,6 +184,11 @@ def records(base):
                     link(name, provider, imported["kind"], imported["name"], imported["line"])
             elif imported["kind"] != "python_from_candidate":
                 external[name].append(imported)
+        if name.startswith("src/generated/"):
+            for match in re.finditer(r"\bgen/[\w.-]+\.f90", sources[name]):
+                if match[0] in sources:
+                    line = sources[name][:match.start()].count("\n") + 1
+                    link(name, match[0], "generated_source_provenance", match[0], line)
         for number, line in enumerate(sources[name].splitlines(), 1):
             for symbol in sorted(set(re.findall(r"\b\w+\b", line)) & abi_providers.keys()):
                 for provider in abi_providers.get(symbol, []):
@@ -205,7 +216,7 @@ def records(base):
         candidates = sorted(set(edge["path"] for edge in callers[name]
                                 if role(edge["path"]) == "verification_source"))
         targeted = review_map[name]
-        yield {
+        record = {
             "schema_version": 1,
             "source_snapshot_base": base,
             "path": name,
@@ -235,6 +246,18 @@ def records(base):
             "unresolved_findings": data["parse_findings"] + [
                 "Equation-to-code derivation, units, full derivative paths and independent review remain unaccounted for at component level."],
         }
+        if name.startswith(("gen/", "src/generated/")):
+            record["generation_provenance"] = {
+                "fortsym_pin": "gen/fortsym-revision.txt",
+                "pinned_fortsym_revision": sources["gen/fortsym-revision.txt"].strip(),
+                "emitted_fortsym_revisions": sorted(set(re.findall(
+                    r"! (?:FortSym revision|Generator revision): ([0-9a-f]{40})",
+                    sources[name]))),
+                "generator_sources": sorted(set(re.findall(
+                    r"\bgen/[\w.-]+\.f90", sources[name]))),
+                "qualification": "provenance only; symbolic and behavioral gates required",
+            }
+        yield record
 
 
 def main():

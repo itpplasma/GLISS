@@ -63,9 +63,184 @@ program test_cartesian_harmonic_spline
     call check_geometry_failures(jet)
     call check_equilibrium_spline(jet, x, y, z)
     call check_invalid_inputs(grid, x, y, z, spline)
+    call check_off_knot_torus_sweep()
     write (*, "(a)") "PASS"
 
 contains
+
+    ! Analytic geometry, rather than knot interpolation or another production
+    ! geometry routine, is the oracle. Tiny high-m input errors reproduce the
+    ! roundoff-amplification trigger of #19; the radial and angular queries are
+    ! shifted away from the input knots and ordinary equispaced sample points.
+    subroutine check_off_knot_torus_sweep()
+        integer, parameter :: truncations(4) = [16, 24, 28, 36]
+        integer, parameter :: resolutions(2) = [64, 128]
+        real(dp), parameter :: limits(3) = [2.0e-9_dp, 2.0e-9_dp, 2.0e-9_dp]
+        real(dp), parameter :: sweep_zeta(3) = [0.173_dp, 0.413_dp, 0.787_dp]
+        type(gvec_cas3d_equilibrium_t) :: equilibrium
+        type(primitive_equilibrium_spline_t) :: primitive
+        real(dp), allocatable :: sweep_theta(:)
+        real(dp) :: errors(3), coordinate
+        integer :: truncation, resolution, point, j, count, status
+
+        do truncation = 1, size(truncations)
+            count = 4 * truncations(truncation) + 3
+            allocate (sweep_theta(count))
+            do j = 1, count
+                sweep_theta(j) = (real(j - 1, dp) + 0.271_dp) / real(count, dp)
+            end do
+            do resolution = 1, size(resolutions)
+                call build_sweep_torus(resolutions(resolution), &
+                    truncations(truncation), equilibrium)
+                call fit_primitive_equilibrium(equilibrium, primitive, status)
+                call require(status == primitive_equilibrium_ok, &
+                    "off-knot torus primitive fit failed")
+                errors = 0.0_dp
+                do point = 0, resolutions(resolution)
+                    coordinate = (real(point, dp) + 0.211_dp) &
+                        / real(resolutions(resolution), dp)
+                    if (point == 0) coordinate = equilibrium%s(1) / 32.0_dp
+                    if (point == resolutions(resolution)) coordinate = 1.0_dp
+                    call accumulate_torus_errors(primitive, coordinate, &
+                        sweep_theta, sweep_zeta, errors)
+                end do
+                write (*, '(a,i0,a,i0,a,3es12.4)') "off-knot torus M", &
+                    truncations(truncation), " surfaces ", resolutions(resolution), &
+                    " jet/metric/Jacobian scaled errors ", errors
+                call require(all(ieee_is_finite(errors)), &
+                    "off-knot torus errors are nonfinite")
+                call require(all(errors < limits), &
+                    "off-knot torus geometry exceeds fixed error limits")
+            end do
+            deallocate (sweep_theta)
+        end do
+        ! A changed major radius is still admissible geometry. The independent
+        ! exact-torus oracle must detect it, rather than merely checking status.
+        equilibrium%xhat%cosine(:, 1, 3) = major_radius + 0.01_dp
+        equilibrium%yhat%sine(:, 1, 3) = -major_radius - 0.01_dp
+        call fit_primitive_equilibrium(equilibrium, primitive, status)
+        call require(status == primitive_equilibrium_ok, &
+            "corrupted torus primitive fit failed")
+        errors = 0.0_dp
+        call accumulate_torus_errors(primitive, 0.431_dp, theta, zeta, errors)
+        call require(errors(3) > 1.0e-4_dp, &
+            "analytic Jacobian oracle missed corrupted torus input")
+    end subroutine check_off_knot_torus_sweep
+
+    subroutine build_sweep_torus(surfaces, poloidal_max, equilibrium)
+        integer, intent(in) :: surfaces, poloidal_max
+        type(gvec_cas3d_equilibrium_t), intent(out) :: equilibrium
+        real(dp) :: radius
+        integer :: surface, mode
+
+        equilibrium%radial_grid = radial_grid_half
+        equilibrium%field_periods = 1
+        allocate (equilibrium%s(surfaces), &
+            equilibrium%poloidal_modes(poloidal_max + 1))
+        do surface = 1, surfaces
+            equilibrium%s(surface) = (real(surface, dp) - 0.5_dp) &
+                / real(surfaces, dp)
+        end do
+        do mode = 0, poloidal_max
+            equilibrium%poloidal_modes(mode + 1) = mode
+        end do
+        equilibrium%toroidal_modes = modes_n
+        equilibrium%toroidal_flux = 2.0_dp + 7.0_dp * equilibrium%s
+        equilibrium%poloidal_flux = -1.0_dp - 3.0_dp * equilibrium%s
+        equilibrium%pressure = 1000.0_dp * (1.0_dp - equilibrium%s)**2
+        allocate (equilibrium%xhat%cosine(surfaces, poloidal_max + 1, 3), &
+            equilibrium%xhat%sine(surfaces, poloidal_max + 1, 3))
+        equilibrium%xhat%cosine = 0.0_dp
+        equilibrium%xhat%sine = 0.0_dp
+        equilibrium%yhat = equilibrium%xhat
+        equilibrium%zhat = equilibrium%xhat
+        do surface = 1, surfaces
+            radius = minor_radius * sqrt(equilibrium%s(surface))
+            equilibrium%xhat%cosine(surface, 1, 3) = major_radius
+            equilibrium%xhat%cosine(surface, 2, 1) = 0.5_dp * radius
+            equilibrium%xhat%cosine(surface, 2, 3) = 0.5_dp * radius
+            equilibrium%yhat%sine(surface, 1, 3) = -major_radius
+            equilibrium%yhat%sine(surface, 2, 1) = 0.5_dp * radius
+            equilibrium%yhat%sine(surface, 2, 3) = -0.5_dp * radius
+            equilibrium%zhat%sine(surface, 2, 2) = radius
+            equilibrium%xhat%cosine(surface, poloidal_max + 1, 2) = &
+                1.0e-16_dp * sin(7.0_dp * real(surface, dp))
+            equilibrium%zhat%sine(surface, poloidal_max + 1, 2) = &
+                1.0e-16_dp * cos(3.0_dp * real(surface, dp))
+        end do
+    end subroutine build_sweep_torus
+
+    subroutine accumulate_torus_errors(primitive, coordinate, theta_query, &
+            zeta_query, errors)
+        type(primitive_equilibrium_spline_t), intent(in) :: primitive
+        real(dp), intent(in) :: coordinate, theta_query(:), zeta_query(:)
+        real(dp), intent(inout) :: errors(3)
+        type(primitive_geometry_grid_t) :: geometry
+        type(cartesian_jet_grid_t) :: actual
+        real(dp) :: expected(3, 10), actual_jet(3, 10)
+        real(dp) :: metric(3, 3), metric_s(3, 3), jacobian(4), actual_j(4)
+        real(dp) :: pressure, pressure_slope, radius, surface_radius, angle, pi
+        integer :: j, k, status
+
+        call evaluate_cartesian_harmonic_spline(primitive%radial_grid, &
+            primitive%position, coordinate, theta_query, zeta_query, actual, status)
+        call require(status == cartesian_harmonic_ok, &
+            "off-knot torus Cartesian jet failed")
+        call evaluate_primitive_equilibrium(primitive, coordinate, theta_query, &
+            zeta_query, geometry, pressure, pressure_slope, status)
+        call require(status == primitive_equilibrium_ok, &
+            "off-knot torus primitive geometry failed")
+        pi = acos(-1.0_dp)
+        radius = minor_radius * sqrt(coordinate)
+        do k = 1, size(zeta_query)
+            do j = 1, size(theta_query)
+                call torus_jet(coordinate, theta_query(j), zeta_query(k), expected)
+                actual_jet(:, 1) = actual%value(j, k, :)
+                actual_jet(:, 2) = actual%radial(j, k, :)
+                actual_jet(:, 3) = actual%poloidal(j, k, :)
+                actual_jet(:, 4) = actual%toroidal(j, k, :)
+                actual_jet(:, 5) = actual%radial_radial(j, k, :)
+                actual_jet(:, 6) = actual%radial_poloidal(j, k, :)
+                actual_jet(:, 7) = actual%radial_toroidal(j, k, :)
+                actual_jet(:, 8) = actual%poloidal_poloidal(j, k, :)
+                actual_jet(:, 9) = actual%poloidal_toroidal(j, k, :)
+                actual_jet(:, 10) = actual%toroidal_toroidal(j, k, :)
+                angle = 2.0_dp * pi * theta_query(j)
+                surface_radius = major_radius + radius * cos(angle)
+                metric = 0.0_dp
+                metric(1, 1) = minor_radius**2 / (4.0_dp * coordinate)
+                metric(2, 2) = (2.0_dp * pi * radius)**2
+                metric(3, 3) = (2.0_dp * pi * surface_radius)**2
+                metric_s = 0.0_dp
+                metric_s(1, 1) = -minor_radius**2 / (4.0_dp * coordinate**2)
+                metric_s(2, 2) = (2.0_dp * pi * minor_radius)**2
+                metric_s(3, 3) = 4.0_dp * pi**2 * surface_radius &
+                    * minor_radius * cos(angle) / sqrt(coordinate)
+                jacobian(1) = -2.0_dp * pi**2 * minor_radius**2 * surface_radius
+                jacobian(2) = -pi**2 * minor_radius**3 * cos(angle) / sqrt(coordinate)
+                jacobian(3) = 4.0_dp * pi**3 * minor_radius**3 * sqrt(coordinate) &
+                    * sin(angle)
+                jacobian(4) = 0.0_dp
+                actual_j(1) = geometry%signed_jacobian(j, k)
+                actual_j(2) = geometry%jacobian_s(j, k)
+                actual_j(3) = geometry%jacobian_theta(j, k)
+                actual_j(4) = geometry%jacobian_zeta(j, k)
+                call require(all(ieee_is_finite(actual_jet)) &
+                    .and. all(ieee_is_finite(geometry%metric(j, k, :, :))) &
+                    .and. all(ieee_is_finite(geometry%metric_radial(j, k, :, :))) &
+                    .and. all(ieee_is_finite(actual_j)), &
+                    "off-knot torus geometry is nonfinite")
+                errors(1) = max(errors(1), &
+                    maxval(abs(actual_jet - expected) / max(1.0_dp, abs(expected))))
+                errors(2) = max(errors(2), maxval(abs(geometry%metric(j, k, :, :) &
+                    - metric) / max(1.0_dp, abs(metric))), &
+                    maxval(abs(geometry%metric_radial(j, k, :, :) &
+                    - metric_s) / max(1.0_dp, abs(metric_s))))
+                errors(3) = max(errors(3), &
+                    maxval(abs(actual_j - jacobian) / max(1.0_dp, abs(jacobian))))
+            end do
+        end do
+    end subroutine accumulate_torus_errors
 
     subroutine build_torus_coefficients(x_pair, y_pair, z_pair)
         type(harmonic_pair_t), intent(out) :: x_pair, y_pair, z_pair

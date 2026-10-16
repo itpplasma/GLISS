@@ -9,6 +9,60 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 include(CTest)
+option(GLISS_ENABLE_CODEGEN
+    "Build optional FortSym kernel generators and reproduction checks" OFF)
+if(GLISS_ENABLE_CODEGEN)
+    find_package(fortsym CONFIG REQUIRED)
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/gen/fortsym-revision.txt"
+        GLISS_FORTSYM_REVISION)
+    string(STRIP "${GLISS_FORTSYM_REVISION}" GLISS_FORTSYM_REVISION)
+    string(LENGTH "${GLISS_FORTSYM_REVISION}" revision_length)
+    if(NOT revision_length EQUAL 40 OR
+            NOT GLISS_FORTSYM_REVISION MATCHES "^[0-9a-f]+$")
+        message(FATAL_ERROR "gen/fortsym-revision.txt must contain one commit SHA")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/gen/fortsym-revision.txt")
+    # FortSym's installed Fortran modules must match this compiler. The package
+    # exports no compiler/revision metadata; CI builds both with one pinned
+    # toolchain, and compilation plus exact reproduction are the native gates.
+    add_custom_target(gliss_regenerate_kernels)
+    add_custom_target(gliss_check_generated)
+    foreach(kernel physical_mass pressure_adjoint energy)
+        add_executable(gliss_${kernel}_gen gen/gliss_${kernel}_gen.f90)
+        target_link_libraries(gliss_${kernel}_gen PRIVATE fortsym::fortsym)
+        set(codegen_arguments
+            "-DKERNEL=${kernel}"
+            "-DGENERATOR_EXE=$<TARGET_FILE:gliss_${kernel}_gen>"
+            "-DSOURCE_DIRECTORY=${CMAKE_CURRENT_SOURCE_DIR}"
+            "-DFORTSYM_REVISION=${GLISS_FORTSYM_REVISION}")
+        add_custom_target(gliss_regenerate_${kernel}
+            COMMAND "${CMAKE_COMMAND}" ${codegen_arguments}
+                "-DOUTPUT_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/generated-kernels/regenerate/${kernel}"
+                -DCHECK_COMMITTED=OFF
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/gen/check_generated.cmake"
+            DEPENDS gliss_${kernel}_gen
+            VERBATIM)
+        add_dependencies(gliss_regenerate_kernels gliss_regenerate_${kernel})
+        add_custom_target(gliss_check_${kernel}
+            COMMAND "${CMAKE_COMMAND}" ${codegen_arguments}
+                "-DOUTPUT_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/generated-kernels/check/${kernel}"
+                -DCHECK_COMMITTED=ON
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/gen/check_generated.cmake"
+            DEPENDS gliss_${kernel}_gen
+            VERBATIM)
+        add_dependencies(gliss_check_generated gliss_check_${kernel})
+        if(BUILD_TESTING)
+            add_test(NAME generated_${kernel}_reproduction
+                COMMAND "${CMAKE_COMMAND}" ${codegen_arguments}
+                    "-DOUTPUT_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/generated-kernels/ctest/${kernel}"
+                    -DCHECK_COMMITTED=ON
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/gen/check_generated.cmake")
+            set_tests_properties(generated_${kernel}_reproduction PROPERTIES
+                LABELS codegen TIMEOUT 180)
+        endif()
+    endforeach()
+endif()
 option(GLISS_REQUIRE_OPENBLAS
     "Fail configuration instead of using the generic BLAS fallback" OFF)
 set(BLA_VENDOR "OpenBLAS" CACHE STRING "BLAS/LAPACK implementation")
@@ -44,6 +98,9 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 endif()
 
 add_library(gliss
+    src/generated/gliss_energy_generated.f90
+    src/generated/gliss_physical_mass_generated.f90
+    src/generated/gliss_pressure_adjoint_generated.f90
     src/gvec_cas3d_adapter.f90
     src/netcdf_c_bindings.f90
     src/netcdf_c_api.f90
@@ -1169,10 +1226,12 @@ if(GLISS_ENABLE_ENZYME)
             test/enzyme_helical_cylinder_gradient.f90)
     add_enzyme_fortran_test(enzyme_physical_mass_gradient
         SOURCES
+            src/generated/gliss_physical_mass_generated.f90
             src/physical_mass_kernel.f90
             test/enzyme_physical_mass_gradient.f90)
     add_enzyme_fortran_test(enzyme_perpendicular_kinetic_gradient
         SOURCES
+            src/generated/gliss_energy_generated.f90
             src/perpendicular_kinetic_kernel.f90
             test/enzyme_perpendicular_kinetic_gradient.f90)
     add_enzyme_fortran_test(enzyme_terpsichore_reduced_mass_gradient
@@ -1197,6 +1256,7 @@ if(GLISS_ENABLE_ENZYME)
             test/enzyme_terpsichore_reduced_mass_family_gradient.f90)
     add_enzyme_fortran_test(enzyme_three_component_gradient
         SOURCES
+            src/generated/gliss_energy_generated.f90
             src/physical_constants.f90
             src/two_component_kernel.f90
             src/three_component_kernel.f90

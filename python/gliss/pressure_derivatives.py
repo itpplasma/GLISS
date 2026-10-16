@@ -93,8 +93,8 @@ class PressureSensitivity:
     unresolved eigenvalue clusters must be selected; their basis rotations
     leave the trace unchanged. The exterior-gap gate is the numerical
     admission diagnostic used for material sensitivities, not a mesh or
-    equilibrium convergence certificate. Constructing the gradient currently
-    costs one exact tangent assembly per pressure sample.
+    equilibrium convergence certificate. Constructing the gradient contracts
+    the energy in one quadrature sweep and applies the pressure-spline transpose.
     """
 
     value: float
@@ -149,9 +149,10 @@ def spectral_pressure_sensitivity(problem, parity_class, start, stop, *, gap):
 
     The pressure domain is strictly positive at samples and assembly points;
     zero-width resonances require a valid full sample-direction domain.
-    All other imported data and the assembly topology remain fixed. This
-    exact reverse action currently uses ns tangent assemblies. For a single
-    direction, spectral_pressure_jvp uses one assembly instead.
+    All other imported data and the assembly topology remain fixed. The
+    reverse action contracts local energy responses before applying the
+    pressure-spline transpose; spectral_pressure_jvp retains the independent
+    tangent-matrix assembly for a single direction.
     """
     parity, start, stop, gap, values, basis, nodes, pressure = _selection(
         problem, parity_class, start, stop, gap

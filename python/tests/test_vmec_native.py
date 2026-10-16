@@ -73,8 +73,37 @@ def test_native_vmec_precomputed_and_native_round_trip_agree(
         wout, tmp_path / "direct.nc", poloidal_max=m, toroidal_max=n,
         radial_surfaces=surfaces,
     )
+    # Serialize a transform computed on this platform for the strict converter
+    # equivalence check. The frozen transform can differ at roundoff level
+    # before angular derivatives amplify its high-mode coefficient differences.
+    settings = json.loads((vmec_data / "provenance.json").read_text())["fixtures"][
+        f"boozmn_{name}.nc"
+    ]
+    transform = booz_xform.Booz_xform()
+    transform.verbose = 0
+    transform.read_wout(str(wout), True)
+    transform.mboz, transform.nboz = settings["mboz"], settings["nboz"]
+    transform.compute_surfs = np.array(settings["compute_surfs"], dtype=np.int32)
+    transform.run()
+    precomputed = tmp_path / "precomputed.nc"
+    transform.write_boozmn(str(precomputed))
+    frozen = booz_xform.Booz_xform()
+    frozen.verbose = 0
+    frozen.read_boozmn(str(vmec_data / f"boozmn_{name}.nc"))
+    for field in (
+        "rmnc_b", "rmns_b", "zmnc_b", "zmns_b", "numnc_b", "numns_b",
+        "bmnc_b", "bmns_b", "gmnc_b", "gmns_b",
+    ):
+        np.testing.assert_allclose(
+            getattr(transform, field), getattr(frozen, field),
+            atol=1e-13, rtol=1e-12, err_msg=field,
+        )
     replay = gliss.convert_boozer(
-        vmec_data / f"boozmn_{name}.nc", tmp_path / "replay.nc",
+        precomputed, tmp_path / "replay.nc",
+        wout_path=wout, poloidal_max=m, toroidal_max=n,
+    )
+    frozen_replay = gliss.convert_boozer(
+        vmec_data / f"boozmn_{name}.nc", tmp_path / "frozen-replay.nc",
         wout_path=wout, poloidal_max=m, toroidal_max=n,
     )
     round_trip = tmp_path / "native-round-trip.nc"
@@ -100,7 +129,7 @@ def test_native_vmec_precomputed_and_native_round_trip_agree(
                     atol=1e-13, rtol=1e-12, err_msg=field,
                 )
     results = []
-    for path in (direct, replay, round_trip):
+    for path in (direct, replay, frozen_replay, round_trip):
         with gliss.Equilibrium(path) as equilibrium:
             with gliss.StabilityProblem(
                 equilibrium, [(1, 1), (2, 1)], degree=1,

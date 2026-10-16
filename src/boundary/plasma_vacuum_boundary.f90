@@ -12,6 +12,7 @@ module plasma_vacuum_boundary
     ! continuity of B leaves no surface-current term.
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use boundary_mesh_geometry, only: periodic_surface_is_embedded
     use cartesian_harmonic_spline, only: cartesian_harmonic_ok, &
         cartesian_jet_grid_t, evaluate_cartesian_harmonic_spline
     use field_periodic_cartesian, only: convert_field_periodic_jet, &
@@ -89,10 +90,10 @@ contains
         integer, intent(out) :: info
         type(cartesian_jet_grid_t) :: jet
         real(dp), allocatable :: theta(:), zeta(:)
-        real(dp) :: area(3), length, orientation, profiles(3), seconds(3)
+        real(dp) :: area(3), length, profiles(3), seconds(3)
         real(dp) :: tangent_u(3), tangent_v(3)
         real(dp) :: slopes(3)
-        integer :: i, k, local_info
+        integer :: i, k, local_info, orientation
 
         info = plasma_vacuum_invalid
         fp = 0.0_dp
@@ -117,7 +118,6 @@ contains
             spline%profiles, 1.0_dp, profiles, slopes, seconds, local_info)
         if (local_info /= radial_cubic_spline_ok) return
         allocate (surface(3, nu, nv), normal(3, nu, nv))
-        orientation = 0.0_dp
         do k = 1, nv
             do i = 1, nu
                 surface(:, i, k) = jet%value(i, k, :)
@@ -128,15 +128,14 @@ contains
                 if (.not. ieee_is_finite(length) .or. length <= tiny(1.0_dp)) &
                     return
                 normal(:, i, k) = area / length
-                ! Divergence theorem: sum r . dA is three times the volume.
-                orientation = orientation + dot_product(surface(:, i, k), area)
             end do
         end do
-        if (.not. ieee_is_finite(orientation) .or. orientation == 0.0_dp) return
-        if (orientation < 0.0_dp) normal = -normal
-        ! A frame whose rotation adds to the toroidal harmonics can trace the
-        ! torus more than once; such a surface bounds no vacuum region.
-        if (toroidal_turns(surface) /= 1) return
+        ! Admit the actual BIE mesh independently of the global coordinate axes.
+        ! Multiple covers and self-intersections fail the simplex-pair check.
+        ! Smooth-chart injectivity between nodes needs separate qualification.
+        if (.not. periodic_surface_is_embedded(surface, orientation)) return
+        ! The BIE triangles have the opposite winding to tangent_u x tangent_v.
+        if (orientation > 0) normal = -normal
         fp = -slopes(2)
         ft = -slopes(1)
         if (.not. ieee_is_finite(fp) .or. .not. ieee_is_finite(ft)) return
@@ -269,24 +268,6 @@ contains
         end do
         resolved = .true.
     end function resolves_trials
-
-    pure integer function toroidal_turns(surface) result(turns)
-        real(dp), intent(in) :: surface(:, :, :)
-        real(dp) :: angle, centre(2), previous, total
-        integer :: k, nv
-
-        nv = size(surface, 3)
-        total = 0.0_dp
-        previous = 0.0_dp
-        do k = 1, nv + 1
-            centre = sum(surface(1:2, :, modulo(k - 1, nv) + 1), dim=2)
-            angle = atan2(centre(2), centre(1))
-            if (k > 1) total = total + modulo(angle - previous &
-                + 0.5_dp * two_pi, two_pi) - 0.5_dp * two_pi
-            previous = angle
-        end do
-        turns = abs(nint(total / two_pi))
-    end function toroidal_turns
 
     pure function cross(a, b) result(c)
         real(dp), intent(in) :: a(3), b(3)

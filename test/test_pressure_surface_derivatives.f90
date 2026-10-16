@@ -9,7 +9,8 @@ program test_pressure_surface_derivatives
         pressure_surface_vjp
     use radial_cubic_spline, only: build_radial_cubic_spline_grid, &
         evaluate_radial_cubic_spline, fit_radial_cubic_spline, &
-        radial_cubic_spline_grid_t, radial_cubic_spline_ok, radial_cubic_spline_t
+        radial_cubic_spline_grid_t, radial_cubic_spline_ok, radial_cubic_spline_t, &
+        radial_cubic_spline_vjp
     implicit none
 
     integer, parameter :: m(3) = [0, 1, 2], n(3) = [0, 1, -1]
@@ -82,6 +83,7 @@ program test_pressure_surface_derivatives
         end do
     end do
     call check_cardinal_directions()
+    call check_spline_transpose()
     call check_invalid()
     call check_resonance()
     write (*, '(a)') "PASS pressure samples -> spline -> production surface JVP/VJP"
@@ -224,6 +226,133 @@ contains
             end do
         end do
     end subroutine check_cardinal_directions
+
+    subroutine check_spline_transpose()
+        integer, parameter :: permutation(11) = [6, 1, 10, 4, 8, 3, 11, 5, 2, 9, 7]
+        type(radial_cubic_spline_grid_t) :: grid, empty_grid
+        type(radial_cubic_spline_t) :: spline
+        real(dp), allocatable :: grid_nodes(:), direction(:), pullback(:)
+        real(dp) :: locations(11), ordered_locations(11), value_weights(11)
+        real(dp) :: slope_weights(11), local_value, local_slope, oracle, product
+        real(dp) :: local_nan
+        integer :: node_count, order, sample, point, local_status, direction_index
+
+        ! The independent scalar fit/evaluate path exercises the full nodal
+        ! space, nonsymmetric endpoint rows, and extrapolation beyond the knots.
+        do node_count = 4, 9, 5
+            allocate (grid_nodes(node_count), direction(node_count))
+            if (node_count == 4) then
+                grid_nodes = [0.07_dp, 0.22_dp, 0.61_dp, 0.93_dp]
+            else
+                grid_nodes = [0.03_dp, 0.09_dp, 0.18_dp, 0.27_dp, 0.42_dp, &
+                    0.55_dp, 0.70_dp, 0.83_dp, 0.96_dp]
+            end if
+            call build_radial_cubic_spline_grid(grid_nodes, 0.0_dp, 1.0_dp, &
+                grid, local_status)
+            call require(local_status == radial_cubic_spline_ok, &
+                "transpose oracle grid failed")
+            ordered_locations(1) = 0.0_dp
+            ordered_locations(2) = grid_nodes(1)
+            ordered_locations(3) = 0.13_dp
+            ordered_locations(4) = 0.27_dp
+            ordered_locations(5) = 0.42_dp
+            ordered_locations(6) = 0.42_dp
+            ordered_locations(7) = 0.67_dp
+            ordered_locations(8) = 0.84_dp
+            ordered_locations(9) = grid_nodes(node_count)
+            ordered_locations(10) = 0.98_dp
+            ordered_locations(11) = 1.0_dp
+            do order = 1, 3
+                select case (order)
+                case (1)
+                    locations = ordered_locations
+                case (2)
+                    locations = ordered_locations(11:1:-1)
+                case (3)
+                    locations = ordered_locations(permutation)
+                end select
+                value_weights = sin(3.0_dp * locations) + 0.3_dp
+                slope_weights = cos(5.0_dp * locations) - 0.2_dp
+                call radial_cubic_spline_vjp(grid, locations, value_weights, &
+                    slope_weights, pullback, local_status)
+                call require(local_status == radial_cubic_spline_ok, &
+                    "spline transpose failed")
+                do direction_index = 1, 3
+                    direction = sin(real(direction_index, dp) &
+                        + 17.0_dp * grid_nodes) &
+                        + cos(11.0_dp * real(direction_index, dp) * grid_nodes)
+                    call fit_radial_cubic_spline(grid, direction, spline, &
+                        local_status)
+                    call require(local_status == radial_cubic_spline_ok, &
+                        "direction fit failed")
+                    oracle = 0.0_dp
+                    do point = 1, size(locations)
+                        call evaluate_radial_cubic_spline(grid, spline, &
+                            locations(point), local_value, local_slope, local_status)
+                        call require(local_status == radial_cubic_spline_ok, &
+                            "direction evaluation failed")
+                        oracle = oracle + value_weights(point) * local_value &
+                            + slope_weights(point) * local_slope
+                    end do
+                    product = dot_product(direction, pullback)
+                    call require(abs(product - oracle) &
+                        < 2.0e-12_dp * max(1.0_dp, abs(oracle)), &
+                        "nonuniform spline transpose duality failed")
+                end do
+                do sample = 1, node_count
+                    direction = 0.0_dp
+                    direction(sample) = 1.0_dp
+                    call fit_radial_cubic_spline(grid, direction, spline, &
+                        local_status)
+                    call require(local_status == radial_cubic_spline_ok, &
+                        "cardinal fit failed")
+                    oracle = 0.0_dp
+                    do point = 1, size(locations)
+                        call evaluate_radial_cubic_spline(grid, spline, &
+                            locations(point), local_value, local_slope, local_status)
+                        call require(local_status == radial_cubic_spline_ok, &
+                            "cardinal evaluation failed")
+                        oracle = oracle + value_weights(point) * local_value &
+                            + slope_weights(point) * local_slope
+                    end do
+                    call require(abs(pullback(sample) - oracle) &
+                        < 2.0e-12_dp * max(1.0_dp, abs(oracle)), &
+                        "cardinal spline transpose differs from scalar oracle")
+                end do
+            end do
+            deallocate (grid_nodes, direction)
+        end do
+        call radial_cubic_spline_vjp(grid, locations(:0), value_weights(:0), &
+            slope_weights(:0), pullback, local_status)
+        call require(local_status == radial_cubic_spline_ok, &
+            "empty spline cotangent failed")
+        call require(all(pullback == 0.0_dp), "empty cotangent is nonzero")
+        call radial_cubic_spline_vjp(grid, locations, value_weights(:2), &
+            slope_weights, pullback, local_status)
+        call require(local_status /= radial_cubic_spline_ok, &
+            "wrong spline cotangent shape accepted")
+        call radial_cubic_spline_vjp(empty_grid, locations, value_weights, &
+            slope_weights, pullback, local_status)
+        call require(local_status /= radial_cubic_spline_ok, &
+            "uninitialized spline transpose grid accepted")
+        locations(1) = -epsilon(1.0_dp)
+        call radial_cubic_spline_vjp(grid, locations, value_weights, &
+            slope_weights, pullback, local_status)
+        call require(local_status /= radial_cubic_spline_ok, &
+            "outside spline transpose coordinate accepted")
+        local_nan = ieee_value(0.0_dp, ieee_quiet_nan)
+        locations(1) = local_nan
+        call radial_cubic_spline_vjp(grid, locations, value_weights, &
+            slope_weights, pullback, local_status)
+        call require(local_status /= radial_cubic_spline_ok, &
+            "NaN spline transpose coordinate accepted")
+        locations = ordered_locations
+        slope_weights(1) = local_nan
+        call radial_cubic_spline_vjp(grid, locations, value_weights, &
+            slope_weights, pullback, local_status)
+        call require(local_status /= radial_cubic_spline_ok, &
+            "NaN spline cotangent accepted")
+    end subroutine check_spline_transpose
 
     subroutine check_invalid()
         nan = ieee_value(0.0_dp, ieee_quiet_nan)

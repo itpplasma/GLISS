@@ -1,0 +1,55 @@
+# Run strict symbolic identities before comparing or replacing generated code.
+foreach(required KERNEL GENERATOR_EXE SOURCE_DIRECTORY OUTPUT_DIRECTORY
+        FORTSYM_REVISION CHECK_COMMITTED)
+    if(NOT DEFINED ${required})
+        message(FATAL_ERROR "Kernel generation requires ${required}")
+    endif()
+endforeach()
+if(NOT KERNEL STREQUAL "physical_mass" AND
+        NOT KERNEL STREQUAL "pressure_adjoint" AND NOT KERNEL STREQUAL "energy")
+    message(FATAL_ERROR "Unknown generated kernel: ${KERNEL}")
+endif()
+set(output "${OUTPUT_DIRECTORY}/gliss_${KERNEL}_generated.f90")
+set(committed "${SOURCE_DIRECTORY}/src/generated/gliss_${KERNEL}_generated.f90")
+set(identities "${OUTPUT_DIRECTORY}/${KERNEL}-identities.json")
+file(MAKE_DIRECTORY "${OUTPUT_DIRECTORY}")
+file(REMOVE "${output}" "${identities}")
+if(NOT KERNEL STREQUAL "pressure_adjoint")
+    execute_process(COMMAND "${GENERATOR_EXE}" "${OUTPUT_DIRECTORY}"
+        "${identities}" "${FORTSYM_REVISION}" RESULT_VARIABLE generated)
+else()
+    execute_process(COMMAND "${GENERATOR_EXE}" "${output}"
+        "${FORTSYM_REVISION}" "${identities}" RESULT_VARIABLE generated)
+endif()
+if(NOT generated STREQUAL "0")
+    message(FATAL_ERROR
+        "${KERNEL} symbolic derivation or emission failed: ${generated}")
+endif()
+if(NOT EXISTS "${output}" OR NOT EXISTS "${identities}")
+    message(FATAL_ERROR "${KERNEL} did not emit its source and identity report")
+endif()
+file(READ "${identities}" identity_report)
+foreach(count total passed proved by_probe failed)
+    string(JSON ${count} ERROR_VARIABLE json_error GET "${identity_report}" ${count})
+    if(NOT json_error STREQUAL "NOTFOUND" OR NOT ${count} MATCHES "^[0-9]+$")
+        message(FATAL_ERROR "${KERNEL} emitted an invalid identity report: ${count}")
+    endif()
+endforeach()
+if(total LESS 1 OR NOT passed EQUAL total OR NOT proved EQUAL total OR
+        NOT by_probe EQUAL 0 OR NOT failed EQUAL 0)
+    message(FATAL_ERROR "${KERNEL} requires every identity to pass by symbolic proof")
+endif()
+if(CHECK_COMMITTED)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files
+        "${committed}" "${output}" RESULT_VARIABLE differs)
+    if(NOT differs STREQUAL "0")
+        message(FATAL_ERROR
+            "Committed ${KERNEL} kernel differs from regenerated output")
+    endif()
+else()
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${output}" "${committed}" RESULT_VARIABLE copied)
+    if(NOT copied STREQUAL "0")
+        message(FATAL_ERROR "Cannot replace generated ${KERNEL} kernel: ${copied}")
+    endif()
+endif()

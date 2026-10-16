@@ -7,6 +7,7 @@ module compatible_compressible_stiffness_assembly
     use period_averaged_assembly, only: accumulate_period_averaged, &
         accumulate_period_averaged_tangent, period_masks
     use physical_constants, only: vacuum_permeability
+    use gliss_pressure_adjoint_generated, only: pressure_energy_pullback
     use three_component_kernel, only: compressible_divergence_value
     use two_component_kernel, only: bending_component_value, &
         compression_component_value, shear_component_value
@@ -22,6 +23,7 @@ module compatible_compressible_stiffness_assembly
 
     public :: assemble_compatible_compressible_stiffness_surface
     public :: assemble_compatible_pressure_stiffness_tangent
+    public :: contract_compatible_pressure_stiffness
 
 contains
 
@@ -210,6 +212,97 @@ contains
         end do
         info = 0
     end subroutine assemble_compatible_pressure_stiffness_tangent
+
+    ! Reverse the local energy after gathering the supplied vectors. Explicit
+    ! field-period averaging is equivalent to the forward assembly masks and
+    ! avoids constructing a matrix for every pressure sample or quadrature point.
+    subroutine contract_compatible_pressure_stiffness(fields, drive, &
+            jacobian_radial, jacobian_theta, jacobian_zeta, gamma_pressure, &
+            fields_slope, drive_slope, trial_m, trial_n, parity, field_periods, &
+            h1, dh1, eta, l2, radial_weight, vectors, term_mask, &
+            slope_cotangent, gamma_cotangent, info)
+        real(dp), intent(in) :: fields(:, :, :), drive(:, :), gamma_pressure(:, :)
+        real(dp), intent(in) :: jacobian_radial(:, :), jacobian_theta(:, :)
+        real(dp), intent(in) :: jacobian_zeta(:, :), fields_slope(:, :, :)
+        real(dp), intent(in) :: drive_slope(:, :), h1(:, :), dh1(:, :)
+        real(dp), intent(in) :: eta(:, :), l2(:, :), radial_weight, vectors(:, :)
+        integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
+        logical, intent(in) :: term_mask(compatible_stiffness_term_count)
+        real(dp), intent(out) :: slope_cotangent, gamma_cotangent
+        integer, intent(out) :: info
+        real(dp) :: coefficients(5, 2, size(vectors, 1))
+        real(dp) :: tangent(5, 2, size(vectors, 1))
+        real(dp) :: response(5, size(vectors, 1)), derivative(5, size(vectors, 1))
+        real(dp) :: values(5, size(vectors, 2)), slopes(5, size(vectors, 2))
+        real(dp) :: terms(4), angle, cosine, sine, angular_weight
+        integer :: j, k, period, column, trial, vector, component, expected
+
+        slope_cotangent = 0.0_dp
+        gamma_cotangent = 0.0_dp
+        call validate_inputs(fields, drive, jacobian_radial, jacobian_theta, &
+            jacobian_zeta, gamma_pressure, trial_m, trial_n, parity, field_periods, &
+            h1, dh1, l2, radial_weight, phase_assembly_transformed, info=info)
+        if (info /= 0) return
+        info = -1
+        expected = size(trial_m) * (size(h1, 1) + 2 * size(l2, 1))
+        if (size(vectors, 1) /= expected .or. size(vectors, 2) < 1) return
+        if (any(shape(fields_slope) /= shape(fields))) return
+        if (any(shape(drive_slope) /= shape(drive))) return
+        if (any(shape(eta) /= shape(l2))) return
+        if (.not. all(ieee_is_finite(vectors))) return
+        if (.not. all(ieee_is_finite(eta))) return
+        if (.not. all(ieee_is_finite(fields_slope))) return
+        if (.not. all(ieee_is_finite(drive_slope))) return
+        if (any(fields_slope(:, :, :9) /= 0.0_dp)) return
+        if (any(fields_slope(:, :, 12) /= 0.0_dp)) return
+        angular_weight = radial_weight / real(size(fields, 1) &
+            * size(fields, 2) * field_periods, dp)
+        do k = 1, size(fields, 2)
+            do j = 1, size(fields, 1)
+                call build_response_coefficients(fields(j, k, :), &
+                    jacobian_radial(j, k), jacobian_theta(j, k), jacobian_zeta(j, k), &
+                    trial_m, trial_n, parity, field_periods, h1, dh1, eta, l2, &
+                    coefficients)
+                call build_response_coefficients(fields(j, k, :), &
+                    jacobian_radial(j, k), jacobian_theta(j, k), jacobian_zeta(j, k), &
+                    trial_m, trial_n, parity, field_periods, h1, dh1, eta, l2, &
+                    tangent, fields_slope(j, k, :))
+                do period = 0, field_periods - 1
+                    do column = 1, size(vectors, 1)
+                        trial = modulo(column - 1, size(trial_m)) + 1
+                        angle = two_pi * (real(trial_m(trial), dp) &
+                            * real(j - 1, dp) / real(size(fields, 1), dp) &
+                            - real(trial_n(trial), dp) &
+                            * (real(k - 1, dp) / real(size(fields, 2), dp) &
+                            + real(period, dp)) / real(field_periods, dp))
+                        cosine = cos(angle)
+                        sine = sin(angle)
+                        response(:, column) = coefficients(:, 1, column) * cosine &
+                            + coefficients(:, 2, column) * sine
+                        derivative(:, column) = tangent(:, 1, column) * cosine &
+                            + tangent(:, 2, column) * sine
+                    end do
+                    values = matmul(response, vectors)
+                    slopes = matmul(derivative, vectors)
+                    do vector = 1, size(vectors, 2)
+                        call pressure_energy_pullback(values(2, vector), &
+                            values(3, vector), values(4, vector), values(5, vector), &
+                            slopes(2, vector), slopes(3, vector), drive_slope(j, k), &
+                            abs(fields(j, k, 7)), 1.0_dp / vacuum_permeability, terms)
+                        do component = 1, 3
+                            if (term_mask(component + 1)) slope_cotangent = &
+                                slope_cotangent + angular_weight * terms(component)
+                        end do
+                        if (term_mask(5)) gamma_cotangent = gamma_cotangent &
+                            + angular_weight * terms(4)
+                    end do
+                end do
+            end do
+        end do
+        if (.not. ieee_is_finite(slope_cotangent)) return
+        if (.not. ieee_is_finite(gamma_cotangent)) return
+        info = 0
+    end subroutine contract_compatible_pressure_stiffness
 
     ! Period-averaged angular quadrature as matrix products over chunks of
     ! angular points; each energy term is one weighted channel.
@@ -555,7 +648,8 @@ contains
         real(dp), intent(in) :: h1(:, :), dh1(:, :), l2(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:)
         integer, intent(in) :: field_periods, phase_assembly
-        real(dp), intent(in) :: radial_weight, stiffness(:, :)
+        real(dp), intent(in) :: radial_weight
+        real(dp), optional, intent(in) :: stiffness(:, :)
         integer, intent(out) :: info
         real(dp), optional, intent(in) :: terms(:, :, :)
         integer :: expected, trials
@@ -569,7 +663,9 @@ contains
         if (size(h1, 2) /= trials .or. any(shape(dh1) /= shape(h1)) &
             .or. size(l2, 2) /= trials) return
         expected = trials * (size(h1, 1) + 2 * size(l2, 1))
-        if (any(shape(stiffness) /= expected)) return
+        if (present(stiffness)) then
+            if (any(shape(stiffness) /= expected)) return
+        end if
         if (present(terms)) then
             if (size(terms, 1) /= expected .or. size(terms, 2) /= expected &
                 .or. size(terms, 3) /= compatible_stiffness_term_count) return

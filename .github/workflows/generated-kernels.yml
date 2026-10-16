@@ -1,0 +1,124 @@
+name: generated kernels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - CMakeLists.txt
+      - gen/**
+      - src/**
+      - test/**
+      - .github/workflows/generated-kernels.yml
+  pull_request:
+    paths:
+      - CMakeLists.txt
+      - gen/**
+      - src/**
+      - test/**
+      - .github/workflows/generated-kernels.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  OMP_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  CCACHE_DIR: ${{ github.workspace }}/.codegen-ccache
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the FortSym source pin
+        id: pin
+        run: |
+          set -euo pipefail
+          revision=$(cat gen/fortsym-revision.txt)
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: lazy-fortran/fortsym
+          ref: ${{ steps.pin.outputs.revision }}
+          path: fortsym-src
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: gliss-codegen-nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('fortsym-src/flake.lock') }}
+          restore-prefixes-first-match: gliss-codegen-nix-${{ runner.os }}-${{ runner.arch }}-
+          gc-max-store-size-linux: 4G
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: gliss-codegen-ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('fortsym-src/flake.lock') }}-${{ steps.pin.outputs.revision }}
+          restore-keys: |
+            gliss-codegen-ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('fortsym-src/flake.lock') }}-
+      - name: Extend the locked toolchain with GLISS dependencies
+        run: |
+          cat > .codegen-shell.nix <<'NIX'
+          let
+            fortsym = builtins.getFlake ("path:" + toString ./fortsym-src);
+            system = builtins.currentSystem;
+            pkgs = import fortsym.inputs.nixpkgs { inherit system; };
+          in pkgs.mkShell {
+            inputsFrom = [ fortsym.devShells.${system}.default ];
+            packages = [ pkgs.netcdf pkgs.openblas ];
+          }
+          NIX
+      - name: Build and install pinned FortSym
+        run: |
+          nix develop --impure --file .codegen-shell.nix --command bash -euo pipefail -c '
+            test "$(git -C fortsym-src rev-parse HEAD)" = "$(cat gen/fortsym-revision.txt)"
+            {
+              git rev-parse HEAD
+              git -C fortsym-src rev-parse HEAD
+              sha256sum fortsym-src/flake.lock
+              command -v gfortran
+              gfortran --version
+              gfortran -dumpmachine
+              sha256sum "$(gfortran -print-prog-name=f951)"
+              cmake --version
+            } > codegen-provenance.txt
+            cmake -S fortsym-src -B fortsym-build -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_Fortran_COMPILER=gfortran \
+              -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/fortsym-prefix" \
+              -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+              -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+              -DFORTSYM_BUILD_TESTING=OFF -DFORTSYM_ENABLE_YACAS=OFF
+            cmake --build fortsym-build --parallel 2
+            cmake --install fortsym-build
+          '
+      - name: Build native generators and check exact reproduction
+        run: |
+          nix develop --impure --file .codegen-shell.nix --command bash -euo pipefail -c '
+            library_path="$GITHUB_WORKSPACE/fortsym-prefix/lib"
+            for flag in $NIX_LDFLAGS; do
+              case "$flag" in
+                -L*) library_path="$library_path:${flag#-L}" ;;
+              esac
+            done
+            export LD_LIBRARY_PATH="$library_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            cmake -S . -B build-codegen -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release -DCMAKE_Fortran_COMPILER=gfortran \
+              -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/fortsym-prefix" \
+              -DGLISS_ENABLE_CODEGEN=ON -DGLISS_REQUIRE_OPENBLAS=ON
+            cmake --build build-codegen --target gliss_check_generated --parallel 2
+            ctest --test-dir build-codegen -L codegen --output-on-failure
+          '
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: generated-kernel-evidence
+          path: |
+            codegen-provenance.txt
+            gen/fortsym-revision.txt
+            fortsym-src/flake.lock
+            build-codegen/generated-kernels/
+            build-codegen/Testing/Temporary/LastTest.log
+          if-no-files-found: warn

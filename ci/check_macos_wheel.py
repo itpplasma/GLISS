@@ -34,14 +34,21 @@ def _load_commands(library):
             yield command, line.strip().split(" (offset ")[0].split(" ", 1)[1]
 
 
+def _audit_macho(library, architecture):
+    """Require one native architecture and a valid arm64 code signature."""
+    architectures = _output("lipo", "-archs", str(library)).split()
+    if architectures != [architecture]:
+        raise RuntimeError(f"{library} has architectures {architectures}")
+    if architecture == "arm64":
+        subprocess.run(["codesign", "--verify", str(library)], check=True)
+
+
 def audit_bundle(package, architecture):
     libraries = sorted(package.rglob("*.dylib"))
     if not libraries:
         raise RuntimeError("the wheel contains no native libraries")
     for library in libraries:
-        architectures = _output("lipo", "-archs", str(library)).split()
-        if architecture not in architectures:
-            raise RuntimeError(f"{library} has architectures {architectures}")
+        _audit_macho(library, architecture)
         for command, name in _load_commands(library):
             if command == "LC_RPATH":
                 if not name.startswith(("@loader_path", "@executable_path")):

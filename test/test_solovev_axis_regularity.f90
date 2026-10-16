@@ -11,7 +11,8 @@
 ! so both fixtures counted one negative eigenvalue.
 !
 ! The conforming space ties the leading |m|=1 coefficients of xi^s and eta
-! at the axis (#35), so its eigenvalues bound the converged ones from above.
+! at the axis (#35). Reduced compression quadrature is non-variational, so
+! this conformity does not make the eigenvalues general upper bounds.
 ! On 16 surfaces degree two is too coarse for this near-marginal mode
 ! (lowest 1.7e2 at q0=1.035); degree three resolves it (-3.1e2, converged
 ! near -3.46e2 in benchmarks/solovev/public/convergence.sh).

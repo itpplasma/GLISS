@@ -1,12 +1,18 @@
 module perpendicular_kinetic_kernel
     use, intrinsic :: iso_c_binding, only: c_double
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use gliss_energy_generated, only: generated_perpendicular_matrix, &
+        generated_perpendicular_energy, generated_perpendicular_jvp, &
+        generated_perpendicular_vjp
     implicit none
     private
 
     public :: benchmark_perpendicular_kinetic_energy
     public :: perpendicular_kinetic_energy
     public :: perpendicular_kinetic_matrix
+
+    public :: perpendicular_kinetic_energy_jvp, perpendicular_kinetic_energy_vjp
+    integer, parameter, public :: perpendicular_kinetic_input_count = 7
 
 contains
 
@@ -15,23 +21,8 @@ contains
         real(dp), intent(in) :: signed_sqrtg, bmag, grad_s2
         real(dp), intent(in) :: signed_sigma_tilde, density_kg_m3
         real(dp), intent(out) :: mass(2, 2)
-        real(dp) :: coefficients(2, 2)
-        integer :: i, j, k
-
-        coefficients = 0.0_dp
-        coefficients(1, 1) = 1.0_dp / sqrt(grad_s2)
-        coefficients(2, 1) = signed_sigma_tilde / sqrt(grad_s2)
-        coefficients(2, 2) = sqrt(grad_s2) / bmag
-        mass = 0.0_dp
-        do j = 1, 2
-            do i = 1, 2
-                do k = 1, 2
-                    mass(i, j) = mass(i, j) &
-                        + coefficients(k, i) * coefficients(k, j)
-                end do
-                mass(i, j) = density_kg_m3 * abs(signed_sqrtg) * mass(i, j)
-            end do
-        end do
+        call generated_perpendicular_matrix(signed_sqrtg, bmag, grad_s2, &
+            signed_sigma_tilde, density_kg_m3, mass)
     end subroutine perpendicular_kinetic_matrix
 
     pure function perpendicular_kinetic_energy(signed_sqrtg, bmag, grad_s2, &
@@ -39,12 +30,12 @@ contains
         real(dp), intent(in) :: signed_sqrtg, bmag, grad_s2
         real(dp), intent(in) :: signed_sigma_tilde, density_kg_m3
         real(dp), intent(in) :: displacement(2)
-        real(dp) :: energy, mass(2, 2), image(2)
+        real(dp) :: energy, values(1)
 
-        call perpendicular_kinetic_matrix(signed_sqrtg, bmag, grad_s2, &
-            signed_sigma_tilde, density_kg_m3, mass)
-        image = matmul(mass, displacement)
-        energy = 0.5_dp * dot_product(displacement, image)
+        call generated_perpendicular_energy(signed_sqrtg, bmag, grad_s2, &
+            signed_sigma_tilde, density_kg_m3, displacement(1), displacement(2), &
+            values)
+        energy = values(1)
     end function perpendicular_kinetic_energy
 
     pure function benchmark_perpendicular_kinetic_energy(active) result(energy) &
@@ -60,5 +51,30 @@ contains
             0.2_dp - 0.01_dp * active, 2.3_dp + 0.05_dp * active, &
             displacement)
     end function benchmark_perpendicular_kinetic_energy
+
+    ! Packed inputs follow the corresponding scalar energy/density argument order.
+    ! Domain: nonzero signed Jacobian, positive B, grad_s2 and density.
+    pure subroutine perpendicular_kinetic_energy_jvp(inputs, tangent, energy, derivative)
+        real(dp), intent(in) :: inputs(7), tangent(7)
+        real(dp), intent(out) :: energy, derivative
+        real(dp) :: values(2)
+
+        call generated_perpendicular_jvp(inputs(1), inputs(2), inputs(3), inputs(4), &
+            inputs(5), inputs(6), inputs(7), tangent(1), tangent(2), tangent(3), &
+            tangent(4), tangent(5), tangent(6), tangent(7), values)
+        energy = values(1)
+        derivative = values(2)
+    end subroutine perpendicular_kinetic_energy_jvp
+
+    pure subroutine perpendicular_kinetic_energy_vjp(inputs, cotangent, energy, gradient)
+        real(dp), intent(in) :: inputs(7), cotangent
+        real(dp), intent(out) :: energy, gradient(7)
+        real(dp) :: values(8)
+
+        call generated_perpendicular_vjp(inputs(1), inputs(2), inputs(3), inputs(4), &
+            inputs(5), inputs(6), inputs(7), cotangent, values)
+        energy = values(1)
+        gradient = values(2:)
+    end subroutine perpendicular_kinetic_energy_vjp
 
 end module perpendicular_kinetic_kernel

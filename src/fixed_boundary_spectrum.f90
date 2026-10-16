@@ -6,6 +6,7 @@ module fixed_boundary_spectrum
         build_compatible_three_component_classes, &
         build_compatible_three_component_problem, &
         build_compatible_pressure_stiffness_tangent, &
+        build_compatible_pressure_trace_gradient, &
         build_compatible_vacuum_energy, &
         compatible_three_component_allocation_error, &
         compatible_three_component_asymmetric, &
@@ -459,21 +460,18 @@ contains
         info = map_fixed_boundary_energy_info(info)
     end subroutine fixed_boundary_rayleigh_gradient
 
-    subroutine fixed_boundary_pressure_trace_jvp(problem, equilibrium, &
-            parity_class, vectors, direction, derivative, info)
+    subroutine prepare_pressure_trace_basis(problem, parity_class, vectors, &
+            permuted, slot, info)
         type(fixed_boundary_problem_t), intent(in) :: problem
-        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: parity_class
-        real(dp), intent(in) :: vectors(:, :), direction(:)
-        real(dp), intent(out) :: derivative
-        integer, intent(out) :: info
-        type(compatible_three_component_problem_t) :: tangent
-        real(dp), allocatable :: powers(:), permuted(:, :), image(:)
+        real(dp), intent(in) :: vectors(:, :)
+        real(dp), allocatable, intent(out) :: permuted(:, :)
+        integer, intent(out) :: slot, info
+        real(dp), allocatable :: image(:)
         real(dp) :: overlap, expected, tolerance
-        integer :: allocation_status, column, row, mode, slot, compatible_info
+        integer :: allocation_status, column, row, status
 
         info = fixed_boundary_invalid
-        derivative = 0.0_dp
         if (.not. problem%ready) return
         if (problem%free_boundary) return
         slot = class_slot(problem, parity_class)
@@ -481,12 +479,8 @@ contains
         if (size(vectors, 1) /= problem%classes(slot)%unknowns) return
         if (size(vectors, 2) < 1) return
         if (size(vectors, 2) > size(vectors, 1)) return
-        if (.not. allocated(equilibrium%s)) return
-        if (size(direction) /= size(equilibrium%s)) return
         if (.not. all(ieee_is_finite(vectors))) return
-        if (.not. all(ieee_is_finite(direction))) return
-        allocate (powers(size(problem%mode_m)), &
-            permuted(size(vectors, 1), size(vectors, 2)), &
+        allocate (permuted(size(vectors, 1), size(vectors, 2)), &
             image(size(vectors, 1)), stat=allocation_status)
         if (allocation_status /= 0) then
             info = fixed_boundary_allocation_error
@@ -503,8 +497,8 @@ contains
         tolerance = 64.0_dp * sqrt(epsilon(1.0_dp))
         do column = 1, size(vectors, 2)
             call apply_variable_block_tridiagonal(problem%classes(slot)%mass, &
-                permuted(:, column), image, compatible_info)
-            if (compatible_info /= variable_block_ok) return
+                permuted(:, column), image, status)
+            if (status /= variable_block_ok) return
             do row = 1, column
                 expected = 0.0_dp
                 if (row == column) expected = 1.0_dp
@@ -513,6 +507,35 @@ contains
                 if (abs(overlap - expected) > tolerance) return
             end do
         end do
+        info = fixed_boundary_ok
+    end subroutine prepare_pressure_trace_basis
+
+    subroutine fixed_boundary_pressure_trace_jvp(problem, equilibrium, &
+            parity_class, vectors, direction, derivative, info)
+        type(fixed_boundary_problem_t), intent(in) :: problem
+        type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
+        integer, intent(in) :: parity_class
+        real(dp), intent(in) :: vectors(:, :), direction(:)
+        real(dp), intent(out) :: derivative
+        integer, intent(out) :: info
+        type(compatible_three_component_problem_t) :: tangent
+        real(dp), allocatable :: powers(:), permuted(:, :), image(:)
+        integer :: allocation_status, column, mode, slot, compatible_info
+
+        info = fixed_boundary_invalid
+        derivative = 0.0_dp
+        if (.not. allocated(equilibrium%s)) return
+        if (size(direction) /= size(equilibrium%s)) return
+        if (.not. all(ieee_is_finite(direction))) return
+        call prepare_pressure_trace_basis(problem, parity_class, vectors, &
+            permuted, slot, info)
+        if (info /= fixed_boundary_ok) return
+        allocate (powers(size(problem%mode_m)), image(size(vectors, 1)), &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = fixed_boundary_allocation_error
+            return
+        end if
         do mode = 1, size(powers)
             powers(mode) = 0.0_dp
             if (problem%mode_m(mode) > 0) powers(mode) = &
@@ -550,30 +573,33 @@ contains
         real(dp), intent(in) :: vectors(:, :), cotangent
         real(dp), allocatable, intent(out) :: gradient(:)
         integer, intent(out) :: info
-        real(dp), allocatable :: direction(:)
-        real(dp) :: derivative
-        integer :: allocation_status, sample
+        real(dp), allocatable :: powers(:), permuted(:, :)
+        integer :: allocation_status, mode, slot, compatible_info
 
         info = fixed_boundary_invalid
         if (.not. ieee_is_finite(cotangent)) return
         if (.not. allocated(equilibrium%s)) return
-        allocate (gradient(size(equilibrium%s)), direction(size(equilibrium%s)), &
-            stat=allocation_status)
+        call prepare_pressure_trace_basis(problem, parity_class, vectors, &
+            permuted, slot, info)
+        if (info /= fixed_boundary_ok) return
+        allocate (powers(size(problem%mode_m)), stat=allocation_status)
         if (allocation_status /= 0) then
             info = fixed_boundary_allocation_error
             return
         end if
-        ! Exact cardinal-direction fallback: ns tangent assemblies, never
-        ! a dense pressure-to-stiffness Jacobian or finite differences.
-        direction = 0.0_dp
-        do sample = 1, size(direction)
-            direction(sample) = 1.0_dp
-            call fixed_boundary_pressure_trace_jvp(problem, equilibrium, &
-                parity_class, vectors, direction, derivative, info)
-            if (info /= fixed_boundary_ok) return
-            gradient(sample) = cotangent * derivative
-            direction(sample) = 0.0_dp
+        do mode = 1, size(powers)
+            powers(mode) = 0.0_dp
+            if (problem%mode_m(mode) > 0) powers(mode) = &
+                1.0_dp - 0.5_dp * real(problem%mode_m(mode), dp)
         end do
+        call build_compatible_pressure_trace_gradient(equilibrium, &
+            problem%adiabatic_index, problem%density_kg_m3, problem%mode_m, &
+            problem%mode_n, powers, parity_class, problem%degree, &
+            problem%n_theta, problem%n_zeta, vectors, gradient, compatible_info, &
+            radial_cells=problem%radial_cells)
+        info = class_status(compatible_info)
+        if (info /= fixed_boundary_ok) return
+        gradient = cotangent * gradient
         if (.not. all(ieee_is_finite(gradient))) then
             info = fixed_boundary_assembly_error
             return

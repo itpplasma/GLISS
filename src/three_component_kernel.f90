@@ -2,8 +2,8 @@ module three_component_kernel
     use, intrinsic :: iso_c_binding, only: c_double
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use physical_constants, only: vacuum_permeability
-    use two_component_kernel, only: bending_component_value, &
-        compression_component_value, shear_component_value
+    use gliss_energy_generated, only: generated_divergence, generated_three_energy, &
+        generated_three_jvp, generated_three_vjp
     implicit none
     private
 
@@ -13,6 +13,9 @@ module three_component_kernel
     public :: three_component_density
     public :: three_component_density_value
 
+    public :: three_component_energy_jvp, three_component_energy_vjp
+    integer, parameter, public :: three_component_input_count = 26
+
 contains
 
     pure function compressible_divergence_value(flux_t_slope, flux_p_slope, &
@@ -21,14 +24,12 @@ contains
         real(dp), intent(in) :: flux_t_slope, flux_p_slope, signed_sqrtg
         real(dp), intent(in) :: sqrtg_xi_s_radial, sqrtg_eta_theta
         real(dp), intent(in) :: sqrtg_eta_zeta, mu_theta, mu_zeta
-        real(dp) :: divergence, flux_norm_squared
+        real(dp) :: divergence, values(1)
 
-        flux_norm_squared = flux_t_slope**2 + flux_p_slope**2
-        divergence = sqrtg_xi_s_radial / signed_sqrtg &
-            + (flux_t_slope * sqrtg_eta_theta &
-            - flux_p_slope * sqrtg_eta_zeta &
-            + flux_p_slope * mu_theta + flux_t_slope * mu_zeta) &
-            / (signed_sqrtg * flux_norm_squared)
+        call generated_divergence(flux_t_slope, flux_p_slope, signed_sqrtg, &
+            sqrtg_xi_s_radial, sqrtg_eta_theta, sqrtg_eta_zeta, mu_theta, mu_zeta, &
+            values)
+        divergence = values(1)
     end function compressible_divergence_value
 
     pure subroutine compressible_divergence(flux_t_slope, flux_p_slope, &
@@ -60,25 +61,15 @@ contains
         real(dp), intent(in) :: eta_theta, eta_zeta
         real(dp), intent(in) :: sqrtg_xi_s_radial, sqrtg_eta_theta
         real(dp), intent(in) :: sqrtg_eta_zeta, mu_theta, mu_zeta
-        real(dp) :: density, c_bending, c_shear, c_compression, divergence
+        real(dp) :: density, values(1)
 
-        c_bending = bending_component_value(flux_t_slope, flux_p_slope, &
-            signed_sqrtg, grad_s2, xi_s_theta, xi_s_zeta)
-        c_shear = shear_component_value(flux_t_slope, flux_p_slope, &
-            flux_t_curve, flux_p_curve, signed_sqrtg, bmag, grad_s2, &
-            j_dot_b, signed_sigma_tilde, xi_s, xi_s_theta, xi_s_zeta, &
-            eta_theta, eta_zeta)
-        c_compression = compression_component_value(flux_t_slope, &
-            flux_p_slope, flux_t_curve, flux_p_curve, current_i, current_j, &
-            signed_sqrtg, bmag, pressure_slope, beta_tilde, xi_s, &
-            xi_s_radial, xi_s_theta, xi_s_zeta, eta_theta, eta_zeta)
-        divergence = compressible_divergence_value(flux_t_slope, &
-            flux_p_slope, signed_sqrtg, sqrtg_xi_s_radial, &
-            sqrtg_eta_theta, sqrtg_eta_zeta, mu_theta, mu_zeta)
-        density = ((c_bending**2 + c_shear**2 + c_compression**2 &
-            - drive_a * xi_s**2) &
-            / vacuum_permeability + gamma_pressure_pa * divergence**2) &
-            * abs(signed_sqrtg)
+        call generated_three_energy(flux_t_slope, flux_p_slope, flux_t_curve, &
+            flux_p_curve, current_i, current_j, signed_sqrtg, bmag, grad_s2, &
+            j_dot_b, pressure_slope, signed_sigma_tilde, beta_tilde, drive_a, &
+            gamma_pressure_pa, xi_s, xi_s_radial, xi_s_theta, xi_s_zeta, eta_theta, &
+            eta_zeta, sqrtg_xi_s_radial, sqrtg_eta_theta, sqrtg_eta_zeta, mu_theta, &
+            mu_zeta, vacuum_permeability, values)
+        density = values(1)
     end function three_component_density_value
 
     pure subroutine three_component_density(flux_t_slope, flux_p_slope, &
@@ -128,5 +119,41 @@ contains
             -0.06_dp + 0.02_dp * active, 0.03_dp - 0.01_dp * active, &
             -0.02_dp + 0.01_dp * active)
     end function benchmark_three_component_energy
+
+    ! Packed inputs follow the corresponding scalar energy/density argument order.
+    ! Domain: nonzero signed Jacobian, positive B and grad_s2; flux norm nonzero.
+    pure subroutine three_component_energy_jvp(inputs, tangent, energy, derivative)
+        real(dp), intent(in) :: inputs(26), tangent(26)
+        real(dp), intent(out) :: energy, derivative
+        real(dp) :: values(2)
+
+        call generated_three_jvp(inputs(1), inputs(2), inputs(3), inputs(4), &
+            inputs(5), inputs(6), inputs(7), inputs(8), inputs(9), inputs(10), &
+            inputs(11), inputs(12), inputs(13), inputs(14), inputs(15), inputs(16), &
+            inputs(17), inputs(18), inputs(19), inputs(20), inputs(21), inputs(22), &
+            inputs(23), inputs(24), inputs(25), inputs(26), vacuum_permeability, &
+            tangent(1), tangent(2), tangent(3), tangent(4), tangent(5), tangent(6), &
+            tangent(7), tangent(8), tangent(9), tangent(10), tangent(11), &
+            tangent(12), tangent(13), tangent(14), tangent(15), tangent(16), &
+            tangent(17), tangent(18), tangent(19), tangent(20), tangent(21), &
+            tangent(22), tangent(23), tangent(24), tangent(25), tangent(26), values)
+        energy = values(1)
+        derivative = values(2)
+    end subroutine three_component_energy_jvp
+
+    pure subroutine three_component_energy_vjp(inputs, cotangent, energy, gradient)
+        real(dp), intent(in) :: inputs(26), cotangent
+        real(dp), intent(out) :: energy, gradient(26)
+        real(dp) :: values(27)
+
+        call generated_three_vjp(inputs(1), inputs(2), inputs(3), inputs(4), &
+            inputs(5), inputs(6), inputs(7), inputs(8), inputs(9), inputs(10), &
+            inputs(11), inputs(12), inputs(13), inputs(14), inputs(15), inputs(16), &
+            inputs(17), inputs(18), inputs(19), inputs(20), inputs(21), inputs(22), &
+            inputs(23), inputs(24), inputs(25), inputs(26), vacuum_permeability, &
+            cotangent, values)
+        energy = values(1)
+        gradient = values(2:)
+    end subroutine three_component_energy_vjp
 
 end module three_component_kernel

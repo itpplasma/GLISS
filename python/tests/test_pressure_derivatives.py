@@ -83,6 +83,7 @@ def test_pressure_trace_is_invariant_under_basis_rotation(native_library, test_d
             direction = np.ascontiguousarray(pressure * np.cos(3.0 * nodes))
             _bind(problem._library)
             values = []
+            gradients = []
             for vectors in (basis, rotated):
                 output = ctypes.c_double()
                 error = ctypes.create_string_buffer(512)
@@ -92,7 +93,18 @@ def test_pressure_trace_is_invariant_under_basis_rotation(native_library, test_d
                 )
                 assert status == 0, error.value
                 values.append(output.value)
+                gradient = np.empty(pressure.size)
+                status = problem._library.gliss_stability_problem_pressure_trace_vjp(
+                    problem._handle, 0, vectors.shape[1], 2, _pointer(vectors),
+                    0.37, pressure.size, _pointer(gradient), error, len(error),
+                )
+                assert status == 0, error.value
+                gradients.append(gradient)
+                assert np.dot(gradient, direction) == pytest.approx(
+                    0.37 * output.value, rel=2e-10, abs=1e-6,
+                )
             assert values[0] == pytest.approx(values[1], rel=2e-10, abs=1e-6)
+            np.testing.assert_allclose(gradients[0], gradients[1], rtol=2e-10, atol=1e-12)
 
 
 def test_pressure_native_failures_preserve_output(native_library, test_data):
@@ -116,6 +128,13 @@ def test_pressure_native_failures_preserve_output(native_library, test_data):
             )
             assert status == 3
             np.testing.assert_array_equal(gradient, np.full(pressure.size, 321.0))
+            for invalid_basis in (2.0 * basis, np.full_like(basis, np.nan)):
+                status = problem._library.gliss_stability_problem_pressure_trace_vjp(
+                    problem._handle, 1, basis.shape[1], 1, _pointer(invalid_basis),
+                    1.0, pressure.size, _pointer(gradient), error, len(error),
+                )
+                assert status != 0
+                np.testing.assert_array_equal(gradient, np.full(pressure.size, 321.0))
             for tangent in (np.ones(pressure.size - 1), np.full(pressure.size, np.inf)):
                 with pytest.raises(ValueError):
                     problem.spectral_pressure_jvp(1, 0, basis.shape[1], tangent, gap=1e-4)

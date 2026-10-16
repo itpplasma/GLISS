@@ -1,12 +1,17 @@
 module physical_mass_kernel
     use, intrinsic :: iso_c_binding, only: c_double
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use gliss_physical_mass_generated, only: generated_physical_mass_matrix, &
+        generated_physical_mass_energy, generated_physical_mass_jvp, &
+        generated_physical_mass_vjp
     implicit none
     private
 
     public :: benchmark_physical_mass_energy
     public :: physical_mass_energy
     public :: physical_mass_matrix
+    public :: physical_mass_energy_jvp, physical_mass_energy_vjp
+    integer, parameter, public :: physical_mass_input_count = 13
 
 contains
 
@@ -19,29 +24,10 @@ contains
         real(dp), intent(in) :: bmag, grad_s2, signed_sigma_tilde
         real(dp), intent(in) :: beta_tilde, density_kg_m3
         real(dp), intent(out) :: mass(3, 3)
-        real(dp) :: coefficients(3, 3), flux_norm_squared, grad_s
-        integer :: i, j, k
 
-        flux_norm_squared = flux_t_slope**2 + flux_p_slope**2
-        grad_s = sqrt(grad_s2)
-        coefficients = 0.0_dp
-        coefficients(1, 1) = 1.0_dp / grad_s
-        coefficients(2, 1) = signed_sigma_tilde / grad_s
-        coefficients(2, 2) = grad_s / bmag
-        coefficients(3, 1) = beta_tilde / bmag
-        coefficients(3, 2) = -(current_i * flux_p_slope &
-            - current_j * flux_t_slope) / (bmag * flux_norm_squared)
-        coefficients(3, 3) = bmag / flux_norm_squared
-        mass = 0.0_dp
-        do j = 1, 3
-            do i = 1, 3
-                do k = 1, 3
-                    mass(i, j) = mass(i, j) &
-                        + coefficients(k, i) * coefficients(k, j)
-                end do
-                mass(i, j) = density_kg_m3 * abs(signed_sqrtg) * mass(i, j)
-            end do
-        end do
+        call generated_physical_mass_matrix(flux_t_slope, flux_p_slope, &
+            current_i, current_j, signed_sqrtg, bmag, grad_s2, &
+            signed_sigma_tilde, beta_tilde, density_kg_m3, mass)
     end subroutine physical_mass_matrix
 
     pure function physical_mass_energy(flux_t_slope, flux_p_slope, &
@@ -53,14 +39,41 @@ contains
         real(dp), intent(in) :: bmag, grad_s2, signed_sigma_tilde
         real(dp), intent(in) :: beta_tilde, density_kg_m3
         real(dp), intent(in) :: displacement(3)
-        real(dp) :: energy, mass(3, 3), image(3)
+        real(dp) :: energy
 
-        call physical_mass_matrix(flux_t_slope, flux_p_slope, current_i, &
-            current_j, signed_sqrtg, bmag, grad_s2, signed_sigma_tilde, &
-            beta_tilde, density_kg_m3, mass)
-        image = matmul(mass, displacement)
-        energy = 0.5_dp * dot_product(displacement, image)
+        call generated_physical_mass_energy(flux_t_slope, flux_p_slope, &
+            current_i, current_j, signed_sqrtg, bmag, grad_s2, &
+            signed_sigma_tilde, beta_tilde, density_kg_m3, displacement(1), &
+            displacement(2), displacement(3), energy)
     end function physical_mass_energy
+
+    ! Inputs and tangent order: FT', FP', I, J, signed sqrt(g), |B|,
+    ! |grad(s)|^2, signed sigma_tilde, beta_tilde, rho, xi^s, eta, mu.
+    ! Units and conventions match physical_mass_energy. Differentiation is
+    ! local to J /= 0, B > 0, grad_s2 > 0, FT'^2+FP'^2 > 0, rho > 0.
+    pure subroutine physical_mass_energy_jvp(inputs, tangent, energy, derivative)
+        real(dp), intent(in) :: inputs(physical_mass_input_count)
+        real(dp), intent(in) :: tangent(physical_mass_input_count)
+        real(dp), intent(out) :: energy, derivative
+
+        call generated_physical_mass_jvp(inputs(1), inputs(2), inputs(3), &
+            inputs(4), inputs(5), inputs(6), inputs(7), inputs(8), inputs(9), &
+            inputs(10), inputs(11), inputs(12), inputs(13), tangent(1), &
+            tangent(2), tangent(3), tangent(4), tangent(5), tangent(6), &
+            tangent(7), tangent(8), tangent(9), tangent(10), tangent(11), &
+            tangent(12), tangent(13), energy, derivative)
+    end subroutine physical_mass_energy_jvp
+
+    ! Same input order and open domain as physical_mass_energy_jvp.
+    pure subroutine physical_mass_energy_vjp(inputs, cotangent, energy, gradient)
+        real(dp), intent(in) :: inputs(physical_mass_input_count), cotangent
+        real(dp), intent(out) :: energy, gradient(physical_mass_input_count)
+
+        call generated_physical_mass_vjp(inputs(1), inputs(2), inputs(3), &
+            inputs(4), inputs(5), inputs(6), inputs(7), inputs(8), inputs(9), &
+            inputs(10), inputs(11), inputs(12), inputs(13), cotangent, &
+            energy, gradient)
+    end subroutine physical_mass_energy_vjp
 
     pure function benchmark_physical_mass_energy(active) result(energy) &
             bind(c, name="gvstab_benchmark_physical_mass_energy")

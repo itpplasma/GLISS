@@ -4,8 +4,12 @@ program test_pressure_stiffness_tangent
     use compatible_three_component_problem, only: &
         build_compatible_three_component_problem, &
         build_compatible_pressure_stiffness_tangent, &
+        build_compatible_pressure_trace_gradient, &
         compatible_three_component_problem_t, compatible_three_component_ok, &
         compatible_three_component_invalid
+    use compatible_compressible_stiffness_assembly, only: &
+        assemble_compatible_pressure_stiffness_tangent, &
+        contract_compatible_pressure_stiffness
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use variable_block_tridiagonal, only: variable_block_to_dense, variable_block_ok
@@ -29,6 +33,7 @@ program test_pressure_stiffness_tangent
         end do
     end do
     call check_duality()
+    call check_period_contraction()
     call check_invalid()
     print *, 'PASS'
 
@@ -98,7 +103,7 @@ contains
 
     subroutine check_duality()
         real(dp), allocatable :: derivative(:, :), mass(:, :), vector(:), basis(:)
-        real(dp), allocatable :: gradient(:)
+        real(dp), allocatable :: gradient(:), reverse_gradient(:), vectors(:, :)
         real(dp) :: jvp, vjp
         integer :: index
 
@@ -118,7 +123,96 @@ contains
         vjp = dot_product(gradient, direction)
         call require(abs(jvp - vjp) < 1.0e-10_dp * max(abs(jvp), abs(vjp)), &
             'pressure sample JVP/VJP duality failed')
+        allocate (vectors(size(vector), 1))
+        vectors(:, 1) = vector
+        call build_compatible_pressure_trace_gradient(equilibrium, 1.4_dp, &
+            1.0_dp, [0, 1, 2], [1, 1, 1], [0.0_dp, 0.5_dp, 0.0_dp], &
+            1, 2, 64, 8, vectors, reverse_gradient, info, radial_cells=6)
+        call require(info == compatible_three_component_ok, &
+            'contracted pressure reverse assembly failed')
+        call require(maxval(abs(reverse_gradient - gradient)) &
+            < 1.0e-10_dp * maxval(abs(gradient)), &
+            'reverse gradient differs from independent cardinal assemblies')
+        call require(abs(dot_product(reverse_gradient, direction) - jvp) &
+            < 1.0e-10_dp * abs(jvp), 'contracted reverse/JVP duality failed')
     end subroutine check_duality
+
+    subroutine check_period_contraction()
+        integer, parameter :: trials = 3, columns = 18, nt = 16, nz = 12
+        real(dp) :: fields(nt, nz, 13), fields_dot(nt, nz, 13)
+        real(dp) :: drive(nt, nz), drive_dot(nt, nz), gamma_p(nt, nz), jac(nt, nz)
+        real(dp) :: h1(2, trials), dh1(2, trials), eta(2, trials), l2(2, trials)
+        real(dp) :: vectors(columns, 2), stiffness(columns, columns)
+        real(dp) :: terms(columns, columns, 5), slope_bar, gamma_bar, expected
+        real(dp) :: angle, scale
+        logical :: mask(5)
+        integer :: j, k, a, component, selection, status, period_count
+
+        ! Mixed Fourier residue classes exercise both period masks. The
+        ! oracle assembles full matrices; the reverse path contracts first.
+        fields = 1.0_dp
+        fields_dot = 0.0_dp
+        jac = 0.13_dp
+        gamma_p = 0.7_dp
+        do k = 1, nz
+            do j = 1, nt
+                angle = 2.0_dp * acos(-1.0_dp) &
+                    * (real(j - 1, dp) / nt - real(k - 1, dp) / nz)
+                fields(j, k, 7) = 1.1_dp + 0.1_dp * cos(angle)
+                fields(j, k, 8) = 4.0_dp
+                fields(j, k, 9) = 3.0_dp
+                fields_dot(j, k, 10) = 0.4_dp * cos(angle)
+                fields_dot(j, k, 11) = 0.2_dp
+                fields_dot(j, k, 13) = 0.05_dp * sin(angle)
+                drive(j, k) = 0.3_dp * cos(angle)
+                drive_dot(j, k) = 0.7_dp * sin(angle)
+            end do
+        end do
+        h1 = 0.7_dp
+        dh1 = -0.3_dp
+        eta = 0.2_dp
+        l2 = 0.6_dp
+        do a = 1, columns
+            vectors(a, 1) = sin(0.37_dp * a)
+            vectors(a, 2) = cos(0.29_dp * a)
+        end do
+        do period_count = 1, 5, 2
+            stiffness = 0.0_dp
+            terms = 0.0_dp
+            call assemble_compatible_pressure_stiffness_tangent(fields, drive, &
+                jac, jac, jac, gamma_p, fields_dot, drive_dot, 0.17_dp, &
+                [0, 1, 2], [1, 2, 3], [1, 2, 1], period_count, &
+                h1, dh1, eta, l2, 0.23_dp, stiffness, terms, status)
+            call require(status == 0, 'period tangent oracle failed')
+            do selection = 1, 3
+                mask = .true.
+                if (selection == 2) mask = &
+                    [.true., .true., .false., .true., .false.]
+                if (selection == 3) mask = &
+                    [.false., .false., .true., .false., .true.]
+                call contract_compatible_pressure_stiffness(fields, drive, &
+                    jac, jac, jac, gamma_p, fields_dot, drive_dot, &
+                    [0, 1, 2], [1, 2, 3], [1, 2, 1], period_count, &
+                    h1, dh1, eta, l2, 0.23_dp, vectors, mask, &
+                    slope_bar, gamma_bar, status)
+                call require(status == 0, 'period reverse contraction failed')
+                expected = 0.0_dp
+                scale = 0.0_dp
+                do component = 2, 5
+                    if (.not. mask(component)) cycle
+                    do a = 1, 2
+                        expected = expected + quadratic(vectors(:, a), &
+                            terms(:, :, component))
+                        scale = scale + abs(quadratic(vectors(:, a), &
+                            terms(:, :, component)))
+                    end do
+                end do
+                call require(abs(slope_bar + 0.17_dp * gamma_bar - expected) &
+                    < 2.0e-12_dp * max(1.0_dp, scale), &
+                    'contracted reverse disagrees with masked period oracle')
+            end do
+        end do
+    end subroutine check_period_contraction
 
     pure function quadratic(vector, matrix) result(value)
         real(dp), intent(in) :: vector(:), matrix(:, :)
