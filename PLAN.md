@@ -1,5 +1,10 @@
 # GLISS verification and development plan
 
+The active execution workflow resumed on October 16, 2026 and is maintained in
+[ROADMAP.md](ROADMAP.md). The records below retain their original source pins and
+verification scope; historical stopping and issue-status statements are not the
+current execution state.
+
 Updated October 2, 2026 during integration, independent regression review,
 installed-package validation and fresh reference measurements. Historical
 September 30 evidence includes public-source DCON/GVEC

@@ -70,8 +70,8 @@ derivative chain and free-boundary physical acceptance remain tracked work.
 Asymmetric equilibria take the coupled parity operator, and precomputed
 BOOZ_XFORM files convert with `convert_boozer`.
 
-See [PLAN.md](PLAN.md) for the current audit findings, validation priorities,
-and linked implementation issues.
+See [ROADMAP.md](ROADMAP.md) for the active implementation and qualification
+workflow, and [PLAN.md](PLAN.md) for the audit findings and recorded evidence.
 
 ## Build
 
