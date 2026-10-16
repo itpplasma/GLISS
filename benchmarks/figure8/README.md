@@ -11,6 +11,13 @@ QUASR189686 weak control. This is the available N2 geometry, not the approximate
 positive on the sampled grids. These examples do not test toroidal-angle reversal
 or prove validity of a cylindrical angular chart everywhere.
 
+The native stored-state axes also retain the strong fold: `axis-evidence.json`
+measures 49.474 degrees at M4/N10 and 49.493 degrees at M6/N20. Axis position is
+independent of poloidal angle within 6e-17 m. The branches at the bowtie's
+projected crossing are approximately 2.146 m apart in three dimensions. These
+are stored rho=0 axis measurements, not just guiding-frame measurements;
+physical equilibrium and stability remain unqualified.
+
 **No physical acceptance fixture is promoted here.** `qualification-evidence.json`
 retains failed attempts without their large state files. The fresh N2-12 attempt
 at M4/N10, four degree-5 radial cells, reached coefficient force

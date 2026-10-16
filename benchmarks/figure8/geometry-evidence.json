@@ -86,5 +86,11 @@
     "Sampled guiding curves are not solved magnetic axes.",
     "Both sampled boundary azimuth derivatives stay positive; no outside-cylindrical-chart claim.",
     "N2-12 is the available approximately 50-degree fold, not the approximately 76-degree maximum-fold paper case."
-  ]
+  ],
+  "stored_state_axis_evidence": {
+    "file": "axis-evidence.json",
+    "sha256": "c529871608ee53537498199f10dae9e8ff666675b9e837556e4a12c1a82992d4",
+    "availability": "Evidence is committed; states, reproduction script and NPZ remain scratch-only.",
+    "physical_equilibrium_qualified": false
+  }
 }

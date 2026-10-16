@@ -1,0 +1,194 @@
+{
+  "status": "UNQUALIFIED stored-state axis geometry; no physical equilibrium or stability certificate",
+  "producer_commit": "c0dc66fe2b9faa147c76a728e5cd053ce693d472",
+  "gvec_version": "1.5.0",
+  "omp_threads": 1,
+  "method": {
+    "curve": "Native State.evaluate(pos,e_zeta,rho=[0],extrapolate=False), full torus zeta. This measures the rho=0 coordinate-axis curve stored in the state.",
+    "theta_independence": "Maximum Euclidean spread relative to theta=0 at theta=[0,.3,1.1,2.4,3.7,5.6,2pi], with 4096 full-torus zeta samples.",
+    "inclination": "Find native y=0 roots; gamma=atan2(abs(native dz/dzeta),abs(native dy/dzeta)) in the inherited Cartesian bowtie y-z convention. Root positions and tangents included.",
+    "writhe": "Midpoint Gauss double integral (1/(4pi))*sum_ij ((dx_i cross dx_j) dot (mid_i-mid_j))/|mid_i-mid_j|^3, on native sampled closed axis at 256,512,1024,2048 segments; diagonal terms omitted. Numerical convergence diagnostic.",
+    "azimuth": "At 4096 zeta samples compute dphi/dzeta=(x*dy/dzeta-y*dx/dzeta)/(x*x+y*y) from native position/tangent and unwrapped full-torus phi winding. Sampled signs are not an interval proof.",
+    "guiding_curve": "Native evaluate_hmap_only(X1=0,X2=0,zeta), compared with stored rho=0 coordinate axis at identical zeta."
+  },
+  "states": {
+    "medium-fresh": {
+      "source_report": "/tmp/gliss-gvec-real-figure8-20261016/evidence/medium-fresh.json",
+      "source_report_sha256": "7bce042f164e0ceca67351a971fe535359c9dd83bc2d06ead18a8a6595ebdfc1",
+      "statefile": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/medium-fresh/GVEC_N2_12_medium-fresh_State_final.dat",
+      "parameterfile": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/medium-fresh/parameter_GVEC_N2_12_medium-fresh_final.ini",
+      "hashes": {
+        "/private/tmp/gliss-gvec-real-figure8-20261016/runs/medium-fresh/GVEC_N2_12_medium-fresh_State_final.dat": "fb1216009f267ce7c6b831aaffc807d155b33d350bb50f6952d7e5924c298aa4",
+        "/private/tmp/gliss-gvec-real-figure8-20261016/runs/medium-fresh/parameter_GVEC_N2_12_medium-fresh_final.ini": "5cf8f0627dab83dc688fb986b2a94d186d54f8702ea0f9f8750cd3a6383ee679",
+        "/tmp/gliss-gvec-real-figure8-20261016/input/N2.12-v3.1-hi.nc": "e3417b64285408f86180fc4b0f0c85d2e08e2c4c999e838123ba9f2add0361aa"
+      },
+      "resolution": {
+        "elements": 4,
+        "m": 4,
+        "n": 10,
+        "degree": 5,
+        "quadrature_points": [
+          13,
+          49
+        ],
+        "minimizer": 10
+      },
+      "physical_equilibrium_qualified": false,
+      "state_max_coefficient_force": 3.49774697784327e-09,
+      "max_axis_theta_position_spread_m": 5.551115123125783e-17,
+      "max_axis_theta_tangent_spread_m_per_radian": 1.1102230246251565e-16,
+      "axis_span_xyz_m": [
+        2.1459630165743993,
+        0.8706326944828504,
+        0.7634785717620622
+      ],
+      "axis_radius_minmax_m": [
+        0.434837175767896,
+        1.0729902871331083
+      ],
+      "native_azimuth_derivative_minmax": [
+        0.461434899759072,
+        2.2817364710055474
+      ],
+      "negative_azimuth_derivative_sample_count": 0,
+      "azimuth_winding": 1.0,
+      "bowtie_y_zero_roots": [
+        {
+          "zeta_radians": 3.1415926504650913,
+          "position_m": [
+            -1.0729815082871998,
+            -2.7472816814966755e-16,
+            -4.8986292596820195e-08
+          ],
+          "native_dpos_dzeta_m": [
+            3.641906843721063e-08,
+            -0.4951111147197457,
+            -0.5791755454581521
+          ],
+          "bowtie_inclination_degrees": 49.474357008190054
+        },
+        {
+          "zeta_radians": 6.283185304054885,
+          "position_m": [
+            1.0729815082871998,
+            4.2841738938354035e-16,
+            -4.8986292821410816e-08
+          ],
+          "native_dpos_dzeta_m": [
+            -3.6419068645941514e-08,
+            0.4951111147197457,
+            -0.5791755454581521
+          ],
+          "bowtie_inclination_degrees": 49.474357008190054
+        }
+      ],
+      "writhe_by_segments": {
+        "256": 0.41311104285465344,
+        "512": 0.41328399243343134,
+        "1024": 0.4133356912017448,
+        "2048": 0.41335073262511557
+      },
+      "last_writhe_refinement_difference": 1.5041423370776297e-05,
+      "stored_axis_to_guiding_curve_displacement_m": {
+        "max": 0.011563484594014442,
+        "rms": 0.007495735360950839
+      },
+      "bowtie_crossing": {
+        "yz_projection_gap_m": 7.381426839764771e-16,
+        "branch_separation_3d_m": 2.1459630165743997
+      }
+    },
+    "refined-fresh-agd": {
+      "source_report": "/tmp/gliss-gvec-real-figure8-20261016/evidence/refined-fresh-agd.json",
+      "source_report_sha256": "573ac6769473c1cbac31f66177e970086ff55fb8846bbde4914bba27c2b4ca88",
+      "statefile": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/refined-fresh-agd/GVEC_N2_12_refined-fresh-agd_gvec_stages/0-00/GVEC_N2_12_refined-fresh-agd_State_0001_00014500.dat",
+      "parameterfile": "/private/tmp/gliss-gvec-real-figure8-20261016/runs/refined-fresh-agd/GVEC_N2_12_refined-fresh-agd_gvec_stages/0-00/parameter.ini",
+      "hashes": {
+        "/private/tmp/gliss-gvec-real-figure8-20261016/runs/refined-fresh-agd/GVEC_N2_12_refined-fresh-agd_gvec_stages/0-00/GVEC_N2_12_refined-fresh-agd_State_0001_00014500.dat": "9b8bcf7da8ee46e320416f83922fc0b9cd202aa3dc6ffc83a48b87d9cbd912d5",
+        "/private/tmp/gliss-gvec-real-figure8-20261016/runs/refined-fresh-agd/GVEC_N2_12_refined-fresh-agd_gvec_stages/0-00/parameter.ini": "2fe569c0c70d4a8dd16cacd68b26df2b389d8808fe310c9b023bad7c27abf2d9",
+        "/tmp/gliss-gvec-real-figure8-20261016/input/N2.12-v3.1-hi.nc": "e3417b64285408f86180fc4b0f0c85d2e08e2c4c999e838123ba9f2add0361aa"
+      },
+      "resolution": {
+        "elements": 6,
+        "m": 6,
+        "n": 20,
+        "degree": 5,
+        "quadrature_points": [
+          27,
+          99
+        ],
+        "radial_gauss_points": 7,
+        "minimizer": 10
+      },
+      "physical_equilibrium_qualified": false,
+      "state_max_coefficient_force": 8.59266888357993e-09,
+      "max_axis_theta_position_spread_m": 2.7755575615628914e-17,
+      "max_axis_theta_tangent_spread_m_per_radian": 6.938893903907228e-18,
+      "axis_span_xyz_m": [
+        2.146050815187498,
+        0.8706298905184011,
+        0.7634613945059117
+      ],
+      "axis_radius_minmax_m": [
+        0.4348318206052008,
+        1.073025407593749
+      ],
+      "native_azimuth_derivative_minmax": [
+        0.4612435233428489,
+        2.2820767336692116
+      ],
+      "negative_azimuth_derivative_sample_count": 0,
+      "azimuth_winding": 1.0,
+      "bowtie_y_zero_roots": [
+        {
+          "zeta_radians": 3.1415926504650833,
+          "position_m": [
+            -1.0730254075937493,
+            -4.2514624450455443e-16,
+            -4.899079367579804e-08
+          ],
+          "native_dpos_dzeta_m": [
+            3.617489370992201e-08,
+            -0.4949260196348411,
+            -0.579331599418661
+          ],
+          "bowtie_inclination_degrees": 49.49256154896629
+        },
+        {
+          "zeta_radians": 6.283185304054877,
+          "position_m": [
+            1.0730254075937493,
+            5.947351978606407e-16,
+            -4.8990793798277653e-08
+          ],
+          "native_dpos_dzeta_m": [
+            -3.617489355374458e-08,
+            0.4949260196348411,
+            -0.579331599418661
+          ],
+          "bowtie_inclination_degrees": 49.49256154896629
+        }
+      ],
+      "writhe_by_segments": {
+        "256": 0.41309195296137896,
+        "512": 0.4132648186248954,
+        "1024": 0.4133164900702985,
+        "2048": 0.4133315231360947
+      },
+      "last_writhe_refinement_difference": 1.5033065796199452e-05,
+      "stored_axis_to_guiding_curve_displacement_m": {
+        "max": 0.011559376069405011,
+        "rms": 0.007493859529816524
+      },
+      "bowtie_crossing": {
+        "yz_projection_gap_m": 1.0272095270094477e-15,
+        "branch_separation_3d_m": 2.1460508151874986
+      }
+    }
+  },
+  "audit_script_sha256": "570916dc429fa511b0de3b4f5eefbfe86505c20cde89f26e6ac449fe1c344635",
+  "native_library": {
+    "path": "/private/tmp/gliss-figure8-20261016/venv/lib/python3.12/site-packages/gvec/_libpygvec.cpython-312-darwin.so",
+    "sha256": "b400a40c1ec5e466315c2625ee32b45bb85804a69192791a359dd7e25698bef7"
+  }
+}

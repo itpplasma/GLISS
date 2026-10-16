@@ -311,6 +311,11 @@ Active dependencies remain explicit:
   RMS 0.00964139 still fails. The physical residual worsens from the 5,000-step
   checkpoint's 0.00840334 despite decreasing coefficient force. This does not
   establish continuous-force convergence; no final state or spectrum is promoted.
+  Actual native rho=0 stored axes retain the strong fold: inclination 49.474
+  degrees for M4/N10 and 49.493 degrees for M6/N20, with poloidal-angle position
+  spread below 6e-17 m. The two branches at the bowtie projection crossing are
+  2.146 m apart in 3D. `axis-evidence.json` pins these state measurements;
+  cylindrical azimuth remains monotone and physical qualification still fails.
   On the identical final state, doubling angular quadrature to 55x199 changes
   coefficient force by only 1.02e-5 relative; both values pass 1e-8. This does
   not support remaining angular underintegration as the physical-error cause.
