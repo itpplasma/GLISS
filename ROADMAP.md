@@ -1,6 +1,6 @@
 # GLISS qualification and implementation roadmap
 
-Updated October 16, 2026. This is the active execution roadmap. [PLAN.md](PLAN.md)
+Updated October 17, 2026. This is the active execution roadmap. [PLAN.md](PLAN.md)
 retains the earlier audit, measurements and scientific limitations; completed
 checks there apply to their recorded revisions, not automatically to new code.
 
@@ -63,7 +63,7 @@ issue whose broader requested acceptance remains unmet.
 | D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse passes; generic equilibrium response unavailable |
 | S | Sparse backend selection | Reliable backend capabilities | Native LDLT lacks public inertia reliability API; retain block-LAPACK |
 | P | Performance qualification | Accepted workload and accuracy | Pressure reverse and Cartesian value benchmarks implemented and measured |
-| R | Reproducible release and evidence | Applicable gates above | 177 native and 388 Python tests pass with two threads; Linux exact reproduction passes |
+| R | Reproducible release and evidence | Applicable gates above | 178 native, 388 Python and nine Enzyme gates pass locally; new Linux generation run pending |
 
 ### K: FortSym-generated kernels
 
@@ -243,6 +243,15 @@ geometric oracle; restoring the include passes. Source accounting now includes
 Fortran includes and their references: 343 records, still zero completed
 whole-component equation reviews.
 
+At `8e51c65`, all 178 native tests and 388 Python tests pass with two OpenMP
+threads; two optional Python checks are skipped. The isolated optimized audit
+also passes clean Fo lint, strict Release compilation with array temporaries
+treated as errors, and all 178 default tests. These checks supplement the
+four exact-reproduction and nine Enzyme gates above. New Linux execution was
+unavailable because the permitted host was shutting down; earlier Linux
+evidence applies to its recorded revisions. Hosted generation checks remain
+required for this new wave.
+
 The first wave passed 175 GNU 16.1 Release tests with
 `-O3 -Werror=array-temporaries`, 332 Python tests with two optional skips, and
 175 GNU bounds/runtime-check tests. Mandatory runtime-check CI also passes.
@@ -290,14 +299,24 @@ LTO or fast-math; it does not establish application throughput or optimality.
 Active dependencies remain explicit:
 
 - Fo's configured `--no-build` CMake-reply race is repaired upstream at
-  `2f979d1`, exact frozen CMake cache metadata at `614d951`, and FortFront nested
-  SELECT RANK scanning at `07bfbb4`. The installed Fo retains original cache
-  help/type/value metadata, including whitespace and literal characters, so
-  automatic OpenMP discovery remains distinct from an explicit override.
+  `2f979d1`, exact frozen CMake cache metadata at `614d951`, proven CMake path
+  aliases at `a0e8dea`, header-only native action handling at `01a2acb`, and
+  FortFront nested SELECT RANK scanning at `07bfbb4`. The installed Fo retains
+  original cache help/type/value metadata, including whitespace and literal
+  characters, so automatic OpenMP discovery remains distinct from an explicit override.
   The old driver fails the focused behavioral regression and the repaired one
   passes; the original GLISS resident lane passes all twelve affected gates at
   `78d1ee8`. The separate mixed-runtime BLAS failure exposed by the lane is
   repaired in GLISS's runtime selection.
+  The generated geometry include exposed an unused native action that the
+  old driver attempted to archive as `.o`. The upstream correction passes
+  the maintained native/reference CLI oracle, including static/executable
+  header declarations and include-only rebuilds, and the full original GLISS
+  optimized audit at `8e51c65`.
+  The updated resident integration lane is healthy and quiescent with all
+  thirteen required gates passing at `8e51c65`, including generated geometry.
+  Its scope is 13/178 tests; the separate full audit supplies default-suite
+  evidence rather than treating the focused lane as complete verification.
 - The public QUASR 189686 NFP=2 boundary/coils are a hash-pinned weakly folded
   control (SHA256 `4bba5c53be41d29798d93faa4ee8bad91fe57f3a8ce094648bd09c883e52038e`).
   A 20,000-iteration GVEC `c0dc66f` attempt fails its frozen coefficient-force
