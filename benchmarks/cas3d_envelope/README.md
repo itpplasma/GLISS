@@ -154,9 +154,27 @@ Public/continuous-native characteristic-force ratios are 52.97, 88.57,
 and metric mismatches prevent source qualification. A fixed low-mode radial
 factor substitution worsens every shell and is rejected; no numerical code
 is changed. BOOZ's installed odd-mode staggering agrees with its source.
-Separating transform, Cartesian truncation and radial interpolation remains
-necessary; neither the four shells nor these diagnostics pass the
-whole-support physical gates.
+
+[retention_comparison.json](retention_comparison.json) records a matched
+retained26/retained40 pair on the same NS289 source and BOOZ48 data. Both use
+256x256 assembly to satisfy the unchanged retained40 anti-alias guard; the
+retained26 repeat reproduces the original 192x192 values. Force improves only
+0.428489%, to 0.004164 characteristic and 19.54% pressure-relative, and the
+energy gap remains 7.17%. All three physical targets fail. The converter's
+projection grids differ, but common position coefficients agree within
+2.33e-14 m; coefficient agreement alone does not bound derivative errors.
+
+[raw_booz_comparison.json](raw_booz_comparison.json) bypasses Cartesian
+projection using all 4608 raw cylindrical BOOZ harmonics and analytic jets.
+Four-shell forces agree with public retained40 within 0.0751%; divergence
+is at roundoff by construction. This locates most of the discrepancy before
+Cartesian projection on these shells. It does not distinguish raw radial
+interpolation from source-to-BOOZ transfer or certify angular convergence.
+The earlier continuous-native control interpolates contravariant B and is
+not exactly solenoidal. Compare a divergence-free native flux field from
+R/Z, lambda and total flux/iota jets next; then repair the demonstrated cause
+and repeat the unchanged whole-support gates. No new eigenpair, literature
+agreement or physical qualification follows from these diagnostics.
 
 ## Historical synthetic scaling result
 

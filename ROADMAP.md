@@ -232,8 +232,41 @@ The installed BOOZ reader's odd-mode sqrt(s) staggering is correct on both
 frozen sources. Replacing only low-mode parity factors with full |m|/2
 factors worsens force on all four shells by factors 2.33 to 125.93;
 independent baseline values/fields match the native trace, so that proposed
-repair is rejected. Next separate BOOZ geometry, Cartesian Fourier truncation
-and continuous radial reconstruction, retaining the failed whole-support gates.
+repair is rejected.
+
+[The retained-band control](benchmarks/cas3d_envelope/retention_comparison.json)
+increases retained26 to retained40 on the same NS289/BOOZ48 data. Both cases
+use assembly256x256 because the unchanged cubic-Jacobian admission requires
+at least 241 points per angle for retained40. The repeated retained26 values
+agree with the original assembly192x192 result; original receipts remain
+unchanged. Force improves by only 0.428489%, to 0.004164 characteristic and
+19.54% pressure-relative, while the energy gap remains 7.17%. All three
+physical targets still fail. Different converter projection grids leave the
+common position coefficients equal within 2.33e-14 m; this is no bound on
+their derivative errors. Higher retention does not explain the near-axis
+discrepancy on this source and radial representation.
+
+[Direct raw-BOOZ reconstruction](benchmarks/cas3d_envelope/raw_booz_comparison.json)
+bypasses Cartesian Fourier projection, using all 4608 cylindrical harmonics
+and analytic jets on the same four shells and 192x192 angular grid. Its
+characteristic forces are 0.033448/0.030991/0.019229/0.00064243, differing
+from the public retained40 reconstruction by only 0.00262% to 0.0751%.
+The raw field is divergence-free to roundoff by construction, and native
+Python/Fortran field calibration agrees within 1.34e-15 relatively.
+Cartesian projection/interpolation therefore contributes little on these
+shells. This single-grid result does not qualify equilibrium or distinguish
+raw radial interpolation from the earlier source-to-BOOZ transfer. The earlier
+continuous native control interpolates stored contravariant B and has nonzero
+divergence; its smaller force cannot isolate continuous source-metric error.
+
+Next compare a divergence-free native-wout flux field, using R/Z, lambda and
+total flux/iota jets, with raw BOOZ on the same flux shells. Report native
+stored-field and geometric-Jacobian consistency, then repair only the
+demonstrated source or transfer defect. Repeat the unchanged whole-support
+force and matched-energy gates before the frozen CAS3D pair. In parallel,
+extract the actual failing uniform-degree-1 Solov'ev trial and compare its
+independent Cartesian energy and mass with the assembled forms before
+changing basis, axis constraints or quadrature.
 
 The old synthetic 70-envelope/139-label run measures scaling. A literal paper
 L139 prefix would contain 139 or 140 envelopes and 277 or 279 labels before
@@ -366,7 +399,11 @@ issue whose broader requested acceptance remains unmet.
   controls with physical scaling, both stable/unstable cases and valid inputs.
 - [ ] Resolve #35's degree-1 q0=1.035 instability criterion at 64 cells; repeat
   higher-degree convergence on qualified equilibria. Reduced compression
-  quadrature does not establish general eigenvalue upper bounds.
+  quadrature does not establish general eigenvalue upper bounds. Before
+  changing the active axis tie or quadrature, compare independent Cartesian
+  energy and physical mass for the actual failing uniform-degree-1 trial
+  with its assembled forms; the existing cylinder oracle does not audit
+  that Solov'ev trial. Keep fixed-export and regenerated-export controls distinct.
 - [x] Expose an optional validated native radial mesh, preserving uniform
   defaults and carrying the same mesh through pressure JVP/VJP. Radius grading
   improves degree-1 approximation but does not satisfy the original uniform

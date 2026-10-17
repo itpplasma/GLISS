@@ -1,0 +1,108 @@
+{
+  "status": "COMPLETE_BOUNDED_DIAGNOSTIC_NO_QUALIFICATION",
+  "identities": {
+    "/tmp/gliss-w7x-source-radial289-extended-20261017/wout_m17n15_ns289.nc": "d65b781742f7d47a809f05d8e4a2116ad4f9cf60628f2604c18b0174d574f0e1",
+    "/tmp/gliss-w7x-source-radial289-extended-20261017/boozmn_m17n15_ns289_fixed48_s288.nc": "27be20ab09c95320ca2f7c50f431d21400e74915e703f4319e3daafba96599b7",
+    "/tmp/gliss-w7x-ret40-20261017/gliss_m17n15_ns289_booz48_ret40_s288.nc": "d3b5da21935420853f307e44511ef100e96169e5711d89c74176f3c29f95d01e",
+    "/tmp/gliss-raw-booz-cylindrical-20261017/protocol.json": "f93491071784a81f87d669367844890a15a09dc09eb3d2319d9469e5f544b618",
+    "/tmp/gliss-raw-booz-cylindrical-20261017/diagnostic.py": "0ce7c2783eeb6796c8bcf046829068f475464e6fad25a7625d4f0110a4db823d",
+    "/tmp/gliss-raw-booz-cylindrical-20261017/public-face-trace.bin": "b82a93ff007547512c60cd3e687787c767979a242f1bb538402e4128f21f0789",
+    "/tmp/gliss-raw-booz-cylindrical-20261017/fields.npz": "3dcac3bc845f8acc36bb01cb5c355e2243bfdfbc8b0a74d5f176f04a4c16d9b3",
+    "/tmp/gliss-raw-booz-cylindrical-20261017/result.json": "6af26ce4124b285e8439b17ed7dd618e1123713c8fca6e360134112a705f0370",
+    "/tmp/gliss-raw-booz-cylindrical-20261017/receipt.json": "cb3279a81575d964f65d5707694a0fb7ca86c1601a28de1567ddee1879d4a38f"
+  },
+  "native_and_python_calibration_identities": {
+    "/tmp/gliss-native-cartesian-parity-ret26-20261017/frozen/export_curl.py": "f0514260194d05b030dbdf06687b8786aaabc7f12e5839247ef668f93f130460",
+    "/tmp/gliss-raw-bernstein-20261017/build-cas/trace": "a20699c52c8dca6ec096d9f84def534e7f0bc5460ff760438ccd7998bd63a7a8",
+    "/tmp/gliss-ns289-matched-shell-force-20261017/grid.txt": "bbd3b80e39c7e44b54fbd6de1772ddfce7e3622aa12d15e08be770ca84c4f751",
+    "/tmp/gliss-raw-bernstein-20261017/libgliss-cas-frozen.a": "a567b9a5988de77470cf4a32dfb44197d5ec9ec6324a7fe52f8782e697b5f949",
+    "/tmp/gliss-cartesian-field-native-build/libcartesian_field.a": "70ab721f34bcb2ee436e6ac183233011d0f5a70ebe7d568e9db54117614441f4"
+  },
+  "settings": {
+    "shells": "[1,2,4,8]/288",
+    "angular_grid": [
+      192,
+      192
+    ],
+    "angular_origins": [
+      0,
+      0
+    ],
+    "raw_harmonics": 4608,
+    "threads": 1,
+    "wall_cap_seconds": 180,
+    "actual_wall_seconds": 2.1506034589838237,
+    "native_trace": "Actual public Cartesian B/curl face mode; no MDE or energy solve"
+  },
+  "rows": [
+    {
+      "full_index": 1,
+      "s": 0.003472222222222222,
+      "raw_characteristic": 0.03344798799648826,
+      "public_ret40_characteristic": 0.033434248166154736,
+      "difference_percent": 0.04109507791305589,
+      "raw_divergence_rms_T_per_m": 1.1886766665014784e-16
+    },
+    {
+      "full_index": 2,
+      "s": 0.006944444444444444,
+      "raw_characteristic": 0.03099092417412982,
+      "public_ret40_characteristic": 0.03096769071297182,
+      "difference_percent": 0.0750248424183253,
+      "raw_divergence_rms_T_per_m": 1.2154420667136348e-16
+    },
+    {
+      "full_index": 4,
+      "s": 0.013888888888888888,
+      "raw_characteristic": 0.01922900540105194,
+      "public_ret40_characteristic": 0.01922007353431278,
+      "difference_percent": 0.046471553416349565,
+      "raw_divergence_rms_T_per_m": 1.2096037141844533e-16
+    },
+    {
+      "full_index": 8,
+      "s": 0.027777777777777776,
+      "raw_characteristic": 0.0006424273062630613,
+      "public_ret40_characteristic": 0.0006424104726661151,
+      "difference_percent": 0.002620380218343321,
+      "raw_divergence_rms_T_per_m": 1.2101295471357992e-16
+    }
+  ],
+  "calibration": {
+    "public_Export_vs_native_B_relative_rms_max": 1.3324553769490678e-15,
+    "raw_vs_public_B_relative_rms_max": 1.0452904629725002e-07,
+    "raw_vs_public_curl_relative_rms_max": 0.0014143638038619812,
+    "raw_vs_public_X_at_half_knots_absolute_rms_max_m": 4.131587945458058e-11,
+    "raw_vs_public_X_between_knots_absolute_rms_max_m": 5.4074779074051245e-09
+  },
+  "independent_read_only_implementation_review": {
+    "agent": "/root/cas3d_solver_validation/quotient_math_review",
+    "result": "No consequential implementation error found",
+    "checked": [
+      "all six symmetric second geometry jets including X_ss",
+      "cylindrical basis rotation",
+      "Fourier sine/angular/NFP signs",
+      "total-Wb flux normalization 1/(2pi)",
+      "Jacobian derivatives and reciprocal basis",
+      "Cartesian gradient orientation and curl",
+      "pressure-force sign",
+      "native trace packing and shared point ordering"
+    ],
+    "no_numerical_execution": true
+  },
+  "interpretation": "Large force remains after bypassing Cartesian Fourier projection. Generic Cartesian projection/interpolation is a minor contribution on these four shells. Raw BOOZ geometry/radial reconstruction versus earlier source-to-BOOZ derivative handling remains unresolved.",
+  "limitations": [
+    "One fixed angular grid and four shells, no angular/radial convergence certification.",
+    "Raw cylindrical and projected Cartesian quantities use different nonlinear radial interpolants; off-knot comparison includes noncommutation. Knot X comparison isolates angular projection/truncation.",
+    "Near-zero divergence follows structurally from the flux/J construction, not equilibrium qualification.",
+    "No source/BOOZ runs, filters, new builds, product edits, acceptance changes, or qualification promotion.",
+    "The earlier continuous native-wout control interpolates stored contravariant B and has nonzero divergence. Its smaller force cannot by itself distinguish continuous source-metric inconsistency from source-to-BOOZ or radial transfer."
+  ],
+  "immutable_files_unchanged": true,
+  "CPU_released": true,
+  "next_discriminator_not_executed": {
+    "action": "Construct a divergence-free flux-based native-wout field from the existing R/Z geometry, lambda straight-field-line map, and total flux/iota profiles with explicitly frozen parity-aware radial and angular jets. Compare its Cartesian B/curl and physical force against the raw BOOZ flux/J reconstruction on the same four normalized-flux shells, with coordinate/sign/flux calibration and geometric Jacobian consistency reported.",
+    "purpose": "Separate continuous source-metric/flux consistency from source-to-BOOZ and radial reconstruction transfer. This comparison is needed because interpolated stored contravariant native B is not exactly solenoidal.",
+    "status": "Not executed in this diagnostic."
+  }
+}
