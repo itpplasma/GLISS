@@ -993,6 +993,13 @@ if(BUILD_TESTING)
     set_tests_properties(screw_pinch_analytic_energy PROPERTIES
         ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
 
+    add_executable(test_resonant_screw_pinch_energy
+        test/test_resonant_screw_pinch_energy.f90)
+    target_link_libraries(test_resonant_screw_pinch_energy PRIVATE gliss)
+    add_test(NAME resonant_screw_pinch_energy COMMAND test_resonant_screw_pinch_energy)
+    set_tests_properties(resonant_screw_pinch_energy PROPERTIES
+        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+
     add_library(gliss_test_support test/cylinder_fixture.f90)
     target_link_libraries(gliss_test_support PUBLIC gliss)
 

@@ -268,3 +268,30 @@ angular sample with their invalid-input status before changing accumulators.
 A focused exact constant-field control verifies this rejection and the
 continued acceptance of `FT'=0, FP'!=0` by the perpendicular/two-component
 surface assemblies and the more general generated point kernels.
+
+## Exact resonant screw-pinch negative energy
+
+`test_resonant_screw_pinch_energy` adds an unstable trial for the same exact
+current-carrying equilibrium. For a perpendicular helical displacement with
+phase `m*theta+k*z` and `k=-m*A/Z`, direct cylindrical differentiation gives
+`Q=curl(xi cross B)=-B*D`, where `D=div(xi)`. The raw Bernstein energy density is
+
+```text
+q = H D^2 + 2 p_r f D,  H = B^2/mu0 + gamma*p > 0.
+```
+
+Choosing `D=-p_r*f/H` gives `q=-p_r^2*f^2/H < 0`. The explicit radial trial
+`f=a*(r/a)^(m-1)*(1-r^2/a^2)^2` and its perpendicular tangential components are
+Cartesian regular, including the m=1 axis tie, and vanish at the wall.
+For gamma=1, the total has an independent closed beta-function integral;
+80-digit raw-energy integrals supply total, magnetic, fluid and physical-mass
+oracles for gamma=1 and 5/3. Their parameters and retained constants are
+documented in the test; regeneration needs no production kernel expressions.
+
+All 144 combinations of m=1/2/3, both parities, both chart signs, both angular
+assembly routes and 16/32/64 area-variable Gauss points pass the fixed `4e-12`
+budget. Direct cylindrical curl, pointwise raw energy and mass, and separate
+integrated terms are checked. This supplies a prescribed negative-energy
+trial through production surface assemblies; it does not establish an
+isolated eigenvalue, continuum growth rate, public primitive cylinder import
+or the global Newcomb/Suydam threshold gates.
