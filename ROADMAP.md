@@ -166,8 +166,8 @@ with negative count two throughout. The sampled-force-qualified 17/15 input
 gives L3/L5 values -0.203176/-0.273623 for Gauss and -0.203844/-0.274375 for
 midpoint, in recorded 10^3 lambda units. All eight conditional literature
 bands still fail, including numerical certificates and reference rounding.
-Improved equilibrium/export accuracy does not explain this discrepancy on
-these controls. Recover the mode/radial conventions and compare raw energy
+These source-angular controls do not establish force accuracy over the full
+operator domain. Recover the mode/radial conventions and compare raw energy
 on matched trials; no normalization is fitted. One FE mesh and one angular
 grid for this improved representation do not establish full convergence.
 
@@ -197,6 +197,27 @@ drive differences close the production/geometric gap algebraically, but
 signed volume/interface corrections and continuum energy are not converged.
 The trial has finite-energy axis behavior in inspected probes; Cartesian
 smoothness and full operator-domain equilibrium qualification remain open.
+
+[The source radial control](benchmarks/cas3d_envelope/source_radial_comparison.json)
+changes only the final VMEC NS from 145 to 289, retaining MPOL17/NTOR15,
+the physical deck, BOOZ48 and retained26; all 288 half-grid surfaces are
+exported. The original 180-second timeout is preserved. One declared
+600-second retry converges in 399 seconds with all three native force
+residuals below 1e-12, and the unchanged public conversion gates pass.
+On the frozen FE192 midpoint trial, sampled volume-weighted characteristic
+force improves from 0.006033 to 0.004182 and pressure-relative force from
+28.31% to 19.62%. Raw/production energy becomes -646.227/-692.575 J,
+reducing the relative gap from 28.34% to 7.17%. All three preregistered
+whole-support targets still fail: characteristic force <0.001,
+pressure-relative force <5%, and energy gap <1%. No radial cutoff is used;
+the first two midpoint characteristic forces remain 0.03244/0.02073.
+The same physical x/eta coefficients are retained in normalized-flux
+coordinates; Cartesian displacement changes with the equilibrium geometry.
+This is one source-resolution control, not a new eigenpair or continuum
+convergence result. The two conditional CAS3D solves are not executed.
+Next separate native-source near-axis force error from full-to-half-grid
+conversion and public radial reconstruction, then repair the demonstrated
+cause and repeat these unchanged physical gates before the frozen CAS3D pair.
 
 The old synthetic 70-envelope/139-label run measures scaling. A literal paper
 L139 prefix would contain 139 or 140 envelopes and 277 or 279 labels before

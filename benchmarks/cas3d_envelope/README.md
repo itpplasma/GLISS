@@ -133,6 +133,19 @@ and this diagnostic do not establish continuum or literature agreement.
 Improve and qualify the equilibrium representation across the trial support
 before repeating the same comparison.
 
+[source_radial_comparison.json](source_radial_comparison.json) preserves the
+next control: only final VMEC NS145 becomes NS289, with unchanged physical
+deck, source17/15, BOOZ48 and retained26. The native solve and public export
+pass. Using the frozen FE192 midpoint coefficients, force improves to
+0.004182 characteristic and 19.62% pressure-relative; raw/production energies
+are `-646.227/-692.575 J`, with a 7.17% relative gap. All preregistered targets
+still fail (`<0.001`, `<5%`, `<1%`, respectively). The first two cells remain
+included. Identical normalized-flux-chart coefficients do not imply identical
+Cartesian displacements across different geometries. This single source step
+establishes neither continuum convergence nor a new eigenvalue. The preserved
+timeout, extended retry and matched receipts are linked by SHA256; the two
+conditional CAS3D comparisons remain unexecuted.
+
 ## Historical synthetic scaling result
 
 `l139_manifest.json`: base mode (1, 1), angular grid 64 x 64, 100 radial
