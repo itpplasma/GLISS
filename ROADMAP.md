@@ -722,6 +722,47 @@ until a separate consumer qualification justifies changing them.
 | FortFront | `a34ada8` | Three delivered topic histories included; source tree unchanged |
 | FortArray | `1529620` | Six historical live heads included; all five merge trees unchanged |
 | FortPlot | `a8f7070` | Twenty-three delivered topic histories included; all merge trees unchanged |
+| Fx | `d3f87b2` | Deferred graph verification integrated; all 38 audited heads included; native build and three affected checks pass |
+| FortSparse | `1fb5573` | Complex low-level SLU and explicit real SuperLU ILU integrated; all nine local heads included; 19 focused cases plus native-only smoke and pinned generation replay pass |
+| FortAD | `5508665` | Both topic histories included; small-power expansion, current FortFront imports and three unsafe bounds guards repaired; final ten affected/control cases pass |
+| FortFEM | `5003b673` | Native sparse branch included, Hermitian regression registered in CI; 14/14 checked FPM cases and 5/5 sparse CMake cases pass |
+| FortIO | `8c989ce` | All 31 live heads included; portability integration preserves long attribute names and isolates the Linux linker fixture; 33/33 CTests, 25 asserting FPM programs and installed consumer pass |
+| Fo | `2add503` | All 105 live and 26 local heads included; selected-test execution, campaign paths, stable restart gates and truthful zero-test reporting repaired; 12 native cases pass and one Linux-only case skips on Darwin |
+
+Fx retains one independently reproduced baseline failure in Darwin automatic
+retirement scanning (188/189 assertions pass). The directory cursor must survive
+restart without violating the scan-work bound; that repair remains in its owning
+roadmap. This integration does not claim a green full Fx store suite.
+
+FortSparse's public native complex supernodal dispatch remains unsupported;
+the later dirty implementation was preserved separately. Multi-thread
+qualification remains unrun under the declared single-thread budget. The ILU
+backend is an explicit approximate inverse, excluded from automatic selection
+and exact implicit JVP/VJP claims; its broader numerical quality is unqualified.
+
+FortAD's checked full run reached 103/105 passing after the reverse-pass guard
+repair. The two remaining failures exposed unsafe caller-index guards; both
+cases and eight related controls pass on the final revision with freshly linked
+executables and an explicitly bound CLI. A final 105-case replay was not run.
+Existing lint and formatting findings remain recorded in its validation receipt.
+
+FortFEM retains its declared FortSparse `1cc17e31` and FortNum `acc8dce` pins.
+The affected native gates include sparse derivatives, Hermitian forms, interval
+and RT checks, and meridian FEEC convergence. They do not qualify the full slow
+suite, new performance claims, or replacing those pins with today's upstream
+mains.
+
+FortIO's three additional FPM fixture entry points require arguments and return
+without assertions in a bare invocation; their substantive workflows pass in
+CTest. NVHPC and the Linux-only linker-wrapper runtime were unavailable on this
+macOS host, so those qualifications remain open. The linker fixture's Linux
+registration and wrapper flags are preserved.
+
+Fo's final native qualification uses APFS fixtures on GNU macOS. The process
+journal-recovery oracle requires Linux and is explicitly skipped here. A real
+receipt-before-coverage process-crash cut and CMake oracle identity remain
+unqualified. An earlier HFS scratch exec fixture flaked; its evidence is retained
+separately from the final passing APFS run.
 
 This closes branch accounting for these revisions, rather than the scientific
 acceptance gates. The next GLISS repair must address the weighted trial space
