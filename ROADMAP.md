@@ -18,6 +18,77 @@ solver agreement are separate evidence. Neither a generated kernel nor a green
 test count certifies the complete calculation. Freeze acceptance tolerances
 before measuring a candidate; retain failed controls and missing-data limits.
 
+## Highest priority: analytical and published-reference validation
+
+The current priority is to validate GLISS's production physical operator
+against analytical cases and published literature, explicitly including
+CAS3D. Run the analytical and CAS3D tracks in parallel. Further kernel
+generation, design derivatives, backend changes and performance work follow
+these gates, except for repairs needed to execute or explain a comparison.
+GVEC figure-eight convergence does not block the analytical GLISS track.
+
+The active claim to establish is that the current production energy, mass,
+assembly and solver reproduce independent physical observables on declared
+test domains.
+The verifier is the native CMake/CTest suite plus fresh, revision-bound runs
+of the analytical and cross-code benchmarks below. Local formula checks,
+stored-matrix replay, symbolic identities and small discrete residuals retain
+their narrower meanings; none alone passes this claim.
+
+| Gate | Existing evidence | Required work and acceptance |
+| --- | --- | --- |
+| A0: equation and normalization audit | Published-source map and local energy/mass oracles; zero completed whole-component reviews | Map the energy principle and CAS3D equations to actual production terms, units, flux signs, chart orientation, axis constraints and boundary contributions; compare independently integrated energies and physical mass for identical displacements |
+| A1: analytical spectra and thresholds | Exact theta-pinch FEEC runner covers degrees 1–4, three meshes and both parities; homogeneous and helical tests include local formula checks | Reproduce Alfvén/fast/slow branches, Newcomb/Suydam and helical limits through applicable production assembly; add valid import/public-path controls, stable/unstable cases, physical scaling and independent energy oracles; retain explicit lower-level scope where a straight cylinder cannot use the toroidal export contract |
+| A2: axis, resonance and small eigenvalues | Higher-degree Solov'ev bracket controls pass; degree 1 still misses a tested marginal endpoint; dense slow-cluster ordering sensitivity is diagnosed | Resolve #35's frozen degree-1 criterion and retain the failed gate until it passes; test rational-surface domain and refinement; check slow-cluster accuracy using independent higher-precision pencils before attributing any failure to the production solver |
+| A3: CAS3D formulation and numerical comparison | Sparse labeled congruence, coefficient normalization, quotient metadata and an L139-size scaling runner exist | Verify small colliding/noncolliding pencils against an independent dense quotient oracle, including lowest-mode selection and normalization scaling; reproduce the published mode mask and resolve indexing; compare matched signs/inertia and marginal parameters before normalized eigenvalues, energies and subspaces |
+| A4: independent published-code comparisons | DCON sign bracket, TERPSICHORE replay and bounded independent QAS3 controls exist | Converge the Solov'ev marginal interval and higher-n controls; rerun current independent QAS3 assembly with qualified input; explain count/branch differences through energy and subspace comparisons; complete ideal-limit MISHKA/CASTOR transfer and the failed stable control under #12 |
+| A5: physical free-boundary references | Analytic vacuum-energy oracle and true-edge ingestion pass | Qualify edge pressure, tangential-field continuity and exterior matching, then reproduce the DCON critical-wall interval and applicable published helical/wall limits with separate volume, edge and wall refinement |
+
+Use the original [Bernstein energy principle](https://doi.org/10.1098/rspa.1958.0023),
+[Newcomb pinch analysis](https://doi.org/10.1016/0003-4916(60)90023-3),
+[Fu vertical-stability limit](https://bp-pub.pppl.gov/pub_report/2000/PPPL-3368.pdf),
+[Schwab CAS3D formulation](https://doi.org/10.1063/1.860656),
+[Nuehrenberg W7-X study](https://doi.org/10.1063/1.871924) and
+[compressional CAS3D formulation](https://doi.org/10.1063/1.873268).
+Freeze exact equation/figure references and their physical assumptions before
+deriving each oracle. The 1996 coefficient norm and the 1999 physical kinetic
+norm are distinct; raw eigenvalues from unlike norms are not comparison data.
+
+CAS3D work that can proceed now includes auditing the transcribed published
+envelope mask against Figure 6, its terminal L/L+1 convention, both parities,
+redundant-label null directions, coefficient-grid and reference-length scaling,
+and sparse/dense agreement on small cases. In particular, test that physical
+quotient inertia, labeled eigenpair selection and the reported zero floor
+remain consistent under mass scaling; source inspection identifies an
+unresolved concern here, not a reproduced defect. The existing synthetic
+L139-size table must remain labeled as a scaling control. Its runner also
+needs correct Darwin peak-RSS units and correction of its advertised but
+unparsed `--surfaces` option before new measurement claims.
+
+Exact reproduction of the historical CAS3D W7-X numbers still needs the
+original angular grid, radial form functions, reference length and complete
+equilibrium/deck identity. The published/transcribed mode mask is available
+for audit; these missing settings do not justify declaring all CAS3D work
+blocked or fitting a normalization to digitized values. Preserve the historical
+L10 discrepancy (about -0.88701 versus digitized -0.37148 in the recorded
+10^3 lambda units, with provisional settings) as unexplained evidence until
+its conventions and inputs are resolved. Issue #11 remains open despite the
+implemented sparse scaling path.
+
+The next bounded integration wave has two fronts: A1 connects independent
+analytical spectra and valid geometry controls to the certified production
+solve; A3 adds the missing small quotient/eigenpair oracles and repairs the
+CAS3D runner. Perform these before expensive high-L or figure-eight studies.
+
+Every accepted case must record primary reference, independent oracle, input
+and code identities, units/norms, mode and boundary conventions, frozen error
+bounds, failed controls, and at least three useful refinement levels. Vary
+equilibrium resolution separately from stability discretization. Use sign,
+inertia and marginal intervals when frequency normalization is unmatched;
+compare isolated modes or complete clusters under a shared physical inner
+product. Fix reproducible GLISS errors before extending claims. Record
+missing external data and untested behavior explicitly.
+
 ## Baseline
 
 The initial production baseline is `e89d6a5343c6827433e3bacb9d9f47fa852ee282`,
@@ -57,13 +128,14 @@ issue whose broader requested acceptance remains unmet.
 
 | ID | Work package | Dependencies | Current execution |
 | --- | --- | --- | --- |
+| A | Analytical and published-reference acceptance, including CAS3D | Independent equations, oracles and qualified inputs | Highest priority; execute A0–A5 above before broader optimization claims |
 | K | Generated physical mathematics | Independent equations and oracle | Mass, magnetic/fluid energy, pressure reverse and Cartesian primitive geometry leaves implemented |
 | G | Geometry and figure-eight admission | Declared embedding contract | Strong GVEC N2-12 is now primary; QUASR is a weak-shape control |
 | V | Discretization and physical qualification | Qualified input and K | Explicit-edge ingestion and optional radial meshes implemented; uniform degree-1 criterion unmet |
 | D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse passes; generic equilibrium response unavailable |
 | S | Sparse backend selection | Reliable backend capabilities | Native LDLT lacks public inertia reliability API; retain block-LAPACK |
 | P | Performance qualification | Accepted workload and accuracy | Pressure reverse and Cartesian value benchmarks implemented and measured |
-| R | Reproducible release and evidence | Applicable gates above | 178 native, 388 Python and nine Enzyme gates pass locally; new Linux generation run pending |
+| R | Reproducible release and evidence | Applicable gates above | 178 native, 388 Python and nine Enzyme gates pass locally; hosted CI and four Linux generation checks pass |
 
 ### K: FortSym-generated kernels
 
@@ -247,10 +319,12 @@ At `8e51c65`, all 178 native tests and 388 Python tests pass with two OpenMP
 threads; two optional Python checks are skipped. The isolated optimized audit
 also passes clean Fo lint, strict Release compilation with array temporaries
 treated as errors, and all 178 default tests. These checks supplement the
-four exact-reproduction and nine Enzyme gates above. New Linux execution was
-unavailable because the permitted host was shutting down; earlier Linux
-evidence applies to its recorded revisions. Hosted generation checks remain
-required for this new wave.
+four exact-reproduction and nine Enzyme gates above. Direct execution on the
+permitted Linux host was unavailable while it was shutting down. The hosted
+[Linux generation run](https://github.com/itpplasma/GLISS/actions/runs/38973903951)
+subsequently passes all four reproduction tests at `8e51c65`. Hosted CI,
+documentation and macOS wheels also pass at `8e51c65` and the documentation-only
+`fa72f97`. These software gates do not complete A0–A5 physical acceptance.
 
 The first wave passed 175 GNU 16.1 Release tests with
 `-O3 -Werror=array-temporaries`, 332 Python tests with two optional skips, and
