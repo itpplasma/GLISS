@@ -215,9 +215,25 @@ The same physical x/eta coefficients are retained in normalized-flux
 coordinates; Cartesian displacement changes with the equilibrium geometry.
 This is one source-resolution control, not a new eigenpair or continuum
 convergence result. The two conditional CAS3D solves are not executed.
-Next separate native-source near-axis force error from full-to-half-grid
-conversion and public radial reconstruction, then repair the demonstrated
-cause and repeat these unchanged physical gates before the frozen CAS3D pair.
+Identify and repair the cause, then repeat these unchanged physical gates
+before the frozen CAS3D pair.
+
+[Matching-shell reconstruction diagnostics](benchmarks/cas3d_envelope/reconstruction_comparison.json)
+compare four flux surfaces s=1/288, 2/288, 4/288 and 8/288. With native stored
+current, Jacobian-weighted characteristic force is 1.29e-4 to 2.66e-4.
+An independent continuous native-wout field gives 2.54e-4 to 6.31e-4;
+the public flux/Cartesian-spline reconstruction gives
+0.03343/0.03097/0.01922/0.0006424. Public/native-continuous ratios are
+52.97/88.57/38.55/2.53. Native interpolation has nonzero divergence and
+metric mismatches, and its 64x64 angular grid differs from the public 192x192
+grid; this localizes a substantial extra reconstruction discrepancy without
+qualifying the source or identifying a specific production defect.
+The installed BOOZ reader's odd-mode sqrt(s) staggering is correct on both
+frozen sources. Replacing only low-mode parity factors with full |m|/2
+factors worsens force on all four shells by factors 2.33 to 125.93;
+independent baseline values/fields match the native trace, so that proposed
+repair is rejected. Next separate BOOZ geometry, Cartesian Fourier truncation
+and continuous radial reconstruction, retaining the failed whole-support gates.
 
 The old synthetic 70-envelope/139-label run measures scaling. A literal paper
 L139 prefix would contain 139 or 140 envelopes and 277 or 279 labels before
@@ -452,11 +468,11 @@ Source accounting contains
 354 records and still zero completed whole-component equation reviews.
 At published `ddaa8f6`, the isolated Fo audit also passes clean lint, strict
 optimized compilation with array temporaries treated as errors, and all 184
-then-registered tests. At preceding `2e6bf4a`, hosted GNU, Flang, runtime-check,
+then-registered tests. At published `fbb2430`, hosted GNU, Flang, runtime-check,
 Python, lint, format, generation and docs checks pass, as do both macOS native
 builds and all twelve installed-wheel Python/architecture combinations.
 The resident integration
-generation at `649e2f9` passes its nine selected gates;
+generation at `ddaa8f6` passes its eleven selected gates;
 that selected scope is not a second full-suite claim. The immutable Fo driver
 is `454c93dffd513b85bc8274c262a2d5364b20e4acf24c45f6ecd55de1769f2daf`.
 The analytical cylinder identifies two fast/slow branches and the Alfvén

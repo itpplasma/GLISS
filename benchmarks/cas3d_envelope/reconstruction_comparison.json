@@ -1,0 +1,30 @@
+{
+  "status": "MATCHED_SHELL_RECONSTRUCTION_GAP_NO_QUALIFICATION",
+  "public_export_sha256": "8ee85e943ef300a27f25fb6362b7f768277ee5f416ecb58ab4012d31d302d58f",
+  "native_wout_sha256": "d65b781742f7d47a809f05d8e4a2116ad4f9cf60628f2604c18b0174d574f0e1",
+  "physics_archive_sha256": "a567b9a5988de77470cf4a32dfb44197d5ec9ec6324a7fe52f8782e697b5f949",
+  "cartesian_archive_sha256": "70ab721f34bcb2ee436e6ac183233011d0f5a70ebe7d568e9db54117614441f4",
+  "characteristic_length_m": 1.047001192349963,
+  "force_definition": "R=curlB cross B-mu0 p_s grad(s); characteristic=L*sqrt(sum(|J|*|R|^2)/sum(|J|*|B|^4)); RMS=sqrt(sum(|J|*|R|^2)/sum(|J|))",
+  "sampling": {"native":[64,64],"public":[192,192],"radial_factor_control":[96,96],"force_norm":"Jacobian-weighted shell RMS ratio; no radial volume norm"},
+  "shells": [
+    {"s":0.003472222222222222,"native_discrete":0.00026571299386479285,"native_continuous":0.0006312167252527491,"public_continuous":0.033434248384571895,"public_over_native_continuous":52.96793802664892,"factor_control_over_baseline":2.3314861168051797},
+    {"s":0.006944444444444444,"native_discrete":0.00019018461341856863,"native_continuous":0.0003496563346712656,"public_continuous":0.030967691228011046,"public_over_native_continuous":88.56608091235002,"factor_control_over_baseline":9.448515098547741},
+    {"s":0.013888888888888888,"native_discrete":0.00015353486232820484,"native_continuous":0.0004985186956624036,"public_continuous":0.019220073169829193,"public_over_native_continuous":38.55436784430048,"factor_control_over_baseline":28.773492904592448},
+    {"s":0.027777777777777776,"native_discrete":0.00012880999018160413,"native_continuous":0.00025401712075341236,"public_continuous":0.0006424301324780166,"public_over_native_continuous":2.5290820184583422,"factor_control_over_baseline":125.93011693654591}
+  ],
+  "native_continuous_interpolation": "All native harmonics; parity-factored not-a-knot cubics for full-grid R/Z and half-grid contravariant B; actual analytic Cartesian curl, no radial second geometry derivative needed",
+  "native_continuous_divergence_rms_T_per_m": [0.002781445277555772,0.0013307590782153818,0.00042513520968634694,0.00020701054370785395],
+  "native_metric_limit": "Relative Jacobian mismatch up to 0.001329, nonzero divergence and unconverged 64x64 sampling prevent physical source qualification",
+  "radial_factor_control": {"change":"Only |m|<=8 factors changed from 0/0.5/1 to |m|/2; higher modes, profiles and flux fixed","fd_step":1e-05,"protocol_sha256":"70e2ddb53c9464cc0256ea499382c243164e6c498721e7bc73c2b617b9ce8181","elapsed_seconds":60.492302041035146,"baseline_native_relative_rms_maxima":{"B":1.3001002272303854e-15,"basis":6.175199406431853e-16,"J":9.785520753345978e-16,"gradient_FD":7.287854904753215e-07,"curl_FD":9.606933528647826e-06},"conclusion":"Worsens all four shells; rejected as a repair, with no production change"},
+  "BOOZ_reader_audit": "Installed 0.0.9 handles odd-m sqrt(s) staggering correctly within 3.33e-16 m on both frozen sources; no upstream parity defect found",
+  "receipts": {
+    "matched_shells": {"path":"/tmp/gliss-ns289-matched-shell-force-20261017/four_shell_comparison_block.json","sha256":"13705e6607c457e1834f78792d740efc34d40dae2a730b7013da3e5bae5d9bb7"},
+    "native_discrete": {"path":"/tmp/gliss-cas3d-ns289-reconstruction-diagnosis-20261017/receipt.json","sha256":"b093bcf5db2c08b6fd0ed9926daabadc36db6b51135ac09e99517ba5fb5a78be"},
+    "native_continuous": {"path":"/tmp/gliss-cas3d-ns289-reconstruction-diagnosis-20261017/continuous-receipt.json","sha256":"75d9f1da43d2c3d81bf7eea1067dc7ce66fe482f95b8675d38aee51e9d039b3b"},
+    "radial_factor_control": {"path":"/tmp/gliss-ns289-radial-factor-control-20261017/report.json","sha256":"168aee996a70dff9670e6541329115471901400bf31b4968579f19f0f8603243"},
+    "BOOZ_reader_audit": {"path":"/tmp/gliss-booz-interpolation-audit-20261017/receipt.json","sha256":"7f5dcb1cfb0dce905054c1bdad32e5b280680d959c6c9731d8d76dd59e81a6fd"}
+  },
+  "interpretation": "A substantial extra force discrepancy occurs downstream of this specified continuous native-wout interpolant; BOOZ, public Cartesian projection and GLISS continuous reconstruction are not yet isolated",
+  "limits": "Matching flux shells, different physical-angle charts and angular grids. Native continuous field is not exactly solenoidal. Four shells and one sensitivity control establish no continuum, whole-support, CAS3D or source qualification. Original full-support gates remain FAIL."
+}

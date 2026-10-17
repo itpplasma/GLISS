@@ -146,6 +146,18 @@ establishes neither continuum convergence nor a new eigenvalue. The preserved
 timeout, extended retry and matched receipts are linked by SHA256; the two
 conditional CAS3D comparisons remain unexecuted.
 
+[reconstruction_comparison.json](reconstruction_comparison.json) compares
+four matching flux shells using native stored current, an independent
+continuous native-wout field and the public Cartesian reconstruction.
+Public/continuous-native characteristic-force ratios are 52.97, 88.57,
+38.55 and 2.53. Different angular grids, nonzero native-interpolant divergence
+and metric mismatches prevent source qualification. A fixed low-mode radial
+factor substitution worsens every shell and is rejected; no numerical code
+is changed. BOOZ's installed odd-mode staggering agrees with its source.
+Separating transform, Cartesian truncation and radial interpolation remains
+necessary; neither the four shells nor these diagnostics pass the
+whole-support physical gates.
+
 ## Historical synthetic scaling result
 
 `l139_manifest.json`: base mode (1, 1), angular grid 64 x 64, 100 radial
