@@ -32,7 +32,7 @@ jobs:
       - name: Install elan from a pinned bootstrap source
         run: |
           curl --proto '=https' --tlsv1.2 -sSfL \
-            https://raw.githubusercontent.com/leanprover/elan/13e8ade06344711b0a99be2374483872ac70d036/elan-init.sh \
+            https://raw.githubusercontent.com/leanprover/elan/58e8d545e33641f66dbcbd22c4283109e71757be/elan-init.sh \
             -o "$RUNNER_TEMP/elan-init.sh"
           sh "$RUNNER_TEMP/elan-init.sh" -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"

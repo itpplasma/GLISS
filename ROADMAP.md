@@ -694,6 +694,10 @@ with warnings treated as errors, no admitted proofs and no added axioms. The
 printed main-result dependencies are the standard `propext`, `Classical.choice`
 and `Quot.sound`. A source-bound [receipt](benchmarks/feec/lean/validation.json)
 records the local build; the new hosted workflow repeats that bounded proof.
+Its first hosted attempt stopped before Lean because the bootstrap URL used
+an annotated tag object. The URL now uses the independently verified peeled
+elan commit `58e8d545e33641f66dbcbd22c4283109e71757be`; downloading that exact
+script and shell/YAML checks pass. Hosted proof completion is still pending.
 These are first-cell coefficient/polynomial and interior-obstruction results,
 not a complete global weighted FEEC or MHD stability proof.
 
