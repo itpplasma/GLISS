@@ -596,6 +596,9 @@ CTest cases at `ddaa8f6` pass in the strict GNU 16 Release build. All 407
 Python tests pass with two optional skips and BOOZ_XFORM installed.
 The new global resonant-pinch spectrum test adds a seventh registered native
 test, with all 36 focused cases passing its strict GNU 16 CTest run.
+At `f468362`, the isolated Fo audit passes clean lint, strict optimized
+compilation with array temporaries treated as errors, and all 185 default
+native tests (39.77 s test wall time).
 Source accounting contains
 365 records and still zero completed whole-component equation reviews.
 At published `ddaa8f6`, the isolated Fo audit also passes clean lint, strict
@@ -603,8 +606,8 @@ optimized compilation with array temporaries treated as errors, and all 184
 then-registered tests. At published `fbb2430`, hosted GNU, Flang, runtime-check,
 Python, lint, format, generation and docs checks pass, as do both macOS native
 builds and all twelve installed-wheel Python/architecture combinations.
-The resident integration
-generation at `ddaa8f6` passes its eleven selected gates;
+The resident integration generation at `f468362` is healthy and quiescent
+with the new spectrum gate passing (one selected test out of 185);
 that selected scope is not a second full-suite claim. The immutable Fo driver
 is `454c93dffd513b85bc8274c262a2d5364b20e4acf24c45f6ecd55de1769f2daf`.
 The analytical cylinder identifies two fast/slow branches and the Alfvén
