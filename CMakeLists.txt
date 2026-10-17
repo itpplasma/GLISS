@@ -1000,6 +1000,17 @@ if(BUILD_TESTING)
     set_tests_properties(resonant_screw_pinch_energy PROPERTIES
         ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
 
+    add_executable(test_resonant_screw_pinch_spectrum
+        test/resonant_screw_pinch_fixture.f90
+        test/test_resonant_screw_pinch_spectrum.f90)
+    target_link_libraries(test_resonant_screw_pinch_spectrum PRIVATE gliss)
+    set_target_properties(test_resonant_screw_pinch_spectrum PROPERTIES
+        Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/resonant-pinch-mod")
+    add_test(NAME resonant_screw_pinch_spectrum
+        COMMAND test_resonant_screw_pinch_spectrum)
+    set_tests_properties(resonant_screw_pinch_spectrum PROPERTIES
+        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+
     add_library(gliss_test_support test/cylinder_fixture.f90)
     target_link_libraries(gliss_test_support PUBLIC gliss)
 

@@ -1,0 +1,13 @@
+{
+  "scope": "Independent resonant screw-pinch perpendicular ground-root shooting before production assembly measurement",
+  "parameters": {"a": "0.7", "A": "0.8", "Z": "1.2", "p_edge": "17000", "rho": "1.7e-7", "m": 2, "gamma": ["1", "5/3"]},
+  "normalization": "ell = lambda*mu0*rho*a^2/Z^2; mu0=4*pi*1e-7",
+  "root_identification": "Scan upward from rigorous completed-square lower bound toward negative trial upper bound; select first sign-changing wall root and require no interior f nodes at root",
+  "axis_starts": [0.001, 0.0001, 0.00001, 0.000001],
+  "axis_initialization": "regular Frobenius branch through x^2, independent analytic coefficients",
+  "double_oracle": {"method": "DOP853", "rtol": [1e-10, 1e-12, 3e-14], "atol": [1e-12, 1e-14, 1e-15], "max_step": [0.02, 0.01, 0.005]},
+  "independent_precision": "80-digit mpmath fixed-step RK4 with Richardson refinement at 1000/2000/4000 steps, or equivalent higher-order independent integration if needed",
+  "oracle_agreement_relative": 2e-10,
+  "proposed_production_gate": {"meshes": [16, 32, 64], "degrees": [1, 2, 3], "parities": [1, 2], "finest_relative_budgets": [0.001, 0.00001, 0.0000001], "coarse_relative_budget": 0.02, "successive_refinement_ratio_or_plateau": 0.8, "residual_eigenvalue_bound_fraction_of_budget": 0.1, "parity_relative_agreement": 1e-8, "ground_mode": "certified negative bracket enclosing the lowest finite eigenvalue and lying inside independent root window separated from next ODE root"},
+  "limits": "Global production radial FEEC/surface assembly and current certifiers, not toroidal primitive import or a public periodic-cylinder equilibrium path. Infinite negative sequence accumulates at zero, plus exact parallel neutral branch. No claim of a spectral gap at zero."
+}

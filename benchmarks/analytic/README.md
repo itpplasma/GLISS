@@ -100,6 +100,18 @@ energy and physical mass, import refinement and the public solve path. It
 does not assert closed-form toroidal eigenfrequencies, an unstable threshold,
 the straight-cylinder curvature limit or a CAS3D literature comparison.
 
+## Unstable resonant screw-pinch eigenvalue
+
+Run `ctest --test-dir build -R '^resonant_screw_pinch_spectrum$' --output-on-failure`.
+The [resonant pinch benchmark](resonant_pinch/README.md) adds an isolated
+unstable ground eigenvalue to the prescribed negative-energy trials.
+Independent radial shooting and 80-digit integration supply absolute
+physical references; 90 strict symbolic checks establish the energy and ODE
+identities. All 36 global radial FEEC cases pass their frozen refinement,
+parity, accuracy, physical mass-residual and inertia gates. The calculation
+starts at exact cylindrical surface data; toroidal import, public problem
+orchestration and unstable marginal thresholds remain separate work.
+
 ## Historical full-spectrum diagnostic
 
 The default theta-pinch runner prescribes exact straight-cylinder kernel fields

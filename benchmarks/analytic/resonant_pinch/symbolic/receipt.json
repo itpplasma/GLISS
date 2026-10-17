@@ -1,0 +1,89 @@
+{
+  "scope": "Independent scratch exact derivation of resonant cylindrical Bernstein raw energy, physical mass, variational eigen-ODE, square lower bound and leading axis coefficients. No product/upstream edits, promotion, Fo lifecycle, rootfinding, or numerical convergence claims.",
+  "fortsym_revision": "2f0571e39f36a0606b3ae150c8b3b3df92ce6750",
+  "fortsym_prefix": "/tmp/fortsym-ordered-outputs-prefix",
+  "fortsym_dylib_sha256": "9b15f7a685073c315bb62d1a30cd1688e604c7eb7e619571397a1a25044a528c",
+  "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+  "compiler_flags": "Release -O3 -Wall -Wextra -Werror=array-temporaries -fcheck=all",
+  "max_build_jobs": 2,
+  "ctest": {
+    "registered_tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "elapsed_seconds": 0.49,
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  },
+  "assumptions": [
+    "All amplitudes, coefficients and jets are real; explicit native engine real facts.",
+    "r>0, a>0, mu0>0, p_edge>0, gamma>0, rho>0, H>0, S>0, lambda<0, Z!=0, m positive integer; explicit native engine facts.",
+    "Physical radial domain 0<r<=a; axis treated by regular-limit analysis. Upper bound r<=a is a mathematical domain restriction, not encoded as a native interval fact.",
+    "Constant mass density; Btheta=A*r, Bz=Z, pressure=p_edge+A^2*(a^2-r^2)/mu0, resonance k=-m*A/Z.",
+    "Physical S=B^2/Z^2 and H=B^2/mu0+gamma*p. These are positive on the physical domain under the stated signs.",
+    "Canonical energy functional is taken from the independently cited fixture Bernstein no-gravity expression; the proof starts at that functional and the cylindrical vector calculus.",
+    "Rigid conducting wall f(a)=0. No free-boundary or vacuum-interface energy is included.",
+    "Real nonzero Fourier harmonics have common angular factor pi*L; eigenvalue is 2 deltaW/N.",
+    "Indicial coefficient identities are exact; convergence/existence of a full Frobenius series is not established by zero tests."
+  ],
+  "proof": {
+    "suite": "Resonant screw-pinch raw energy and radial ODE",
+    "total": 90,
+    "passed": 90,
+    "proved": 90,
+    "by_probe": 0,
+    "failed": 0
+  },
+  "distinct_identities": 45,
+  "engines": [
+    "native FortSym with explicit assumptions",
+    "SymEngine exact zero-test adapter"
+  ],
+  "conclusions": {
+    "raw_Q_equals_minus_B_D_at_resonance_before_perpendicular_restriction": true,
+    "nonzero_stationary_eigenvalue_forces_perpendicular_displacement": true,
+    "candidate_first_order_system_correct_on_stated_domain": true,
+    "scalar_second_order_divergence_form_equivalent": true,
+    "physical_mass_reduction_exact": true,
+    "exact_square_completion_and_wall_optimized_lower_bound": true,
+    "axis_regular_leading_branch_checked": true,
+    "isolated_eigenvalue_existence_proved": false,
+    "eigenvalue_numerical_values_used": false,
+    "rootfinding_or_convergence_certified": false,
+    "finite_negative_eigenvalue_count_claimed": false,
+    "full_Frobenius_series_convergence_proved": false
+  },
+  "source_anchor": {
+    "path": "/Users/ert/code/gliss/test/test_resonant_screw_pinch_energy.f90",
+    "sha256": "ceb6480c4e8effdda3a60b85cd551f4821a27eb3ea09d6c7e8a3aa03f3601dba",
+    "repo_head_at_receipt": "febaf6a94c0a33b3dc418f05682490f3e04c36ec",
+    "source_lines": {
+      "energy_and_trial_contract": [
+        22,
+        51
+      ],
+      "physical_fields_and_trial": [
+        150,
+        177
+      ],
+      "raw_curl_energy_and_mass": [
+        211,
+        226
+      ]
+    },
+    "attribution": "Bernstein et al. (1958), printed p.23 Eq.3.13, no gravity, as cited in fixture; no new literature retrieval."
+  },
+  "files": {
+    "src/resonant_pinch_proof.f90": "a82d2674a0e5e513da974897a1f0b7111dd6893bd79be6fb3e4a13efc53afd9a",
+    "src/CMakeLists.txt": "c4cf055c92d5eff4c064ec5de82d4078697e50266b6fe24ecdad66372cd8dac0",
+    "derivation.md": "84be5f4f0a457ccd27d02d0ff27e20a4dc41aaffd6e1236bde78b4a89257e3f8",
+    "configure.log": "a7221edbe2b1338cdc75d23d9eef316b40ef4bd5782f98f5fa2a649fce366430",
+    "build.log": "070f9c2ea40dd102a20b83e80e5c07d22c73639a4ad9b792be7f5f44e22a4edf",
+    "ctest.log": "1bbc3cd265d0f8d41cf20642ed544ee2f789d00b6808504b8028415b39d00665",
+    "build/strict-identities.json": "de84e2511e617eebed7c51e6db2f3d1e811c80ed3a81810b614e507d7767816c",
+    "build/Testing/Temporary/LastTest.log": "ae12d905ee40a2a7ae17cf8104b9ee8931e69e59483f4eb9632e4ff3457e91d7",
+    "build/resonant_pinch_proof": "0d84c8329cb9b54b8741793e4c4fbc5399c6d06adabb33824268f6e7cf579ec8"
+  }
+}

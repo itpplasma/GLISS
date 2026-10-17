@@ -1,0 +1,355 @@
+{
+  "status": "PASS",
+  "scope": "Exact resonant screw-pinch prescribed cylindrical fields -> current GLOBAL radial FEEC/surface stiffness and physical mass -> current indexed eigenpair refinement and lowest-inertia certificate; not toroidal primitive import/public global problem orchestration",
+  "source_base": "febaf6a94c0a33b3dc418f05682490f3e04c36ec",
+  "source_sha256": {
+    "test/resonant_screw_pinch_fixture.f90": "90a53b24db1d9b6208873cae9ba4b96717132c2b6b32c376107a30df8c774c68",
+    "test/test_resonant_screw_pinch_spectrum.f90": "e90d4721f0415cfee7b20c6ce6c61f100d3741598aee31656eee414d283aee39"
+  },
+  "library_sha256": "473a85566d726ba772aa88830a58ae2dc57625d9507968fbffff2c720cde0c5e",
+  "native_build": "/var/tmp/gliss-vacuum-torus-build",
+  "compiler": "GNU Fortran16",
+  "flags": "Release -fcheck=all -Warray-temporaries -Werror=array-temporaries; canonical sqrt(s) axis quadrature, split interior quadrature",
+  "runtime": {
+    "OMP_NUM_THREADS": 1,
+    "OPENBLAS_NUM_THREADS": 1,
+    "VECLIB_MAXIMUM_THREADS": 1
+  },
+  "ctest": "resonant_screw_pinch_spectrum",
+  "ctest_seconds": 3.18,
+  "records": [
+    {
+      "gamma_case": 1,
+      "degree": 1,
+      "parity": 1,
+      "cells": 16,
+      "ell": -0.0242703280477994,
+      "relative_error": -0.00332059603395962,
+      "mass_residual_eigenvalue_bound": 5.07694873364093e-14
+    },
+    {
+      "gamma_case": 1,
+      "degree": 1,
+      "parity": 1,
+      "cells": 32,
+      "ell": -0.0243350599261924,
+      "relative_error": -0.00066233241892677,
+      "mass_residual_eigenvalue_bound": 4.70354586813615e-13
+    },
+    {
+      "gamma_case": 1,
+      "degree": 1,
+      "parity": 1,
+      "cells": 64,
+      "ell": -0.0243477722703502,
+      "relative_error": -0.000140290377581787,
+      "mass_residual_eigenvalue_bound": 1.59906008274337e-12
+    },
+    {
+      "gamma_case": 1,
+      "degree": 1,
+      "parity": 2,
+      "cells": 16,
+      "ell": -0.0242703280477994,
+      "relative_error": -0.00332059603395962,
+      "mass_residual_eigenvalue_bound": 5.07694873364093e-14
+    },
+    {
+      "gamma_case": 1,
+      "degree": 1,
+      "parity": 2,
+      "cells": 32,
+      "ell": -0.0243350599261924,
+      "relative_error": -0.00066233241892677,
+      "mass_residual_eigenvalue_bound": 4.70354586813615e-13
+    },
+    {
+      "gamma_case": 1,
+      "degree": 1,
+      "parity": 2,
+      "cells": 64,
+      "ell": -0.0243477722703815,
+      "relative_error": -0.000140290376298924,
+      "mass_residual_eigenvalue_bound": 1.64944836791923e-12
+    },
+    {
+      "gamma_case": 1,
+      "degree": 2,
+      "parity": 1,
+      "cells": 16,
+      "ell": -0.0243511195306887,
+      "relative_error": -2.83259651923107e-06,
+      "mass_residual_eigenvalue_bound": 4.72250325661734e-13
+    },
+    {
+      "gamma_case": 1,
+      "degree": 2,
+      "parity": 1,
+      "cells": 32,
+      "ell": -0.024351185545344,
+      "relative_error": -1.21654702311957e-07,
+      "mass_residual_eigenvalue_bound": 1.96471168576219e-12
+    },
+    {
+      "gamma_case": 1,
+      "degree": 2,
+      "parity": 1,
+      "cells": 64,
+      "ell": -0.0243511883708949,
+      "relative_error": -5.62131241554908e-09,
+      "mass_residual_eigenvalue_bound": 6.11395616525164e-12
+    },
+    {
+      "gamma_case": 1,
+      "degree": 2,
+      "parity": 2,
+      "cells": 16,
+      "ell": -0.0243511195306889,
+      "relative_error": -2.83259651245871e-06,
+      "mass_residual_eigenvalue_bound": 3.96807829830005e-13
+    },
+    {
+      "gamma_case": 1,
+      "degree": 2,
+      "parity": 2,
+      "cells": 32,
+      "ell": -0.0243511855453431,
+      "relative_error": -1.21654738283183e-07,
+      "mass_residual_eigenvalue_bound": 1.62459600276597e-12
+    },
+    {
+      "gamma_case": 1,
+      "degree": 2,
+      "parity": 2,
+      "cells": 64,
+      "ell": -0.0243511883707945,
+      "relative_error": -5.62543667204096e-09,
+      "mass_residual_eigenvalue_bound": 6.94908077971949e-12
+    },
+    {
+      "gamma_case": 1,
+      "degree": 3,
+      "parity": 1,
+      "cells": 16,
+      "ell": -0.0243511885035634,
+      "relative_error": -1.73181913254439e-10,
+      "mass_residual_eigenvalue_bound": 8.29981808395952e-13
+    },
+    {
+      "gamma_case": 1,
+      "degree": 3,
+      "parity": 1,
+      "cells": 32,
+      "ell": -0.0243511885077516,
+      "relative_error": -1.1873835248366e-12,
+      "mass_residual_eigenvalue_bound": 3.37722304253624e-12
+    },
+    {
+      "gamma_case": 1,
+      "degree": 3,
+      "parity": 1,
+      "cells": 64,
+      "ell": -0.0243511885077863,
+      "relative_error": 2.38031816479634e-13,
+      "mass_residual_eigenvalue_bound": 1.19804098665432e-11
+    },
+    {
+      "gamma_case": 1,
+      "degree": 3,
+      "parity": 2,
+      "cells": 16,
+      "ell": -0.0243511885035634,
+      "relative_error": -1.73181913254439e-10,
+      "mass_residual_eigenvalue_bound": 8.29981808395952e-13
+    },
+    {
+      "gamma_case": 1,
+      "degree": 3,
+      "parity": 2,
+      "cells": 32,
+      "ell": -0.0243511885077565,
+      "relative_error": -9.86655201984377e-13,
+      "mass_residual_eigenvalue_bound": 3.22056718402106e-12
+    },
+    {
+      "gamma_case": 1,
+      "degree": 3,
+      "parity": 2,
+      "cells": 64,
+      "ell": -0.0243511885077168,
+      "relative_error": -2.61568544601687e-12,
+      "mass_residual_eigenvalue_bound": 1.45424239684003e-11
+    },
+    {
+      "gamma_case": 2,
+      "degree": 1,
+      "parity": 1,
+      "cells": 16,
+      "ell": -0.0225948423389687,
+      "relative_error": -0.00293826761888238,
+      "mass_residual_eigenvalue_bound": 1.51412715161016e-13
+    },
+    {
+      "gamma_case": 2,
+      "degree": 1,
+      "parity": 1,
+      "cells": 32,
+      "ell": -0.0226486616273719,
+      "relative_error": -0.000563338326355023,
+      "mass_residual_eigenvalue_bound": 5.94515886476892e-13
+    },
+    {
+      "gamma_case": 2,
+      "degree": 1,
+      "parity": 1,
+      "cells": 64,
+      "ell": -0.0226588168846831,
+      "relative_error": -0.000115208691477631,
+      "mass_residual_eigenvalue_bound": 2.00815666563141e-12
+    },
+    {
+      "gamma_case": 2,
+      "degree": 1,
+      "parity": 2,
+      "cells": 16,
+      "ell": -0.0225948423389687,
+      "relative_error": -0.00293826761888238,
+      "mass_residual_eigenvalue_bound": 1.51412715161016e-13
+    },
+    {
+      "gamma_case": 2,
+      "degree": 1,
+      "parity": 2,
+      "cells": 32,
+      "ell": -0.0226486616273719,
+      "relative_error": -0.000563338326355023,
+      "mass_residual_eigenvalue_bound": 5.94515886476892e-13
+    },
+    {
+      "gamma_case": 2,
+      "degree": 1,
+      "parity": 2,
+      "cells": 64,
+      "ell": -0.0226588168847056,
+      "relative_error": -0.000115208690485313,
+      "mass_residual_eigenvalue_bound": 1.86672599320225e-12
+    },
+    {
+      "gamma_case": 2,
+      "degree": 2,
+      "parity": 1,
+      "cells": 16,
+      "ell": -0.0226613885518835,
+      "relative_error": -1.72655624053331e-06,
+      "mass_residual_eigenvalue_bound": 5.24844186746022e-13
+    },
+    {
+      "gamma_case": 2,
+      "degree": 2,
+      "parity": 1,
+      "cells": 32,
+      "ell": -0.0226614264307466,
+      "relative_error": -5.50435870216859e-08,
+      "mass_residual_eigenvalue_bound": 1.60714355106486e-12
+    },
+    {
+      "gamma_case": 2,
+      "degree": 2,
+      "parity": 1,
+      "cells": 64,
+      "ell": -0.0226614276429334,
+      "relative_error": -1.55239698873544e-09,
+      "mass_residual_eigenvalue_bound": 6.96554623505975e-12
+    },
+    {
+      "gamma_case": 2,
+      "degree": 2,
+      "parity": 2,
+      "cells": 16,
+      "ell": -0.0226613885518835,
+      "relative_error": -1.72655624053331e-06,
+      "mass_residual_eigenvalue_bound": 5.24844186746022e-13
+    },
+    {
+      "gamma_case": 2,
+      "degree": 2,
+      "parity": 2,
+      "cells": 32,
+      "ell": -0.0226614264307177,
+      "relative_error": -5.50448640002088e-08,
+      "mass_residual_eigenvalue_bound": 1.62453158633143e-12
+    },
+    {
+      "gamma_case": 2,
+      "degree": 2,
+      "parity": 2,
+      "cells": 64,
+      "ell": -0.0226614276429196,
+      "relative_error": -1.55300616810905e-09,
+      "mass_residual_eigenvalue_bound": 6.9789176835736e-12
+    },
+    {
+      "gamma_case": 2,
+      "degree": 3,
+      "parity": 1,
+      "cells": 16,
+      "ell": -0.0226614276824683,
+      "relative_error": 1.921924841497e-10,
+      "mass_residual_eigenvalue_bound": 9.37201478634013e-13
+    },
+    {
+      "gamma_case": 2,
+      "degree": 3,
+      "parity": 1,
+      "cells": 32,
+      "ell": -0.0226614276780796,
+      "relative_error": -1.46893608388154e-12,
+      "mass_residual_eigenvalue_bound": 3.55145147548443e-12
+    },
+    {
+      "gamma_case": 2,
+      "degree": 3,
+      "parity": 1,
+      "cells": 64,
+      "ell": -0.0226614276784472,
+      "relative_error": 1.47502010605649e-11,
+      "mass_residual_eigenvalue_bound": 1.68038925514126e-11
+    },
+    {
+      "gamma_case": 2,
+      "degree": 3,
+      "parity": 2,
+      "cells": 16,
+      "ell": -0.0226614276824683,
+      "relative_error": 1.921924841497e-10,
+      "mass_residual_eigenvalue_bound": 9.37201478634013e-13
+    },
+    {
+      "gamma_case": 2,
+      "degree": 3,
+      "parity": 2,
+      "cells": 32,
+      "ell": -0.0226614276780796,
+      "relative_error": -1.46893608388154e-12,
+      "mass_residual_eigenvalue_bound": 3.55145147548443e-12
+    },
+    {
+      "gamma_case": 2,
+      "degree": 3,
+      "parity": 2,
+      "cells": 64,
+      "ell": -0.0226614276784323,
+      "relative_error": 1.40929490299868e-11,
+      "mass_residual_eigenvalue_bound": 1.68461000141229e-11
+    }
+  ],
+  "worst_finest_relative_error_by_degree": {
+    "1": 0.000140290377581787,
+    "2": 5.62543667204096e-09,
+    "3": 1.47502010605649e-11
+  },
+  "worst_relative_mass_residual_eigenvalue_bound": 7.433821140119932e-10,
+  "frozen_protocol_sha256": "addfeb3e917a8c355742737614343bbc1f4a6e1b4590493200e2ba8685727489",
+  "initial_historical_axis_result": "native-initial-historical-axis-ctest.log; diagnostic only, superseded by canonical schedule result",
+  "remaining_limit": "Only m=n=2 and gamma1/5/3 isolated unstable ground qualified; no claim of gap at zero, all negative sequence, global toroidal import or CAS3D literature match"
+}

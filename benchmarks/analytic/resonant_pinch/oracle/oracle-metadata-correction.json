@@ -1,0 +1,50 @@
+{
+  "kind": "postmeasurement output-only metadata correction",
+  "recorded_utc": "2026-10-17T07:59:47.580821+00:00",
+  "scope": "Capture rigorous-lower-bound and negative-trial endpoint phases before the accuracy-study loop reassigns lo. Root values, brackets, node counts, studies, precision and all native measurements are unchanged.",
+  "premeasurement_receipt": "oracle-receipt.json",
+  "premeasurement_receipt_sha256": "fb37eeac04e6361ddb2edf999efc6c8b660b1b1416cbfd3a8babde2881785e5f",
+  "premeasurement_archives": {
+    "shoot-premeasurement.py": "3408779424a7fbfd1d5f298c23183ee91c445eda0d78426080f649cd5320601d",
+    "shooting-premeasurement.json": "055ea6da6ac2662d1753369b79004eddc08fcb92f0e51e523c83934222087e26"
+  },
+  "corrected_sources_and_results": {
+    "shoot.py": "1e92c7d0bf2ec11476a85fa2ffc743b4398819fc04ca898ddba3f5dbb1c3ee53",
+    "shooting.json": "be6292e7d527b1e0ffc71f7a9fb2a5ba8702db57782167d28e4d8f9f5bf6e5e7"
+  },
+  "qualified_precision_unchanged": {
+    "precision.py": "f0356bf334bf90cbf1b475e2b8103a2517f9a3e8647e53ef389b36e010a06b49",
+    "precision.json": "57cece0e0cb6b110451651be983a233542ca8291bf398026bf7d60e7d83bee17"
+  },
+  "validation": "One serial shoot.py rerun completed; recursive JSON comparison after removing only ground_endpoint_phases is exactly equal. No native or precision rerun. Corrected script was not frozen before production measurement.",
+  "endpoint_corrections": [
+    {
+      "gamma": 1.0,
+      "previous_values": [
+        3.101825155307015,
+        3.2259558478559223
+      ],
+      "corrected_values": [
+        1.109812140092209,
+        3.2259558478559223
+      ],
+      "previous_first_endpoint_ell": -0.02518955927225902,
+      "corrected_first_endpoint_ell": -0.15390769885067945,
+      "second_endpoint_ell": -0.022690413654060406
+    },
+    {
+      "gamma": 1.6666666666666667,
+      "previous_values": [
+        3.0978751048609814,
+        3.228503020638454
+      ],
+      "corrected_values": [
+        1.098504514272588,
+        3.228503020638454
+      ],
+      "previous_first_endpoint_ell": -0.023561321989568146,
+      "corrected_first_endpoint_ell": -0.15268260929652905,
+      "second_endpoint_ell": -0.021005304735522277
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "original_protocol_sha256": "a8551caa4891424639556f5fc529df6ed0bed29a9040191d017a9a1f2543af99",
+  "current_protocol_sha256": "addfeb3e917a8c355742737614343bbc1f4a6e1b4590493200e2ba8685727489",
+  "change": "Only independent integration axis stability protocol amended before any production measurement; production gates unchanged",
+  "original_shooting": "shoot-initial.py and shooting-initial.json",
+  "original_precision": "precision-uniform-initial.json",
+  "graded_rule": "step<=x/(2m); with irregular eigenvalue -2m/x, RK4 z>=-1 stays inside its negative real stability interval"
+}

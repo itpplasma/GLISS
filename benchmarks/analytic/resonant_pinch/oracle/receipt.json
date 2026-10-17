@@ -1,0 +1,34 @@
+{
+  "status": "independent_ground_oracle_qualified_before_production_measurement",
+  "source_hashes": {
+    "shoot.py": "3408779424a7fbfd1d5f298c23183ee91c445eda0d78426080f649cd5320601d",
+    "precision.py": "f0356bf334bf90cbf1b475e2b8103a2517f9a3e8647e53ef389b36e010a06b49",
+    "protocol.json": "addfeb3e917a8c355742737614343bbc1f4a6e1b4590493200e2ba8685727489",
+    "protocol-original.json": "a8551caa4891424639556f5fc529df6ed0bed29a9040191d017a9a1f2543af99",
+    "protocol-amendment.json": "752e852e3a52026ea37fe138755e09b136760d0c0354984854c7b367f09831f9",
+    "shooting.json": "055ea6da6ac2662d1753369b79004eddc08fcb92f0e51e523c83934222087e26",
+    "precision.json": "57cece0e0cb6b110451651be983a233542ca8291bf398026bf7d60e7d83bee17"
+  },
+  "python": "/Users/ert/code/infra/.venv/bin/python",
+  "versions": {
+    "numpy": "2.5.1",
+    "scipy": "1.18.0",
+    "mpmath": "1.3.0"
+  },
+  "checks": {
+    "DOP853_axis_accuracy_max_relative_drift": 1.25e-14,
+    "graded_RK4_Richardson_ratio": [
+      16.007747771935126,
+      16.003633757883275
+    ],
+    "graded_RK4_DOP853_max_relative_disagreement": 1.52e-15,
+    "graded_RK4_axis_max_relative_drift": 7.6e-17,
+    "ground_identification": "continuous Pruefer phase pi bracketed by completed-square lower and independent negative trial upper bound; first overtone phase2pi separately bracketed"
+  },
+  "initial_diagnostics_only": [
+    "shoot-initial.py",
+    "shooting-initial.json",
+    "precision-uniform-initial.json"
+  ],
+  "remaining_scope": "global production FEEC comparison has not run"
+}

@@ -148,3 +148,10 @@ Applying the explicit corrections reproduces selected native energy to
 `5.27e-10` relatively. This explains the compared forms without resolving the
 missed degree-1 instability. It establishes no variational upper bound,
 continuum convergence or repair by using more quadrature; #35 remains open.
+
+The [weighted derivative-space audit](derivative_space_audit.md) derives an
+exact difference between the current degree-1 and higher-degree physical
+trial spaces. It proposes a derivative-generated eta span and states the
+independent Cartesian oracle and layout work needed to test it. This is a
+candidate investigation, with no implemented repair or demonstrated cause
+of the Solov'ev discrepancy.
