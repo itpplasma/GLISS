@@ -376,6 +376,19 @@ index/tie and solver reviews found no defect within that experiment's scope.
 No production basis change is promoted. The cylinder oracle does not qualify
 the global candidate's Cartesian energy, marginal bracket or convergence.
 
+The [fixed-normal eta-relaxation control](benchmarks/solovev/public/eta_relaxation.json)
+stopped at its frozen replay gate before any least-squares solve. Selected/full
+total-energy and mass replay pass, but compression-channel relative error
+3.55e-10 and pointwise response/matrix relative error 1.14e-6 exceed their
+unchanged 1e-10 budgets. The existing trace shows a compression contraction
+scale of 7.84e8 J against 1134 J of energy, with an axis condition indicator
+of 3.57e9. This identifies an ill-conditioned comparison without providing
+a complete native rounding-error bound or a demonstrated physics defect.
+Before resuming minimization, derive and freeze an absolute, conditioned
+replay error model covering row contraction, transformed assembly and radial
+aggregation. Preserve shared eta values at duplicate quadrature nodes and the
+fixed axis-cell trace. No relaxed-energy sign was determined; #35 stays open.
+
 The [QAS3 source and response audit](benchmarks/qas3/symbolic_current/)
 traces both accessible implementations into stiffness. The current reference
 recipe's fixed DELTAJP=0.04 and GLISS's equilibrium-data-dependent resonance

@@ -162,3 +162,15 @@ degree-1/uniform-64 case, a private dense adapter lowers the baseline from
 `+851.151902` to `+609.269323 +/- 0.008452 s^-2`, with zero negative inertia.
 It therefore still fails #35. The production basis is unchanged; the cylinder
 oracle does not establish global Cartesian-energy or marginal-bracket accuracy.
+
+The [fixed-normal eta-relaxation control](eta_relaxation.json) stopped before
+minimization because its frozen compression-channel and pointwise
+response/matrix replay gates failed. Total selected/full energy and physical
+mass replay pass. The compression contraction scale is `7.84e8 J` against
+`1134 J` of energy, exposing severe cancellation; a complete arithmetic-error
+bound remains unavailable. No relaxed trial, minimum or energy sign was
+computed. Resume only after establishing a conditioned replay error model,
+while sharing eta at duplicate midpoint/Gauss nodes and preserving the axis
+cell. Interior sample interpolation would realize a discrete trial, but would
+not by itself validate continuously integrated energy. No tolerance or #35
+criterion was changed.
