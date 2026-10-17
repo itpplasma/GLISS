@@ -6,13 +6,16 @@ proves its exact kernel and dimension, distinguishes accepted custom powers
 from physical defaults, and derives the axis normalization and wall-generator
 requirements. It does not establish a Solov'ev repair.
 
-The native CMake/CTest suite checks 13 identities strictly, with zero numerical
-probes: one unfactored derivative identity with native FortSym, and six
+The current native CMake/CTest suite checks 14 identities strictly, with zero
+numerical probes: the original unfactored derivative identity and six
 normalized or algebraic identities with both native FortSym and SymEngine.
+The additional SymEngine check exercises the repaired exponent normalization;
+its [validation receipt](repair-validation.json) records the tested source,
+repair patch and library separately from the historical evidence.
 The function-space rank and trace conclusions follow from the written
 mathematical argument, rather than numerical ranks or the identity count.
 
-With the repository-pinned FortSym installed, reproduce with:
+With a FortSym build containing the recorded repair installed, reproduce with:
 
 ```sh
 cmake -S benchmarks/solovev/public/symbolic_derivative/src \
@@ -22,9 +25,12 @@ cmake --build /tmp/gliss-weighted-derivative-proof --parallel 2
 ctest --test-dir /tmp/gliss-weighted-derivative-proof --output-on-failure
 ```
 
-The original [receipt](receipt.json) binds sources, library and results from
-the isolated execution. Its build and diagnostic log paths refer to that
-execution directory; they are not required to reproduce the committed suite.
-The audit records unsuccessful unfactored normalizations separately from the
-proved identities, including an inconsistent SymEngine NONZERO verdict. No
-failed normalization is treated as a disproof or as evidence for a repair.
+The original [receipt](receipt.json), [13-check result](strict-identities.json)
+and [audit](audit.md) remain the frozen evidence from FortSym `2f0571e`. Their
+source hashes refer to that historical source, retained in Git history; the
+new validation records the four-line source addition and the 14-check result.
+Build and diagnostic log paths in the original receipt refer to its isolated
+execution directory and are not required to reproduce the current suite.
+The audit's unsuccessful unfactored normalizations describe that earlier
+execution, including the inconsistent SymEngine NONZERO verdict. They are
+not treated as mathematical disproofs or rewritten as successful checks.

@@ -53,6 +53,10 @@ program weighted_derivative_proof
         'unfactored weighted product derivative [native]', &
         ds(weight*n) - weight*(ns - alpha*n/s))
     if (checks%failed /= 0) error stop 'unfactored native identity failed'
+    call check_identity(checks, symengine, &
+        'unfactored weighted product derivative [SymEngine]', &
+        ds(weight*n) - weight*(ns - alpha*n/s))
+    if (checks%failed /= 0) error stop 'unfactored SymEngine identity failed'
     ! Divide the derivative identity by its positive real weight,
     ! using d exp(logweight)/ds = weight*d(logweight)/ds.
     call prove('weight-normalized product derivative with real alpha', &

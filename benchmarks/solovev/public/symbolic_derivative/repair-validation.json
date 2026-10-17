@@ -1,0 +1,221 @@
+{
+  "scope": "Consumer validation of repaired FortSym exponent normalization; no production discretization or Solovev repair claim.",
+  "fortsym": {
+    "repair_base_revision": "2f0571e39f36a0606b3ae150c8b3b3df92ce6750",
+    "published_repaired_revision": "bdeb96e0777b1eafcb7c3b4845ca2ba9362a2b00",
+    "publication_status": "Controller published the repaired FortSym source to main. Consumer evidence below is bound independently to exact source, candidate patch and installed library hashes; no fully_verified resident claim is made.",
+    "repair_patch": "/tmp/gliss-fortsym-zero-diagnosis-20261017/candidate.patch",
+    "repair_patch_sha256": "54a3a3c75e48e0b9eb499b3d9df6cbc4d1a02db78e46aa8fde80efa755747c8b",
+    "repair_receipt": "/tmp/gliss-fortsym-zero-diagnosis-20261017/repair-receipt.json",
+    "repair_receipt_sha256": "aa43a00bb379ad9c256c8e7a12a1641a7b7f0515f17afb6bd4a4cdcedfcf037e",
+    "installed_prefix": "/tmp/gliss-fortsym-symbolic-power-prefix",
+    "dylib_sha256": "d402298d89954addd8f9e870b58e544e544eb1d2815ac3ed76eb030693516ad6"
+  },
+  "source_change": "Add one strict SymEngine check of the original unfactored weighted product derivative; retain all thirteen previous checks verbatim.",
+  "current_source_sha256": {
+    "src/weighted_derivative_proof.f90": "31a919f0153642012f7c5e57085bb952838ccb8c16485dbf9256d29cb07b250c",
+    "src/CMakeLists.txt": "f5a23549b338973e706d410b857ca0da2b458b4d3177c76515b92ad55ca802c2",
+    "README.md": "ec5fbd055f6dc9f4ab2b12a8e043468c3117c01f589f532b20dca8d8434cc797"
+  },
+  "proof_domain": "s>0 and real alpha; w=exp(-alpha*log(s)) defines the real positive weight. The original residual is D[w*N]-w*(N_s-alpha*N/s), with D=partial_s+N_s*partial_N.",
+  "engine_scope": "Seven expressions checked strictly with both native FortSym and SymEngine, including the original unfactored residual. Fourteen checks are not fourteen distinct theorems.",
+  "proof": {
+    "suite": "Weighted derivative exact identities and kernels",
+    "total": 14,
+    "passed": 14,
+    "proved": 14,
+    "by_probe": 0,
+    "failed": 0
+  },
+  "native_validation": {
+    "source_directory": "/Users/ert/code/gliss/benchmarks/solovev/public/symbolic_derivative/src",
+    "build_directory": "/tmp/gliss-fortsym-symbolic-power-main-validation/weighted",
+    "source_scope": "Built and checked directly from the exact main-workspace source, not a scratch source copy.",
+    "compiler": "GNU Fortran 16.1.0",
+    "compile_options": "Release -O3 -Wall -Wextra -Werror=array-temporaries -fcheck=all",
+    "max_build_jobs": 2,
+    "test_environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    },
+    "execution_order": "Weighted proof configured, built and tested first; QAS3 proof then configured, built and tested separately.",
+    "ctest": "1/1 PASS; strict_weighted_derivative_identities; 0.28 seconds",
+    "runtime_search_paths": [
+      "/tmp/gliss-fortsym-symbolic-power-prefix/lib",
+      "@loader_path",
+      "/opt/homebrew/Cellar/gcc/16.1.0/lib/gcc/current/gcc/aarch64-apple-darwin25/16",
+      "/opt/homebrew/Cellar/gcc/16.1.0/lib/gcc/current/gcc",
+      "/opt/homebrew/Cellar/gcc/16.1.0/lib/gcc/current"
+    ],
+    "artifact_sha256": {
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/weighted-configure.log": "7a53678e76f80e004e5b2a871c958f8a6e0d3ad2bd1b1e9d2db2442819bd69d3",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/weighted-build.log": "90d9f32f59af94616d57096f7618db59f79e3d97f8316e77c99d3014a796587a",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/weighted-ctest.log": "335607778ba97bc4c7c8f7555036b4c25e39394a348782eeb99a1c2d01a72d2f",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/weighted-linkage.log": "08f7ee025c9e49b492f330fd21d706cb280a1df22907844367f9d45566f6ef7a",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/weighted/strict-identities.json": "dfee4dbe778adc17aa91efd0efc17bab0e0884888f43d5ed744fc702c4e8a9d3",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/weighted/Testing/Temporary/LastTest.log": "af6f080762036bf4345df6283e0658ab13e1b625f74f6b7ef4b8b8ccf15a0de9",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/weighted/CMakeCache.txt": "6f9a638925b4c2daae0a68a45f05dda6530524af5a1656b837286af1f54126a7",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/weighted/build.ninja": "f1e4393cb1e9714869c32c60b4cc63c0e1e0bad552a048d56c0a4a7ed1bdc9bd"
+    }
+  },
+  "historical_evidence": {
+    "source_introducing_commit": "8828bb66facda12f03b7ac7636f472aa2b571029",
+    "original_proof_source_sha256": "985242c703df69402ee9fce8e2764689d1043b5378be9045c39658ed8553f5a8",
+    "fortsym_revision": "2f0571e39f36a0606b3ae150c8b3b3df92ce6750",
+    "files_preserved_sha256": {
+      "receipt.json": "7af827fa779a0f9aa9dfcb76d600551264895d4ae3101b6a9938cd0941cc9e4c",
+      "strict-identities.json": "6ead4b6361de1548aade8c422e9e6d650209ab04bb09e737c968a17fe06dca33",
+      "audit.md": "9bf8461425f065f30721487e705f026f9c1f75c8185e45eac4c4d3ac3be3f9ef"
+    },
+    "proof_counts": {
+      "total": 13,
+      "passed": 13,
+      "proved": 13,
+      "by_probe": 0,
+      "failed": 0
+    },
+    "interpretation": "Frozen historical evidence remains unchanged. Its failed unfactored SymEngine normalization is not a mathematical disproof or a successful check on the repaired library."
+  },
+  "limits": "Identity checks validate the displayed algebra. Function-space rank and trace conclusions require the written argument in audit.md; these checks do not establish a physical Solovev repair or numerical spectral convergence.",
+  "affected_qas3_validation": {
+    "source_directory": "/Users/ert/code/gliss/benchmarks/qas3/symbolic_current/src",
+    "build_directory": "/tmp/gliss-fortsym-symbolic-power-main-validation/qas3",
+    "source_sha256": {
+      "/Users/ert/code/gliss/benchmarks/qas3/symbolic_current/src/resonant_response_proof.f90": "b6e4b01a2f871552b57a50d4b69aa2fa395e7af3dd916164e11755afc382ab84",
+      "/Users/ert/code/gliss/benchmarks/qas3/symbolic_current/src/CMakeLists.txt": "a7a3d16c39c449093b2b072009de21428772aab469b79dfee43296e3968837b9"
+    },
+    "proof": {
+      "suite": "Pinned TERPSICHORE and GLISS resonant responses",
+      "total": 54,
+      "passed": 54,
+      "proved": 54,
+      "by_probe": 0,
+      "failed": 0
+    },
+    "ctest": "1/1 PASS; strict_resonant_response_identities; 0.28 seconds",
+    "runtime_search_paths": [
+      "/tmp/gliss-fortsym-symbolic-power-prefix/lib",
+      "@loader_path",
+      "/opt/homebrew/Cellar/gcc/16.1.0/lib/gcc/current/gcc/aarch64-apple-darwin25/16",
+      "/opt/homebrew/Cellar/gcc/16.1.0/lib/gcc/current/gcc",
+      "/opt/homebrew/Cellar/gcc/16.1.0/lib/gcc/current"
+    ],
+    "artifact_sha256": {
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/qas3-configure.log": "c871b6e5a04208305913f22d616be4a7199be1847bfb95c52cbb4a3e94ae1c08",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/qas3-build.log": "0656ba42d45182a9eb087583338c54b4a1d5b8314ca14622a5cc7cee729c4c2a",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/qas3-ctest.log": "0e007130133a9683d2400c06fcaed2a7f13c9300b92487a8d62fc4f15b1b6ff0",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/qas3-linkage.log": "f233a26a666aa0d5c3c9c3d1a75c13ba5e2927849d2e394eaa4ef077ce4d0a1e",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/qas3/strict-identities.json": "452674cbf13c3b831bbb610355b3f81fa1b087a121f4f8e6b632e24dfdbf0434",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/qas3/Testing/Temporary/LastTest.log": "4f77b54768d57dc1731605cf0f21fcc5e547aef43d3292c133c4e6a9269e43d9",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/qas3/CMakeCache.txt": "436b23e4b042183255a8224107a3b76d9e18bcac7dbdf2f978e455c9867517ef",
+      "/tmp/gliss-fortsym-symbolic-power-main-validation/qas3/build.ninja": "38095ac1ec658f7aab0449be2611d920470c3b8a340b05a197bddb0a18b92097"
+    },
+    "interpretation": "Existing 27 rational response identities checked by both engines; source and historical QAS3 receipt are unchanged. No numerical spectra were run."
+  },
+  "main_validation_record": {
+    "path": "/tmp/gliss-fortsym-symbolic-power-main-validation/validation.json",
+    "sha256": "2d1bce0d373c11c501a57ddacdf2cb4d6d62d31a61b26f724f786c54484cb7a0"
+  },
+  "kernel_regeneration": {
+    "comparison_base": "4571277ea970b2f8999b56db3327cef003c9ee65",
+    "method": "Native gliss_regenerate_kernels, gliss_check_generated and five registered codegen CTests against repaired FortSym prefix.",
+    "strict_proved_total": 1064,
+    "by_probe": 0,
+    "ctest": "5/5 PASS; 2.60 seconds",
+    "reports": {
+      "cartesian_field": {
+        "proved": 116,
+        "by_probe": 0,
+        "report": "/tmp/gliss-codegen-symbolic-power/generated-kernels/ctest/cartesian_field/cartesian_field-identities.json",
+        "sha256": "786abafd0be9725a3626d5d3dc739967a6f72117ddde78436f60505866058b43"
+      },
+      "energy": {
+        "proved": 103,
+        "by_probe": 0,
+        "report": "/tmp/gliss-codegen-symbolic-power/generated-kernels/ctest/energy/energy-identities.json",
+        "sha256": "7a59487200785492ed60a222effb4759d35aa70592e453d62e14256b3b00082b"
+      },
+      "geometry": {
+        "proved": 778,
+        "by_probe": 0,
+        "report": "/tmp/gliss-codegen-symbolic-power/generated-kernels/ctest/geometry/geometry-identities.json",
+        "sha256": "4a8ca14ab85a1ec9c430f7a90f674eeeb32c8364d955ab5446aca132c562ba81"
+      },
+      "physical_mass": {
+        "proved": 41,
+        "by_probe": 0,
+        "report": "/tmp/gliss-codegen-symbolic-power/generated-kernels/ctest/physical_mass/physical_mass-identities.json",
+        "sha256": "df547503cb6d0f47b6825b2f108d72bb88db96e7fcbcd3902048e061846b22e0"
+      },
+      "pressure_adjoint": {
+        "proved": 26,
+        "by_probe": 0,
+        "report": "/tmp/gliss-codegen-symbolic-power/generated-kernels/ctest/pressure_adjoint/pressure_adjoint-identities.json",
+        "sha256": "4ea0a724bbd4c9d9de5d8d36382e4ad2dc7ca8c000d8f2610e66e875d6c1bb8b"
+      }
+    },
+    "generated_source_sha256": {
+      "src/generated/gliss_cartesian_field_generated.f90": "095eb8342f683c9eb61ef73d385e97692f557d80a3bfeccba903d45742c8e234",
+      "src/generated/gliss_energy_generated.f90": "c97b23e3013d549018301e2f53f639938f66003ae0a63222e64772aef8c3649d",
+      "src/generated/gliss_geometry_generated.f90": "20ff34be565559175623b844ab6690f67cfb8be605f532849d6ca59d7d529171",
+      "src/generated/gliss_geometry_primal.inc": "2b1fcb17977a6e1b643db71fc28544517082261f28716e47a017791970350823",
+      "src/generated/gliss_physical_mass_generated.f90": "6a808bdd6bb6bcdc7705f0e66b4aed5a8a9eec09f3b12ac55a0cf5bd37309023",
+      "src/generated/gliss_pressure_adjoint_generated.f90": "72ef16c46f21af38bdfecba8bbefc77c1c7a667ba4dfae7ce1ea619ae5821425"
+    },
+    "executable_source_comparison": "All six generated outputs byte-identical to comparison_base after removing whole-line Fortran comments; changes contain revision provenance only.",
+    "log": "/tmp/gliss-symbolic-power-regenerate.log",
+    "log_sha256": "7b5d4ca2ac753998bfb91823ac5904fcba558050269e6f7d04eedcf600d83f44",
+    "verification_limit": "Production numerical behavior is unchanged; previously qualified native runtime checks retain their recorded revisions and scopes."
+  },
+  "controller_fo": {
+    "driver_sha256": "454c93dffd513b85bc8274c262a2d5364b20e4acf24c45f6ecd55de1769f2daf",
+    "verify": "Exit0; static/build/tests/lint stage summary PASS. No test-count inference is made from this summary.",
+    "verify_log": "/tmp/gliss-fortsym-controller-fo-verify.log",
+    "verify_log_sha256": "ed5a2a7eb417d29aa3b81854f8e6f8250c703a76ac96640bafb514591e28bda7",
+    "focused": "fo test test_fortsym_shim_zero --rerun --json:1pass,0fail,0skip",
+    "focused_log": "/tmp/gliss-fortsym-controller-fo-focused.log",
+    "focused_log_sha256": "aafc27e7589d853e0a7be30eab26e0b5c142562d2b268dae08c947e59d65a200",
+    "native_suite_scope": "Upstream repair receipt records121/122 full-native passes plus sole affected reciprocal-oracle replay PASS, covering all122 registered tests; no all-resident coverage claim.",
+    "resident": {
+      "lane": "fortsym-integration",
+      "session": "28927-1792225565-137639000",
+      "generation": "8f59f0cac7eb74b0521b78bb2cc35877e0d2961da504f3fca3f3888446d0f264",
+      "state": "quiescent",
+      "health": "healthy",
+      "gate_required": 1,
+      "gate_passed": 1,
+      "full_required": 122,
+      "full_passed": 1,
+      "fully_verified": false,
+      "scope": "C-ABI zero-test regression only. All five captured source hashes match the published repair.",
+      "status_path": "/tmp/gliss-fortsym-controller-resident-status.json",
+      "status_sha256": "f7a051341f1acdcb7f3e5babfdceb5c95d84f5089fa483f816f76fb2d3ecb4ad"
+    }
+  },
+  "priority_proof_regressions": {
+    "scope": "Existing CAS3D and analytical proof suites checked against repaired FortSym; no numerical spectra.",
+    "cases": [
+      {
+        "suite": "CAS3D metric",
+        "proved": 2,
+        "by_probe": 0,
+        "ctest": "1/1 PASS"
+      },
+      {
+        "suite": "CAS3D interpolation",
+        "proved": 34,
+        "by_probe": 0,
+        "ctest": "1/1 PASS"
+      },
+      {
+        "suite": "Resonant screw pinch",
+        "proved": 90,
+        "by_probe": 0,
+        "ctest": "1/1 PASS"
+      }
+    ],
+    "receipt": "/tmp/gliss-fortsym-symbolic-power-priority-validation/receipt.json",
+    "receipt_sha256": "27ed3c57e49468c9940e179c48bd6fb4c39f91c34075a20a46c358e3a34713da"
+  }
+}

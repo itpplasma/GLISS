@@ -631,6 +631,27 @@ replace a reliable inertia method with pivot-perturbed LU.
 
 ## Integrated evidence and active dependencies
 
+The symbolic-verifier wave pins published FortSym
+`bdeb96e0777b1eafcb7c3b4845ca2ba9362a2b00`. A reproduced adapter defect
+reported an exact weighted-derivative identity as NONZERO after fraction
+folding left symbolic power exponents unexpanded. The upstream repair
+normalizes exponent arithmetic with growth guards while preserving bases and
+branches. All 122 upstream native tests are covered by the full run and its
+sole affected portability-oracle replay; the controller's explicit Fo C-ABI
+regression also passes. Existing standalone lint diagnostics remain recorded
+in the upstream receipt and do not originate in the changed files.
+The [consumer repair receipt](benchmarks/solovev/public/symbolic_derivative/repair-validation.json)
+records 14 strict weighted-derivative checks and 54 strict reference-current
+checks against the repaired library, with zero probes. Existing CAS3D metric,
+CAS3D interpolation and resonant-pinch proof suites also pass their 2, 34 and
+90 strict checks and registered CTests against that library. All five production
+generator suites prove 1,064 identities and their five registered reproduction
+tests pass. Native regeneration changes only revision comments in the six
+generated outputs; their executable Fortran is unchanged. Historical receipts
+retain their original source and dependency revisions. This repairs a concrete
+symbolic-verifier defect; it does not complete the whole-operator or physical
+acceptance gates above.
+
 The analytical/CAS3D waves add six registered native tests. All 184 default
 CTest cases at `ddaa8f6` pass in the strict GNU 16 Release build. All 407
 Python tests pass with two optional skips and BOOZ_XFORM installed.
