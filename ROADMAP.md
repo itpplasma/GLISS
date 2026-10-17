@@ -115,7 +115,14 @@ profiles and boundary. At fixed BOOZ48, retained 18/18 and 144 surfaces their
 characteristic residuals are 0.00150060 and 0.00156457, with pressure-relative
 residuals 7.65% and 7.98%. Both fail the separately frozen 0.001 and 5% physical
 limits. The final source-pair change passes 0.0005, but retained-representation
-convergence is not yet isolated. Vary equilibrium resolution separately from
+convergence is not yet isolated by those controls. A separately frozen 2x2
+retained-22/26 study on both sources improves the final 17/15, retained-26
+case to 0.000874519 characteristic force and 4.458% pressure-relative force.
+It passes both strict sampled limits; source and retained-pair changes pass
+0.0005. The other three individual cases still fail the physical limits.
+This qualifies only the five specified interior radii and aggregate angle
+norms, with no axis/edge or pointwise maximum claim. Run the unchanged CAS3D
+comparison on these improved inputs. Vary equilibrium resolution separately from
 the stability mesh. The original
 profile diagnostic's large maximum is not itself a fractional force error.
 
@@ -140,8 +147,13 @@ With the same 144-surface equilibrium, all sixteen degree-1 radial FE controls
 at 48/96/192/384 cells complete. The final eigenvalue changes are below 0.203%
 and Gauss/midpoint differences below 0.083%. The reported negative count drops
 from two to one at 384 cells while the numerical zero floor grows; the frozen
-mesh gate therefore fails. Diagnose the actual sparse pencil and its marginal
-band before interpreting this as physical inertia loss. All sixteen literature
+mesh gate therefore fails. Independent sparse eigenpairs on six actual L3
+pencils retain two disjoint negative residual intervals. At FE384 the second
+mode is approximately -1.81e-5, inside the official 3.50e-5 marginal band;
+the public count correctly excludes it. No floor or count policy is changed.
+Its Gauss eigenvalue still changes 2.12% on the final mesh pair, so convergence
+of that weaker mode remains unestablished. L5 is outside this independent
+reassembly scope. All sixteen literature
 comparisons still miss the cached digitization bands. The final L5/L3 ratio is
 about 1.3487, with certificate-expanded interval [1.3221,1.3758], versus the
 cached reference interval [1.0451,1.2542]. A common positive reference-length
@@ -211,13 +223,13 @@ issue whose broader requested acceptance remains unmet.
 | ID | Work package | Dependencies | Current execution |
 | --- | --- | --- | --- |
 | A | Analytical and published-reference acceptance, including CAS3D | Independent equations, oracles and qualified inputs | Highest priority; execute A0–A5 above before broader optimization claims |
-| K | Generated physical mathematics | Independent equations and oracle | Mass, magnetic/fluid energy, pressure reverse and Cartesian primitive geometry leaves implemented |
+| K | Generated physical mathematics | Independent equations and oracle | Mass, magnetic/fluid energy, pressure reverse, primitive geometry and Cartesian field/curl leaves implemented; new field parameter AD remains open |
 | G | Geometry and figure-eight admission | Declared embedding contract | Strong GVEC N2-12 is now primary; QUASR is a weak-shape control |
 | V | Discretization and physical qualification | Qualified input and K | Explicit-edge ingestion and optional radial meshes implemented; uniform degree-1 criterion unmet |
 | D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse passes; generic equilibrium response unavailable |
 | S | Sparse backend selection | Reliable backend capabilities | Native LDLT lacks public inertia reliability API; retain block-LAPACK |
 | P | Performance qualification | Accepted workload and accuracy | Pressure reverse and Cartesian value benchmarks implemented and measured |
-| R | Reproducible release and evidence | Applicable gates above | Analytical/CAS3D wave: 182 native, 407 source Python and 382 installed Python checks pass locally; prior unchanged kernels have nine Enzyme and four Linux generation gates |
+| R | Reproducible release and evidence | Applicable gates above | 183 native, 407 source Python, 382 installed Python and five generation gates pass locally; prior unchanged AD kernels have nine Enzyme gates |
 
 ### K: FortSym-generated kernels
 
@@ -234,6 +246,11 @@ issue whose broader requested acceptance remains unmet.
   magnetic components/magnitude and second-form values with local JVP/VJP.
   Preserve range-safe evaluation, both signed charts, frozen NFP/orientation
   and independent all-input derivative and extreme-scale regressions.
+- [x] Generate Cartesian B, its spatial gradient, curl and divergence from
+  primitive jets. Retain independent curved-chart, vacuum-torus, screw-pinch,
+  signed-chart and finite-difference oracles and exact regeneration checks.
+- [ ] Add parameter JVP/VJP and independent AD checks for the new Cartesian
+  field/curl API; spatial differentiation alone does not satisfy this gate.
 - [ ] Preserve independent Cartesian/metric energy oracles; cover all active
   argument directions, both orientations, symmetry, scaling and transpose
   duality. Cross-check symbolic derivatives against Enzyme and step plateaus.
@@ -369,17 +386,17 @@ replace a reliable inertia method with pivot-perturbed LU.
 
 ## Integrated evidence and active dependencies
 
-The analytical/CAS3D waves add four registered native tests. All 182 default
+The analytical/CAS3D waves add five registered native tests. All 183 default
 CTest cases pass in the strict GNU 16 Release build; all 407 Python tests pass
 with two optional skips and BOOZ_XFORM installed. Source accounting contains
-349 records and still zero completed whole-component equation reviews.
-At published `2e6bf4a`, the isolated Fo audit also passes clean lint, strict
-optimized compilation with array temporaries treated as errors, and all 181
-then-registered tests. Hosted GNU, Flang, runtime-check, Python, lint, format,
-generation and docs checks pass at that revision, as do both macOS native
+353 records and still zero completed whole-component equation reviews.
+At published `649e2f9`, the isolated Fo audit also passes clean lint, strict
+optimized compilation with array temporaries treated as errors, and all 182
+then-registered tests. At preceding `2e6bf4a`, hosted GNU, Flang, runtime-check,
+Python, lint, format, generation and docs checks pass, as do both macOS native
 builds and all twelve installed-wheel Python/architecture combinations.
 The resident integration
-generation passes its eight selected gates;
+generation at `649e2f9` passes its nine selected gates;
 that selected scope is not a second full-suite claim. The immutable Fo driver
 is `454c93dffd513b85bc8274c262a2d5364b20e4acf24c45f6ecd55de1769f2daf`.
 The analytical cylinder identifies two fast/slow branches and the Alfvén
@@ -427,6 +444,24 @@ near-zero selection. It verifies active map rank/nullity, mass normalization,
 residuals and certificates after the two reproduced repairs above. Fresh
 corrected-library L3/L5 checks retain the provisional literature discrepancy;
 solver-reporting repairs do not turn it into agreement.
+
+The Cartesian field/curl wave adds 116 exact identities at the same pinned
+FortSym revision: five suites now prove 1,064 identities with zero probes or
+failures, and all five registered reproduction tests pass byte for byte.
+The native point and spline-grid API returns Cartesian B, its spatial
+gradient, curl and divergence. Independent curved-chart, exact vacuum-torus,
+finite-pressure screw-pinch, both-orientation, magnetic-null and range controls
+pass. On 11,520 interior points per archived/m7/m10 export, native positions
+and B agree with independent Python reconstruction to roundoff; three-step
+Cartesian finite differences converge quadratically to the native gradient
+and curl. Native divergence stays below 1.34e-15 T/m. These checks establish
+the sampled representation mathematics, not force balance. Parameter JVP/VJP
+and C/Python exposure for this new API remain open.
+The improved source17/15 retained26 input passes the same native/Python
+parity protocol; the finest curl relative RMS difference is 6.33e-6 and the
+finer-step convergence order is two. Its outer sampled surfaces still exceed
+the aggregate physical limits individually (16.82% pressure-relative residual
+at s=0.85); the aggregate pass must not become an every-surface claim.
 
 The first code wave includes three reproducible generated modules. At FortSym
 `c9b1ec1a0eaf20d5fcde47853498eeb3508715ba`, the strict suites prove 41 mass,

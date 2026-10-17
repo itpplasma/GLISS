@@ -143,5 +143,88 @@
     "interpretation": "Source angular9/7 to13/11 materially improves sampled physical force balance, but13/11 to17/15 at fixed retained18 does not further improve it. The latest source fails both stricter physical targets despite passing the scalar source-pair stability bound. Source-versus-retained-representation attribution remains unresolved. No converter patch or threshold change is justified.",
     "limits": "Five interior radii, uniform-angle RMS; no global, pointwise, axis, edge, volume-weighted, native curl parity, empirical convergence-order or paper-agreement claim. Earlier0.005 protocol and results remain separate, unchanged. No source/converter patch, threshold fit or extra producer solve by measurement worker.",
     "native_parity_scope": "This independent primitive/finite-difference receipt does not include native Cartesian-curl parity results; native worker evidence is separate."
+  },
+  "radial_count_diagnostic": {
+    "status": "DIAGNOSED_CLASSIFICATION_BAND",
+    "production_bug_reproduced": false,
+    "frozen_acceptance": "FAIL retained unchanged",
+    "scope": "Actual L3 coefficient pencils only; four midpoint meshes and final two Gauss meshes.",
+    "diagnosis": "The second distinct negative eigenmode remains below zero on FE384 but lies inside its growing official numerical marginal band. The reported count change from 2 to 1 is consistent with existing public semantics.",
+    "floor_semantics": "negative_count counts eigenvalues strictly below -zero_floor; zero_floor=1024*eps*||K/mass_scale||_inf for this scalar coefficient mass.",
+    "common_floor_diagnostics": {"low":5.582747574843935e-07,"high":3.5032008789295205e-05,"acceptance_changed":false},
+    "original_shared_library_sha256": "9e37ee4f5b6f5fdc52624378194c4acef5a672eb786c2a8cf8e8894fef954f83",
+    "input": {"path":"/private/tmp/gliss-w7x-radial-fixed48-20261017/fixed48_gliss_m18n18_s144.nc","sha256":"36d1941834f078d044f4f52b9a90cf66e9cd871ddc271b0c467729edf631091a"},
+    "method": "Native frozen sparse assembly and block congruence; independent SciPy 1.18 ARPACK/SuperLU CSR shift-invert; compensated original K/mass residual with conservative product-rounding allowance.",
+    "gauss_final_second_mode_relative_change": 0.021188670226295607,
+    "limits": ["No production files changed for this diagnosis; no floor reduction or count override.","No dense global matrix formed; sparse CSR dimension at most 3835, local LDL blocks at most 10.","The original full mesh-count gate remains FAIL. Common-floor comparisons are post-hoc diagnostics only.","L5 was not independently reassembled here; its same reported pattern remains separate evidence.","Second-mode radial convergence is not established merely by a retained negative sign; GaussFE192\u2192384 changes 2.119 percent.","Residual intervals concern stored discrete pencils and exclude assembly, equilibrium-force, interpolation and angular-convergence error."],
+    "receipt_sha256": "3ec062362a60ab2b6b36a4343d5dd15ce9af5561bc18a2922f0db1328b8c9b8c",
+    "receipt_directory": "/tmp/gliss-cas3d-radial-eigen-diagnostic",
+    "runs": [
+      {"case":"midpoint-fe48","quadrature":"cas3d_midpoint","radial_cells":48,"dimension":475,"official_zero_floor":5.582747574843935e-07,"official_negative_count":2,"second_eigenvalue":-1.547842927712038e-05,"second_interval":[-1.5478703620653597e-05,-1.5478154933587166e-05],"second_inside_native_band":false,"K_sha256":"b7c9311ddad60a13933afbd3615d0cbc0d71715841a7158cf10a81a16efb4755","M_sha256":"f8e7fa2943e3658c6f79024d4351fe9c04bdf9c7b3ee4636de2e8ce0e27193af"},
+      {"case":"midpoint-fe96","quadrature":"cas3d_midpoint","radial_cells":96,"dimension":955,"official_zero_floor":2.2081870440092885e-06,"official_negative_count":2,"second_eigenvalue":-1.7719073572347075e-05,"second_interval":[-1.772006667653776e-05,-1.7718080468156388e-05],"second_inside_native_band":false,"K_sha256":"f235f304fe278fb67dd63faa0691ce67e61b92226a2e66ad44135736a18f7b21","M_sha256":"ff0a05cb478f24eea162925e8e11630147032d5bf1b45615df8150811bf93417"},
+      {"case":"midpoint-fe192","quadrature":"cas3d_midpoint","radial_cells":192,"dimension":1915,"official_zero_floor":8.782920244593938e-06,"official_negative_count":2,"second_eigenvalue":-1.8051143568688432e-05,"second_interval":[-1.8055177850585417e-05,-1.8047109286791448e-05],"second_inside_native_band":false,"K_sha256":"6805fe6be862986781fdbbd1dea2e4342ec443584be9833bb36bc7d14d140025","M_sha256":"00cf91b9a1a243406bc047761920a6f3c65fa8b7a827934267ec433fdd56509b"},
+      {"case":"midpoint-fe384","quadrature":"cas3d_midpoint","radial_cells":384,"dimension":3835,"official_zero_floor":3.503200870792791e-05,"official_negative_count":1,"second_eigenvalue":-1.8137565970587002e-05,"second_interval":[-1.8153248695322237e-05,-1.8121883245851767e-05],"second_inside_native_band":true,"K_sha256":"bfdcddc40d321f673c57cb06897c399ae4161b9bd69a560456d0886bc662c32a","M_sha256":"f3da7769e67d2fb263ccde6ce9d03c2ec28a9b79aae64e0abe0a910efcd6cc1e"},
+      {"case":"gauss-fe192","quadrature":"gauss5","radial_cells":192,"dimension":1915,"official_zero_floor":8.782920310952802e-06,"official_negative_count":2,"second_eigenvalue":-1.7655859305777348e-05,"second_interval":[-1.7659877093868385e-05,-1.765184151768631e-05],"second_inside_native_band":false,"K_sha256":"ef083396c10a12c01b98e3f6bf065400af6adc6ce5c7b5bc5ba561f918fa133f","M_sha256":"00cf91b9a1a243406bc047761920a6f3c65fa8b7a827934267ec433fdd56509b"},
+      {"case":"gauss-fe384","quadrature":"gauss5","radial_cells":384,"dimension":3835,"official_zero_floor":3.5032008789295205e-05,"official_negative_count":1,"second_eigenvalue":-1.8038061849835026e-05,"second_interval":[-1.8054235741446265e-05,-1.8021887958223788e-05],"second_inside_native_band":true,"K_sha256":"f23ace5bb77d9f8646ae874606d2cb4091e851f858e964bdc97c6caabc5e2657","M_sha256":"f3da7769e67d2fb263ccde6ce9d03c2ec28a9b79aae64e0abe0a910efcd6cc1e"}
+    ],
+    "matrix_identities_sha256": "0a65c98273e827950ba5fb7a0e159e13fde52774357cc8c14c90ed2ead624986",
+    "scripts": {"radial_dump.f90":"40efab8a3e24229ffba67619e2212ea7150573822d06504726bfd780075c4b93","independent_eigenpairs.py":"2c98d9c6d0ad9ae435c0b6025708e8c191375bcde5ae482eb151ca2a9d416b89","independent_inertia.py":"96ce3d76f0f8ea93d85d1e0d3593a1990883b2c48a582a5dfb8252c4331a3e0c","run_dumps.py":"07de77f1953c597cec3f0b40567882619116602337596025a12b7d8b98bbacb5","run_gauss_dumps.py":"90e5ded29a26e9e0f511b3d517e30c5e5f92f2d830c7f1a22f70741ab3f21300"}
+  },
+  "retained_representation_force": {
+    "producer_freeze_sha256": "cf289a748b3f6fab2579fb820591b0661f31aa156b219ba44546fed6f05367f8",
+    "producer_summary_sha256": "473393a5424185b689fe0eef2d30b2053c5bd89695b5b8440a3ab1a03a9609b5",
+    "force_protocol_sha256": "0f4ae4ed331462e2ac8416afd1105a18eae7936109cd585f26844acfde050892",
+    "force_receipt_sha256": "97b99015c845d7bea029ecf4c331acd2f74f514272ea55a391055bc855bc3953",
+    "force_report_sha256": "c1cf7b686d61bb21795098da1ad7a43ff8278355b67bb6ef6f381f93e6b01bf5",
+    "force_manifest_sha256": "56356889964c6defc8196857217c3614f4cb927270c537600eae9f7829a747cb",
+    "normalization": "L*rms(curl B cross B - mu0 grad p)/rms(|B|^2)",
+    "pressure_relative_normalization": "rms(curl B cross B - mu0 grad p)/rms(mu0 grad p)",
+    "common_length_m": 1.047001192349963,
+    "scope": {"radii":[0.1,0.25,0.5,0.75,0.85],"primary_angular_grid":[48,48],"FD_step":0.0001,"BOOZ":[48,48],"surfaces":144,"physical_target_case":[17,15,26]},
+    "targets_strict_upper_bounds": {"force_strict_upper_bound":0.001,"pressure_relative_strict_upper_bound":0.05,"retained_pair_difference_strict_upper_bound":0.0005,"source_pair_difference_strict_upper_bound":0.0005},
+    "cases": [
+      {"source":[13,11],"retained":22,"export_sha256":"bcf9ccd08bf4dc2c8a28671ae90ad14827c25cd4b2d6812ec0d2453ef300439c","source_wout_sha256":"3037df0febd343206c6573e062237b9e796aa85a2148a61f61cbc022f3d340bc","boozmn_sha256":"1c4c6d2011bb68f21e95448d116516eafa5ddac7636cacebf4c6fbe09c47269f","charforce":0.0012559323281004279,"pressure_relative":0.06402686593130126,"force_pass":false,"pressure_relative_pass":false,"physical_status":"FAIL"},
+      {"source":[13,11],"retained":26,"export_sha256":"6bfbbe83bed816c82f2224472acb84e01d9f56b115e696c994d1f49c84bc1bdf","source_wout_sha256":"3037df0febd343206c6573e062237b9e796aa85a2148a61f61cbc022f3d340bc","boozmn_sha256":"1c4c6d2011bb68f21e95448d116516eafa5ddac7636cacebf4c6fbe09c47269f","charforce":0.0012091657832741397,"pressure_relative":0.06164272847051497,"force_pass":false,"pressure_relative_pass":false,"physical_status":"FAIL"},
+      {"source":[17,15],"retained":22,"export_sha256":"dfedfe2d51435e7c873e4f05cc63391c8d6b9d818bacc357d83c175a45f8a384","source_wout_sha256":"1d2bed1229a6923b81bc4443b75fb4f2e2b1ad1c85377929d1e65d840326c545","boozmn_sha256":"8c45f536c10d72ea47dc9c7e666b4e461fdf299ab2b335ea0e69a823f86a5110","charforce":0.0010017232387646057,"pressure_relative":0.051067215788958085,"force_pass":false,"pressure_relative_pass":false,"physical_status":"FAIL"},
+      {"source":[17,15],"retained":26,"export_sha256":"717be47f1e7d8fc5d3fc2c08ed64da2b5746a055d1f6a66580efa22cfed9c87b","source_wout_sha256":"1d2bed1229a6923b81bc4443b75fb4f2e2b1ad1c85377929d1e65d840326c545","boozmn_sha256":"8c45f536c10d72ea47dc9c7e666b4e461fdf299ab2b335ea0e69a823f86a5110","charforce":0.000874518699029614,"pressure_relative":0.04458240895569213,"force_pass":true,"pressure_relative_pass":true,"physical_status":"PASS"}
+    ],
+    "final_target_evaluation": {"latest_source_retained":[17,15,26],"latest_force":0.000874518699029614,"latest_pressure_relative":0.04458240895569213,"force_pass":true,"pressure_relative_pass":true,"retained_pairs":[{"source":[13,11],"difference":4.67665448262882e-05,"passed":true},{"source":[17,15],"difference":0.00012720453973499163,"passed":true}],"retained_pairs_pass":true,"final_source_pair_difference":0.0003346470842445256,"source_pair_pass":true,"passed":true},
+    "latest_per_radius": [
+      {"s":0.1,"charforce":0.00036994675020083246,"pressure_relative":0.04015047465021308},
+      {"s":0.25,"charforce":0.0006876261330630105,"pressure_relative":0.027339274774958344},
+      {"s":0.5,"charforce":0.0009670661627163818,"pressure_relative":0.03091542640533551},
+      {"s":0.75,"charforce":0.0010484284478379522,"pressure_relative":0.07337266254342123},
+      {"s":0.85,"charforce":0.001044398488720738,"pressure_relative":0.16823041211626807}
+    ],
+    "sampled_local_max_normalization": "max(L*|curl B cross B-mu0 grad p|/|B|^2) over sampled points",
+    "latest_sampled_local_max_charforce": 0.004784469998593747,
+    "latest_sampling_checks": {"charforce48":0.000874518699029614,"charforce64":0.0008743900479639711,"charforce96":0.000874388025077821,"pressure_relative96":0.044575747280420484,"angular48_to96_difference":1.3067395179301462e-07,"angular64_to96_difference":2.0228861500378587e-09,"fd32_steps":[0.001,0.0003,0.0001],"fd32_charforce":[0.0008711100391956488,0.000872448151314482,0.0008724417660629551]},
+    "prior_failed_retained18_report_sha256": "ceec3f80b06da274005dcac1ea9432ce27d0ed0f137d9f43cd2eea6002d0894b",
+    "producer_integrity": {"frozen_files_unchanged":true,"retained_pair_profiles_signs_bitwise_equal":true,"new_solves_or_transforms":false,"levels_beyond_planned22_26":false,"prior_failures_preserved":true},
+    "limits": ["Uniform-angle sampled aggregate RMS at five interior radii; no volume weighting or convergence-order claim.","Outer per-surface metrics and sampled local maximum exceed aggregate targets; no each-surface, pointwise, global, axis or edge physical qualification."],
+    "native_parity": "Improved-export native parity follow-up is separate; not included in this force block."
+  },
+  "native_cartesian_field_parity": {
+    "scope": "Native Cartesian primitive field/spatial-derivative parity at five interior radii; not physical force balance or parameter AD.",
+    "fortsym_revision": "2f0571e39f36a0606b3ae150c8b3b3df92ce6750",
+    "strict_symbolic_identities": 116,
+    "symbolic_probes": 0,
+    "generated_module_sha256": "232ca5f5304d3cf4c3afdbc8138a3e9ea0e149799945ac4ca5e30d47970ba0b2",
+    "native_parity_archive_sha256": "70ab721f34bcb2ee436e6ac183233011d0f5a70ebe7d568e9db54117614441f4",
+    "radii": [0.1,0.25,0.5,0.75,0.85],
+    "angular_samples": [48,48],
+    "FD_steps": [0.001,0.0003,0.0001],
+    "native_B_FD_subset_points": 320,
+    "receipts": [
+      {"directory":"/tmp/gliss-native-cartesian-parity-20261017","manifest_sha256":"af2e04e21ec4ca638a7f2d18bce326801a111f7bf2d474210140ca5e02952173","report_sha256":"03087d2914c80ada6ff19daae11f0f3dfb89537a4b799927161b96162eb7a806"},
+      {"directory":"/tmp/gliss-native-cartesian-parity-ret26-20261017","manifest_sha256":"7ff9d8e3e3e8bfc49b1addb75fae4f27e6afd58ae5613825abd95e0ddef35959","report_sha256":"cd60a729ccbbf49de29adb08b95afa8859187875fb0cb7c6056dca6d56e13143"}
+    ],
+    "runs": [
+      {"name":"old","samples":11520,"input_sha256":"ddfae0b7a23cdefc0febca8b3071ccdd703f564946e49ed20e9b6ceea8bd1584","position_rms":3.313370259365608e-16,"B_rms":6.718154928780177e-15,"gradient_rms":5.391322486676899e-07,"curl_rms":8.434702125681698e-07,"divmax":1.3322676295501878e-15},
+      {"name":"m7","samples":11520,"input_sha256":"43ee731dea755be49f469d2759da0cc4fb615233a01846408612eb8cba42a0d5","position_rms":4.173204522924321e-16,"B_rms":6.692771857798259e-15,"gradient_rms":5.506961853501489e-07,"curl_rms":3.127932007348312e-06,"divmax":7.771561172376096e-16},
+      {"name":"m10","samples":11520,"input_sha256":"4319c5d62c7c3c78ec5c45e8496245db82f6c3dd6d88a541046ab49e4572e494","position_rms":4.2386481721416283e-16,"B_rms":6.848071682858122e-15,"gradient_rms":4.5180197403394106e-07,"curl_rms":5.746008635588074e-06,"divmax":7.771561172376096e-16},
+      {"name":"source17_ret26_s144","samples":11520,"input_sha256":"717be47f1e7d8fc5d3fc2c08ed64da2b5746a055d1f6a66580efa22cfed9c87b","position_rms":6.225645028929008e-16,"B_rms":7.680875470836314e-15,"gradient_rms":4.190706783569152e-07,"curl_rms":6.32630708261909e-06,"divmax":8.881784197001252e-16}
+    ],
+    "limits": ["Python reconstruction and native B finite differences agree with native spatial jets; parameter JVP/VJP unavailable.","Source17/15 retained26 fine-step convergence is quadratic. Coarse-step stencils cross spline knots; this is an inference about the changed coarse order, not a sole-cause proof.","Axis, edge, global physical force and every-surface acceptance remain outside this scope."]
   }
 }

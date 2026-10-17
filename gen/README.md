@@ -148,3 +148,30 @@ finite differences, Cartesian magnetic vectors, three differentiation steps,
 scalar-contraction reverse checks, both orientations and physical scaling.
 These local derivatives do not supply a force-balanced equilibrium response or
 the complete geometry-to-spectrum design chain.
+
+## Cartesian field and spatial derivatives
+
+`generate_cartesian_field.f90` derives Cartesian `B`, its spatial gradient,
+curl and divergence from the primitive Cartesian position jets and flux
+profiles. The generated field uses `B^theta=-chi_s/(nfp*J)` and
+`B^zeta=-Phi_s/J`, with the existing one-period angular convention. FortSym
+differentiates this definition, applies the reciprocal-basis chain rule and
+proves equivalence with the covariant curl. Its 116 exact identities include
+zero divergence; no numerical probe substitutes are accepted. Ordered stages
+retain `J_q/J` before multiplication to avoid an unnecessary overflow.
+
+The native `primitive_cartesian_field` module exposes point and spline-grid
+evaluators. Packed inputs contain the nine Cartesian position-jet vectors
+listed above, followed by `Phi_s`, `chi_s`, `Phi_ss`, `chi_ss` and `1/nfp`.
+The sixteen outputs are `B(3)`, column-major `gradient(3,3)`, `curl(3)` and
+`divergence`, in tesla and tesla per metre; `gradient(i,j)=dB_i/dx_j`.
+Both regular signed charts and magnetic nulls are supported. Invalid inputs
+return zeroed output and an error status before division by the Jacobian.
+
+Build `gliss_cartesian_field_gen`, or use the shared `gliss_check_generated`
+target and `codegen` CTest label. The directory/report/revision arguments match
+the geometry generator. Ordinary builds compile the committed module without
+FortSym. Independent tests cover curved charts, a true nested vacuum torus,
+a finite-pressure screw pinch and Cartesian finite-difference convergence.
+These are spatial derivatives. Parameter JVP/VJP, C/Python bindings and a
+force-balanced equilibrium design response remain unimplemented for this API.

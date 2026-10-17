@@ -28,8 +28,12 @@ if(GLISS_ENABLE_CODEGEN)
     # toolchain, and compilation plus exact reproduction are the native gates.
     add_custom_target(gliss_regenerate_kernels)
     add_custom_target(gliss_check_generated)
-    foreach(kernel physical_mass pressure_adjoint energy geometry)
-        add_executable(gliss_${kernel}_gen gen/gliss_${kernel}_gen.f90)
+    foreach(kernel physical_mass pressure_adjoint energy geometry cartesian_field)
+        set(generator_source gen/gliss_${kernel}_gen.f90)
+        if(kernel STREQUAL "cartesian_field")
+            set(generator_source gen/generate_cartesian_field.f90)
+        endif()
+        add_executable(gliss_${kernel}_gen ${generator_source})
         target_link_libraries(gliss_${kernel}_gen PRIVATE fortsym::fortsym)
         set(codegen_arguments
             "-DKERNEL=${kernel}"
@@ -100,6 +104,7 @@ endif()
 set_source_files_properties(src/generated/gliss_geometry_primal.inc
     PROPERTIES HEADER_FILE_ONLY TRUE)
 add_library(gliss
+    src/generated/gliss_cartesian_field_generated.f90
     src/generated/gliss_energy_generated.f90
     src/generated/gliss_geometry_generated.f90
     src/generated/gliss_geometry_primal.inc
@@ -142,6 +147,7 @@ add_library(gliss
     src/cartesian_primitive_geometry.f90
     src/primitive_geometry_grid.f90
     src/primitive_equilibrium_spline.f90
+    src/primitive_cartesian_field.f90
     src/radial_feec_complex.f90
     src/perpendicular_kinetic_kernel.f90
     src/symmetric_pivot_inertia.f90
@@ -896,6 +902,13 @@ if(BUILD_TESTING)
     add_executable(test_generated_geometry test/test_generated_geometry.f90)
     target_link_libraries(test_generated_geometry PRIVATE gliss)
     add_test(NAME generated_geometry COMMAND test_generated_geometry)
+
+    add_executable(test_primitive_cartesian_field
+        test/test_primitive_cartesian_field.f90)
+    target_link_libraries(test_primitive_cartesian_field PRIVATE gliss)
+    add_test(NAME primitive_cartesian_field COMMAND test_primitive_cartesian_field)
+    set_tests_properties(primitive_cartesian_field PROPERTIES
+        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
 
     add_executable(test_cartesian_harmonic_spline
         test/test_cartesian_harmonic_spline.f90)

@@ -7,7 +7,7 @@ foreach(required KERNEL GENERATOR_EXE SOURCE_DIRECTORY OUTPUT_DIRECTORY
 endforeach()
 if(NOT KERNEL STREQUAL "physical_mass" AND
         NOT KERNEL STREQUAL "pressure_adjoint" AND NOT KERNEL STREQUAL "energy" AND
-        NOT KERNEL STREQUAL "geometry")
+        NOT KERNEL STREQUAL "geometry" AND NOT KERNEL STREQUAL "cartesian_field")
     message(FATAL_ERROR "Unknown generated kernel: ${KERNEL}")
 endif()
 set(output "${OUTPUT_DIRECTORY}/gliss_${KERNEL}_generated.f90")
