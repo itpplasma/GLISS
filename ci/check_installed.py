@@ -155,6 +155,8 @@ def main():
                 "--ignore=tests/test_closure_registry.py",
                 # Site layout of ci/publish_docs.py, a repository script.
                 "--ignore=tests/test_publish_docs.py",
+                # Repository benchmark runner; covered by the source test job.
+                "--ignore=tests/test_cas3d_benchmark_runner.py",
                 "-q",
                 "-rs",
             ],

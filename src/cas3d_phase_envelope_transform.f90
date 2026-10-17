@@ -229,7 +229,7 @@ contains
         integer, allocatable :: normal_rank(:), eta_rank(:)
         real(dp), allocatable :: weights(:, :, :)
         integer :: allocation_status, block, blocks, column, envelope, width
-        integer :: normal_count, eta_count, mode, support
+        integer :: normal_count, eta_count, mode, support, physical_blocks
 
         ! Degree-one block pencil of the physical problem: block b holds the
         ! normal unknowns of H1 function b (b <= h1_dofs), mode-minor, then
@@ -276,13 +276,16 @@ contains
                 eta_rank(mode) = eta_count
             end if
         end do
-        if (eta_count < 1) return
         blocks = l2_dofs
+        physical_blocks = blocks
+        if (eta_count == 0) physical_blocks = h1_dofs
+        if (physical_blocks < 1) return
         if (.not. allocated(stiffness%widths)) return
-        if (size(stiffness%widths) /= blocks) return
+        if (size(stiffness%widths) /= physical_blocks) return
         if (.not. allocated(mass%widths)) return
+        if (size(mass%widths) /= physical_blocks) return
         if (any(mass%widths /= stiffness%widths)) return
-        do block = 1, blocks
+        do block = 1, physical_blocks
             if (stiffness%widths(block) /= physical_width(block)) return
         end do
         envelope = map%envelope_mode_count
@@ -335,12 +338,15 @@ contains
                 info = cas3d_phase_transform_allocation
                 return
             end if
-            call block_congruence(rows(:, :labeled%widths(block), block), &
-                weights(:, :labeled%widths(block), block), &
-                rows(:, :labeled%widths(block), block), &
-                weights(:, :labeled%widths(block), block), &
-                stiffness%diagonal(block)%values, &
-                labeled%diagonal(block)%values)
+            labeled%diagonal(block)%values = 0.0_dp
+            if (block <= physical_blocks) then
+                call block_congruence(rows(:, :labeled%widths(block), block), &
+                    weights(:, :labeled%widths(block), block), &
+                    rows(:, :labeled%widths(block), block), &
+                    weights(:, :labeled%widths(block), block), &
+                    stiffness%diagonal(block)%values, &
+                    labeled%diagonal(block)%values)
+            end if
             if (block == blocks) cycle
             allocate (labeled%lower(block)%values(labeled%widths(block + 1), &
                 labeled%widths(block)), stat=allocation_status)
@@ -348,12 +354,15 @@ contains
                 info = cas3d_phase_transform_allocation
                 return
             end if
-            call block_congruence( &
-                rows(:, :labeled%widths(block + 1), block + 1), &
-                weights(:, :labeled%widths(block + 1), block + 1), &
-                rows(:, :labeled%widths(block), block), &
-                weights(:, :labeled%widths(block), block), &
-                stiffness%lower(block)%values, labeled%lower(block)%values)
+            labeled%lower(block)%values = 0.0_dp
+            if (block < physical_blocks) then
+                call block_congruence( &
+                    rows(:, :labeled%widths(block + 1), block + 1), &
+                    weights(:, :labeled%widths(block + 1), block + 1), &
+                    rows(:, :labeled%widths(block), block), &
+                    weights(:, :labeled%widths(block), block), &
+                    stiffness%lower(block)%values, labeled%lower(block)%values)
+            end if
         end do
         call identity_blocks(labeled%widths, mass_scale, labeled_mass, info)
         if (info /= cas3d_phase_transform_ok) return

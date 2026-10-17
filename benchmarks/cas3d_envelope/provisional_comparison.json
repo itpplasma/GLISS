@@ -94,6 +94,7 @@
     "profile_binary_sha256": "801aacd286652502a4be1071318187b065d8195a0c5011bc06954b22617a055b",
     "converter_metric_caveat": "The converter uses an interior angular mean and a magnetic-scale denominator regularizer; its 0.079757 value is a different diagnostic."
   },
+  "independent_cartesian_force_diagnostic": {"scope":"Five interior radii, uniform angular samples, independent Cartesian FD with pressure gradient; not volume weighted or an axis/edge check.","normalization":"rms(curl(B) cross B - mu0 grad(p))/rms(|B|^2), per metre; multiply by a declared length for dimensionless residual.","normalized_residual_per_m":0.34327421615002485,"absolute_rms_N_per_m3":1991500.3724371486,"angular_grid":[48,48],"radial_samples":[0.1,0.25,0.5,0.75,0.85],"steps":[0.001,0.0003,0.0001],"angular_refinement_difference_per_m":1.57e-08,"native_aggregate_metric_agreement":3.5e-15,"native_revision":"6ad09730e38d6330a90867af12252322fd35e7e7","native_pointwise_curl_comparison":false,"manifest_sha256":"1af129035d0edf4b2f379a0f506e4e68d1379f8df5df0fb9d1b1da0aff451ad3","report_sha256":"3ee1b1686a4e9f4181b96b749bd1124fceda4b7f9ec338175ed6548159bc8f9b","calculator_sha256":"f0514260194d05b030dbdf06687b8786aaabc7f12e5839247ef668f93f130460","pressure_gradient_calibration":"Independent vacuum torus p=s; errors decrease 9.44e-7,8.50e-8,9.44e-9."},
   "measurement_summary": {
     "max_residual": 1.794178260024633e-10,
     "max_certificate_1e3": 0.00010145567116273441,
@@ -155,5 +156,141 @@
     {"alignment":"terminal","quadrature":"gauss5","parity":2,"L":5,"absolute_error_plotted":0.23092791349096414,"historical_broad_bound_plotted":0.0918125,"historical_broad_window_passed":false,"inside_approx_digitization_interval":false}
   ],
   "corrected_solver_recheck": {"source_patch_base":"a26beee22e4820373bcc03e5aacf447a4b669fd8","production_source_sha256":{"src/marginality_spectrum.f90":"44498bd8cd7f73140d249733df9ebbcd5e069ebddadbd9f2a8ffe328348bafdc","src/cas3d_phase_envelope_transform.f90":"bd9b8922f2a67ae12a7f9dd7a4d04fc47bdf6e796a646058304638a4cceb0d43"},"library_sha256":"6e14e0d52088533dce111391226daf1f4facb2467da2c41335936b8bba01d899","scope":"Corrected solver; same frozen caption/Gauss settings and parity1, L3/L5. Eigenvalues and counts unchanged; reported coefficient floor corrected.","receipt_sha256":"d3357ac25b3f01ea9836220a6275a8d0c3ca1bfde84aaac70e50cb81bd418f22","runs":[{"L":3,"lambda":-0.00019062904335991884,"baseline_delta":0.0,"negative_count":2,"coefficient_zero_floor":5.62005458549051e-07},{"L":5,"lambda":-0.0002613285389956703,"baseline_delta":0.0,"negative_count":2,"coefficient_zero_floor":5.634056884472282e-07}]},
+  "regenerated_equilibrium": {
+    "scope": "Unchanged retained VMEC input; fresh native coefficient convergence, not complete Cartesian physical qualification.",
+    "input_sha256": "16d290d0a22492b29d0559d29cdbb86f1c6442f6b64d2bd883cf7c06bbae1981",
+    "freeze_sha256": "b0d5dfc9bb8e9c0f2f5299692da44d451faa096b0c1307ae4e7c9f43acf74397",
+    "native_build_metadata": "0.5.5.dev120+g1b36dfca2.d20260627",
+    "native_source_provenance_caveat": "Installed native build version differs from current clean source checkout; binary and Python wrapper frozen independently. No current-source build claim.",
+    "wout_sha256": "bce9eeb1470b1c084f335ae5f079b6f02510f65b7e337044ee9d20e7704e0561",
+    "producer_inspection_sha256": "6235451d1711718f47919aaa347b4dcbf8e901bed6bd3ee5e99246efec49050a",
+    "native_force_residuals": {
+      "ier_flag": 0,
+      "fsqr": 9.98688339179716e-13,
+      "fsqz": 1.3830356007003524e-13,
+      "fsql": 7.762929401664829e-15,
+      "ftolv": 1e-12
+    },
+    "profile_and_boundary_checks": {
+      "pressure_half_grid_max_abs_Pa": 8.276401786133647e-11,
+      "pressure_half_grid_max_relative_to_core": 1.2095935264653182e-15,
+      "phi_edge_error_Wb": -8.881784197001252e-15,
+      "ac_all_zero": true,
+      "net_toroidal_current_A": 1.1129453707083847e-10,
+      "rbc_max_abs_m": 1.3877787807814457e-17,
+      "zbs_max_abs_m": 1.431146867680866e-17
+    },
+    "characteristic_length_m": 1.047001192349963,
+    "fresh_m5n4": "Rejected at unchanged truncated-Jacobian gate: 0.176 > 0.05.",
+    "conversion_freeze_sha256": "5867ca3c26557338bd73d883faeb7625281e4b45fa2e36efb15d6fe63dd67e20",
+    "conversion_results_sha256": "4dea2f04f386d7f4638bf8f1a3be434ec1eecdfb2b53bb6fb6f62f3d5510ef47",
+    "profiles_bitwise_identical_m7_m10": true,
+    "profile_comparison_sha256": "7e864c3c9e0987ab96760381ff1a377ff64f815e7ae502ece29a48b4901eaa26"
+  },
+  "fresh_export_force_control": {
+    "normalization": "L*rms(curl B cross B - mu0 grad p)/rms(|B|^2), L=fresh producer Aminor_p; RMS uses uniform angles at five fixed radial surfaces.",
+    "characteristic_length_m": 1.047001192349963,
+    "report_sha256": "606515b067353da137f2748b532f327231272064698a961f844e51f7f526ede0",
+    "calculator_sha256": "f0514260194d05b030dbdf06687b8786aaabc7f12e5839247ef668f93f130460",
+    "primary_angular_grid": [
+      48,
+      48
+    ],
+    "secondary_angular_grid": [
+      64,
+      64
+    ],
+    "radial_samples": [
+      0.1,
+      0.25,
+      0.5,
+      0.75,
+      0.85
+    ],
+    "dimensionless_force_m7n7": 0.07460742058415396,
+    "dimensionless_force_m10n10": 0.01802414977074179,
+    "qualification": "Both exports fail to establish physical convergence; retained-harmonic and transform resolutions covary in this control.",
+    "limits": [
+      "No new producer solve, source repair or tolerance change performed by this diagnostic.",
+      "Independent primitive spline mathematical contract; native comparisons are owned by controller.",
+      "Axis patch and true edge excluded.",
+      "Uniform-angle sampled RMS, not volume-weighted RMS or certified maxima."
+    ]
+  },
+  "fresh_export_comparison": {
+    "scope": "diagnostic controls; no same-deck literature acceptance",
+    "source": {
+      "commit": "6ad09730e38d6330a90867af12252322fd35e7e7",
+      "source_tree_sha256": "2b41e61dea8c32587310205287ac37a5b065a5f9c6dcabd5f2f27a45cf09be62",
+      "source_tree_hash_scheme": "SHA256 of sorted path NUL file-SHA256 LF records",
+      "source_file_count": 138,
+      "tracked_changes": "ROADMAP.md\nbenchmarks/cas3d_envelope/provisional_comparison.json\nci/check_installed.py\nsrc/cas3d_phase_envelope_transform.f90\nsrc/compatible_block_storage.f90\nsrc/marginality_spectrum.f90\ntest/test_cas3d_quotient_spectrum.f90",
+      "runner_sha256": "c07fcce118ddb61e99ea63f4879e43fb7d887953da761069c36b804c2c8779fc"
+    },
+    "library": {
+      "path": "/Users/ert/code/gliss/build/libgliss_c.dylib",
+      "sha256": "9e37ee4f5b6f5fdc52624378194c4acef5a672eb786c2a8cf8e8894fef954f83"
+    },
+    "exports": {
+      "m7n7": {
+        "path": "/private/tmp/gliss-w7x-regeneration-20261017/fresh_gliss_m7n7_s48.nc",
+        "sha256": "43ee731dea755be49f469d2759da0cc4fb615233a01846408612eb8cba42a0d5"
+      },
+      "m10n10": {
+        "path": "/private/tmp/gliss-w7x-regeneration-20261017/fresh_gliss_m10n10_s48.nc",
+        "sha256": "4319c5d62c7c3c78ec5c45e8496245db82f6c3dd6d88a541046ab49e4572e494"
+      }
+    },
+    "freeze_sha256": "81002ba287eae01b562421e23262c7344fffe95a109ee84b26c65d1ed53b695d",
+    "summary_sha256": "45077611bea99c9456eb31599d757d5ced33b430fc8fcb1d9077f75a507afe14",
+    "receipt_sha256": "b2ada1183b6a7a14f209f95c62e21afd73a23f68079abe6f4c5513142a3126e6",
+    "case_count": 26,
+    "completed": 26,
+    "failed": 0,
+    "settings": "Same frozen carrier, mesh, grids, reference length, quadratures and prefix hypotheses as the archived baseline; parity1 for both exports plus m10 caption/Gauss parity2 L3/L5.",
+    "compared_to_digitized_count": 18,
+    "inside_approx_digitization_interval": 0,
+    "historical_broad_window_pass": 12,
+    "max_eigenpair_residual": 1.7978827932897495e-10,
+    "max_certificate_1e3": 0.00010067922478038577,
+    "max_harmonic_refinement_relative_change": 0.0002822458824782433,
+    "all_nullities_zero": true,
+    "limits": [
+      "Implementation-derived partial mode table is not independent Figure6 evidence.",
+      "Rounded cached digitized values and approximate uncertainties were not re-read from primary raster.",
+      "Fresh native VMEC coefficient force convergence is not Cartesian force-balance qualification.",
+      "The old-input comparison changes both producer/export and solver binary; retained as diagnostic, not an isolated causal attribution.",
+      "Only two accepted fresh harmonic resolutions are available; rejected m5n4 is preserved in producer receipts.",
+      "No energy decomposition or mode-subspace comparison: the public coefficient-envelope API exposes neither eigenvector nor decomposed energies."
+    ],
+    "runs": [
+      {"export":"m10n10","prefix":"caption_l","quadrature":"cas3d_midpoint","parity":1,"L":3,"lambda_1e3":-0.12705237879896508,"negative_count":2,"quotient_rank":475,"labeled_nullity":0,"certificate_1e3":2.6964508859227536e-05,"eigenpair_residual":7.731579042357077e-11,"inertia_zero_floor":5.583005915019462e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"65d320ab1d417f82912e999628e6838a12e2d9e9d6777ba2bf49a4a3a09ff1be"},
+      {"export":"m10n10","prefix":"caption_l","quadrature":"cas3d_midpoint","parity":1,"L":5,"lambda_1e3":-0.18220039853779427,"negative_count":2,"quotient_rank":855,"labeled_nullity":0,"certificate_1e3":4.823422903563574e-05,"eigenpair_residual":8.060431604752258e-11,"inertia_zero_floor":5.583057958671692e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"b461247f520a7f2b61a740e1d434eb4d6efecdc4c482471a4600d05ee1062cc1"},
+      {"export":"m10n10","prefix":"caption_l","quadrature":"cas3d_midpoint","parity":1,"L":7,"lambda_1e3":-0.4704091803656148,"negative_count":3,"quotient_rank":1235,"labeled_nullity":0,"certificate_1e3":8.087690568796967e-05,"eigenpair_residual":9.54875426911113e-11,"inertia_zero_floor":5.583130431182824e-07,"receipt_sha256":"bdb08f2993ee270475ddce99c98565d8ee3316192806c30ce102fa1662659e12"},
+      {"export":"m10n10","prefix":"caption_l","quadrature":"gauss5","parity":1,"L":3,"lambda_1e3":-0.1856701816113368,"negative_count":2,"quotient_rank":475,"labeled_nullity":0,"certificate_1e3":2.8633489603476954e-05,"eigenpair_residual":6.066303969736832e-11,"inertia_zero_floor":5.583006511269525e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"64d1e6036a59dbea65bdf431507817ffc1e2f68b7d7c34e514665c111c3daf0c"},
+      {"export":"m10n10","prefix":"caption_l","quadrature":"gauss5","parity":1,"L":5,"lambda_1e3":-0.25402715212079247,"negative_count":2,"quotient_rank":855,"labeled_nullity":0,"certificate_1e3":5.0311704095699855e-05,"eigenpair_residual":8.310748941567311e-11,"inertia_zero_floor":5.583058863055804e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"ecd163808a7680d0b81d32f846da3b4c922694484ba15de3da54779532bcee33"},
+      {"export":"m10n10","prefix":"caption_l","quadrature":"gauss5","parity":1,"L":7,"lambda_1e3":-0.5620171981799693,"negative_count":3,"quotient_rank":1235,"labeled_nullity":0,"certificate_1e3":8.141338557071121e-05,"eigenpair_residual":9.133010425729877e-11,"inertia_zero_floor":5.583130446313164e-07,"receipt_sha256":"97d280cf879ef866d22910708d244d56383136b64c20889fac9929fe49893270"},
+      {"export":"m10n10","prefix":"caption_l","quadrature":"gauss5","parity":2,"L":3,"lambda_1e3":-0.18567018478005987,"negative_count":2,"quotient_rank":475,"labeled_nullity":0,"certificate_1e3":2.8638579442018106e-05,"eigenpair_residual":6.575289733594307e-11,"inertia_zero_floor":5.583006511269524e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"6ef06f2324ab516790e8c745acd3c355b3331f97044001ef049fe870c3d6d059"},
+      {"export":"m10n10","prefix":"caption_l","quadrature":"gauss5","parity":2,"L":5,"lambda_1e3":-0.25402715235106393,"negative_count":2,"quotient_rank":855,"labeled_nullity":0,"certificate_1e3":5.035550729803703e-05,"eigenpair_residual":1.269106948997877e-10,"inertia_zero_floor":5.583058863055802e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"fecf8005c3e671b6035be6e235570fbe36139ec503fa8c3069af9fa5ec313b8f"},
+      {"export":"m10n10","prefix":"terminal_l_plus_one","quadrature":"cas3d_midpoint","parity":1,"L":3,"lambda_1e3":-0.1772010722352977,"negative_count":2,"quotient_rank":665,"labeled_nullity":0,"certificate_1e3":3.873006971806945e-05,"eigenpair_residual":5.6822544956749317e-11,"inertia_zero_floor":5.583021474860732e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"d650f37ac15dc51e939386d9e29223a6591f8092657ab9a03ca06ee162bae229"},
+      {"export":"m10n10","prefix":"terminal_l_plus_one","quadrature":"cas3d_midpoint","parity":1,"L":5,"lambda_1e3":-0.3035949410381707,"negative_count":3,"quotient_rank":1045,"labeled_nullity":0,"certificate_1e3":6.426991709628261e-05,"eigenpair_residual":9.512064683766581e-11,"inertia_zero_floor":5.583105568314656e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":false,"receipt_sha256":"49d4029a1c8dcf44b14031fd6711e009004112e3a4543a7217883892efb9c4c2"},
+      {"export":"m10n10","prefix":"terminal_l_plus_one","quadrature":"cas3d_midpoint","parity":1,"L":7,"lambda_1e3":-0.7286479743624675,"negative_count":4,"quotient_rank":1425,"labeled_nullity":0,"certificate_1e3":0.00010067922478038577,"eigenpair_residual":1.7978827932897495e-10,"inertia_zero_floor":5.583190286331455e-07,"receipt_sha256":"551ed0dca6595e523578aa96fda19e9a39e14bc55f0e48fbbd17dd0fe2014c6e"},
+      {"export":"m10n10","prefix":"terminal_l_plus_one","quadrature":"gauss5","parity":1,"L":3,"lambda_1e3":-0.24812373442361918,"negative_count":2,"quotient_rank":665,"labeled_nullity":0,"certificate_1e3":4.0478224622541895e-05,"eigenpair_residual":8.252919685062653e-11,"inertia_zero_floor":5.583022183521903e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":false,"receipt_sha256":"ff3becd0324f250f5d2d6994ab060eb1b36505f6a57157e8c19a6940f2eaf1d9"},
+      {"export":"m10n10","prefix":"terminal_l_plus_one","quadrature":"gauss5","parity":1,"L":5,"lambda_1e3":-0.3878947487050843,"negative_count":2,"quotient_rank":1045,"labeled_nullity":0,"certificate_1e3":6.554961891692294e-05,"eigenpair_residual":8.90749027159404e-11,"inertia_zero_floor":5.583105609280615e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":false,"receipt_sha256":"ead771d803146e1805772e8cadf4ec07867063abe5f99b8fa30451b5169db7e6"},
+      {"export":"m10n10","prefix":"terminal_l_plus_one","quadrature":"gauss5","parity":1,"L":7,"lambda_1e3":-0.8214115608057574,"negative_count":3,"quotient_rank":1425,"labeled_nullity":0,"certificate_1e3":0.000100406537970705,"eigenpair_residual":1.4470206612837527e-10,"inertia_zero_floor":5.583190149062558e-07,"receipt_sha256":"eccd4579c22958ffd2c3e137157ec1829ff1e09e6b7c7bd1af10d291ba60d4af"},
+      {"export":"m7n7","prefix":"caption_l","quadrature":"cas3d_midpoint","parity":1,"L":3,"lambda_1e3":-0.12701651878819,"negative_count":2,"quotient_rank":475,"labeled_nullity":0,"certificate_1e3":2.694949075637401e-05,"eigenpair_residual":6.444652216739198e-11,"inertia_zero_floor":5.583275242875965e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"be692302622ce74deada7a394df3bb8c08a241c49cbcb0cf03020a0600ae433f"},
+      {"export":"m7n7","prefix":"caption_l","quadrature":"cas3d_midpoint","parity":1,"L":5,"lambda_1e3":-0.1821653299609547,"negative_count":2,"quotient_rank":855,"labeled_nullity":0,"certificate_1e3":4.8231616714933854e-05,"eigenpair_residual":7.968176757562238e-11,"inertia_zero_floor":5.583516369848166e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"283d434873724ad40260f268fd514dd2c0b6618e18b9020c9326752f1efb4ca7"},
+      {"export":"m7n7","prefix":"caption_l","quadrature":"cas3d_midpoint","parity":1,"L":7,"lambda_1e3":-0.47029307297777717,"negative_count":3,"quotient_rank":1235,"labeled_nullity":0,"certificate_1e3":8.090037791871412e-05,"eigenpair_residual":1.2222758479308058e-10,"inertia_zero_floor":5.584635276589127e-07,"receipt_sha256":"ba6b2e2773fe81d9c7c68f5e9a006d980c2e710d6f3c28e21f65706cd8d5f168"},
+      {"export":"m7n7","prefix":"caption_l","quadrature":"gauss5","parity":1,"L":3,"lambda_1e3":-0.1856243493218069,"negative_count":2,"quotient_rank":475,"labeled_nullity":0,"certificate_1e3":2.8630043275899315e-05,"eigenpair_residual":5.919603628567506e-11,"inertia_zero_floor":5.583276466437516e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"8d283c8ce5af7bdc78531fff6369eadfe533e11de45d7b6c815edd1e67e312d2"},
+      {"export":"m7n7","prefix":"caption_l","quadrature":"gauss5","parity":1,"L":5,"lambda_1e3":-0.2539884581769436,"negative_count":2,"quotient_rank":855,"labeled_nullity":0,"certificate_1e3":5.0330740673314444e-05,"eigenpair_residual":1.0323604553462412e-10,"inertia_zero_floor":5.583517529153645e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"b736fe42566d1d0b08438c93289a6f438cea5b1ba3f02b0f4ac9f41ad81aff74"},
+      {"export":"m7n7","prefix":"caption_l","quadrature":"gauss5","parity":1,"L":7,"lambda_1e3":-0.5618961265693072,"negative_count":3,"quotient_rank":1235,"labeled_nullity":0,"certificate_1e3":8.139201265780526e-05,"eigenpair_residual":7.267665857993643e-11,"inertia_zero_floor":5.584635570859302e-07,"receipt_sha256":"249b7fa313bb5ea1db9693d7fbaec1aebdf22c5e1160c296ed2991f535a1a412"},
+      {"export":"m7n7","prefix":"terminal_l_plus_one","quadrature":"cas3d_midpoint","parity":1,"L":3,"lambda_1e3":-0.1771655562655325,"negative_count":2,"quotient_rank":665,"labeled_nullity":0,"certificate_1e3":3.8750898656432885e-05,"eigenpair_residual":7.913035789489757e-11,"inertia_zero_floor":5.583365025634489e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":true,"receipt_sha256":"c7d4c88800b21af365742ea1b908e73f112a865c643c177afa015a24929f74fb"},
+      {"export":"m7n7","prefix":"terminal_l_plus_one","quadrature":"cas3d_midpoint","parity":1,"L":5,"lambda_1e3":-0.303544540967845,"negative_count":3,"quotient_rank":1045,"labeled_nullity":0,"certificate_1e3":6.429791458137656e-05,"eigenpair_residual":1.2419229720914134e-10,"inertia_zero_floor":5.584214305917102e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":false,"receipt_sha256":"8c88bacb6c6c616bb02f969487ed92614b31df9d4e4cd4bedcfdbccc2e79d272"},
+      {"export":"m7n7","prefix":"terminal_l_plus_one","quadrature":"cas3d_midpoint","parity":1,"L":7,"lambda_1e3":-0.7285319030370456,"negative_count":4,"quotient_rank":1425,"labeled_nullity":0,"certificate_1e3":0.00010060061052547186,"eigenpair_residual":1.0030564024561074e-10,"inertia_zero_floor":5.584786663041972e-07,"receipt_sha256":"1029de8557b2572d46c419112357e8d248359d753f964af2029ca273855a5a7e"},
+      {"export":"m7n7","prefix":"terminal_l_plus_one","quadrature":"gauss5","parity":1,"L":3,"lambda_1e3":-0.24808421565887295,"negative_count":2,"quotient_rank":665,"labeled_nullity":0,"certificate_1e3":4.048422791142907e-05,"eigenpair_residual":8.952216333146405e-11,"inertia_zero_floor":5.583366015519825e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":false,"receipt_sha256":"9d02ac9a3c159e44441b372af0d544f2436f64134f87cc055628422f0eb3a1ec"},
+      {"export":"m7n7","prefix":"terminal_l_plus_one","quadrature":"gauss5","parity":1,"L":5,"lambda_1e3":-0.38784236018908474,"negative_count":2,"quotient_rank":1045,"labeled_nullity":0,"certificate_1e3":6.557335984394482e-05,"eigenpair_residual":1.1340662073395454e-10,"inertia_zero_floor":5.584214654659528e-07,"inside_approx_digitization_interval":false,"historical_broad_window_passed":false,"receipt_sha256":"b30905199a36a7a2f96af026f6620f9c2c121584cf875b78340115ea12a4f567"},
+      {"export":"m7n7","prefix":"terminal_l_plus_one","quadrature":"gauss5","parity":1,"L":7,"lambda_1e3":-0.8212915672969392,"negative_count":3,"quotient_rank":1425,"labeled_nullity":0,"certificate_1e3":0.00010037435881648667,"eigenpair_residual":1.1177470162850504e-10,"inertia_zero_floor":5.584786655850854e-07,"receipt_sha256":"be54d15fd92ac8f922e42e614bb47aee88e44bac795e2749a95da04fb6c9f073"}
+    ]
+  },
   "qualification_limits": ["Partial implementation-derived table is not independent Figure6 verification.", "No exact same-deck CAS3D agreement or qualified physical equilibrium is established.", "All 16 approximate digitization comparisons fail; retain every broad-window failure.", "The 24 cases have zero labeled nullity and do not certify colliding/null-space solver behavior."]
 }

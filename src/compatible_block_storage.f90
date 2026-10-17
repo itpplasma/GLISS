@@ -68,8 +68,13 @@ contains
         if (unknowns64 < 1_int64) return
         if (unknowns64 > int(huge(unknowns), int64)) return
         unknowns = int(unknowns64)
-        groups = max(ceiling_ratio(h1_dofs, degree), &
-            ceiling_ratio(l2_dofs, degree))
+        ! A component with no active Fourier modes contributes no blocks.
+        ! In particular, sin(0) can remove every L2 unknown, so the extra
+        ! L2 basis function must not create an empty trailing physical block.
+        groups = 0
+        if (normal_modes > 0) groups = ceiling_ratio(h1_dofs, degree)
+        if (eta_modes + mus > 0) &
+            groups = max(groups, ceiling_ratio(l2_dofs, degree))
         if (groups < 1) return
         allocate (widths(groups), source=0, stat=allocation_status)
         if (allocation_status /= 0) then

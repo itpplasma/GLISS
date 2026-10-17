@@ -18,7 +18,8 @@ program test_cas3d_quotient_spectrum
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use marginality_spectrum, only: compute_phase_envelope_spectrum, &
-                          marginality_normalization_cas3d2mn, marginality_spectrum_ok, &
+        marginality_normalization_cas3d2mn, marginality_spectrum_compute_error, &
+        marginality_spectrum_ok, &
                      marginality_spectrum_result_t, solve_compatible_marginality_problem
     use symmetric_eigensolver, only: solve_symmetric_generalized_allocated, &
                                      symmetric_eigensolver_ok
@@ -40,6 +41,9 @@ program test_cas3d_quotient_spectrum
             call check_near_zero(case_id, parity)
         end do
     end do
+    call check_equilibrium(4, 1)
+    call check_zero_stiffness()
+    call check_physical_normal_only()
     call check_empty_normal_component()
     open (newunit=status, file=filename, status='old')
     close (status, status='delete')
@@ -88,6 +92,10 @@ contains
             else
                 cn(2, 3) = -1.0_dp; ce(2, 2) = 1.0_dp
             end if
+        case (4) ! The zero carrier alone has one inactive component.
+            pm = [0]; pn = [0]; lm = [0]; ln = [0]
+            orientation = [1]; em = [0]; en = [0]
+            allocate (cn(1, 1), ce(1, 1), source=1.0_dp)
         end select
     end subroutine tables
 
@@ -369,6 +377,81 @@ contains
                               4.0_dp*floor), 'independent coefficient residual differs')
         end do
     end subroutine check_near_zero
+
+    subroutine check_zero_stiffness()
+        type(compatible_two_component_problem_t) :: physical
+        type(marginality_spectrum_result_t) :: result
+        character(len=160) :: message
+        integer :: local_info, normalization
+
+        call build_compatible_two_component_problem(equilibrium, [0], [0], &
+            [0.0_dp], 2, 1, 13, 13, physical, local_info, radial_cells=3)
+        call require(local_info == compatible_problem_ok, &
+            'zero-carrier eta-only assembly failed')
+        call require(all(physical%stiffness == 0.0_dp), &
+            'axisymmetric eta(0,0) symmetry mode is not exactly marginal')
+        do normalization = 1, 2
+            call compute_phase_envelope_spectrum(equilibrium, 0, 0, [0], [0], &
+                2, 1, 13, 13, .false., result, local_info, message, &
+                normalization_policy=normalization, radial_cells=3)
+            call require(local_info == marginality_spectrum_ok, &
+                'exact-zero pencil inertia failed')
+            call require(result%negative_count == 0, &
+                'exact-zero pencil has negative inertia')
+            if (normalization == marginality_normalization_cas3d2mn) &
+                call require(result%quotient_rank == 3 &
+                    .and. result%labeled_nullity == 2, &
+                    'eta-only quotient dimensions differ')
+            call compute_phase_envelope_spectrum(equilibrium, 0, 0, [0], [0], &
+                2, 1, 13, 13, .true., result, local_info, message, &
+                normalization_policy=normalization, radial_cells=3)
+            call require(local_info == marginality_spectrum_compute_error &
+                .and. index(message, 'no resolved eigenvalue') > 0, &
+                'exact-zero pencil returned a spurious resolved eigenpair')
+        end do
+        call build_compatible_two_component_problem(equilibrium, [0], [0], &
+            [0.0_dp], 2, 1, 13, 13, physical, local_info, radial_cells=3, &
+            sparse_storage=.true.)
+        call require(local_info == compatible_problem_ok, &
+            'zero-pencil mass-control assembly failed')
+        physical%sparse_mass%diagonal(1)%values(1, 1) = -1.0_dp
+        call solve_compatible_marginality_problem(physical, .false., result, &
+            local_info, message)
+        call require(local_info == marginality_spectrum_compute_error, &
+            'zero stiffness accepted indefinite mass')
+        physical%sparse_mass%diagonal(1)%values(1, 1) = 0.0_dp
+        call solve_compatible_marginality_problem(physical, .false., result, &
+            local_info, message)
+        call require(local_info == marginality_spectrum_compute_error, &
+            'zero stiffness accepted singular mass')
+    end subroutine check_zero_stiffness
+
+    subroutine check_physical_normal_only()
+        type(compatible_two_component_problem_t) :: physical
+        type(marginality_spectrum_result_t) :: result
+        real(dp), allocatable :: values(:), vectors(:, :)
+        character(len=160) :: message
+        integer :: local_info
+
+        call build_compatible_two_component_problem(equilibrium, [0], [0], &
+            [0.0_dp], 1, 1, 13, 13, physical, local_info, radial_cells=3, &
+            density_kg_m3=1.0_dp)
+        call require(local_info == compatible_problem_ok, &
+            'physical normal-only assembly failed')
+        call require(physical%normal_unknowns == 2 &
+            .and. physical%eta_unknowns == 0, 'normal-only topology differs')
+        call solve_symmetric_generalized_allocated(physical%stiffness, &
+            physical%mass, values, vectors, local_info)
+        call require(local_info == symmetric_eigensolver_ok, &
+            'physical normal-only dense oracle failed')
+        call compute_phase_envelope_spectrum(equilibrium, 0, 0, [0], [0], &
+            1, 1, 13, 13, .true., result, local_info, message, radial_cells=3)
+        call require(local_info == marginality_spectrum_ok, &
+            'physical normal-only sparse solve failed')
+        call require(abs(result%lowest_eigenvalue - values(1)) &
+            <= max(4.0_dp * result%certificate, 1.0e-9_dp * abs(values(1))), &
+            'physical normal-only eigenpair differs from dense oracle')
+    end subroutine check_physical_normal_only
 
     subroutine check_empty_normal_component()
         type(cas3d_phase_envelope_map_t) :: map

@@ -33,6 +33,7 @@ module marginality_spectrum
         variable_block_tridiagonal_t
     use variable_generalized_solver, only: &
         iterate_variable_generalized_eigenvalue, pencil_roundoff, &
+        validate_variable_pencil, &
         variable_eigenvalue_bound, &
         variable_generalized_inertia, variable_generalized_ok
     use variable_spectrum_analysis, only: analyze_variable_spectrum, &
@@ -509,11 +510,21 @@ contains
         real(dp) :: eigenvalue, interval, residual, resolution, shift
         real(dp) :: zero_floor
         integer :: local_info, unknowns
+        logical :: zero_stiffness
 
         result = marginality_spectrum_result_t()
         info = marginality_spectrum_compute_error
         message = "sparse compatible FEEC spectrum analysis failed"
         unknowns = sum(problem%sparse_stiffness%widths)
+        zero_stiffness = sparse_stiffness_is_zero(problem%sparse_stiffness)
+        if (zero_stiffness) then
+            call validate_variable_pencil(problem%sparse_stiffness, &
+                problem%sparse_mass, local_info)
+            if (local_info /= variable_generalized_ok) then
+                message = "sparse compatible FEEC mass is not positive definite"
+                return
+            end if
+        end if
         zero_floor = zero_floor_roundoff &
             * pencil_roundoff(problem%sparse_stiffness, problem%sparse_mass)
         result%zero_floor = zero_floor
@@ -528,7 +539,8 @@ contains
         end if
         result%has_eigenpair = solve_eigenpair
         if (.not. solve_eigenpair) then
-            if (.not. present(negative_count_override)) then
+            if (.not. present(negative_count_override) .and. &
+                    .not. zero_stiffness) then
                 call variable_generalized_inertia( &
                     problem%sparse_stiffness, problem%sparse_mass, &
                     -zero_floor, result%negative_count, local_info)
@@ -544,6 +556,13 @@ contains
             if (present(full_eigenvalues)) allocate (full_eigenvalues(0))
             info = marginality_spectrum_ok
             message = ""
+            return
+        end if
+        if (zero_stiffness) then
+            ! An exact symmetry null space has inertia zero. Factoring an
+            ! artificial subnormal shift can underflow after coefficient
+            ! mass scaling; there is no resolved eigenpair to extract.
+            message = "sparse compatible FEEC pencil has no resolved eigenvalue"
             return
         end if
         call analyze_variable_spectrum(problem%sparse_stiffness, &
@@ -595,6 +614,19 @@ contains
         info = marginality_spectrum_ok
         message = ""
     end subroutine solve_sparse_compatible_problem
+
+    pure logical function sparse_stiffness_is_zero(stiffness) result(zero)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness
+        integer :: block
+
+        zero = .false.
+        do block = 1, size(stiffness%widths)
+            if (any(stiffness%diagonal(block)%values /= 0.0_dp)) return
+            if (block == size(stiffness%widths)) cycle
+            if (any(stiffness%lower(block)%values /= 0.0_dp)) return
+        end do
+        zero = .true.
+    end function sparse_stiffness_is_zero
 
     function valid_compatible_problem(problem) result(valid)
         type(compatible_two_component_problem_t), intent(in) :: problem

@@ -4,13 +4,14 @@ program test_analytical_production_spectrum
     use physical_constants, only: vacuum_permeability
     use symmetric_eigensolver, only: solve_symmetric_generalized_allocated
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
-    use dense_spectrum_support, only: refine_dense_spectrum, &
+    use dense_spectrum_support, only: refine_dense_spectrum, refine_dense_eigenpair, &
         certify_dense_spectrum_orthogonality, certify_dense_spectrum_inertia, &
         diagnose_dense_spectrum
     use variable_block_tridiagonal, only: pack_variable_blocks, &
         variable_block_tridiagonal_t
     use variable_generalized_solver, only: variable_eigenvalue_bound, &
-        variable_generalized_inertia
+        variable_generalized_inertia, variable_generalized_diagnostics, &
+        pencil_roundoff
     implicit none
     real(dp), parameter :: pi = acos(-1.0_dp)
     ! Independently tabulated J_3' zeros; checked with intrinsic Bessel functions.
@@ -143,12 +144,15 @@ contains
         type(fixed_boundary_solver_controls_t) :: controls
         real(dp), allocatable :: dense_k(:, :), dense_m(:, :), work_k(:, :)
         real(dp), allocatable :: work_m(:, :), values(:), vectors(:, :)
-        real(dp), allocatable :: quotients(:), residuals(:), resolutions(:)
+        real(dp), allocatable :: refined_vector(:)
         real(dp) :: slow(3), fast(3), alfven, error(4), lower, upper
         real(dp) :: bound, slow_upper, fast_lower, reference(4)
         real(dp) :: lower_bounds(4), upper_bounds(4)
+        real(dp) :: accuracy_target, gap_target, refined_value, residual
+        real(dp) :: resolution, interval, quotient
         integer :: info, normal, tangential, nslow, nfast, indices(4), i, n
         integer :: widths(1)
+        logical :: replaced
 
         call assemble_exact_cylinder(cells, polynomial_degree, phase, &
             dense_k, dense_m, parameters=parameters, normal_dofs=normal, &
@@ -167,14 +171,7 @@ contains
         call refine_dense_spectrum(stiffness, mass, controls, values, &
             vectors, info)
         call require(info == 0, 'production spectrum refinement failed')
-        call certify_dense_spectrum_orthogonality(mass, vectors, info)
-        call require(info == 0, 'production orthogonality certificate failed')
-        call diagnose_dense_spectrum(stiffness, mass, values, vectors, &
-            quotients, residuals, resolutions, info)
-        call require(info == 0, 'production spectrum diagnostics failed')
-        call certify_dense_spectrum_inertia(stiffness, mass, values, &
-            residuals, resolutions, info)
-        call require(info == 0, 'production gap inertia certificate failed')
+        call certify_spectrum(stiffness, mass, values, vectors)
         call references(parameters, slow, fast, alfven)
         call check_inertia(stiffness, mass, 0.0_dp, 0)
         slow_upper = 0.5_dp*(slow(1) + min(alfven, &
@@ -211,6 +208,7 @@ contains
         upper_bounds(2) = lower_bounds(1)
         upper_bounds(3) = lower_bounds(4)
         upper_bounds(4) = 0.5_dp*(fast(2) + fast(3))
+        replaced = .false.
         do i = 1, 4
             lower = lower_bounds(i)
             upper = upper_bounds(i)
@@ -219,22 +217,71 @@ contains
             call variable_eigenvalue_bound(stiffness, mass, &
                 vectors(:, indices(i)), values(indices(i)), bound, info)
             call require(info == 0, 'mass residual bound failed')
-            call require(bound < 0.25_dp*min(reference(i) - lower, &
-                upper - reference(i)), 'branch uncertainty exceeds gap')
-            call require(bound < 0.1_dp*budgets(polynomial_degree) &
-                *reference(i), 'branch uncertainty exceeds accuracy target')
+            accuracy_target = 0.1_dp*budgets(polynomial_degree)*reference(i)
+            gap_target = 0.25_dp*min(reference(i) - lower, upper - reference(i))
+            if (bound >= min(accuracy_target, gap_target)) then
+                ! The dense seed's backward-error stopping rule includes
+                ! roundoff/resolution floors. An isolated physical branch
+                ! must also meet this stricter mass-residual target.
+                write (*, '(a,2i5,a,3es24.15)') 'refine branch/index ', i, &
+                    indices(i), ' bound/accuracy/gap ', bound, &
+                    accuracy_target, gap_target
+                call variable_generalized_diagnostics(stiffness, mass, &
+                    vectors(:, indices(i)), values(indices(i)), quotient, &
+                    residual, resolution, info)
+                call require(info == 0, 'branch seed diagnostics failed')
+                write (*, '(a,3es24.15)') 'seed residual/resolution/roundoff ', &
+                    residual, resolution, pencil_roundoff(stiffness, mass)
+                call refine_dense_eigenpair(stiffness, mass, controls, &
+                    values, indices(i), vectors(:, indices(i)), refined_value, &
+                    refined_vector, residual, resolution, info, interval)
+                call require(info == 0, 'indexed branch refinement failed')
+                call variable_eigenvalue_bound(stiffness, mass, refined_vector, &
+                    refined_value, bound, info)
+                call require(info == 0, 'refined mass residual bound failed')
+                write (*, '(a,4es24.15)') &
+                    'refined bound/residual/resolution/interval ', &
+                    bound, residual, resolution, interval
+                values(indices(i)) = refined_value
+                vectors(:, indices(i)) = refined_vector
+                replaced = .true.
+            end if
+            call require(bound < gap_target, 'branch uncertainty exceeds gap')
+            call require(bound < accuracy_target, &
+                'branch uncertainty exceeds accuracy target')
             call require(values(indices(i)) - bound > lower, &
                 'branch enclosure crosses lower analytical window')
             call require(values(indices(i)) + bound < upper, &
                 'branch enclosure crosses upper analytical window')
             measured(i) = values(indices(i))
         end do
+        ! Certificates on the dense seeds do not certify replaced columns.
+        if (replaced) call certify_spectrum(stiffness, mass, values, vectors)
         measured(5) = sum(values(nslow + 1:n - nfast))/real(normal, dp)
         error = measured(:4)/reference - 1.0_dp
         call require(maxval(abs(error)) < 2.0e-2_dp, &
             'analytical branch error exceeds 2%')
         if (present(relative_errors)) relative_errors = error
     end subroutine check_case
+
+    subroutine certify_spectrum(stiffness, mass, values, vectors)
+        type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
+        real(dp), intent(in) :: values(:)
+        real(dp), contiguous, intent(in) :: vectors(:, :)
+        real(dp), allocatable :: quotients(:), residuals(:), resolutions(:)
+        integer :: info
+
+        call require(all(values(2:) >= values(:size(values) - 1)), &
+            'spectrum order changed after refinement')
+        call certify_dense_spectrum_orthogonality(mass, vectors, info)
+        call require(info == 0, 'production orthogonality certificate failed')
+        call diagnose_dense_spectrum(stiffness, mass, values, vectors, &
+            quotients, residuals, resolutions, info)
+        call require(info == 0, 'production spectrum diagnostics failed')
+        call certify_dense_spectrum_inertia(stiffness, mass, values, &
+            residuals, resolutions, info)
+        call require(info == 0, 'production gap inertia certificate failed')
+    end subroutine certify_spectrum
 
     subroutine check_inertia(stiffness, mass, shift, expected)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass

@@ -64,6 +64,11 @@ sin(0) trial: normal and eta components can have different active mode counts.
 The sparse congruence now accepts their separate active rows. Exact map rank
 is distinguished from stiffness rank, which can also contain physical neutral
 modes. Keep near-zero positive/negative and redundant-label controls.
+Origin-only envelopes now retain valid normal-only physical blocks without
+empty trailing groups. Their positive eigenpairs agree with independent dense
+oracles in both norms. The complementary exact symmetry nullspace returns
+zero negative inertia and no resolved eigenpair; singular or indefinite mass
+is still rejected.
 
 The runner now accepts ordered CSV modes, explicit printed-n sign and L/L+1
 prefix conventions, both supported single parities, separate assembly and
@@ -87,9 +92,30 @@ with available digitized values, eight miss the frozen broad tolerance and
 all miss the approximate digitization band. Caption/Gauss values in recorded
 10^3 lambda units are -0.190629 and -0.261329 versus -0.14613 and -0.16725;
 caption/midpoint gives -0.130592 and -0.187850. Both parities agree, but that
-does not resolve the paper discrepancy. The flux/profile force diagnostic
-also needs interpretation and a characteristic Cartesian force check; its
-large maximum is not directly a fractional magnetic-force error.
+does not resolve the paper discrepancy. An independently calibrated Cartesian
+calculation on five interior radii gives
+rms(curl(B) cross B - mu0 grad(p))/rms(|B|^2) = 0.343274216 per metre.
+Differentiation-step and angular refinements converge; native aggregate
+geometry/field comparisons agree to 3.5e-15. This is an angle-sampled interior
+diagnostic, with no axis/edge, volume weighting or native pointwise-curl check;
+it does not qualify this frozen export. A fresh solve of the unchanged complete
+VMEC input converges below its 1e-12 coefficient-force target and preserves the
+boundary, pressure, flux and zero-current settings. The current converter
+rejects m5/n4 at its unchanged Jacobian gate. Fresh m7/n7 and m10/n10 exports
+pass that gate; their independently sampled characteristic Cartesian force
+residuals are 0.0746074 and 0.0180241 using the producer's minor radius. Neither
+is physically converged. A fixed BOOZ transform with separate retained-harmonic
+refinement is the next control; vary equilibrium resolution separately from
+the stability mesh. The original
+profile diagnostic's large maximum is not itself a fractional force error.
+
+All 26 fresh-export CAS3D controls complete with the original declared
+assumptions. The m7/n7 to m10/n10 eigenvalue drift is at most 0.0283%, with
+unchanged inertia; the fresh input shifts values by 2.15–3.03% from the archived
+export. All 18 comparisons still miss the approximate digitization band.
+For m10/n10, caption/Gauss L3/L5 give -0.185670 and -0.254027; midpoint gives
+-0.127052 and -0.182200. Retain these failed comparisons while investigating
+the independent mode mask, radial trial functions and normalization conventions.
 Preserve the historical L10 discrepancy (-0.88701 versus -0.37148) separately.
 Issue #11 remains open.
 
@@ -315,12 +341,27 @@ The analytical/CAS3D wave adds three registered native tests. All 181 default
 CTest cases pass in the strict GNU 16 Release build; all 407 Python tests pass
 with two optional skips and BOOZ_XFORM installed. Source accounting contains
 348 records and still zero completed whole-component equation reviews.
+At published `6ad0973`, the isolated Fo audit also passes clean lint, strict
+optimized compilation with array temporaries treated as errors, and all 181
+tests. The resident integration generation passes its eight selected gates;
+that selected scope is not a second full-suite claim. The immutable Fo driver
+is `454c93dffd513b85bc8274c262a2d5364b20e4acf24c45f6ecd55de1769f2daf`.
 The analytical cylinder identifies two fast/slow branches and the Alfvén
 cluster for both parities, degrees 1–4 and 8/16/32 cells, with zero negative
 inertia and independently bounded branch enclosures. Finest relative errors
 are 9.76e-5, 3.05e-7, 1.79e-10 and 2.89e-14; six physical variants and exact
 scaling laws also pass. This exercises production surface assembly and the
 full-spectrum certifier, while retaining its prescribed-field scope.
+Generic reference BLAS/LAPACK exposed a degree-4 branch whose seed satisfied
+the solver's backward-error stopping rule but missed the stricter physical
+mass-residual target. A local reference-LAPACK reproduction confirms that
+indexed production refinement reduces the bound from 9.48e-4 to 1.99e-6,
+below the unchanged 7.99e-4 target. The test reruns all spectrum certificates
+after replacing a branch vector; accuracy budgets remain unchanged.
+The installed-distribution verifier excludes the repository-only benchmark
+runner test, which remains in the source suite. A rebuilt wheel passes all
+382 installed tests plus production angular/scaling/derivative checks; a
+fresh sdist builds and loads its bundled library outside the checkout.
 
 The imported exact vacuum torus exercises the native writer/reader, Cartesian
 primitive spline, public fixed-boundary assembly, lowest-mode and full-spectrum
