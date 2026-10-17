@@ -697,9 +697,37 @@ records the local build; the new hosted workflow repeats that bounded proof.
 Its first hosted attempt stopped before Lean because the bootstrap URL used
 an annotated tag object. The URL now uses the independently verified peeled
 elan commit `58e8d545e33641f66dbcbd22c4283109e71757be`; downloading that exact
-script and shell/YAML checks pass. Hosted proof completion is still pending.
+script and shell/YAML checks pass. Hosted run
+[`39030591265`](https://github.com/itpplasma/GLISS/actions/runs/39030591265)
+passes at `11a9371`; the preceding implementation's generated-kernel and main
+CI workflows also pass at `51ade3b`.
 These are first-cell coefficient/polynomial and interior-obstruction results,
 not a complete global weighted FEEC or MHD stability proof.
+
+### October 17 dependency branch consolidation
+
+The closeout covers committed local branches and branches advertised by the
+live upstream remotes at the audit snapshot. Deleted remote tracking refs and
+uncommitted work are preserved. Historical fixes already delivered through
+squashes or replacement implementations receive explicit ancestry merges;
+their current source trees must remain identical. Functional integrations
+retain their own native gates. GLISS's validated dependency pins remain fixed
+until a separate consumer qualification justifies changing them.
+
+| Repository | Published main | Consolidation evidence |
+| --- | --- | --- |
+| FortSym | `8a418e2` | Resource-verdict repair above; all audited heads included |
+| FortGen | `3bfb380` | All audited heads already included |
+| FortNum | `b29e82c` | All live/local heads already included; local main synchronized |
+| FortFront | `a34ada8` | Three delivered topic histories included; source tree unchanged |
+| FortArray | `1529620` | Six historical live heads included; all five merge trees unchanged |
+| FortPlot | `a8f7070` | Twenty-three delivered topic histories included; all merge trees unchanged |
+
+This closes branch accounting for these revisions, rather than the scientific
+acceptance gates. The next GLISS repair must address the weighted trial space
+and compression discretization together under #35's unchanged unstable and
+stable controls. CAS3D normalization/mode-mask comparison, qualified figure-eight
+input, full differentiability and measured performance remain open above.
 
 The earlier symbolic-verifier wave pinned published FortSym
 `bdeb96e0777b1eafcb7c3b4845ca2ba9362a2b00`. A reproduced adapter defect
