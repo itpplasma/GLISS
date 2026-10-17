@@ -660,6 +660,9 @@ test, with all 36 focused cases passing its strict GNU 16 CTest run.
 At `f468362`, the isolated Fo audit passes clean lint, strict optimized
 compilation with array temporaries treated as errors, and all 185 default
 native tests (39.77 s test wall time).
+At `144ec56`, the isolated Fo audit passes clean lint, strict optimized
+compilation with array temporaries treated as errors, and all 186 default
+native tests (40.89 s test wall time), including the new sheared-pinch test.
 Source accounting contains
 373 records and still zero completed whole-component equation reviews.
 At published `ddaa8f6`, the isolated Fo audit also passes clean lint, strict
@@ -667,8 +670,9 @@ optimized compilation with array temporaries treated as errors, and all 184
 then-registered tests. At published `fbb2430`, hosted GNU, Flang, runtime-check,
 Python, lint, format, generation and docs checks pass, as do both macOS native
 builds and all twelve installed-wheel Python/architecture combinations.
-The resident integration generation at `f468362` is healthy and quiescent
-with the new spectrum gate passing (one selected test out of 185);
+The resident integration generation at `144ec56` is healthy and quiescent
+with the sheared-pinch gate passing (one selected test out of 186). Its captured
+CMake, test and 111 production source/include files match the published source;
 that selected scope is not a second full-suite claim. The immutable Fo driver
 is `454c93dffd513b85bc8274c262a2d5364b20e4acf24c45f6ecd55de1769f2daf`.
 The analytical cylinder identifies two fast/slow branches and the Alfvén

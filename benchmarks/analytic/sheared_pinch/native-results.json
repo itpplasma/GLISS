@@ -49,5 +49,35 @@
     "Local Newcomb marginal/Frobenius coefficients only; no global stability classification or physical-mass singular eigenpair.",
     "No evaluation atF=0. Both stable and unstable discriminant controls have negativepressuregradient. Critical case judged only with absolute budget.",
     "Condition cap and empirical finite-stencil error budget are not a universal roundoff theorem."
-  ]
+  ],
+  "current_source_verification": {
+    "git_revision": "144ec564f3f16c786ef4a6c00cc349cc88709e90",
+    "source_sha256": "da3163b7c75c2ba2b4e57a652c7fb54a717e0d24a866bee807bf779f71ed4be3",
+    "authority": "ci/array_temporary_audit.sh in a fresh detached worktree of the clean committed revision, executed through the immutable Fo driver",
+    "compiler": "GNU Fortran16.1.0; native CMake backend; Release -O3 -Warray-temporaries -Werror=array-temporaries",
+    "clean_lint": "PASS, zero diagnostics",
+    "registered_native_tests": 186,
+    "passed": 186,
+    "failed": 0,
+    "test_wall_seconds": 40.89,
+    "audit_exit_code": 0,
+    "audit_log": "/var/tmp/gliss-sheared-pinch-audit-20261017.log",
+    "audit_log_sha256": "fcfe911a71d039ddaf586672f10a6f552f19b5a2f5fb94a4f00b2dbf63fce66b",
+    "fo_driver_sha256": "454c93dffd513b85bc8274c262a2d5364b20e4acf24c45f6ecd55de1769f2daf",
+    "build_jobs": 6,
+    "OMP_NUM_THREADS": 2,
+    "OPENBLAS_NUM_THREADS": 1
+  },
+  "resident_focused_verification": {
+    "git_revision": "144ec564f3f16c786ef4a6c00cc349cc88709e90",
+    "session_id": "67849-1792226891-285208000",
+    "generation": "fef91b6beffdbb22555bff1fdaa13997379a685703d82149882d68bdcb2e10b7",
+    "scope": "sheared_pinch_newcomb, one selected registered CTest out of186; not another full-suite result",
+    "gate_required": 1,
+    "gate_passed": 1,
+    "state": "quiescent",
+    "health": "healthy",
+    "captured_native_source_hashes_compared": 113,
+    "case_log_sha256": "b71fcc90de170f828f474957c21fc81593c71958d14f1ea72d6d232ee1bf37ed"
+  }
 }

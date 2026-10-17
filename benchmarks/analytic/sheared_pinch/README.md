@@ -84,6 +84,12 @@ evaluated finite-step values by at most `1.953e-10`; truncation dominates.
 In particular, the small negative critical-case estimate does not establish
 an instability at the exactly marginal parameter.
 
+The fresh isolated Fo audit at `144ec56` rebuilds the committed source, passes
+clean lint and optimized compilation with array temporaries treated as errors,
+and passes all 186 registered native tests (40.89 s). Its revision and log hash
+are recorded in `native-results.json`, closing the earlier candidate archive
+qualification.
+
 Build GLISS with its native CMake configuration and run
 `ctest --test-dir <build> -R '^sheared_pinch_newcomb$' --output-on-failure`.
 The standalone symbolic CMake project under `symbolic/src` requires the
