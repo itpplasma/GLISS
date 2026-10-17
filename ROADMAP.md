@@ -367,6 +367,14 @@ generator. Its 13 strict FortSym checks pass without numerical probes;
 the rank conclusion follows from the written kernel argument.
 The original uniform-64 degree-1 instability and stable-control
 acceptance criteria remain unchanged.
+The [single derivative-eta experiment](benchmarks/solovev/public/derivative_eta_trial.json)
+passes nine independent cylinder trial-response controls. Its private dense
+Solov'ev baseline reproduces +851.151902 s^-2 within its certificate; the
+candidate gives +609.269323 +/-0.008452 s^-2 with no negative inertia.
+It improves approximation in this case but still fails #35. Independent
+index/tie and solver reviews found no defect within that experiment's scope.
+No production basis change is promoted. The cylinder oracle does not qualify
+the global candidate's Cartesian energy, marginal bracket or convergence.
 
 The [QAS3 source and response audit](benchmarks/qas3/symbolic_current/)
 traces both accessible implementations into stiffness. The current reference

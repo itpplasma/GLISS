@@ -155,3 +155,10 @@ trial spaces. It proposes a derivative-generated eta span and states the
 independent Cartesian oracle and layout work needed to test it. This is a
 candidate investigation, with no implemented repair or demonstrated cause
 of the Solov'ev discrepancy.
+
+The [bounded derivative-eta experiment](derivative_eta_trial.json) passes the
+first independent cylinder response oracle. On the unchanged q0=1.035,
+degree-1/uniform-64 case, a private dense adapter lowers the baseline from
+`+851.151902` to `+609.269323 +/- 0.008452 s^-2`, with zero negative inertia.
+It therefore still fails #35. The production basis is unchanged; the cylinder
+oracle does not establish global Cartesian-energy or marginal-bracket accuracy.
