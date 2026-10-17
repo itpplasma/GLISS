@@ -17,6 +17,8 @@ EVIDENCE = ROOT / "ci/source_inventory_evidence.json"
 EXTENSIONS = {".f90", ".inc", ".py", ".sh", ".c", ".h", ".cmake", ".yml", ".js", ".lock"}
 EXPLICIT = {"CMakeLists.txt", "fpm.toml", ".github/manylinux.Dockerfile",
             "benchmarks/figure8/native/CMakeLists.txt",
+            "benchmarks/cas3d_envelope/symbolic_interpolation/src/CMakeLists.txt",
+            "benchmarks/cas3d_envelope/symbolic_metric/src/CMakeLists.txt",
             "docs/Makefile", "pyproject.toml", "python/gliss/closure_manifest.json",
             "ci/source_inventory_evidence.json", "gen/fortsym-revision.txt"}
 PREFIXES = ("src/", "app/", "include/", "python/gliss/", "python/tests/",

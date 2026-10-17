@@ -133,3 +133,18 @@ logarithmically divergent compression energy hidden by the Gauss rule in s)
 and normalized with a coefficient norm that is unbounded for regular |m|=1
 displacements; its eigenvalues converged only at first order and, with an
 exact axis rule, showed a spurious high-m axis mode at degree 4.
+
+The [actual-trial comparison](actual_trial_comparison.json) uses the checked-in
+16-surface `q0=1.035` export with uniform FE64, whose degree-1 eigenvalue is
+`+851.151902 s^-2`; this is a different input from the regenerated-export
+`+844.8` table entry. Native axis ties and perpendicular unit-density mass are
+preserved. Explicit real sidebands retain all cross terms. Independent
+Cartesian mass and selected-operator energy replay agree to `3.55e-15` and
+`5.21e-10` relatively. Direct raw/full energy comparison fails its frozen
+`1e-6` budget; measured force/current/drive and weighted P0 interface terms
+account for the difference. The `-95005.743 J` selective/full compression
+correction comes entirely from interior cells, with zero axis-cell difference.
+Applying the explicit corrections reproduces selected native energy to
+`5.27e-10` relatively. This explains the compared forms without resolving the
+missed degree-1 instability. It establishes no variational upper bound,
+continuum convergence or repair by using more quadrature; #35 remains open.

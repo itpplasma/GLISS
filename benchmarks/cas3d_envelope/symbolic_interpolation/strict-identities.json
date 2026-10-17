@@ -1,0 +1,8 @@
+{
+  "suite": "Uniform-grid axis and BOOZ interpolation identities",
+  "total": 34,
+  "passed": 34,
+  "proved": 34,
+  "by_probe": 0,
+  "failed": 0
+}

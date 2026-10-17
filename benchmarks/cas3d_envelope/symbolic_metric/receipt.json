@@ -1,0 +1,65 @@
+{
+  "scope": "Scratch exact 2D quadratic averaging identity with bounded read-only available VMEC++ source correspondence; no production changes, scientific sampling or Fo lane",
+  "fortsym_revision": "2f0571e39f36a0606b3ae150c8b3b3df92ce6750",
+  "fortsym_prefix": "/tmp/fortsym-ordered-outputs-prefix",
+  "fortsym_dylib_sha256": "9b15f7a685073c315bb62d1a30cd1688e604c7eb7e619571397a1a25044a528c",
+  "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+  "compiler_flags": "Release -O3 -Wall -Wextra -Werror=array-temporaries -fcheck=all",
+  "max_build_jobs": 2,
+  "assumptions": [
+    "x0,z0,x1,z1 are real, explicitly registered in the native engine context",
+    "Source correspondence uses the even-only tangent specialization ruo_i=ruo_o=zuo_i=zuo_o=0"
+  ],
+  "proof": {
+    "suite": "Two-dimensional tangent metric averaging identity",
+    "total": 2,
+    "passed": 2,
+    "proved": 2,
+    "by_probe": 0,
+    "failed": 0
+  },
+  "distinct_identities": 1,
+  "engines": [
+    "native FortSym with real context",
+    "SymEngine exact zero-test adapter"
+  ],
+  "source_anchor": {
+    "checkout": "/Users/ert/code/vmecpp",
+    "head": "a40d22b0181c7378d44a5a1115a32dc136b35bc6",
+    "files": {
+      "/Users/ert/code/vmecpp/src/vmecpp/cpp/vmecpp/vmec/ideal_mhd_model/metric_kernel.h": {
+        "sha256": "898f3753300802757aab56429a112b4bb7637ccfb0d4657c38628945683d83ab",
+        "lines": [
+          45,
+          50
+        ]
+      },
+      "/Users/ert/code/vmecpp/src/vmecpp/cpp/vmecpp/vmec/ideal_mhd_model/jacobian_kernel.h": {
+        "sha256": "1d74c923171911532b95d66cbcb9e4431dd95ba2a9212a1cf391a21cd1542932",
+        "lines": [
+          51,
+          56
+        ]
+      }
+    }
+  },
+  "production_claims": {
+    "causality_established": false,
+    "production_bug_established": false,
+    "complete_parity_metric_identity_claimed": false
+  },
+  "preserved_axis_receipt": {
+    "path": "/tmp/gliss-axis-interpolation-proof-20261017/receipt.json",
+    "sha256": "cce6e56e5e1bbc9c728b738b87a57f0890969fda030ec5a117e5c67e15184253"
+  },
+  "files": {
+    "src/metric_averaging_proof.f90": "acb7715985c79a29c1502338682563e2d940d9be0c212b5cd238aa7822e20949",
+    "src/CMakeLists.txt": "8e17d3b7955939f4453542000eeaa67eb60d97fd1d9c24e0f925c6db1b704ab9",
+    "derivation.md": "2f4f3d907024e0fd842aeef29731a269bc64b05b93dbf75ba703d193b00398b0",
+    "configure.log": "ab7792ca7398b225aae64e91b0768445c254e6f4906455406784af4936ee5c6b",
+    "build.log": "535faa75ef8748c3ffb1282c0553684f834bd9d11c313640a0c14b8a71595566",
+    "ctest.log": "9438f56cd1734e58ace618d4a4d84ccb824694f44f3a2ad64024f4e48fd61067",
+    "build/strict-identities.json": "049d6b0bd4f00099f99f44b66729c09529efe193b5411fa15142cb25e6eccc68",
+    "build/Testing/Temporary/LastTest.log": "e12f69244399287b64aaf1fdae674aa63d3879835a7e6d3b8b2707ba04be0dbc"
+  }
+}

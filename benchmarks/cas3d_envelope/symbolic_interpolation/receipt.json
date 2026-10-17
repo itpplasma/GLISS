@@ -1,0 +1,65 @@
+{
+  "scope": "Scratch exact proof of conditional interpolation properties, no production/upstream math changes and no Fo resident lane",
+  "fortsym_revision": "2f0571e39f36a0606b3ae150c8b3b3df92ce6750",
+  "fortsym_prefix": "/tmp/fortsym-ordered-outputs-prefix",
+  "fortsym_dylib_sha256": "9b15f7a685073c315bb62d1a30cd1688e604c7eb7e619571397a1a25044a528c",
+  "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+  "compiler_flags": "Release -O3 -Wall -Wextra -Werror=array-temporaries -fcheck=all",
+  "max_build_jobs": 2,
+  "assumptions": [
+    "h is real and h>0, recorded in native FortSym context; h!=0 checked as implied fact",
+    "a,b,c,s,j,M0,M1,M2,q0,q1,q2 are real",
+    "K=R=0 are premise equations of the conditional spline implication, not conclusions of a zero test",
+    "Subsequent physical half-grid cells use integer j>=1; identity holds for arbitrary real j"
+  ],
+  "proof": {
+    "suite": "Uniform-grid axis and BOOZ interpolation identities",
+    "total": 34,
+    "passed": 34,
+    "proved": 34,
+    "by_probe": 0,
+    "failed": 0
+  },
+  "distinct_identities": 17,
+  "engines": [
+    "native FortSym with h>0 context",
+    "SymEngine exact zero-test adapter"
+  ],
+  "production_claims": {
+    "causality_established": false,
+    "production_bug_established": false,
+    "closure_removal_recommended": false,
+    "axis_M0_forced_zero": false,
+    "first_positive_M1_forced_zero_under_stated_rows_and_closure": true
+  },
+  "source_anchor": {
+    "path": "/Users/ert/.cache/uv/sdists-v9/pypi/booz-xform/0.0.9/US9JLQ3OXA1SsSIK6_wyM/src/src/_booz_xform/init_from_vmec.cpp",
+    "sha256": "1023316194f30127f37e7975c953b919d046aa87c2b5477cc621e62f839f50ac",
+    "version": "booz-xform 0.0.9",
+    "mesh_lines": [
+      210,
+      219
+    ],
+    "odd_quotient_interpolation_lines": [
+      246,
+      258
+    ],
+    "first_m1_half_grid_lines": [
+      260,
+      280
+    ],
+    "formula": "(1.5*q1-0.5*q2)*sqrt(s_half)",
+    "prior_read_only_audit_receipt": "/tmp/gliss-booz-interpolation-audit-20261017/receipt.json",
+    "prior_audit_receipt_sha256": "7f5dcb1cfb0dce905054c1bdad32e5b280680d959c6c9731d8d76dd59e81a6fd"
+  },
+  "files": {
+    "src/axis_interpolation_proof.f90": "1a03ea96c5b8184138a36c775395336697686f400fae832d9e18312f0e6ceebe",
+    "src/CMakeLists.txt": "c5d6f3f61cd8330eb1b0c61398a05adb743eeef761b4d1da507c4854e070a434",
+    "derivation.md": "dd6397725ea8552816056da913bad95a416dba01ef53807313aa0e41f5118a1e",
+    "configure.log": "63268e373347291bed290d268f604033c435134b6f0dd038b14fd7b7143d4118",
+    "build.log": "919ab3c9f0b47507bf5287ac2d1ebe821641b8a9fb2a453c0a8690af28e768a3",
+    "ctest.log": "21a63460e0bb7c61a1ecbebbb695ba903601ed0794f6229db3e3e8b30b1e15b7",
+    "build/strict-identities.json": "85051606b3da4b86d6aadb6154fac057cc5072780f7709185d49c6ceec44b1ad",
+    "build/Testing/Temporary/LastTest.log": "dac17154c5567b2a115411424c1d7fd77425f51cb3473313dbf22fd8ada2862c"
+  }
+}

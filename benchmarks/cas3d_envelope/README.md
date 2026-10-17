@@ -171,10 +171,43 @@ is at roundoff by construction. This locates most of the discrepancy before
 Cartesian projection on these shells. It does not distinguish raw radial
 interpolation from source-to-BOOZ transfer or certify angular convergence.
 The earlier continuous-native control interpolates contravariant B and is
-not exactly solenoidal. Compare a divergence-free native flux field from
-R/Z, lambda and total flux/iota jets next; then repair the demonstrated cause
-and repeat the unchanged whole-support gates. No new eigenpair, literature
-agreement or physical qualification follows from these diagnostics.
+not exactly solenoidal.
+
+[native_flux_comparison.json](native_flux_comparison.json) adds the
+divergence-free native flux field from R/Z, lambda and shared total-flux/
+pressure jets. Its characteristic forces are
+0.137940/0.058494/0.018355/0.00065216 on the four native-angle shells, with
+divergence below 1.94e-16 T/m. Field differences versus stored native B track
+geometric/native Jacobian differences. A substantial discrepancy thus exists
+in this chosen continuous native reconstruction before BOOZ. This does not
+invalidate the discrete source solve. Isolate radial continuation/staggering,
+repair the demonstrated cause and repeat the unchanged whole-support gates.
+No new eigenpair, literature agreement or physical qualification follows
+from these diagnostics.
+
+[axis_continuation_control.json](axis_continuation_control.json) isolates
+the native m1 quotient axis closure. Although q0=2q1-q2 forces zero first-node
+quotient curvature in a uniform not-a-knot spline, removing this closure
+worsens force by 7.40% to 20.49% on all four shells. Positive-node positions
+and pure angular jets remain bitwise unchanged. The manufactured bias is
+real; this tested substitution is unsuitable as a physical repair. The
+BOOZ first-half interpolation is a separate hypothesis.
+
+[firsthalf_force_control.json](firsthalf_force_control.json) tests that
+separate hypothesis using only the first m1 R/Z input geometry, one BOOZ
+surface transform and an unchanged retained26 public conversion. All other
+BOOZ payloads are bitwise preserved. Full-support characteristic/pressure-
+relative force worsens by 12.75% to 0.004715/22.12%; both physical gates fail.
+The candidate is rejected without an energy or eigenvalue solve.
+
+The [reference source audit](reference_source_audit.md) records accessible
+VMEC++ and BOOZ contracts and their build-provenance limits. Reproducible
+[interpolation](symbolic_interpolation/derivation.md) and
+[metric-averaging](symbolic_metric/derivation.md) FortSym derivations prove
+34 and 2 exact checks respectively, with zero probes. Their source/CMake
+drivers and receipts are included. No reference implementation is treated
+as ground truth, and these proofs establish neither physical causality nor
+the correctness of unavailable CAS3D source.
 
 ## Historical synthetic scaling result
 

@@ -35,6 +35,17 @@ of the analytical and cross-code benchmarks below. Local formula checks,
 stored-matrix replay, symbolic identities and small discrete residuals retain
 their narrower meanings; none alone passes this claim.
 
+Reference codes are fallible. Where source is accessible, trace both GLISS
+and the reference implementation against independently derived equations,
+including staggering, quadrature, normalization and source/build provenance.
+Where source is unavailable, audit the published formulation and GLISS;
+record that the other implementation cannot be certified. Exact symbolic
+identities must distinguish continuum equations from discretization and
+regularization approximations. A discrepancy is not automatically a GLISS
+defect, and agreement is not a proof. Preserve unresolved findings and move
+to independent useful checks when available clues are exhausted; do not fit
+reference values or repeatedly pursue inaccessible data.
+
 | Gate | Existing evidence | Required work and acceptance |
 | --- | --- | --- |
 | A0: equation and normalization audit | Exact pinch raw energy/mass pass; matched W7-X trial exposes a raw/production energy gap on a force-defective retained equilibrium; zero completed whole-component reviews | Qualify equilibrium over the actual trial support, converge raw three-dimensional energy and P0 interface terms, and audit units, flux signs, axis constraints and boundaries |
@@ -259,14 +270,76 @@ raw radial interpolation from the earlier source-to-BOOZ transfer. The earlier
 continuous native control interpolates stored contravariant B and has nonzero
 divergence; its smaller force cannot isolate continuous source-metric error.
 
-Next compare a divergence-free native-wout flux field, using R/Z, lambda and
-total flux/iota jets, with raw BOOZ on the same flux shells. Report native
-stored-field and geometric-Jacobian consistency, then repair only the
-demonstrated source or transfer defect. Repeat the unchanged whole-support
-force and matched-energy gates before the frozen CAS3D pair. In parallel,
-extract the actual failing uniform-degree-1 Solov'ev trial and compare its
-independent Cartesian energy and mass with the assembled forms before
-changing basis, axis constraints or quadrature.
+[The divergence-free native-wout control](benchmarks/cas3d_envelope/native_flux_comparison.json)
+uses R/Z, lambda and the same total-flux/pressure profiles, with geometric
+Jacobian and analytic jets. Its four-shell characteristic forces are
+0.137940/0.058494/0.018355/0.00065216, with divergence below 1.94e-16 T/m.
+Signed flux agrees with native phips to roundoff; effective/native iota
+differences are recorded. Field discrepancies versus stored native B track
+geometric/native Jacobian differences. Large force is already present before
+BOOZ in this explicitly chosen continuous reconstruction. This does not
+invalidate the discrete native solve or establish an inaccurate continuum
+equilibrium. Native radial-jet reconstruction and staggering remain finite
+resolution choices to isolate.
+
+[The axis-continuation control](benchmarks/cas3d_envelope/axis_continuation_control.json)
+proves a concrete interpolation property: for uniform not-a-knot cubic data,
+the closure q0=2q1-q2 forces q''(h)=0 at the first positive node. A quadratic
+quotient has curvature 2c, so this is a real manufactured radial-jet bias.
+However, removing only that closure for native m1 R/Z, preserving positive
+positions and all pure angular jets bitwise, worsens force by 7.40% to 20.49%
+on all four shells. Reject it as a sufficient repair. The separate BOOZ
+first-half transfer remains a different controlled hypothesis; an algebraic
+interpolation bias alone does not establish the cause of a physical error.
+
+[The BOOZ first-half control](benchmarks/cas3d_envelope/firsthalf_force_control.json)
+changes only the first m1 R/Z input geometry, transforming that single
+surface and preserving all other BOOZ payloads bitwise. The public retained26
+export passes unchanged admission gates, but the full-support physical force
+worsens by 12.75%, to 0.004715 characteristic and 22.12% pressure-relative.
+Both force targets fail, so no energy or CAS3D solve is run for this candidate.
+Reject this substitution too. Neither tested continuation repairs the defect;
+retain the unqualified W7-X case and proceed with the other independent
+analytical gates rather than fitting another local interpolation change.
+
+[The reference source audit](benchmarks/cas3d_envelope/reference_source_audit.md)
+traces VMEC++'s staggered geometry, metric, flux field, current and force
+residuals alongside BOOZ's parity interpolation. A separately averaged
+quadratic metric generally differs from the metric of the averaged tangent;
+the [exact metric derivation](benchmarks/cas3d_envelope/symbolic_metric/derivation.md)
+proves this distinction. Matching audited VMEC kernels across the metadata
+and current source revisions does not attest the installed binary build.
+No reference-code bug explaining the force discrepancy has been demonstrated.
+An unrelated static BOOZ ns=2 bounds finding is recorded separately; it was
+not exercised by these cases and does not block this work.
+The [interpolation derivation](benchmarks/cas3d_envelope/symbolic_interpolation/derivation.md)
+has 17 exact identities, checked by native FortSym and SymEngine: 34/34
+proved, zero probes. The metric identity adds 2/2 exact checks, zero probes.
+Both reproducible native CMake/CTest drivers are included. These establish
+the stated source/interpolation properties, not physical causality or a
+complete implementation audit. The pinned generated-kernel CI also runs
+both proof suites and retains their strict reports.
+
+Repair only a demonstrated source or transfer defect, then repeat the
+unchanged whole-support force and matched-energy gates before the frozen
+CAS3D pair. The actual failing uniform-degree-1 Solov'ev trial is compared
+with independent Cartesian energy and mass below. Reconstruct its real
+two-sideband displacement explicitly; a blanket
+half-Hermitian angular average from the W7-X oracle is not applicable.
+
+[The actual Solov'ev trial diagnostic](benchmarks/solovev/public/actual_trial_comparison.json)
+recovers the fixed 16-surface export's uniform-degree-1/FE64 lowest trial,
+lambda=+851.151902 s^-2, with unchanged axis ties and unit physical mass.
+Independent Cartesian mass agrees to 3.55e-15 and selected-operator energy
+replay to 5.21e-10 relatively. Full-quadrature raw/production energies are
+95857.727/95856.895 J; their direct comparison fails the frozen 1e-6 budget.
+Explicit force/current/drive and interface terms explain this difference.
+The selected/full compression-channel correction is -95005.743 J, entirely
+from interior cells; the axis cell has no quadrature difference. Including
+these measured corrections reproduces native selected energy to 5.27e-10.
+This explains the compared forms, not the missed instability: #35 stays open.
+One trial and one radial rule do not establish physical convergence, an
+eigenvalue upper bound or a repair by increasing quadrature.
 
 The old synthetic 70-envelope/139-label run measures scaling. A literal paper
 L139 prefix would contain 139 or 140 envelopes and 277 or 279 labels before
@@ -399,11 +472,12 @@ issue whose broader requested acceptance remains unmet.
   controls with physical scaling, both stable/unstable cases and valid inputs.
 - [ ] Resolve #35's degree-1 q0=1.035 instability criterion at 64 cells; repeat
   higher-degree convergence on qualified equilibria. Reduced compression
-  quadrature does not establish general eigenvalue upper bounds. Before
-  changing the active axis tie or quadrature, compare independent Cartesian
-  energy and physical mass for the actual failing uniform-degree-1 trial
-  with its assembled forms; the existing cylinder oracle does not audit
-  that Solov'ev trial. Keep fixed-export and regenerated-export controls distinct.
+  quadrature does not establish general eigenvalue upper bounds. The actual
+  failing fixed-export trial now passes independent mass and selected-energy
+  replay; measured quadrature and equilibrium defects explain its raw-energy
+  difference. Investigate the remaining degree-1 approximation/locking before
+  changing axis constraints or quadrature. Keep fixed-export and regenerated-
+  export controls distinct; the cylinder oracle alone does not audit Solov'ev.
 - [x] Expose an optional validated native radial mesh, preserving uniform
   defaults and carrying the same mesh through pressure JVP/VJP. Radius grading
   improves degree-1 approximation but does not satisfy the original uniform
@@ -502,7 +576,7 @@ The analytical/CAS3D waves add six registered native tests. All 184 default
 CTest cases at `ddaa8f6` pass in the strict GNU 16 Release build. All 407
 Python tests pass with two optional skips and BOOZ_XFORM installed.
 Source accounting contains
-354 records and still zero completed whole-component equation reviews.
+358 records and still zero completed whole-component equation reviews.
 At published `ddaa8f6`, the isolated Fo audit also passes clean lint, strict
 optimized compilation with array temporaries treated as errors, and all 184
 then-registered tests. At published `fbb2430`, hosted GNU, Flang, runtime-check,
