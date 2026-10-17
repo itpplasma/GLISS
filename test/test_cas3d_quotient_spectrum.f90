@@ -16,10 +16,10 @@ program test_cas3d_quotient_spectrum
         compatible_two_component_problem_t
     use cylinder_fixture, only: create_cylinder_fixture
     use gvec_cas3d_reader, only: read_gvec_cas3d_file, reader_ok
-    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
+    use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t
     use marginality_spectrum, only: compute_phase_envelope_spectrum, &
         marginality_normalization_cas3d2mn, marginality_spectrum_compute_error, &
-        marginality_spectrum_ok, &
+        marginality_spectrum_invalid, marginality_spectrum_ok, &
                      marginality_spectrum_result_t, solve_compatible_marginality_problem
     use symmetric_eigensolver, only: solve_symmetric_generalized_allocated, &
                                      symmetric_eigensolver_ok
@@ -45,6 +45,7 @@ program test_cas3d_quotient_spectrum
     call check_zero_stiffness()
     call check_physical_normal_only()
     call check_empty_normal_component()
+    call check_position_bandwidth_admission()
     open (newunit=status, file=filename, status='old')
     close (status, status='delete')
     write (*, '(a)') 'PASS: coefficient quotient eigenpairs and floor scaling'
@@ -489,6 +490,99 @@ contains
             .and. all(stiffness%lower(1)%values(:, :3) == 0.0_dp), &
             'inactive normal labels acquired stiffness')
     end subroutine check_empty_normal_component
+
+    subroutine check_position_bandwidth_admission()
+        type(gvec_cas3d_equilibrium_t) :: padded
+        type(marginality_spectrum_result_t) :: result
+        character(len=160) :: message, expected
+        integer :: bandwidth, minimum, normalization, symmetry, local_info
+
+        do bandwidth = 14, 18, 4
+            padded = equilibrium
+            ! Zero padding leaves the cylinder unchanged. The MDE admission
+            ! contract uses the declared position table, including these rows.
+            deallocate (padded%poloidal_modes, padded%toroidal_modes)
+            allocate (padded%poloidal_modes(3), padded%toroidal_modes(5))
+            padded%poloidal_modes(:2) = equilibrium%poloidal_modes
+            padded%poloidal_modes(3) = bandwidth
+            padded%toroidal_modes(:3) = equilibrium%toroidal_modes
+            padded%toroidal_modes(4) = bandwidth
+            padded%toroidal_modes(5) = -bandwidth
+            call pad_harmonics(padded%xhat)
+            call pad_harmonics(padded%yhat)
+            call pad_harmonics(padded%zhat)
+            call pad_harmonics(padded%mod_b)
+            call pad_harmonics(padded%jacobian)
+            call pad_harmonics(padded%g_tt)
+            call pad_harmonics(padded%g_tz)
+            call pad_harmonics(padded%g_zz)
+            call pad_harmonics(padded%g_st)
+            call pad_harmonics(padded%g_sz)
+            call pad_harmonics(padded%second_form_tt)
+            call pad_harmonics(padded%second_form_tz)
+            call pad_harmonics(padded%second_form_zz)
+            call pad_harmonics(padded%b_contravariant_theta)
+            call pad_harmonics(padded%b_contravariant_zeta)
+            minimum = 6 * bandwidth + 1
+            write (expected, '(a,i0,a,i0)') &
+                'cubic-Jacobian MDE requires angular_theta >= ', minimum, &
+                ' and angular_zeta >= ', minimum
+            do symmetry = 1, 2
+                do normalization = 1, 2
+                    call compute_phase_envelope_spectrum(padded, 3, 2, &
+                        [0], [0], symmetry, 1, 96, 64, .true., result, &
+                        local_info, message, normalization_policy=normalization, &
+                        radial_cells=3)
+                    if (local_info /= marginality_spectrum_invalid) &
+                        write (error_unit, '(a,i0,2a)') &
+                        'angular admission status ', local_info, ': ', trim(message)
+                    call require(local_info == marginality_spectrum_invalid, &
+                        'undersampled position table was not an input error')
+                    call require(message == expected, &
+                        'angular admission did not report actual minimum counts')
+                    call compute_phase_envelope_spectrum(padded, 3, 2, &
+                        [0], [0], symmetry, 1, minimum, minimum, .true., result, &
+                        local_info, message, normalization_policy=normalization, &
+                        radial_cells=3)
+                    if (local_info /= marginality_spectrum_ok) &
+                        write (error_unit, '(a,4(i0,1x),2a)') &
+                        'admitted status/band/parity/norm ', local_info, bandwidth, &
+                        symmetry, normalization, ': ', trim(message)
+                    call require(local_info == marginality_spectrum_ok, &
+                        'admitted position table failed at minimum angular grid')
+                    call require(ieee_is_finite(result%lowest_eigenvalue) &
+                        .and. ieee_is_finite(result%certificate), &
+                        'admitted angular grid returned a nonfinite eigenpair')
+                end do
+            end do
+            call compute_phase_envelope_spectrum(padded, 3, 2, [0], [0], &
+                1, 1, minimum - 1, minimum, .false., result, local_info, &
+                message, radial_cells=3)
+            call require(local_info == marginality_spectrum_invalid &
+                .and. message == expected, 'poloidal Nyquist boundary accepted')
+            call compute_phase_envelope_spectrum(padded, 3, 2, [0], [0], &
+                1, 1, minimum, minimum - 1, .false., result, local_info, &
+                message, radial_cells=3)
+            call require(local_info == marginality_spectrum_invalid &
+                .and. message == expected, 'toroidal Nyquist boundary accepted')
+        end do
+    end subroutine check_position_bandwidth_admission
+
+    subroutine pad_harmonics(pair)
+        type(harmonic_pair_t), intent(inout) :: pair
+        real(dp), allocatable :: coefficients(:, :, :)
+        integer :: nn, nm, ns
+
+        ns = size(pair%cosine, 1)
+        nm = size(pair%cosine, 2)
+        nn = size(pair%cosine, 3)
+        allocate (coefficients(ns, nm + 1, nn + 2), source=0.0_dp)
+        coefficients(:, :nm, :nn) = pair%cosine
+        call move_alloc(coefficients, pair%cosine)
+        allocate (coefficients(ns, nm + 1, nn + 2), source=0.0_dp)
+        coefficients(:, :nm, :nn) = pair%sine
+        call move_alloc(coefficients, pair%sine)
+    end subroutine pad_harmonics
 
     subroutine require(condition, message)
         logical, intent(in) :: condition

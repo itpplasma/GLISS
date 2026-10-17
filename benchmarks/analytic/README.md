@@ -221,3 +221,50 @@ near the cusp. The diagnostic also reports ||L⁻¹(Kv−λMv)||₂, M=LLᵀ, fo
 mass-normalized vector. This bounds distance to some discrete eigenvalue;
 it does not identify a member of the narrow cluster. No production solver
 change or fitted acceptance tolerance is included.
+
+## Absolute finite-pressure screw-pinch energy
+
+`test_screw_pinch_analytic_energy` checks the production two-component,
+compressible-stiffness and physical-mass **surface assemblies** against an
+exact current-carrying equilibrium. In physical cylindrical coordinates,
+`B_theta=A*r`, `B_z=Z` and
+`p=p_edge+A^2*(a^2-r^2)/mu0` satisfy force balance exactly. The trial displacement
+`xi_r=r*(1-r^2/a^2)` is Cartesian regular at the axis and has zero normal
+wall displacement. The radial coordinate is physical radius; both angular
+coordinates use unit turns.
+
+The independent oracle starts from the uncompleted energy in
+[Bernstein et al. (1958)](https://www.hao.ucar.edu/people/phil-judge/Book/preparations/bernstein58.pdf),
+printed page 23, equation 3.13. With `Q=curl(xi cross B)`, it retains the
+current and pressure-gradient work as well as fluid compression. Direct
+polynomial integration gives
+
+```text
+2 delta W = 2 pi L [(A^2 a^4 + 2 Z^2 a^2)/(3 mu0)
+                    + gamma (2 p_edge a^2 + A^2 a^4/mu0)/3]
+N = integral rho |xi|^2 dV = pi L rho a^4/12.
+```
+
+The implemented completed-square form and its negative drive are those of
+Carolin Schwab’s 1991 Darmstadt dissertation,
+[Numerische Verfahren zur Untersuchung der magnetohydrodynamischen Stabilität
+dreidimensionaler Plasmagleichgewichte](https://www.researchgate.net/publication/260742687),
+printed page 36, equations 3.2.1–3.2.3, and Appendix D.1, pages 147–149.
+Here the drive coefficient is `4 A^2`.
+The test checks the raw Bernstein expression at every quadrature point,
+absolute integrated energy and mass, and separate magnetic and fluid terms.
+Six fixed physical cases exercise field reversal, radius/length/density and
+field/pressure scaling, zero gamma, zero edge pressure and zero poloidal field.
+Each uses both chart orientations and both compressible/mass angular assembly
+routes, with a fixed relative tolerance of `4e-12`.
+
+This qualifies the prescribed cylindrical fields through the local angular
+assemblies. It does not supply a straight-cylinder primitive import, a global
+unstable-mode threshold, or a review of the complete three-dimensional energy
+and equilibrium reconstruction. The compressible surface assembly currently
+uses `nu=mu-(FP'/FT')*sqrt(g)*eta` and therefore also requires `FT' != 0`.
+The stiffness and physical-mass surface entries reject a zero `FT'` at any
+angular sample with their invalid-input status before changing accumulators.
+A focused exact constant-field control verifies this rejection and the
+continued acceptance of `FT'=0, FP'!=0` by the perpendicular/two-component
+surface assemblies and the more general generated point kernels.

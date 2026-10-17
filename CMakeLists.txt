@@ -972,6 +972,14 @@ if(BUILD_TESTING)
     set_tests_properties(vacuum_torus_analytic PROPERTIES
         ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
 
+    add_executable(test_screw_pinch_analytic_energy
+        test/test_screw_pinch_analytic_energy.f90)
+    target_link_libraries(test_screw_pinch_analytic_energy PRIVATE gliss)
+    add_test(NAME screw_pinch_analytic_energy
+        COMMAND test_screw_pinch_analytic_energy)
+    set_tests_properties(screw_pinch_analytic_energy PROPERTIES
+        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+
     add_library(gliss_test_support test/cylinder_fixture.f90)
     target_link_libraries(gliss_test_support PUBLIC gliss)
 

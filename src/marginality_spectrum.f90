@@ -25,6 +25,7 @@ module marginality_spectrum
         bracket_lowest_positive, &
         fixed_boundary_bracket_ok
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
+    use export_surface_geometry, only: magnetic_differential_grid_is_dealiased
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use symmetric_eigensolver, only: solve_symmetric_generalized_allocated, &
         symmetric_eigensolver_ok
@@ -703,6 +704,7 @@ contains
         integer, intent(in) :: radial_quadrature_policy, radial_cells
         integer, intent(out) :: info
         character(len=*), intent(out) :: message
+        character(len=128) :: grid_message
 
         info = marginality_spectrum_invalid
         if (.not. valid_mode_table(mode_m, mode_n, stored_power)) then
@@ -756,6 +758,19 @@ contains
         else if (angular_grid_aliases(equilibrium, mode_m, mode_n, n_theta, &
                 n_zeta)) then
             message = "mode table aliases the angular quadrature"
+        else if (.not. magnetic_differential_grid_is_dealiased( &
+                equilibrium%poloidal_modes, equilibrium%toroidal_modes, &
+                n_theta, n_zeta)) then
+            ! This assembly path always constructs the primitive Cartesian
+            ! MDE forcing. Admit its cubic position bandwidth before assembly
+            ! can replace the specific alias failure with a generic error.
+            write (grid_message, '(a,i0,a,i0)') &
+                "cubic-Jacobian MDE requires angular_theta >= ", &
+                6_int64 * maxval(abs(int(equilibrium%poloidal_modes, int64))) &
+                + 1_int64, " and angular_zeta >= ", &
+                6_int64 * maxval(abs(int(equilibrium%toroidal_modes, int64))) &
+                + 1_int64
+            message = grid_message
         else
             info = marginality_spectrum_ok
             message = ""

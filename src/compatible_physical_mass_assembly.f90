@@ -474,6 +474,11 @@ contains
             .or. any(fields(:, :, 8) <= 0.0_dp) &
             .or. any(fields(:, :, 9) <= 0.0_dp)) return
         if (any(fields(:, :, 1)**2 + fields(:, :, 2)**2 <= 0.0_dp)) return
+        if (tangential_components == 2) then
+            ! Only the three-component nu map divides by FT'. The
+            ! perpendicular mass retains the point kernel's wider domain.
+            if (any(abs(fields(:, :, 1)) <= 0.0_dp)) return
+        end if
         info = 0
     end subroutine validate_inputs
 

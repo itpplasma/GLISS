@@ -37,7 +37,7 @@ their narrower meanings; none alone passes this claim.
 
 | Gate | Existing evidence | Required work and acceptance |
 | --- | --- | --- |
-| A0: equation and normalization audit | Published-source map and local energy/mass oracles; zero completed whole-component reviews | Map the energy principle and CAS3D equations to actual production terms, units, flux signs, chart orientation, axis constraints and boundary contributions; compare independently integrated energies and physical mass for identical displacements |
+| A0: equation and normalization audit | Raw Bernstein finite-pressure screw-pinch energy and absolute mass agree with production surface assemblies; zero completed whole-component reviews | Extend the independent current/pressure-work comparison to three-dimensional displacements; audit units, flux signs, chart orientation, axis constraints and boundary contributions |
 | A1: analytical spectra and thresholds | Registered cylinder assembly/certifier test covers independent slow/fast branches and Alfvén clusters, degrees 1–4, three meshes and both parities; exact vacuum torus covers import through certified solve and absolute energy/mass | Add production Newcomb/Suydam and helical unstable/marginal limits; retain explicit assembly-level scope for the straight cylinder and the stable-domain scope of the imported vacuum torus |
 | A2: axis, resonance and small eigenvalues | Higher-degree Solov'ev bracket controls pass; degree 1 still misses a tested marginal endpoint; dense slow-cluster ordering sensitivity is diagnosed | Resolve #35's frozen degree-1 criterion and retain the failed gate until it passes; test rational-surface domain and refinement; check slow-cluster accuracy using independent higher-precision pencils before attributing any failure to the production solver |
 | A3: CAS3D formulation and numerical comparison | Independent dense quotient oracle reproduces floor inconsistency and zero-carrier component-topology defects; integrated repairs and ordered-CSV experiments pass their software gates | Recover and audit the full published mode mask; resolve provisional numerical discrepancies and compare matched signs/inertia, marginal parameters, energies and subspaces |
@@ -104,8 +104,18 @@ boundary, pressure, flux and zero-current settings. The current converter
 rejects m5/n4 at its unchanged Jacobian gate. Fresh m7/n7 and m10/n10 exports
 pass that gate; their independently sampled characteristic Cartesian force
 residuals are 0.0746074 and 0.0180241 using the producer's minor radius. Neither
-is physically converged. A fixed BOOZ transform with separate retained-harmonic
-refinement is the next control; vary equilibrium resolution separately from
+is physically converged. Fixed BOOZ72 and retained m10/m14/m18 controls reduce
+this norm to 0.00519838; that misses the frozen 0.005 gate. Keeping the retained
+18/18 representation and using all 144 native radial surfaces reduces it to
+0.00425274 and passes that bounded sampled gate. The residual is nevertheless
+21.68% of the pressure-force RMS; neither gate covers the axis, edge or global
+maximum. Resolution-only source solves at MPOL/NTOR 13/11 and 17/15 converge
+below the unchanged native 1e-12 target and preserve the prescribed physical
+profiles and boundary. At fixed BOOZ48, retained 18/18 and 144 surfaces their
+characteristic residuals are 0.00150060 and 0.00156457, with pressure-relative
+residuals 7.65% and 7.98%. Both fail the separately frozen 0.001 and 5% physical
+limits. The final source-pair change passes 0.0005, but retained-representation
+convergence is not yet isolated. Vary equilibrium resolution separately from
 the stability mesh. The original
 profile diagnostic's large maximum is not itself a fractional force error.
 
@@ -119,6 +129,25 @@ the independent mode mask, radial trial functions and normalization conventions.
 Preserve the historical L10 discrepancy (-0.88701 versus -0.37148) separately.
 Issue #11 remains open.
 
+Fourteen fixed-BOOZ72 CAS3D controls retain six completed solves and eight
+undersampled failures. The existing cubic-Jacobian MDE admission requires
+85x85 angular points for retained 14/14 and 109x109 for 18/18. The public
+validator now reports those requirements instead of a generic assembly error;
+the original failed runs remain evidence. At 18/18, assembly refinement from
+192x128 to 384x256 changes the lowest eigenvalue by less than 5e-8 relatively.
+
+With the same 144-surface equilibrium, all sixteen degree-1 radial FE controls
+at 48/96/192/384 cells complete. The final eigenvalue changes are below 0.203%
+and Gauss/midpoint differences below 0.083%. The reported negative count drops
+from two to one at 384 cells while the numerical zero floor grows; the frozen
+mesh gate therefore fails. Diagnose the actual sparse pencil and its marginal
+band before interpreting this as physical inertia loss. All sixteen literature
+comparisons still miss the cached digitization bands. The final L5/L3 ratio is
+about 1.3487, with certificate-expanded interval [1.3221,1.3758], versus the
+cached reference interval [1.0451,1.2542]. A common positive reference-length
+or eigenvalue rescaling cannot align both values. These references remain
+conditional on the unrecovered primary figure and full mask; do not fit them.
+
 The old synthetic 70-envelope/139-label run measures scaling. A literal paper
 L139 prefix would contain 139 or 140 envelopes and 277 or 279 labels before
 collisions. Do not identify these different dimensions as the same benchmark.
@@ -129,6 +158,9 @@ The [provisional CAS3D evidence](benchmarks/cas3d_envelope/provisional_compariso
 retains all 24 outcomes, frozen settings, input/library hashes and unavailable
 data. Its [eight-entry control](benchmarks/cas3d_envelope/native_l8_envelope_control.csv)
 is explicitly derived from the retained implementation test.
+The separate [refinement evidence](benchmarks/cas3d_envelope/refinement_comparison.json)
+retains the fixed-transform, radial-FE and equilibrium-source controls with
+their unchanged acceptance limits and failed outcomes.
 
 Every accepted case must record primary reference, independent oracle, input
 and code identities, units/norms, mode and boundary conventions, frozen error
@@ -185,7 +217,7 @@ issue whose broader requested acceptance remains unmet.
 | D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse passes; generic equilibrium response unavailable |
 | S | Sparse backend selection | Reliable backend capabilities | Native LDLT lacks public inertia reliability API; retain block-LAPACK |
 | P | Performance qualification | Accepted workload and accuracy | Pressure reverse and Cartesian value benchmarks implemented and measured |
-| R | Reproducible release and evidence | Applicable gates above | Analytical/CAS3D wave: 181 native and 407 Python checks pass locally; prior unchanged kernels have nine Enzyme and four Linux generation gates |
+| R | Reproducible release and evidence | Applicable gates above | Analytical/CAS3D wave: 182 native, 407 source Python and 382 installed Python checks pass locally; prior unchanged kernels have nine Enzyme and four Linux generation gates |
 
 ### K: FortSym-generated kernels
 
@@ -337,13 +369,17 @@ replace a reliable inertia method with pivot-perturbed LU.
 
 ## Integrated evidence and active dependencies
 
-The analytical/CAS3D wave adds three registered native tests. All 181 default
+The analytical/CAS3D waves add four registered native tests. All 182 default
 CTest cases pass in the strict GNU 16 Release build; all 407 Python tests pass
 with two optional skips and BOOZ_XFORM installed. Source accounting contains
-348 records and still zero completed whole-component equation reviews.
-At published `6ad0973`, the isolated Fo audit also passes clean lint, strict
+349 records and still zero completed whole-component equation reviews.
+At published `2e6bf4a`, the isolated Fo audit also passes clean lint, strict
 optimized compilation with array temporaries treated as errors, and all 181
-tests. The resident integration generation passes its eight selected gates;
+then-registered tests. Hosted GNU, Flang, runtime-check, Python, lint, format,
+generation and docs checks pass at that revision, as do both macOS native
+builds and all twelve installed-wheel Python/architecture combinations.
+The resident integration
+generation passes its eight selected gates;
 that selected scope is not a second full-suite claim. The immutable Fo driver
 is `454c93dffd513b85bc8274c262a2d5364b20e4acf24c45f6ecd55de1769f2daf`.
 The analytical cylinder identifies two fast/slow branches and the Alfvén
@@ -362,6 +398,17 @@ The installed-distribution verifier excludes the repository-only benchmark
 runner test, which remains in the source suite. A rebuilt wheel passes all
 382 installed tests plus production angular/scaling/derivative checks; a
 fresh sdist builds and loads its bundled library outside the checkout.
+
+The finite-pressure screw-pinch oracle starts from Bernstein et al. (1958),
+printed page 23, equation 3.13, with independent cylindrical vector calculus
+and polynomial integration. Twenty-four cases exercise current, pressure
+gradient, fluid compression, absolute mass, both chart signs and both angular
+assembly routes. The worst relative error is 7.51e-16 against the frozen 4e-12
+limit. This checks surface assemblies, not a public primitive cylinder import
+or global unstable threshold. It also reproduces and repairs division by zero
+in the three-component surface variable nu=mu-(FP'/FT')*sqrt(g)*eta: zero FT'
+now fails admission before mutation. Perpendicular and generated point kernels
+retain their independently tested wider domain.
 
 The imported exact vacuum torus exercises the native writer/reader, Cartesian
 primitive spline, public fixed-boundary assembly, lowest-mode and full-spectrum

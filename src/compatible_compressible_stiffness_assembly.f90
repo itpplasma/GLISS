@@ -695,6 +695,10 @@ contains
             .or. any(fields(:, :, 8) <= 0.0_dp) &
             .or. any(fields(:, :, 9) <= 0.0_dp)) return
         if (any(fields(:, :, 1)**2 + fields(:, :, 2)**2 <= 0.0_dp)) return
+        ! The nu surface variable uses (FP'/FT')*sqrtg*eta. Its chart
+        ! requires FT' /= 0 even though the point kernel permits FT' = 0.
+        ! Reject before changing stiffness or term accumulators.
+        if (any(abs(fields(:, :, 1)) <= 0.0_dp)) return
         info = 0
     end subroutine validate_inputs
 
