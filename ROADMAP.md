@@ -361,8 +361,23 @@ change. Its generator is injective for the physical default axis powers,
 but has a one-dimensional kernel for custom alpha in {1,...,degree}, which
 the current APIs admit. Preserve those inputs or handle the kernel explicitly;
 the candidate cannot assume the current unknown count for every admitted power.
+The [exact function-space proof](benchmarks/solovev/public/symbolic_derivative/)
+also derives the changed axis normalization and the need to retain the wall
+generator. Its 13 strict FortSym checks pass without numerical probes;
+the rank conclusion follows from the written kernel argument.
 The original uniform-64 degree-1 instability and stable-control
 acceptance criteria remain unchanged.
+
+The [QAS3 source and response audit](benchmarks/qas3/symbolic_current/)
+traces both accessible implementations into stiffness. The current reference
+recipe's fixed DELTAJP=0.04 and GLISS's equilibrium-data-dependent resonance
+width define different current regularizations. Their common-chart residuals,
+difference and exceptional domains pass 54 strict FortSym checks without probes.
+This identifies a controlled comparison to perform, not a demonstrated code
+defect or the cause of the historical count mismatch. Bind actual deck/export
+bytes, qualify their common equilibrium, then compare responses and trial
+energies before attributing eigenvalue differences. Stability-mesh refinement
+at fixed equilibrium data does not remove this model difference.
 
 The old synthetic 70-envelope/139-label run measures scaling. A literal paper
 L139 prefix would contain 139 or 140 envelopes and 277 or 279 labels before
@@ -604,7 +619,7 @@ At `f468362`, the isolated Fo audit passes clean lint, strict optimized
 compilation with array temporaries treated as errors, and all 185 default
 native tests (39.77 s test wall time).
 Source accounting contains
-365 records and still zero completed whole-component equation reviews.
+369 records and still zero completed whole-component equation reviews.
 At published `ddaa8f6`, the isolated Fo audit also passes clean lint, strict
 optimized compilation with array temporaries treated as errors, and all 184
 then-registered tests. At published `fbb2430`, hosted GNU, Flang, runtime-check,

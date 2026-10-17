@@ -12,6 +12,8 @@ on:
       - benchmarks/cas3d_envelope/symbolic_interpolation/**
       - benchmarks/cas3d_envelope/symbolic_metric/**
       - benchmarks/analytic/resonant_pinch/symbolic/**
+      - benchmarks/solovev/public/symbolic_derivative/**
+      - benchmarks/qas3/symbolic_current/**
       - .github/workflows/generated-kernels.yml
   pull_request:
     paths:
@@ -23,6 +25,8 @@ on:
       - benchmarks/cas3d_envelope/symbolic_interpolation/**
       - benchmarks/cas3d_envelope/symbolic_metric/**
       - benchmarks/analytic/resonant_pinch/symbolic/**
+      - benchmarks/solovev/public/symbolic_derivative/**
+      - benchmarks/qas3/symbolic_current/**
       - .github/workflows/generated-kernels.yml
   workflow_dispatch:
 
@@ -171,6 +175,28 @@ jobs:
             cmake --build build-symbolic_resonant_pinch --parallel 2
             ctest --test-dir build-symbolic_resonant_pinch --output-on-failure
           '
+      - name: Check weighted derivative-space identities
+        run: |
+          nix develop --impure --file .codegen-shell.nix --command bash -euo pipefail -c '
+            export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/fortsym-prefix/lib:$GLISS_CODEGEN_RUNTIME_LIBRARIES"
+            cmake -S benchmarks/solovev/public/symbolic_derivative/src \
+              -B build-symbolic_derivative -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release -DCMAKE_Fortran_COMPILER=gfortran \
+              -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/fortsym-prefix"
+            cmake --build build-symbolic_derivative --parallel 2
+            ctest --test-dir build-symbolic_derivative --output-on-failure
+          '
+      - name: Check reference-current response identities
+        run: |
+          nix develop --impure --file .codegen-shell.nix --command bash -euo pipefail -c '
+            export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/fortsym-prefix/lib:$GLISS_CODEGEN_RUNTIME_LIBRARIES"
+            cmake -S benchmarks/qas3/symbolic_current/src \
+              -B build-symbolic_current -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release -DCMAKE_Fortran_COMPILER=gfortran \
+              -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/fortsym-prefix"
+            cmake --build build-symbolic_current --parallel 2
+            ctest --test-dir build-symbolic_current --output-on-failure
+          '
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -188,4 +214,8 @@ jobs:
             build-symbolic_metric/Testing/Temporary/LastTest.log
             build-symbolic_resonant_pinch/strict-identities.json
             build-symbolic_resonant_pinch/Testing/Temporary/LastTest.log
+            build-symbolic_derivative/strict-identities.json
+            build-symbolic_derivative/Testing/Temporary/LastTest.log
+            build-symbolic_current/strict-identities.json
+            build-symbolic_current/Testing/Temporary/LastTest.log
           if-no-files-found: warn

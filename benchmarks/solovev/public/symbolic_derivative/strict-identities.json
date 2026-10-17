@@ -1,0 +1,8 @@
+{
+  "suite": "Weighted derivative exact identities and kernels",
+  "total": 13,
+  "passed": 13,
+  "proved": 13,
+  "by_probe": 0,
+  "failed": 0
+}

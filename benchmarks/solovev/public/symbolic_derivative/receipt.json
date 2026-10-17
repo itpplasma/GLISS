@@ -1,0 +1,47 @@
+{
+  "scope": "Bounded independent function-space audit, scratch strict checks, no product edits/promotion/Fo or numerical rank tests",
+  "fortsym_revision": "2f0571e39f36a0606b3ae150c8b3b3df92ce6750",
+  "fortsym_dylib_sha256": "9b15f7a685073c315bb62d1a30cd1688e604c7eb7e619571397a1a25044a528c",
+  "compiler": "GNU16.1.0 O3 -Wall -Wextra -Werror=array-temporaries -fcheck=all",
+  "max_build_jobs": 2,
+  "proof": {
+    "suite": "Weighted derivative exact identities and kernels",
+    "total": 13,
+    "passed": 13,
+    "proved": 13,
+    "by_probe": 0,
+    "failed": 0
+  },
+  "engine_scope": "One unfactored native identity plus six normalized/algebraic identities checked by native and SymEngine. Not thirteen distinct theorems. Failed unfactored normalization attempts retained separately.",
+  "mathematical_kernel": "dimker=1 exactly when alpha is integer1..p, otherwise0; image dimension=pcells-dimker",
+  "candidate_physical_presets": "m0 alpha0; m>=1 alpha=1-m/2. Injective and dimension pcells.",
+  "production_fix_claimed": false,
+  "solovev_causality_claimed": false,
+  "source_head": "3ad9b1b5614ff9e4ff2fdd50de1f2712b6c27c4c",
+  "source_hashes": {
+    "benchmarks/solovev/public/derivative_space_audit.md": "75a3afcf59006e591bc341521ccb613e9d187b7b938317613d2b5841ad841995",
+    "src/radial_feec_complex.f90": "dd033db4fd4c4aabfc1036b9b8cbb5fbccf7ede6c12c1806b1f15c111991d74a",
+    "src/compatible_problem_assembly_support.f90": "6115da5ec538370a9dd189c39a86edc0a9d9b9de58c3df60b710ba3b63dd797a",
+    "src/compatible_two_component_problem.f90": "11a0ab3fe44ad72a6416e22d8bd7aa4197cb1f8f6ce3a09e01f42f93cecd6517",
+    "src/compatible_three_component_problem.f90": "824dd84d1362f443259bde1254ac83ea888ae3c3adc86b9d71f43ebecb764568",
+    "src/compatible_axis_regularity.f90": "26ca4424cbd5fbcb8745cf41a6e06abf288e31e2f3cd007202123a5b296af763",
+    "src/axisymmetric_spectrum.f90": "160b25be8dd24ac8b644d05d813a53cae99399d97d6378d745ceafcc3d2cc5a3",
+    "src/terpsichore_topology.f90": "3d292252cdc645354ca4332303fab2e15da1266528dd133d76879c55b03793d3",
+    "src/trial_space_topology.f90": "3682a8239b834e5ae380fda105c6207de6110f07b4486ef37d1ceb9abececbfa",
+    "test/test_terpsichore_topology.f90": "497593bc7d4f101902da75e9076c51a03be03447114b267f8b8366c1f2ec98ee"
+  },
+  "files": {
+    "src/weighted_derivative_proof.f90": "985242c703df69402ee9fce8e2764689d1043b5378be9045c39658ed8553f5a8",
+    "src/CMakeLists.txt": "f5a23549b338973e706d410b857ca0da2b458b4d3177c76515b92ad55ca802c2",
+    "audit.md": "9bf8461425f065f30721487e705f026f9c1f75c8185e45eac4c4d3ac3be3f9ef",
+    "configure.log": "fd32369b09102e20db6857791aeb3367ba7fd5d0ec24f74eefa2db44568361a3",
+    "build.log": "90d9f32f59af94616d57096f7618db59f79e3d97f8316e77c99d3014a796587a",
+    "ctest.log": "56384052ced4c8370d91e1a9536a944eb11473aee35c55543ce6e897263a7d4f",
+    "build/strict-identities.json": "6ead4b6361de1548aade8c422e9e6d650209ab04bb09e737c968a17fe06dca33",
+    "build/Testing/Temporary/LastTest.log": "04df333c864da8c1e6a46621b8de692ec8eed203d199a192d0c8581909c6a9f1",
+    "failed-symbolic-power-ctest.log": "db2dca78dea7af414783831dd9adbb3dfec6782c7ae24fbfadbccdef85d19f58",
+    "failed-unfactored-exp-ctest.log": "7ec4418624577a51df5405dd9ebcf262f3f69e1c5911f85d8f334ced73865590",
+    "failed-unfactored-half-power-ctest.log": "c56dd28d3564bfcdb923bfe7ab4e19d158379d84d72ca819b405007adcdfbf2d",
+    "failed-unfactored-curl-cancellation-ctest.log": "72b8b0113daa39aedc8a1ea38d11ed6cb0b72c93637c8883f4196123c3de9ef3"
+  }
+}

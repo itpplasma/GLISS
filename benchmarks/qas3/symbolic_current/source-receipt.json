@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "date": "2026-10-17",
+  "scope": "bounded source-only QAS3 equilibrium-current regularization seam",
+  "gliss_revision": "3ad9b1b5614ff9e4ff2fdd50de1f2712b6c27c4c",
+  "terpsichore_revision": "04dcf9af3ceea7ef36198508f2beb5fafd9cef20",
+  "terpsichore_remote": "https://github.com/krystophny/terpsichore.git",
+  "reference_checkout": "/tmp/gliss-terpsichore-source-audit-20261017",
+  "sources": [
+    {
+      "owner": "terpsichore",
+      "path": "srcs/tprgl2_block_ap.f",
+      "sha256": "604df797df5862c49e69b152ab5c4c4a3dd69f2cb55a44312e8fd5ba540f4490",
+      "anchors": "BOPHYS 598,602,844-864,901-906,930-932"
+    },
+    {
+      "owner": "terpsichore",
+      "path": "srcs/tprgl5_block_ap.f",
+      "sha256": "51ff8850da81956acc9a9d263048067b2b14eae6caf14e22746d968ded1eeb6c",
+      "anchors": "MODELK0 664-674; Fourier 750-775,824-859; LHSMAT 340-395"
+    },
+    {
+      "owner": "terpsichore",
+      "path": "srcs/tprgl0_block_ap.f",
+      "sha256": "ca3b7b4d8d48e0c1b9973d958e906ad7bc9ca4bc8f783f81c195d15ac2f25b71",
+      "anchors": "deck read517; equilibrium n scaling571"
+    },
+    {
+      "owner": "terpsichore",
+      "path": "srcs/vmecv92terps.f",
+      "sha256": "d702827368788f2d6472e43ffc49e90a85958af8cbdf43b7487b6fb93f587a50",
+      "anchors": "isotropic source inputs163-174"
+    },
+    {
+      "owner": "terpsichore",
+      "path": "QAS3_fx_benchmark/QAS3_fx_cur_bench_n1.data",
+      "sha256": "b59a189874279c58b4397d353adf7ddccb16a47d3a6d5e4b74f2c7e6aea25a26",
+      "anchors": "LCURRF41-42; DELTAJP52-53; MODELK55"
+    },
+    {
+      "owner": "gliss",
+      "path": "src/export_surface_geometry.f90",
+      "sha256": "8d462edc1cd2bc54874b1537729280ffea80e89f4772d01f36e91e933211163a",
+      "anchors": "fields319-381; forcing701-703; inverse723-753; width790-803"
+    },
+    {
+      "owner": "gliss",
+      "path": "src/primitive_kernel_geometry.f90",
+      "sha256": "77eb839bb23753043a2cf80d47fbf25648cbfde8c73d4b2369550dc5c1cab612",
+      "anchors": "default81,88; data-cell width326-357"
+    },
+    {
+      "owner": "gliss",
+      "path": "src/terpsichore_normalization.f90",
+      "sha256": "584e2c01395a06b7418e2ab66e2bfacc8208f545e82786ce9c8043194be814b6",
+      "anchors": "internal flip-pol map48-53"
+    },
+    {
+      "owner": "gliss",
+      "path": "gen/gliss_energy_gen.f90",
+      "sha256": "c3d61d6d3675e88796aafe05ad09c3dd7fe070be1a4279ff96fada5fe1f2a980",
+      "anchors": "energy components91-112"
+    },
+    {
+      "owner": "gliss",
+      "path": "benchmarks/qas3/run_case.sh",
+      "sha256": "6a976371370f9b0e30d3d72e740668d7aa0fc0343d41efbfb7aaab72d2817614",
+      "anchors": "public deck31-32"
+    },
+    {
+      "owner": "gliss",
+      "path": "benchmarks/qas3/make_deck.py",
+      "sha256": "f0ea3e2bbcf62e36a63b139aa173765901ed4b5c21cde23b188a6241d569d5d8",
+      "anchors": "all template mutations15-55"
+    },
+    {
+      "owner": "gliss",
+      "path": "benchmarks/qas3/build.sh",
+      "sha256": "ff5a70699576263bc4280fd268e426f37b7f3817768e86ac1e077860e6bea233",
+      "anchors": "reference pins18-20"
+    }
+  ],
+  "report_sha256": "dcaadababee98f617e66c4a607fce55b22336592dd2c434c3902343aa6c33a44",
+  "runs": {
+    "builds": 0,
+    "numerical_physics_runs": 0,
+    "spectra": 0
+  },
+  "claim": "different current-regularization operator; no demonstrated code defect or count-mismatch causality",
+  "historical_executed_deck_hashes_recovered": false,
+  "whole_component_review": false
+}

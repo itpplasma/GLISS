@@ -20,6 +20,8 @@ EXPLICIT = {"CMakeLists.txt", "fpm.toml", ".github/manylinux.Dockerfile",
             "benchmarks/cas3d_envelope/symbolic_interpolation/src/CMakeLists.txt",
             "benchmarks/cas3d_envelope/symbolic_metric/src/CMakeLists.txt",
             "benchmarks/analytic/resonant_pinch/symbolic/src/CMakeLists.txt",
+            "benchmarks/solovev/public/symbolic_derivative/src/CMakeLists.txt",
+            "benchmarks/qas3/symbolic_current/src/CMakeLists.txt",
             "docs/Makefile", "pyproject.toml", "python/gliss/closure_manifest.json",
             "ci/source_inventory_evidence.json", "gen/fortsym-revision.txt"}
 PREFIXES = ("src/", "app/", "include/", "python/gliss/", "python/tests/",

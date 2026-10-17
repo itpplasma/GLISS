@@ -1,0 +1,80 @@
+{
+  "scope": "Bounded exact real rational response comparison after common-chart mapping, no complete-code, spectrum or mismatch-causality claim",
+  "fortsym_revision": "2f0571e39f36a0606b3ae150c8b3b3df92ce6750",
+  "fortsym_prefix": "/tmp/fortsym-ordered-outputs-prefix",
+  "fortsym_dylib_sha256": "9b15f7a685073c315bb62d1a30cd1688e604c7eb7e619571397a1a25044a528c",
+  "compiler": "GNU Fortran16.1.0 -O3 -Wall -Wextra -Werror=array-temporaries -fcheck=all",
+  "max_build_jobs": 2,
+  "ctest": {
+    "registered": 1,
+    "passed": 1,
+    "failed": 0,
+    "reported_seconds": 0.32,
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "proof": {
+    "suite": "Pinned TERPSICHORE and GLISS resonant responses",
+    "total": 54,
+    "passed": 54,
+    "proved": 54,
+    "by_probe": 0,
+    "failed": 0
+  },
+  "distinct_identities": 27,
+  "engines": [
+    "native FortSym strict check_identity",
+    "SymEngine strict check_identity"
+  ],
+  "assumptions": [
+    "All variables real; delta>0,W>=0,spread>=0,scale>0,kappa!=0,Nfp>0; explicit native facts",
+    "Common-domain denominators A=D\u00b2+delta(D+P)\u00b2>0 and B=D\u00b2+W\u00b2>0 explicitly assumed",
+    "Identities involving1/D and zero-parameter limits require D!=0",
+    "Substitution D0 for RT requires P!=0; for RG requires W>0; these are additional branch conditions, not facts implied by simplified zero numerators",
+    "Main identities are real-number equalities, not assertions about bitwise floating-point evaluation",
+    "The m,n,P,T comparison is after chart/Fourier mapping; raw array names are not equated across codes"
+  ],
+  "formulas": {
+    "RT": "D/[D\u00b2+delta(D+P)\u00b2]",
+    "RG": "D/[D\u00b2+W\u00b2]",
+    "D": "mP\u2212nT",
+    "W": "0.5abs(mT)*iota_spread",
+    "RT_minus_RG": "D[W\u00b2\u2212delta(D+P)\u00b2]/[AB]",
+    "common_domain": "D!=0 OR (P!=0 AND W>0)"
+  },
+  "source": {
+    "terpsichore_pin": "04dcf9af3ceea7ef36198508f2beb5fafd9cef20",
+    "QAS_deck": "LCURRF1, DELTAJP0.04 nominal exact-real1/25; source floor1e\u221216",
+    "owner_trace": "/root/terpsichore_operator_audit supplied source variable/caller/coordinate interpretation; selected formulas/deck/map read independently",
+    "files": {
+      "/tmp/gliss-terpsichore-source-audit-20261017/srcs/tprgl2_block_ap.f": "604df797df5862c49e69b152ab5c4c4a3dd69f2cb55a44312e8fd5ba540f4490",
+      "/tmp/gliss-terpsichore-source-audit-20261017/QAS3_fx_benchmark/QAS3_fx_cur_bench_n1.data": "b59a189874279c58b4397d353adf7ddccb16a47d3a6d5e4b74f2c7e6aea25a26",
+      "/Users/ert/code/gliss/src/export_surface_geometry.f90": "8d462edc1cd2bc54874b1537729280ffea80e89f4772d01f36e91e933211163a",
+      "/Users/ert/code/gliss/src/primitive_kernel_geometry.f90": "77eb839bb23753043a2cf80d47fbf25648cbfde8c73d4b2369550dc5c1cab612",
+      "/Users/ert/code/gliss/src/terpsichore_normalization.f90": "584e2c01395a06b7418e2ab66e2bfacc8208f545e82786ce9c8043194be814b6"
+    }
+  },
+  "preserved_weighted_derivative_receipt": {
+    "path": "/tmp/gliss-weighted-derivative-proof-20261017/receipt.json",
+    "sha256": "7af827fa779a0f9aa9dfcb76d600551264895d4ae3101b6a9938cd0941cc9e4c"
+  },
+  "claims_excluded": [
+    "whole-operator equivalence",
+    "numerical spectra",
+    "benchmark mismatch causality",
+    "floating-point enclosure",
+    "new production behavior",
+    "upstream repair"
+  ],
+  "files": {
+    "src/resonant_response_proof.f90": "b6e4b01a2f871552b57a50d4b69aa2fa395e7af3dd916164e11755afc382ab84",
+    "src/CMakeLists.txt": "a7a3d16c39c449093b2b072009de21428772aab469b79dfee43296e3968837b9",
+    "derivation.md": "e07d79abb5258f3a282e997dc51be18809f216722ec1c9caa1810af54f56d125",
+    "configure.log": "c39218da7862f3018712c07635d17ba3b735c647bd3963837be1ca7a92d00a5b",
+    "build.log": "0656ba42d45182a9eb087583338c54b4a1d5b8314ca14622a5cc7cee729c4c2a",
+    "ctest.log": "8774b6a4fe684f5e1dacfde1457349d00a65787244880e01ee05b6dc0acf843a",
+    "build/strict-identities.json": "452674cbf13c3b831bbb610355b3f81fa1b087a121f4f8e6b632e24dfdbf0434",
+    "build/Testing/Temporary/LastTest.log": "d77e2b341e1c2a9018df3f67d2325bed95ab1485c69edf612f914cbbae52297a"
+  }
+}

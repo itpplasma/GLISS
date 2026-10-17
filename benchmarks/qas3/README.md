@@ -11,6 +11,14 @@ to compare GLISS with public reference codes:
   discretization, with sign and count compared only, because the
   normalizations differ.
 
+The [current-regularization source audit](symbolic_current/) identifies an
+additional operator difference in the current recipe: TERPSICHORE uses fixed
+`DELTAJP=0.04`, whereas GLISS uses a width from the equilibrium export's radial
+transform variation. The exact response comparison passes 54 strict symbolic
+checks. The historical results below do not isolate this difference, and their
+executed deck hashes have not been recovered. Count discrepancies therefore
+remain unresolved; radial mesh convergence alone is insufficient qualification.
+
 ## Reproduce
 
 ```sh
