@@ -22,6 +22,24 @@ builds FortSym from the recorded commit, and retains provenance and proof report
 The installed package exports no compiler/revision metadata: developers must
 select the matching installation; compilation and exact reproduction check it.
 
+## Weighted radial FEEC jets
+
+`gliss_weighted_feec_gen.f90` derives the value, first and second radial
+derivatives of `x(s)=s**(-alpha)*N(s)`, with `s>0` and finite real `alpha`.
+The independent inputs are the coordinate, power and three jets of `N`.
+It also derives parameter JVP/VJP leaves. Production normal and tangential
+weighting use the generated primal leaves, sharing an emitted include so
+the existing loops can inline them and evaluate the weight once per mode.
+Strict identities and the native `weighted_feec_compatibility` test cover
+custom powers, integer-power kernels and the interior degree-1 obstruction.
+
+These are local derivative kernels. B-spline topology, incidence maps, axis
+ties, boundary conditions, quadrature and global assembly remain handwritten.
+The [Lean coefficient proof](../benchmarks/feec/lean/README.md) supplies a
+separate structural check; neither local code generation nor that bounded
+proof establishes a global commuting projection or resolves Solov'ev #35.
+The reproduction gate compares both the generated module and primal include.
+
 ## Physical mass
 
 `gliss_physical_mass_gen.f90` defines the pointwise physical kinetic energy in

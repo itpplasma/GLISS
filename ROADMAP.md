@@ -55,20 +55,38 @@ reference values or repeatedly pursue inaccessible data.
 | A4: independent published-code comparisons | DCON sign bracket, TERPSICHORE replay and bounded independent QAS3 controls exist | Converge the Solov'ev marginal interval and higher-n controls; rerun current independent QAS3 assembly with qualified input; explain count/branch differences through energy and subspace comparisons; complete ideal-limit MISHKA/CASTOR transfer and the failed stable control under #12 |
 | A5: physical free-boundary references | Analytic vacuum-energy oracle and true-edge ingestion pass | Qualify edge pressure, tangential-field continuity and exterior matching, then reproduce the DCON critical-wall interval and applicable published helical/wall limits with separate volume, edge and wall refinement |
 
-The active A2 work derives the physical weighted FEEC operators, rather than
-assuming that the unweighted H1-to-L2 sequence survives multiplication by the
-axis weights. The bounded workflow is to repair FortSym's confirmed
-resource-limit NONZERO verdict, generate and strictly check weighted basis
-jets from one definition, prove the coefficient kernel and degree-1 span
-obstruction in Lean, and compare the resulting operators with independent
-physical cancellation and derivative tests. Topology, global function-space
-arguments, boundary admissibility and assembled quadrature remain separate
-obligations. Generating algebraically equivalent leaves does not change the
-trial space or resolve #35. Any proposed space change must pass the original
+The [weighted FEEC derivation](benchmarks/feec/README.md) now supplies generated
+value, first/second derivative and JVP/VJP leaves from one definition, plus
+21 kernel-checked Lean theorems for the first-cell coefficient/polynomial
+operator and the degree-1 interior companion-space obstruction. Independent
+native tests cover polynomial jets, custom powers, derivative products and
+a Cartesian two-cell tent with exact physical cancellation. Production uses
+the generated weighting leaves; the trial space is unchanged. This does not
+establish a complete weighted FEEC complex or resolve #35. Global finite-energy
+domains, interface gluing, a bounded commuting projection, boundary
+admissibility and consistent compression projection/quadrature remain open.
+Any proposed space change must pass the original
 uniform-64 Solov'ev instability criterion, stable controls and analytical
 convergence gates without relaxing tolerances or adding hidden polynomial
 degree. The existing failed derivative-eta and inconclusive relaxation
 experiments remain evidence, rather than accepted repairs.
+
+A bounded follow-up allowed independent eta values at five radial nodes per
+interior cell while retaining the existing midpoint compression rule. It is
+rejected: four off-midpoint eta values per cell receive no compression penalty.
+The selected-form energy is exactly negative on both the unstable q=1.035
+case (-5.984e6 J) and the stable q=1.045 control (-5.728e6 J), whereas evaluation
+of the same finite interpolants at all existing accurate nodes gives positive
+7.202e11 J and 4.679e11 J respectively. Physical masses remain positive.
+These are exact signs conditional on the captured rounded native point forms,
+not continuum certificates. The result diagnoses aliasing in this candidate;
+it neither repairs #35 nor establishes a defect in the original P0 scheme.
+The next admissible candidate must derive the weighted space and compression
+projection/quadrature together, with a physical-energy consistency argument
+and the stable control retained before measuring its unstable endpoint.
+The frozen diagnostic, complete witnesses and source-bound receipt are retained
+at `/tmp/gliss-weighted-feec-local-schur-20261017/outcome-receipt.json`
+(SHA256 `ce7c22e4d244de3499a5a2ba578834c418768eabf559b5cb93e34889979e24f6`).
 
 Use the original [Bernstein energy principle](https://doi.org/10.1098/rspa.1958.0023),
 [Newcomb pinch analysis](https://doi.org/10.1016/0003-4916(60)90023-3),
@@ -646,7 +664,40 @@ replace a reliable inertia method with pivot-perturbed LU.
 
 ## Integrated evidence and active dependencies
 
-The symbolic-verifier wave pins published FortSym
+The weighted FEEC wave pins published FortSym
+[`8a418e2efe40dd9a01231a0900f71caad7858360`](https://github.com/lazy-fortran/fortsym/commit/8a418e2efe40dd9a01231a0900f71caad7858360),
+including the resource-limit verdict repair and the concurrently published
+FortGen `3bfb380958f6827a9639425f0f7447b83c3813f6` dependency update.
+The final dependency closure passes all 123 upstream native tests (78.80 s)
+and both installed-consumer tests (1.78 s). The original disputed residual now
+returns native UNKNOWN; SymEngine proves it and the returned native residual
+ZERO. The accepted sheared-pinch proof retains 88 strict checks and zero probes.
+No normalization resource cap is raised. The final source/library-bound receipt
+is `/tmp/gliss-fortsym-resource-verdict-final-receipt.json`
+(SHA256 `bb10a00e39767b2dc842349321471fc4ff01f9e1a8af03ca68268dee57a046a3`).
+All six production generator suites pass 1,116 strict identities with zero
+probes; their six registered reproduction tests pass byte for byte (2.64 s).
+The six analytical/reference derivations also pass 282 strict identities:
+CAS3D metric/interpolation, resonant/sheared pinch, weighted derivatives and
+reference-current response. Regeneration updates only revision comments in
+the eight outputs, preserving the executable Fortran used by the current
+187-test native run. The final pinned-library receipt is
+`/tmp/gliss-weighted-feec-final-validation-20261017/receipt.json`
+(SHA256 `16254bbed334160d3a6761487ebd0533ae4a5cddfa91fdf17d5fd15269bacb52`).
+Source accounting now contains 382 records and 1,710 static reference edges,
+including the pinned Lean proof target; whole-component equation reviews
+remain zero.
+
+The [weighted FEEC Lean target](benchmarks/feec/lean/README.md) compiles with
+Lean 4.16.0 and an exact mathlib/dependency manifest. All 21 theorems are checked
+with warnings treated as errors, no admitted proofs and no added axioms. The
+printed main-result dependencies are the standard `propext`, `Classical.choice`
+and `Quot.sound`. A source-bound [receipt](benchmarks/feec/lean/validation.json)
+records the local build; the new hosted workflow repeats that bounded proof.
+These are first-cell coefficient/polynomial and interior-obstruction results,
+not a complete global weighted FEEC or MHD stability proof.
+
+The earlier symbolic-verifier wave pinned published FortSym
 `bdeb96e0777b1eafcb7c3b4845ca2ba9362a2b00`. A reproduced adapter defect
 reported an exact weighted-derivative identity as NONZERO after fraction
 folding left symbolic power exponents unexpanded. The upstream repair
@@ -679,17 +730,26 @@ At `144ec56`, the isolated Fo audit passes clean lint, strict optimized
 compilation with array temporaries treated as errors, and all 186 default
 native tests (40.89 s test wall time), including the new sheared-pinch test.
 Source accounting contains
-373 records and still zero completed whole-component equation reviews.
+373 records at that revision and still zero completed whole-component equation reviews.
 At published `ddaa8f6`, the isolated Fo audit also passes clean lint, strict
 optimized compilation with array temporaries treated as errors, and all 184
 then-registered tests. At published `fbb2430`, hosted GNU, Flang, runtime-check,
 Python, lint, format, generation and docs checks pass, as do both macOS native
 builds and all twelve installed-wheel Python/architecture combinations.
-The resident integration generation at `144ec56` is healthy and quiescent
+The resident integration generation at `144ec56` was healthy and quiescent
 with the sheared-pinch gate passing (one selected test out of 186). Its captured
 CMake, test and 111 production source/include files match the published source;
 that selected scope is not a second full-suite claim. The immutable Fo driver
 is `454c93dffd513b85bc8274c262a2d5364b20e4acf24c45f6ecd55de1769f2daf`.
+That resident was stopped for the weighted FEEC integration. Replacement
+admission was unavailable while other projects held the host work slots;
+no replacement resident pass is claimed. The current focused Fo invocation
+passes seven selected native tests (26.00 s), and a fresh GNU 16 Release build
+with array temporaries treated as errors passes all 187 default CTests
+(71.34 s). Canonical formatting and diff checks pass. Full-checkout Fo lint
+reports 27 warnings in the unchanged optional Enzyme geometry test and no
+unused imports; none is in a changed file. These warnings are distinct from
+the clean default native build and are not a new clean-lint claim.
 The analytical cylinder identifies two fast/slow branches and the Alfvén
 cluster for both parities, degrees 1–4 and 8/16/32 cells, with zero negative
 inertia and independently bounded branch enclosures. Finest relative errors
@@ -765,7 +825,10 @@ defect: normalization refused a product above its 2,000-term bound, but the
 fallback inferred NONZERO. SymEngine proves the same residual ZERO. The accepted
 proof checks the full raw completion with both engines and then instantiates
 that exact completion; the disputed verdict is preserved and not used. This
-non-blocking generic verifier defect is diagnosed, not repaired in this wave.
+generic verifier defect is repaired in the weighted FEEC wave: all refused
+rational normalization stages prevent residual-structure NONZERO inference,
+while exact scalar decisions remain available. Independent geometric-series
+regressions cover degree and term limits without raising the resource caps.
 The symbolic check also caught and corrected the new proof draft's eta/mu/nu
 chart transcription before acceptance; the production mapping was correct.
 

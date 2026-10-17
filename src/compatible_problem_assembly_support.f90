@@ -30,6 +30,8 @@ module compatible_problem_assembly_support
 
 contains
 
+    include 'generated/gliss_weighted_feec_primal.inc'
+
     pure function angular_grid_aliases(equilibrium, mode_m, mode_n, n_theta, &
             n_zeta) result(aliases)
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
@@ -71,7 +73,7 @@ contains
         if (size(dh1) /= size(h1)) return
         if (any(indices < 1) .or. any(indices > size(h1))) return
         do trial = 1, size(stored_power)
-            scale = coordinate**(-stored_power(trial))
+            call generated_weighted_feec_scale(coordinate, stored_power(trial), scale)
             if (.not. ieee_is_finite(scale)) return
             call set_stored_power_column(coordinate, stored_power(trial), &
                 scale, h1, dh1, indices, values(:, trial), &
@@ -95,7 +97,7 @@ contains
         real(dp), intent(out) :: values(:, :)
         integer, intent(out) :: info
         real(dp) :: scale
-        integer :: trial
+        integer :: trial, basis
 
         info = compatible_support_invalid
         if (coordinate <= 0.0_dp) return
@@ -104,9 +106,12 @@ contains
         if (info /= compatible_support_ok) return
         info = compatible_support_invalid
         do trial = 1, size(stored_power)
-            scale = coordinate**(-stored_power(trial))
+            call generated_weighted_feec_scale(coordinate, stored_power(trial), scale)
             if (.not. ieee_is_finite(scale)) return
-            values(:, trial) = scale * values(:, trial)
+            do basis = 1, size(indices)
+                call generated_weighted_feec_value_from_scale(scale, &
+                    l2(indices(basis)), values(basis, trial))
+            end do
         end do
         if (.not. all(ieee_is_finite(values))) return
         info = compatible_support_ok
@@ -121,9 +126,8 @@ contains
 
         do basis = 1, size(indices)
             source = indices(basis)
-            values(basis) = scale * h1(source)
-            derivatives(basis) = scale &
-                * (dh1(source) - power * h1(source) / coordinate)
+            call generated_weighted_feec_first_from_scale(coordinate, power, scale, &
+                h1(source), dh1(source), values(basis), derivatives(basis))
         end do
     end subroutine set_stored_power_column
 

@@ -28,7 +28,8 @@ if(GLISS_ENABLE_CODEGEN)
     # toolchain, and compilation plus exact reproduction are the native gates.
     add_custom_target(gliss_regenerate_kernels)
     add_custom_target(gliss_check_generated)
-    foreach(kernel physical_mass pressure_adjoint energy geometry cartesian_field)
+    foreach(kernel physical_mass pressure_adjoint energy geometry cartesian_field
+            weighted_feec)
         set(generator_source gen/gliss_${kernel}_gen.f90)
         if(kernel STREQUAL "cartesian_field")
             set(generator_source gen/generate_cartesian_field.f90)
@@ -103,6 +104,8 @@ endif()
 
 set_source_files_properties(src/generated/gliss_geometry_primal.inc
     PROPERTIES HEADER_FILE_ONLY TRUE)
+set_source_files_properties(src/generated/gliss_weighted_feec_primal.inc
+    PROPERTIES HEADER_FILE_ONLY TRUE)
 add_library(gliss
     src/generated/gliss_cartesian_field_generated.f90
     src/generated/gliss_energy_generated.f90
@@ -110,6 +113,8 @@ add_library(gliss
     src/generated/gliss_geometry_primal.inc
     src/generated/gliss_physical_mass_generated.f90
     src/generated/gliss_pressure_adjoint_generated.f90
+    src/generated/gliss_weighted_feec_generated.f90
+    src/generated/gliss_weighted_feec_primal.inc
     src/gvec_cas3d_adapter.f90
     src/netcdf_c_bindings.f90
     src/netcdf_c_api.f90
@@ -493,6 +498,14 @@ if(BUILD_TESTING)
         test/test_radial_feec_complex.f90)
     target_link_libraries(test_radial_feec_complex PRIVATE gliss)
     add_test(NAME radial_feec_complex COMMAND test_radial_feec_complex)
+
+    add_executable(test_weighted_feec_compatibility
+        test/test_weighted_feec_compatibility.f90)
+    target_link_libraries(test_weighted_feec_compatibility PRIVATE gliss)
+    add_test(NAME weighted_feec_compatibility
+        COMMAND test_weighted_feec_compatibility)
+    set_tests_properties(weighted_feec_compatibility PROPERTIES
+        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
 
     add_executable(test_compatible_radial_quadrature
         test/test_compatible_radial_quadrature.f90)

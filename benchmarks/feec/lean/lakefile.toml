@@ -1,0 +1,12 @@
+name = "weightedFeec"
+version = "0.1.0"
+defaultTargets = ["WeightedFeec"]
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "a6276f4c6097675b1cf5ebd49b1146b735f38c02"
+
+[[lean_lib]]
+name = "WeightedFeec"
+moreLeanArgs = ["-j2", "-DwarningAsError=true"]

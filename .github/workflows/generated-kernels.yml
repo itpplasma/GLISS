@@ -140,8 +140,8 @@ jobs:
               -DGLISS_ENABLE_CODEGEN=ON -DGLISS_REQUIRE_OPENBLAS=ON
             cmake --build build-codegen --parallel 2 --target \
               gliss_physical_mass_gen gliss_pressure_adjoint_gen gliss_energy_gen \
-              gliss_geometry_gen gliss_cartesian_field_gen
-            for generator in physical_mass pressure_adjoint energy geometry cartesian_field; do
+              gliss_geometry_gen gliss_cartesian_field_gen gliss_weighted_feec_gen
+            for generator in physical_mass pressure_adjoint energy geometry cartesian_field weighted_feec; do
               printf "\nLoader dependencies: %s\n" "$generator" >> codegen-runtime-provenance.txt
               "$GLISS_CODEGEN_LOADER" --library-path "$library_path" \
                 --list "build-codegen/gliss_${generator}_gen" \

@@ -14,7 +14,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "source_inventory.jsonl"
 EVIDENCE = ROOT / "ci/source_inventory_evidence.json"
-EXTENSIONS = {".f90", ".inc", ".py", ".sh", ".c", ".h", ".cmake", ".yml", ".js", ".lock"}
+EXTENSIONS = {".f90", ".inc", ".py", ".sh", ".c", ".h", ".cmake", ".yml", ".js", ".lock", ".lean"}
 EXPLICIT = {"CMakeLists.txt", "fpm.toml", ".github/manylinux.Dockerfile",
             "benchmarks/figure8/native/CMakeLists.txt",
             "benchmarks/cas3d_envelope/symbolic_interpolation/src/CMakeLists.txt",
@@ -23,6 +23,9 @@ EXPLICIT = {"CMakeLists.txt", "fpm.toml", ".github/manylinux.Dockerfile",
             "benchmarks/analytic/sheared_pinch/symbolic/src/CMakeLists.txt",
             "benchmarks/solovev/public/symbolic_derivative/src/CMakeLists.txt",
             "benchmarks/qas3/symbolic_current/src/CMakeLists.txt",
+            "benchmarks/feec/lean/lean-toolchain",
+            "benchmarks/feec/lean/lakefile.toml",
+            "benchmarks/feec/lean/lake-manifest.json",
             "docs/Makefile", "pyproject.toml", "python/gliss/closure_manifest.json",
             "ci/source_inventory_evidence.json", "gen/fortsym-revision.txt"}
 PREFIXES = ("src/", "app/", "include/", "python/gliss/", "python/tests/",
@@ -44,6 +47,12 @@ def paths():
 def role(path):
     if path == "ci/source_inventory_evidence.json":
         return "audit_metadata"
+    if path.startswith("benchmarks/feec/lean/"):
+        if path.endswith(".lean") and not path.endswith("lakefile.lean"):
+            return "formal_proof_source"
+        if path.endswith("lean-toolchain"):
+            return "formal_proof_dependency_pin"
+        return "formal_proof_configuration"
     if path == "gen/fortsym-revision.txt":
         return "symbolic_dependency_pin"
     if path.startswith("gen/"):

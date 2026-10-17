@@ -1,0 +1,45 @@
+name: weighted FEEC proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - benchmarks/feec/lean/**
+      - .github/workflows/weighted-feec-proof.yml
+  pull_request:
+    paths:
+      - benchmarks/feec/lean/**
+      - .github/workflows/weighted-feec-proof.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: benchmarks/feec/lean
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan/toolchains
+            benchmarks/feec/lean/.lake/packages
+          key: weighted-feec-lean-${{ runner.os }}-${{ hashFiles('benchmarks/feec/lean/lean-toolchain', 'benchmarks/feec/lean/lake-manifest.json') }}
+      - name: Install elan from a pinned bootstrap source
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL \
+            https://raw.githubusercontent.com/leanprover/elan/13e8ade06344711b0a99be2374483872ac70d036/elan-init.sh \
+            -o "$RUNNER_TEMP/elan-init.sh"
+          sh "$RUNNER_TEMP/elan-init.sh" -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Fetch the pinned mathematics cache
+        run: |
+          lake exe cache get Mathlib/LinearAlgebra/FiniteDimensional.lean \
+            Mathlib/LinearAlgebra/Dimension/Constructions.lean \
+            Mathlib/Algebra/Polynomial/Derivative.lean Mathlib/Tactic.lean
+      - name: Check the weighted FEEC theorems
+        run: lake build

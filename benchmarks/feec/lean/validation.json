@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "scope": "Finite-dimensional first-cell weighted derivative coefficient kernel/rank and degree-one interior companion-space obstruction; not complete FEEC/MHD validation.",
+  "lean_toolchain": "leanprover/lean4:v4.16.0",
+  "mathlib_revision": "a6276f4c6097675b1cf5ebd49b1146b735f38c02",
+  "command": "lake build",
+  "working_directory": "benchmarks/feec/lean",
+  "exit_code": 0,
+  "result": "PASS",
+  "lean_arguments": [
+    "-j2",
+    "-DwarningAsError=true"
+  ],
+  "reported_axioms": {
+    "WeightedFeec.resonant_nullity": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "WeightedFeec.resonant_rank": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "WeightedFeec.physical_injective": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "WeightedFeec.polynomial_kernel_iff": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "WeightedFeec.degree_one_tent_obstruction": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ]
+  },
+  "added_axioms": [],
+  "admitted_proofs": 0,
+  "source_bindings": {
+    "WeightedFeec.lean": "d7557ee46b9c3c74aea32269bf91dd8f3e799d79830760d849a75c5b3d8481d8",
+    "lakefile.toml": "b0c9d4c952b2c79779dc3319826287faec8a4f63fcd26a155a4eb4f238638464",
+    "lake-manifest.json": "417cc488648116d954c970a9c5b0f52da61dc88c0947279e086250b3ae2cb4d7",
+    "lean-toolchain": "b3f7d43e005c36e7980721171c8809899ec3c0bc338f35568f54606beb7149a8",
+    "README.md": "f1bbd4442b63ba2b50861b32986f6e07041c92470dd0c432463427b20b74f900"
+  },
+  "build_log": {
+    "path": "/tmp/gliss-weighted-feec-lean-20261017.log",
+    "sha256": "38da9954c47e356fdc85236ede3c6e74270095f4c6c8305d213075bdb7324f7a"
+  },
+  "local_execution_note": "Build reused an existing cache for the exact pinned mathlib/dependency revisions. The ignored .lake cache and local symlinks are not part of the dependency manifest."
+}

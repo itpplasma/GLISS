@@ -7,7 +7,8 @@ foreach(required KERNEL GENERATOR_EXE SOURCE_DIRECTORY OUTPUT_DIRECTORY
 endforeach()
 if(NOT KERNEL STREQUAL "physical_mass" AND
         NOT KERNEL STREQUAL "pressure_adjoint" AND NOT KERNEL STREQUAL "energy" AND
-        NOT KERNEL STREQUAL "geometry" AND NOT KERNEL STREQUAL "cartesian_field")
+        NOT KERNEL STREQUAL "geometry" AND NOT KERNEL STREQUAL "cartesian_field" AND
+        NOT KERNEL STREQUAL "weighted_feec")
     message(FATAL_ERROR "Unknown generated kernel: ${KERNEL}")
 endif()
 set(output "${OUTPUT_DIRECTORY}/gliss_${KERNEL}_generated.f90")
@@ -18,6 +19,11 @@ if(KERNEL STREQUAL "geometry")
     list(APPEND outputs "${OUTPUT_DIRECTORY}/gliss_geometry_primal.inc")
     list(APPEND committed_outputs
         "${SOURCE_DIRECTORY}/src/generated/gliss_geometry_primal.inc")
+endif()
+if(KERNEL STREQUAL "weighted_feec")
+    list(APPEND outputs "${OUTPUT_DIRECTORY}/gliss_weighted_feec_primal.inc")
+    list(APPEND committed_outputs
+        "${SOURCE_DIRECTORY}/src/generated/gliss_weighted_feec_primal.inc")
 endif()
 set(identities "${OUTPUT_DIRECTORY}/${KERNEL}-identities.json")
 file(MAKE_DIRECTORY "${OUTPUT_DIRECTORY}")
