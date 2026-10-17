@@ -730,9 +730,9 @@ contains
                     beta_pair%cosine(1, mode_m, mode_n) = 0.0_dp
                     beta_pair%sine(1, mode_m, mode_n) = 0.0_dp
                 else if (width > 0.0_dp) then
-                    ! Resolution-consistent inverse: the cell average of the
-                    ! principal value of 1/D, whose zero may lie anywhere in
-                    ! the radial cell, rather than the exact inverse.
+                    ! Finite-resolution regularized inverse. Its width follows
+                    ! denominator variation over the radial data interval;
+                    ! this is not an exact interval principal-value average.
                     response = denominator / (denominator**2 + width**2)
                     beta_pair%sine(1, mode_m, mode_n) = &
                         (rhs_cosine(mode_m, mode_n) / scale) * response / two_pi

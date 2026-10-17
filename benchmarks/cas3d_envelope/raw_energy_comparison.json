@@ -1,0 +1,42 @@
+{
+  "status": "DIAGNOSTIC_OPERATOR_DOMAIN_FORCE_AND_ENERGY_GAP",
+  "input_sha256": "717be47f1e7d8fc5d3fc2c08ed64da2b5746a055d1f6a66580efa22cfed9c87b",
+  "physics_archive_sha256": "a567b9a5988de77470cf4a32dfb44197d5ec9ec6324a7fe52f8782e697b5f949",
+  "cartesian_archive_sha256": "70ab721f34bcb2ee436e6ac183233011d0f5a70ebe7d568e9db54117614441f4",
+  "trial_sha256": "e52bf689f2444ab20b019ee0d9c0ae9ddd72174595160430bfe966f3d7544096",
+  "matrix_sha256": "0263f317bc57448add137c3404269efeddc58c6c2f3ee5fe8bcd3915d2fc772d",
+  "trial": "Actual native lowest FE192 caption-L3 midpoint vector, degree1, parity1, axis_conforming=false, physical C-map decoded and native-checked",
+  "energy_convention": "Full-torus 2deltaW in J, gamma=0; production replay equals NFP*vKv/mu0; curlB in T/m",
+  "production_replay_expected_J": -811.07078744843989,
+  "production_replay_relative_error": 3.9565578598849062e-07,
+  "energies_J": {
+    "midpoint_192x192": {"raw":-631.99172269690632,"actual_geometric":3034.9126882846358,"production":-811.07110835328979},
+    "two_gauss_per_cell_192x192": {"raw":-627.22590653653765,"actual_geometric":3006.0010531406388,"production":-805.85218460000237},
+    "midpoint_256x256": {"raw":-631.99172257731391,"actual_geometric":3034.9126882789496,"production":-811.07110825129212}
+  },
+  "raw_radial_drift_relative": 0.0075409471187873221,
+  "raw_angular_drift_relative": 1.8923098182926332e-10,
+  "production_minus_raw_midpoint_J": -179.07938565638347,
+  "production_minus_geometric_components_J": {"current":-87.579471931827385,"normal_force":-1092.6827244781421,"drive":-2665.7216002279179},
+  "production_gap_decomposition_absolute_error_J": 3.8198777474462986e-11,
+  "force_sampling": "All 192 FE midpoints and 192x192 angles; physical vector residual R=curlB cross B-mu0 p_s grad(s)",
+  "characteristic_length_m": 1.0470011923499629,
+  "volume_weighted_force_characteristic": 0.0060332089697292431,
+  "volume_weighted_force_pressure_relative": 0.2830549900824656,
+  "volume_weighted_vector_force_rms_T2_per_m": 0.040614547401199685,
+  "near_axis_vector_force": [
+    {"s":0.0026041666666666665,"force_rms_T2_per_m":0.2869877924817863,"B_squared_rms_T2":7.003889352278223,"pressure_force_rms_T2_per_m":0.00031864268826962283,"characteristic":0.04290138604496587,"pressure_relative":900.6570778079445},
+    {"s":0.0078125,"force_rms_T2_per_m":0.2140325409313646,"B_squared_rms_T2":7.0056784134481,"pressure_force_rms_T2_per_m":0.0016382296333859918,"characteristic":0.031987241253704043,"pressure_relative":130.64868109423048}
+  ],
+  "axis_domain": "Actual trial has xi=O(sqrt(s)), bounded/decaying Q and finite energy density in native s=1e-3..3e-7 probes; Cartesian smoothness is not established",
+  "P0_interfaces": "Cellwise completion includes +sum integral x*[c]*j_dot_n dS/mu0, [c]=[eta]; no eta_s distribution enters curl(xi cross B) or div(xi)",
+  "residual_bound_scope": "Exact pointwise identity closes; volume and interface absolute force bounds are very loose; signed residual/flux integrals are not radially converged",
+  "qualification": "Negative raw sign persists in both finite quadratures. Continuum energy convergence, operator-domain equilibrium qualification and quantitative CAS3D literature agreement remain open. Existing five-radius force protocol is not reclassified.",
+  "formulation_conclusion": "No missing Bernstein pressure/current term or exact-equilibrium counterexample found. Production uses reconstructed MDE current and an equilibrium-only completed square; force/current/drive differences are separately measured.",
+  "full_force_receipt_sha256": "9808773c69b15601bc2703e8463fd7bfd5391081f4d00310752161eadd15a7a1",
+  "midpoint_receipt_sha256": "390f60d00571a66ee4e07ff8a76173f3934bb5d32ae9d75135d7831da7c8e106",
+  "refined_receipt_sha256": "f4a79d8086b797a3db25586534f1e47dc25dbe3e37bee3bd2c880ff1aa428dce",
+  "angular_receipt_sha256": "e6d0f41730c88b3c315b351653cdbe38306e3d9456ba8c5cad39374e5681d413",
+  "oracle_source_sha256": "5ce46b08f761d5977931e5b1f03cc3b9d3e3305e7829ffe42e738f23b5bf7da8",
+  "scope": "Scratch independent diagnostic only; not a whole-component mathematical review or product acceptance promotion"
+}

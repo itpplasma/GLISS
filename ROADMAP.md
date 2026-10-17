@@ -37,7 +37,7 @@ their narrower meanings; none alone passes this claim.
 
 | Gate | Existing evidence | Required work and acceptance |
 | --- | --- | --- |
-| A0: equation and normalization audit | Raw Bernstein finite-pressure screw-pinch energy and absolute mass agree with production surface assemblies; zero completed whole-component reviews | Extend the independent current/pressure-work comparison to three-dimensional displacements; audit units, flux signs, chart orientation, axis constraints and boundary contributions |
+| A0: equation and normalization audit | Exact pinch raw energy/mass pass; matched W7-X trial exposes a raw/production energy gap on a force-defective retained equilibrium; zero completed whole-component reviews | Qualify equilibrium over the actual trial support, converge raw three-dimensional energy and P0 interface terms, and audit units, flux signs, axis constraints and boundaries |
 | A1: analytical spectra and thresholds | Cylinder fast/slow/Alfvén branches, imported exact vacuum torus and 144 exact resonant screw-pinch negative-energy trials pass | Add global production Newcomb/Suydam and helical unstable/marginal limits; retain surface-assembly scope for the screw pinch and stable-domain scope for the imported vacuum torus |
 | A2: axis, resonance and small eigenvalues | Higher-degree Solov'ev bracket controls pass; degree 1 still misses a tested marginal endpoint; dense slow-cluster ordering sensitivity is diagnosed | Resolve #35's frozen degree-1 criterion and retain the failed gate until it passes; test rational-surface domain and refinement; check slow-cluster accuracy using independent higher-precision pencils before attributing any failure to the production solver |
 | A3: CAS3D formulation and numerical comparison | Independent dense quotient oracle reproduces floor inconsistency and zero-carrier component-topology defects; integrated repairs and ordered-CSV experiments pass their software gates | Recover and audit the full published mode mask; resolve provisional numerical discrepancies and compare matched signs/inertia, marginal parameters, energies and subspaces |
@@ -121,9 +121,9 @@ case to 0.000874519 characteristic force and 4.458% pressure-relative force.
 It passes both strict sampled limits; source and retained-pair changes pass
 0.0005. The other three individual cases still fail the physical limits.
 This qualifies only the five specified interior radii and aggregate angle
-norms, with no axis/edge or pointwise maximum claim. Vary equilibrium resolution separately from
-the stability mesh. The original
-profile diagnostic's large maximum is not itself a fractional force error.
+norms, with no axis/edge or pointwise maximum claim. Vary equilibrium resolution
+separately from the stability mesh. The original profile diagnostic's large
+maximum is not itself a fractional force error.
 
 All 26 fresh-export CAS3D controls complete with the original declared
 assumptions. The m7/n7 to m10/n10 eigenvalue drift is at most 0.0283%, with
@@ -170,6 +170,33 @@ Improved equilibrium/export accuracy does not explain this discrepancy on
 these controls. Recover the mode/radial conventions and compare raw energy
 on matched trials; no normalization is fitted. One FE mesh and one angular
 grid for this improved representation do not establish full convergence.
+
+The matched-trial investigation now takes priority over further CAS3D sweeps.
+Check force balance throughout the actual assembly support, including the
+near-axis and outer cells, and separate source, transform and radial
+interpolation errors. Compare Cartesian curl current with reconstructed MDE
+current, then converge raw Bernstein energy for the same physical trial,
+including the one-sided P0 interface contributions. Retain the existing
+five-radius protocol's bounded result; it does not certify this larger domain.
+Repeat the frozen CAS3D comparison only after this operator/input consistency
+check is qualified. Historical settings remain declared hypotheses.
+
+[Matched-trial evidence](benchmarks/cas3d_envelope/raw_energy_comparison.json)
+uses the actual lowest FE192/L3 midpoint vector on the final 17/15, retained26
+input. Independent production replay agrees with its native matrix quadratic
+to 3.96e-7 relatively. Full-torus raw/production 2 delta W is
+-631.992/-811.071 J with midpoint integration and -627.226/-805.852 J with
+two Gauss points per cell. The refined magnitude gap is 28.48% of the raw
+value; angular refinement changes raw energy by 1.89e-10 relatively, while
+the radial change is 0.754%. Sampled volume-weighted force over all 192
+assembly midpoints is 0.006033 characteristic and 28.31% pressure-relative.
+The first two physical vector-force RMS values are 0.287 and 0.214 T^2/m;
+the second is outside the special axis patch. No pressure/flux unit defect
+or missing Bernstein term was reproduced. Current, force substitution and
+drive differences close the production/geometric gap algebraically, but
+signed volume/interface corrections and continuum energy are not converged.
+The trial has finite-energy axis behavior in inspected probes; Cartesian
+smoothness and full operator-domain equilibrium qualification remain open.
 
 The old synthetic 70-envelope/139-label run measures scaling. A literal paper
 L139 prefix would contain 139 or 140 envelopes and 277 or 279 labels before
@@ -240,7 +267,7 @@ issue whose broader requested acceptance remains unmet.
 | D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse passes; generic equilibrium response unavailable |
 | S | Sparse backend selection | Reliable backend capabilities | Native LDLT lacks public inertia reliability API; retain block-LAPACK |
 | P | Performance qualification | Accepted workload and accuracy | Pressure reverse and Cartesian value benchmarks implemented and measured |
-| R | Reproducible release and evidence | Applicable gates above | 183 native pass at 6c13a08; the new resonant test passes separately; 407 source Python, 382 installed Python and five generation gates pass; prior unchanged AD kernels have nine Enzyme gates |
+| R | Reproducible release and evidence | Applicable gates above | 184 native, 407 source Python, 382 installed Python and five generation gates pass locally; prior unchanged AD kernels have nine Enzyme gates |
 
 ### K: FortSym-generated kernels
 
@@ -397,13 +424,13 @@ replace a reliable inertia method with pivot-perturbed LU.
 
 ## Integrated evidence and active dependencies
 
-The analytical/CAS3D waves add six registered native tests. All 183 default
-CTest cases at `6c13a08` pass in the strict GNU 16 Release build; the additional
-resonant screw-pinch test passes its focused native check. All 407 Python tests pass
-with two optional skips and BOOZ_XFORM installed. Source accounting contains
+The analytical/CAS3D waves add six registered native tests. All 184 default
+CTest cases at `ddaa8f6` pass in the strict GNU 16 Release build. All 407
+Python tests pass with two optional skips and BOOZ_XFORM installed.
+Source accounting contains
 354 records and still zero completed whole-component equation reviews.
-At published `6c13a08`, the isolated Fo audit also passes clean lint, strict
-optimized compilation with array temporaries treated as errors, and all 183
+At published `ddaa8f6`, the isolated Fo audit also passes clean lint, strict
+optimized compilation with array temporaries treated as errors, and all 184
 then-registered tests. At preceding `2e6bf4a`, hosted GNU, Flang, runtime-check,
 Python, lint, format, generation and docs checks pass, as do both macOS native
 builds and all twelve installed-wheel Python/architecture combinations.

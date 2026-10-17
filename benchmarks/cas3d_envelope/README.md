@@ -111,6 +111,28 @@ The relevant primary references are
 [Schwab's CAS3D formulation](https://doi.org/10.1063/1.860656) and
 [Nuehrenberg's W7-X study](https://doi.org/10.1063/1.871924).
 
+## Matched raw-energy diagnostic
+
+[raw_energy_comparison.json](raw_energy_comparison.json) records an independent
+Bernstein-energy evaluation of the actual lowest FE192/L3 midpoint trial on
+the source17/15, retained26, 144-surface W7-X export. The production replay
+matches the native matrix quadratic to `3.96e-7` relatively. With two Gauss
+points per cell, full-torus `2*deltaW` is `-627.226 J` for raw Bernstein energy
+and `-805.852 J` for the production completed square. The magnitude gap is
+28.48% of the raw value. The raw radial-quadrature drift is 0.754%; angular
+refinement changes it by `1.89e-10` relatively.
+
+The physical force residual on the actual assembly support is much larger
+than the five-radius aggregate suggests: sampled volume-weighted values are
+0.006033 in characteristic units and 28.31% relative to pressure force.
+The receipt separates actual Cartesian curl current from reconstructed MDE
+current and records force/drive contributions. No missing energy term or
+exact-equilibrium counterexample was found. P0 interface terms and signed
+volume corrections require further radial convergence; the retained input
+and this diagnostic do not establish continuum or literature agreement.
+Improve and qualify the equilibrium representation across the trial support
+before repeating the same comparison.
+
 ## Historical synthetic scaling result
 
 `l139_manifest.json`: base mode (1, 1), angular grid 64 x 64, 100 radial
