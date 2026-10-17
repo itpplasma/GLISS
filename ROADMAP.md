@@ -55,6 +55,21 @@ reference values or repeatedly pursue inaccessible data.
 | A4: independent published-code comparisons | DCON sign bracket, TERPSICHORE replay and bounded independent QAS3 controls exist | Converge the Solov'ev marginal interval and higher-n controls; rerun current independent QAS3 assembly with qualified input; explain count/branch differences through energy and subspace comparisons; complete ideal-limit MISHKA/CASTOR transfer and the failed stable control under #12 |
 | A5: physical free-boundary references | Analytic vacuum-energy oracle and true-edge ingestion pass | Qualify edge pressure, tangential-field continuity and exterior matching, then reproduce the DCON critical-wall interval and applicable published helical/wall limits with separate volume, edge and wall refinement |
 
+The active A2 work derives the physical weighted FEEC operators, rather than
+assuming that the unweighted H1-to-L2 sequence survives multiplication by the
+axis weights. The bounded workflow is to repair FortSym's confirmed
+resource-limit NONZERO verdict, generate and strictly check weighted basis
+jets from one definition, prove the coefficient kernel and degree-1 span
+obstruction in Lean, and compare the resulting operators with independent
+physical cancellation and derivative tests. Topology, global function-space
+arguments, boundary admissibility and assembled quadrature remain separate
+obligations. Generating algebraically equivalent leaves does not change the
+trial space or resolve #35. Any proposed space change must pass the original
+uniform-64 Solov'ev instability criterion, stable controls and analytical
+convergence gates without relaxing tolerances or adding hidden polynomial
+degree. The existing failed derivative-eta and inconclusive relaxation
+experiments remain evidence, rather than accepted repairs.
+
 Use the original [Bernstein energy principle](https://doi.org/10.1098/rspa.1958.0023),
 [Newcomb pinch analysis](https://doi.org/10.1016/0003-4916(60)90023-3),
 [Fu vertical-stability limit](https://bp-pub.pppl.gov/pub_report/2000/PPPL-3368.pdf),
