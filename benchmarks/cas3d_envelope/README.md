@@ -1,11 +1,12 @@
-# CAS3D2MN coefficient solve: scaling through L139
+# CAS3D2MN coefficient envelopes
 
 `run.py` solves the CAS3D2MN labeled phase envelope with the coefficient
 normalization (`gliss.solve_cas3d_phase_envelope(...,
 normalization="cas3d2mn_coefficient")`) for envelope tables of increasing
 size, each in a fresh process, and writes a manifest of labeled and physical
 dimensions, quotient rank, labeled nullity, widest block, inertia, lowest
-eigenvalue, certificate, peak resident memory and wall time.
+eigenvalue, certificate, eigenpair residual, equilibrium force-balance
+residual, numerical zero floor, peak resident memory and wall time.
 
 ```sh
 GLISS_LIB=build/libgliss_c.so PYTHONPATH=python OMP_NUM_THREADS=2 \
@@ -15,13 +16,102 @@ GLISS_LIB=build/libgliss_c.so PYTHONPATH=python OMP_NUM_THREADS=2 \
 The labeled pencil is the congruence of the physical block-tridiagonal
 pencil by a block-diagonal map, applied block by block
 (`apply_cas3d_phase_envelope_block_congruence`): no dense matrix is formed
-at physical or labeled size. Coincident labels give an exact null space of
-the labeled pencil (`labeled_nullity`); the physical inertia is the quotient
-inertia. `test_cas3d_block_congruence` checks the blockwise congruence
+at physical or labeled size. Coincident labels and inactive `sin(0)` trials
+give an exact null space of the coefficient map (`labeled_nullity`);
+`quotient_rank` measures the map rank, while physical neutral modes can further
+reduce stiffness rank. Exact zero-shift inertia agrees on the quotient.
+Finite marginal-band counts, mode selection and the reported zero floor all
+use the coefficient pencil and its units. A floor from a different physical
+mass pencil is not interchangeable with this one.
+`test_cas3d_quotient_spectrum` checks small colliding, noncolliding and
+zero-carrier cases against an independently specified dense quotient,
+including positive/negative near-zero modes and norm scaling.
+`test_cas3d_block_congruence` checks the blockwise congruence
 entrywise against the retained dense congruence on a colliding table and
 the quotient rank and nullity exactly.
 
-## Result
+## Ordered literature experiments
+
+The default mode preserves the original synthetic envelope and parameters.
+Its 70 envelope entries give 139 sideband labels; that size does not identify
+the published mode mask. For a paper comparison, supply an ordered CSV with
+integer `m,n` columns and `(0,0)` as its first row. Additional columns, such
+as the printed cell number or transcription notes, are allowed. Rows are
+never sorted, deduplicated or filled in. Duplicate pairs and invalid input
+are rejected.
+
+For example, after auditing a transcription against the original figure:
+
+```sh
+GLISS_LIB=build/libgliss_c.dylib PYTHONPATH=python OMP_NUM_THREADS=2 \
+    python benchmarks/cas3d_envelope/run.py w7x.nc caption.json \
+    --envelope-csv figure6_mode_mask.csv --envelope-n-sign opposite \
+    --literature-l 3 5 7 --prefix-convention caption_l \
+    --base 3 2 --parity 1 --angular 96 64 \
+    --coefficient-angular 36 24 --reference-length 10 \
+    --radial-cells 32 --radial-quadrature gauss5 \
+    --assumption 'Original coefficient grid unavailable: use 36 x 24' \
+    --assumption 'Original reference length unavailable: use 10'
+```
+
+These numerical choices illustrate declared hypotheses; this command does
+not assert that the unavailable historical settings have been recovered.
+Use the platform's actual shared-library suffix. The CSV path must point to
+an independently audited ordered transcription. A table reconstructed from
+an old GLISS test is implementation-derived evidence and must be recorded
+as such; it is not an independent paper transcription.
+
+`--envelope-n-sign opposite` negates the CSV's printed toroidal envelope
+index to obtain GLISS's phase `2*pi*(m*theta-n*zeta)`; `gliss` preserves it.
+The carrier always uses GLISS's `2*pi*(M*theta-N*zeta/N_T)` convention and
+is set separately by `--base`. Both the CSV sign choice and the literature
+prefix convention are explicit:
+
+| prefix convention | requested literature L | envelope CSV rows | labeled sidebands |
+| --- | --- | --- | --- |
+| `caption_l` | L | first L | 2L-1 |
+| `terminal_l_plus_one` | L | first L+1 | 2L+1 |
+
+`--entries` instead selects an explicit number of envelope rows and does not
+attach a paper L label. No conversion from a sideband count to a paper L is
+inferred. `--parity 1` and `2` select the two parity classes. Coupled parity
+is unsupported by the native coefficient-normalized solve. Use separate
+manifests for the two supported parities or different prefix hypotheses.
+
+`--angular THETA ZETA` sets stiffness assembly resolution.
+`--coefficient-angular THETA ZETA` independently sets the coefficient norm
+grid and defaults to the assembly grid for backward compatibility.
+`--reference-length` defaults to 1; changing it by a factor `a` rescales
+the coefficient eigenvalue by `a**-3`, leaving exact inertia unchanged.
+`--radial-cells` uses the native radial FE mesh API (at least two cells),
+without resampling the equilibrium export. Omitting it retains the
+equilibrium radial grid. The supported radial quadratures are `gauss5`
+(default) and `cas3d_midpoint`. Coefficient normalization uses degree 1 and
+the implemented constant envelope form factor `f_l=1`; no arbitrary
+historical radial form function is implied. The old unimplemented
+`--surfaces` option has been removed from the usage text.
+
+The manifest is written before the first solve, with the full ordered input,
+planned prefixes, all parameters and repeatable `--assumption` notes. It
+records hashes for the equilibrium, CSV, converted envelope sequence, loaded
+native library, runner, Python executable and tracked production source
+tree, together with the Git commit and changed tracked paths. An adjacent
+CMake cache, compiler identity and build flags are recorded when available;
+the cache is informational and does not prove which source built a binary.
+Input, table or library changes during the experiment are rejected. Failed
+native runs retain the frozen manifest and error instead of dropping the
+unsuccessful hypothesis. Peak RSS is converted from Darwin bytes or Linux
+KiB to MiB; other platforms require an explicit unit implementation.
+
+The output is a code-specific coefficient Ritz value, not an SI frequency
+or growth rate. Compare physical assumptions, equilibrium, signs, inertia
+and marginal parameters before interpreting raw normalized eigenvalue
+agreement. Do not choose a reference length to fit an observed eigenvalue.
+The relevant primary references are
+[Schwab's CAS3D formulation](https://doi.org/10.1063/1.860656) and
+[Nuehrenberg's W7-X study](https://doi.org/10.1063/1.871924).
+
+## Historical synthetic scaling result
 
 `l139_manifest.json`: base mode (1, 1), angular grid 64 x 64, 100 radial
 surfaces, two OpenMP threads on a 4-vCPU Xeon at 2.1 GHz.
@@ -35,7 +125,7 @@ surfaces, two OpenMP threads on a 4-vCPU Xeon at 2.1 GHz.
 | 70 | 139 | 27661 | 0 | 278 | 0 | 0.254767 | 1.9e-04 | 523 | 382 |
 
 Memory grows with the widest block, not with the square of the unknown
-count: a dense pencil at L139 would need 6.1 GB per matrix. The eigenvalue
+count: a dense pencil at 139 labels would need 6.1 GB per matrix. The eigenvalue
 decreases monotonically as sidebands are added, and the inertia stays
 stable.
 

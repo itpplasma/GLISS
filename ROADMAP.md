@@ -38,9 +38,9 @@ their narrower meanings; none alone passes this claim.
 | Gate | Existing evidence | Required work and acceptance |
 | --- | --- | --- |
 | A0: equation and normalization audit | Published-source map and local energy/mass oracles; zero completed whole-component reviews | Map the energy principle and CAS3D equations to actual production terms, units, flux signs, chart orientation, axis constraints and boundary contributions; compare independently integrated energies and physical mass for identical displacements |
-| A1: analytical spectra and thresholds | Exact theta-pinch FEEC runner covers degrees 1–4, three meshes and both parities; homogeneous and helical tests include local formula checks | Reproduce Alfvén/fast/slow branches, Newcomb/Suydam and helical limits through applicable production assembly; add valid import/public-path controls, stable/unstable cases, physical scaling and independent energy oracles; retain explicit lower-level scope where a straight cylinder cannot use the toroidal export contract |
+| A1: analytical spectra and thresholds | Registered cylinder assembly/certifier test covers independent slow/fast branches and Alfvén clusters, degrees 1–4, three meshes and both parities; exact vacuum torus covers import through certified solve and absolute energy/mass | Add production Newcomb/Suydam and helical unstable/marginal limits; retain explicit assembly-level scope for the straight cylinder and the stable-domain scope of the imported vacuum torus |
 | A2: axis, resonance and small eigenvalues | Higher-degree Solov'ev bracket controls pass; degree 1 still misses a tested marginal endpoint; dense slow-cluster ordering sensitivity is diagnosed | Resolve #35's frozen degree-1 criterion and retain the failed gate until it passes; test rational-surface domain and refinement; check slow-cluster accuracy using independent higher-precision pencils before attributing any failure to the production solver |
-| A3: CAS3D formulation and numerical comparison | Sparse labeled congruence, coefficient normalization, quotient metadata and an L139-size scaling runner exist | Verify small colliding/noncolliding pencils against an independent dense quotient oracle, including lowest-mode selection and normalization scaling; reproduce the published mode mask and resolve indexing; compare matched signs/inertia and marginal parameters before normalized eigenvalues, energies and subspaces |
+| A3: CAS3D formulation and numerical comparison | Independent dense quotient oracle reproduces floor inconsistency and zero-carrier component-topology defects; integrated repairs and ordered-CSV experiments pass their software gates | Recover and audit the full published mode mask; resolve provisional numerical discrepancies and compare matched signs/inertia, marginal parameters, energies and subspaces |
 | A4: independent published-code comparisons | DCON sign bracket, TERPSICHORE replay and bounded independent QAS3 controls exist | Converge the Solov'ev marginal interval and higher-n controls; rerun current independent QAS3 assembly with qualified input; explain count/branch differences through energy and subspace comparisons; complete ideal-limit MISHKA/CASTOR transfer and the failed stable control under #12 |
 | A5: physical free-boundary references | Analytic vacuum-energy oracle and true-edge ingestion pass | Qualify edge pressure, tangential-field continuity and exterior matching, then reproduce the DCON critical-wall interval and applicable published helical/wall limits with separate volume, edge and wall refinement |
 
@@ -54,31 +54,55 @@ Freeze exact equation/figure references and their physical assumptions before
 deriving each oracle. The 1996 coefficient norm and the 1999 physical kinetic
 norm are distinct; raw eigenvalues from unlike norms are not comparison data.
 
-CAS3D work that can proceed now includes auditing the transcribed published
-envelope mask against Figure 6, its terminal L/L+1 convention, both parities,
-redundant-label null directions, coefficient-grid and reference-length scaling,
-and sparse/dense agreement on small cases. In particular, test that physical
-quotient inertia, labeled eigenpair selection and the reported zero floor
-remain consistent under mass scaling; source inspection identifies an
-unresolved concern here, not a reproduced defect. The existing synthetic
-L139-size table must remain labeled as a scaling control. Its runner also
-needs correct Darwin peak-RSS units and correction of its advertised but
-unparsed `--surfaces` option before new measurement claims.
+The CAS3D dense oracle removes redundant labels by orthonormalizing the range
+of the independently specified coefficient map. It checks the coefficient
+pencil, not a different physical kinetic norm. The old returned zero floor
+was about 90 times smaller than the floor used by the solved coefficient
+pencil in a reproduced case. The repair uses one pencil and floor for inertia,
+mode selection and reporting. A second reproduced defect concerns the absent
+sin(0) trial: normal and eta components can have different active mode counts.
+The sparse congruence now accepts their separate active rows. Exact map rank
+is distinguished from stiffness rank, which can also contain physical neutral
+modes. Keep near-zero positive/negative and redundant-label controls.
 
-Exact reproduction of the historical CAS3D W7-X numbers still needs the
-original angular grid, radial form functions, reference length and complete
-equilibrium/deck identity. The published/transcribed mode mask is available
-for audit; these missing settings do not justify declaring all CAS3D work
-blocked or fitting a normalization to digitized values. Preserve the historical
-L10 discrepancy (about -0.88701 versus digitized -0.37148 in the recorded
-10^3 lambda units, with provisional settings) as unexplained evidence until
-its conventions and inputs are resolved. Issue #11 remains open despite the
-implemented sparse scaling path.
+The runner now accepts ordered CSV modes, explicit printed-n sign and L/L+1
+prefix conventions, both supported single parities, separate assembly and
+coefficient grids, reference length, native radial cells and quadrature. It
+freezes assumptions and input/library identities before solving, preserves
+failed hypotheses, and fixes Darwin RSS units and the unsupported `--surfaces`
+usage. Coupled parity is not implemented for this coefficient norm.
 
-The next bounded integration wave has two fronts: A1 connects independent
-analytical spectra and valid geometry controls to the certified production
-solve; A3 adds the missing small quotient/eigenpair oracles and repairs the
-CAS3D runner. Perform these before expensive high-L or figure-eight studies.
+Proceed with reasonable declared assumptions rather than waiting for every
+historical setting. The current controlled W7-X experiments freeze carrier
+(3,2), degree 1, 48 radial cells, assembly 96x64, coefficient grid 36x24 and
+reference length 10, then vary both parities, both quadratures and both prefix
+conventions. These are hypotheses, not recovered settings or fitted values.
+The first eight envelope entries can be reconstructed exactly from a retained
+native L8 control; their full Figure 6 transcription is not independently
+verified. The pinned research server currently refuses connections, and the
+primary PDF is inaccessible. Do not invent later mode entries.
+
+All 24 provisional L3/L5/L7 baseline runs completed. Of 16 L3/L5 comparisons
+with available digitized values, eight miss the frozen broad tolerance and
+all miss the approximate digitization band. Caption/Gauss values in recorded
+10^3 lambda units are -0.190629 and -0.261329 versus -0.14613 and -0.16725;
+caption/midpoint gives -0.130592 and -0.187850. Both parities agree, but that
+does not resolve the paper discrepancy. The flux/profile force diagnostic
+also needs interpretation and a characteristic Cartesian force check; its
+large maximum is not directly a fractional magnetic-force error.
+Preserve the historical L10 discrepancy (-0.88701 versus -0.37148) separately.
+Issue #11 remains open.
+
+The old synthetic 70-envelope/139-label run measures scaling. A literal paper
+L139 prefix would contain 139 or 140 envelopes and 277 or 279 labels before
+collisions. Do not identify these different dimensions as the same benchmark.
+Complete integrated A1/A3 checks and explain the controlled discrepancies
+before expensive high-L or further figure-eight studies.
+
+The [provisional CAS3D evidence](benchmarks/cas3d_envelope/provisional_comparison.json)
+retains all 24 outcomes, frozen settings, input/library hashes and unavailable
+data. Its [eight-entry control](benchmarks/cas3d_envelope/native_l8_envelope_control.csv)
+is explicitly derived from the retained implementation test.
 
 Every accepted case must record primary reference, independent oracle, input
 and code identities, units/norms, mode and boundary conventions, frozen error
@@ -135,7 +159,7 @@ issue whose broader requested acceptance remains unmet.
 | D | Efficient and complete derivatives | K, G, V for complete claim | Contracted pressure reverse passes; generic equilibrium response unavailable |
 | S | Sparse backend selection | Reliable backend capabilities | Native LDLT lacks public inertia reliability API; retain block-LAPACK |
 | P | Performance qualification | Accepted workload and accuracy | Pressure reverse and Cartesian value benchmarks implemented and measured |
-| R | Reproducible release and evidence | Applicable gates above | 178 native, 388 Python and nine Enzyme gates pass locally; hosted CI and four Linux generation checks pass |
+| R | Reproducible release and evidence | Applicable gates above | Analytical/CAS3D wave: 181 native and 407 Python checks pass locally; prior unchanged kernels have nine Enzyme and four Linux generation gates |
 
 ### K: FortSym-generated kernels
 
@@ -286,6 +310,35 @@ replace a reliable inertia method with pivot-perturbed LU.
   completed file accounting must not be presented as completed equation review.
 
 ## Integrated evidence and active dependencies
+
+The analytical/CAS3D wave adds three registered native tests. All 181 default
+CTest cases pass in the strict GNU 16 Release build; all 407 Python tests pass
+with two optional skips and BOOZ_XFORM installed. Source accounting contains
+348 records and still zero completed whole-component equation reviews.
+The analytical cylinder identifies two fast/slow branches and the Alfvén
+cluster for both parities, degrees 1–4 and 8/16/32 cells, with zero negative
+inertia and independently bounded branch enclosures. Finest relative errors
+are 9.76e-5, 3.05e-7, 1.79e-10 and 2.89e-14; six physical variants and exact
+scaling laws also pass. This exercises production surface assembly and the
+full-spectrum certifier, while retaining its prescribed-field scope.
+
+The imported exact vacuum torus exercises the native writer/reader, Cartesian
+primitive spline, public fixed-boundary assembly, lowest-mode and full-spectrum
+solves. Positive Jacobian and GLISS's negative toroidal-flux slope give the
+known field B=F/R e_phi with zero pressure/current. For xi^s=s(1-s), the absolute
+quadratic magnetic-energy error is 3.56e-12 and the independent physical-mass
+error is 1.76e-13. Three import refinements, both parities, coupled spectra,
+neutral modes, B-squared/density scaling and invalid-input controls pass.
+This is a stable finite-aspect-ratio reference, not an unstable threshold.
+See [analytical benchmark scope](benchmarks/analytic/README.md).
+
+The CAS3D algebra gate uses independent product-to-sum matrices and an
+orthonormal dense quotient, including colliding and self-colliding labels,
+both parities, independent normalization changes and positive/negative
+near-zero selection. It verifies active map rank/nullity, mass normalization,
+residuals and certificates after the two reproduced repairs above. Fresh
+corrected-library L3/L5 checks retain the provisional literature discrepancy;
+solver-reporting repairs do not turn it into agreement.
 
 The first code wave includes three reproducible generated modules. At FortSym
 `c9b1ec1a0eaf20d5fcde47853498eeb3508715ba`, the strict suites prove 41 mass,

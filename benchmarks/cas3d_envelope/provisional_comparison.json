@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "status": "provisional implementation-derived controls; literature and equilibrium qualification incomplete",
+  "native_baseline": {
+    "source_commit": "8e51c65e119e7c672c143af0827cf45a6c3a7bbb",
+    "library_sha256": "285bc2236c97a289aa0f18b939cd1495863f70be67bc943450921727b2ae0783",
+    "source_evidence": "Controller-verified native build copied before solver correction; later documentation commits do not identify a rebuilt binary.",
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    },
+    "case_count": 24
+  },
+  "freeze_before_results": {
+    "created_utc": "2026-10-17T04:45:46.529213+00:00",
+    "settings_receipt_sha256": "3a5e602ed78e03299c30aaedbb0a35f136cea48d55bad3d24f13e0780c090856",
+    "partial_settings_receipt_sha256": "63bad177db167d1c81eae354cdabd25131debfd06a4ebc3320f3ec21714d8db5",
+    "frozen_input_csv_sha256": "18a8cb2702acaa7952d88aa7c48f6bfb9c0c5435243dce4647d2e6efe45b874c",
+    "receipt_directory": "/tmp/gliss-cas3d-comparison-20261017",
+    "policy": "Settings fixed before the first result; coefficient grid/reference length were never fitted. Product CSV adds provenance comments to the identical frozen eight-row table."
+  },
+  "equilibrium": {
+    "repository": "https://gitlab.tugraz.at/plasma/proj/stel/gvec-stability",
+    "revision": "822b2bb0296f48cedd246a67cc46ad69266a5cb7",
+    "path": "benchmarks/gliss/w7x_nuehrenberg_1996/input/low_i_gliss_m5n4.nc",
+    "sha256": "ddfae0b7a23cdefc0febca8b3071ccdd703f564946e49ed20e9b6ceea8bd1584",
+    "availability": "Restricted external input; not copied into GLISS.",
+    "qualification": "Independent physical force balance, equilibrium convergence and full reference-deck equivalence remain unqualified."
+  },
+  "envelope_control": {
+    "path": "native_l8_envelope_control.csv",
+    "sha256": "af4c25d3a17b20684c0cba9b5389792899b475cc5ad7c09c182fb2dc9cb354a2",
+    "scope": "Implementation-derived first eight envelope cells; not independent primary-paper evidence.",
+    "native_oracle": "test/test_compatible_family_point_assembly.f90",
+    "native_oracle_sha256": "e8936fa45038a0dd4bd78b45cbad3d9005f56fe8ff6a73a383fd77d7374056a0",
+    "oracle_introduced_commit": "3df8fce4ee5fcc82b1c049f5506f7f8b9559e7fe",
+    "reconstruction": "Documented carrier/sideband formula reproduces all 15 native oracle modes exactly, including m=0 sign canonicalization.",
+    "full_figure6_expected_sha256": "d73da936f3d1510c5c9f7e97b1baa7e5655ff3f9daf13a410fd297cda918ea8d"
+  },
+  "settings": {
+    "carrier_gliss": [3, 2],
+    "carrier_paper": [3, -2],
+    "printed_envelope_n_to_gliss": "negate",
+    "degree": 1,
+    "radial_cells": 48,
+    "parity_classes": [1, 2],
+    "assembly_grid": [96, 64],
+    "coefficient_grid": [36, 24],
+    "reference_length": 10.0,
+    "normalization": "cas3d2mn_coefficient",
+    "radial_quadratures": ["gauss5", "cas3d_midpoint"],
+    "caption_mapping": "first L envelope rows",
+    "terminal_mapping": "first L+1 envelope rows",
+    "L_values": [3, 5, 7]
+  },
+  "historical_settings": {
+    "declared_reasonable_guesses": ["coefficient grid 36x24", "reference length 10", "both caption/terminal interpretations and both quadrature rules retained"],
+    "unavailable_exact_inputs": ["original CAS3D angular/coefficient grid", "original reference-length convention", "original radial form-function deck", "complete original run deck and reference mode vectors"],
+    "unrecovered_source_files": ["primary 1996 PDF", "full pinned Figure6 mask CSV", "full-precision digitized CSV/uncertainty data"],
+    "boundary": "No synthetic L10 or higher table was invented."
+  },
+  "reference_comparison": {
+    "primary_paper": "https://doi.org/10.1063/1.871924",
+    "reference_source": "Pinned research README; rounded digitized values and approximate uncertainty, not independently re-read primary raster/CSV.",
+    "readme_sha256": "11f54452284d674fd84da8e36bddf0188272e71cc527e7c17b4c45d07d8f52b2",
+    "reference_lambda_1e3": {
+      "L3": -0.14613,
+      "L5": -0.16725
+    },
+    "reference_rounding_halfwidth_1e3": 5e-06,
+    "historical_broad_bound": "0.05 + 0.25*abs(reference_lambda_1e3)",
+    "approx_digitization_halfwidth_1e3": 0.0071,
+    "parity_scope": "Both parities are diagnostic comparisons; original paper parity was not independently verified.",
+    "broad_pass": 8,
+    "broad_fail": 8,
+    "inside_approx_digitization_interval": 0,
+    "outside_approx_digitization_interval": 16,
+    "interpretation": "Small eigensolver residuals do not resolve the retained physical/reference discrepancy."
+  },
+  "force_profile_diagnostic": {
+    "definition": "Maximum over stored surfaces of pointwise five-term Boozer/profile force identity divided by its sum of absolute terms; not a characteristic Cartesian JxB-grad(p) norm.",
+    "all_surface_max": 0.8854396335581608,
+    "max_surface_s": 0.9895833333333334,
+    "interior_0p05_to_0p9_max": 0.07970421078726898,
+    "selected_surfaces": [
+      {"s":0.09374999999999999,"identity_deviation":0.002958852606165319},
+      {"s":0.48958333333333326,"identity_deviation":0.0033268208335996393},
+      {"s":0.6979166666666667,"identity_deviation":0.007900124474374557},
+      {"s":0.8854166666666666,"identity_deviation":0.07970421078726898},
+      {"s":0.9895833333333334,"identity_deviation":0.8854396335581608}
+    ],
+    "profile_csv_receipt_sha256": "b38495981b3b12e7ccc027d8fb80d7706ccc30eeb151ff0469c4ce174f0af2aa",
+    "profile_binary_sha256": "801aacd286652502a4be1071318187b065d8195a0c5011bc06954b22617a055b",
+    "converter_metric_caveat": "The converter uses an interior angular mean and a magnetic-scale denominator regularizer; its 0.079757 value is a different diagnostic."
+  },
+  "measurement_summary": {
+    "max_residual": 1.794178260024633e-10,
+    "max_certificate_1e3": 0.00010145567116273441,
+    "max_peak_rss_mib": 84.859375,
+    "all_nullities_zero": true,
+    "energies": "Unavailable: public coefficient-envelope API returns neither its eigenvector nor decomposed energy terms."
+  },
+  "preserved_failed_control": {
+    "status": "rejected",
+    "reason": "runner changed after assumptions were frozen",
+    "receipt": "/tmp/gliss-cas3d-comparison-20261017/baseline-caption-cas3d_midpoint-parity2-runner-mutation-failure.json",
+    "receipt_sha256": "0acf0b084d5f16c7c52123421ae9c5117872bd5792c27c2a576697373df1764c",
+    "unchanged_identities": ["native library", "equilibrium input", "envelope table"],
+    "recovery": "Resumed only after the runner was stable; completed unchanged cases reused."
+  },
+  "L139_scope": "Cached caption mapping gives 139 envelope rows -> 277 labels; terminal gives 140 rows -> 279 labels before physical collisions. The existing 70-envelope/139-label manifest is a synthetic scaling control, not the published L139 table.",
+  "runs": [
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":1,"L":3,"entries":3,"labels":5,"quotient_rank":475,"nullity":0,"peak_block_width":10,"negative_count":2,"lambda_1e3":-0.1305919977824998,"certificate_1e3":2.712103426326231e-05,"residual":6.762451407541856e-11,"quotient_zero_floor":6.517669929555314e-07,"peak_rss_mib":84.171875,"wall_seconds":0.569910833844915},
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":1,"L":5,"entries":5,"labels":9,"quotient_rank":855,"nullity":0,"peak_block_width":18,"negative_count":2,"lambda_1e3":-0.18784987650850596,"certificate_1e3":4.866102848686543e-05,"residual":7.480017520510493e-11,"quotient_zero_floor":6.630240555137344e-07,"peak_rss_mib":78.15625,"wall_seconds":0.79290512483567},
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":1,"L":7,"entries":7,"labels":13,"quotient_rank":1235,"nullity":0,"peak_block_width":26,"negative_count":3,"lambda_1e3":-0.4823648066938864,"certificate_1e3":8.154997307307682e-05,"residual":1.1688837429358907e-10,"quotient_zero_floor":6.741527069489685e-07,"peak_rss_mib":79.96875,"wall_seconds":1.0404440842103213},
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":2,"L":3,"entries":3,"labels":5,"quotient_rank":475,"nullity":0,"peak_block_width":10,"negative_count":2,"lambda_1e3":-0.13059200440876567,"certificate_1e3":2.7107315839170142e-05,"residual":5.390609456491569e-11,"quotient_zero_floor":6.517669929555314e-07,"peak_rss_mib":76.515625,"wall_seconds":0.5661017089150846},
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":2,"L":5,"entries":5,"labels":9,"quotient_rank":855,"nullity":0,"peak_block_width":18,"negative_count":2,"lambda_1e3":-0.18784988179941456,"certificate_1e3":4.866117795726122e-05,"residual":7.494965760218799e-11,"quotient_zero_floor":6.630240555137343e-07,"peak_rss_mib":77.484375,"wall_seconds":0.8035932499915361},
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":2,"L":7,"entries":7,"labels":13,"quotient_rank":1235,"nullity":0,"peak_block_width":26,"negative_count":3,"lambda_1e3":-0.4823648026677469,"certificate_1e3":8.152824623051875e-05,"residual":9.516151073715529e-11,"quotient_zero_floor":6.741527069489685e-07,"peak_rss_mib":75.734375,"wall_seconds":1.0432499158196151},
+    {"alignment":"caption","quadrature":"gauss5","parity":1,"L":3,"entries":3,"labels":5,"quotient_rank":475,"nullity":0,"peak_block_width":10,"negative_count":2,"lambda_1e3":-0.19062904335991884,"certificate_1e3":2.883900714423235e-05,"residual":9.922818415558448e-11,"quotient_zero_floor":4.904154099789436e-07,"peak_rss_mib":84.859375,"wall_seconds":3.1354821249842644},
+    {"alignment":"caption","quadrature":"gauss5","parity":1,"L":5,"entries":5,"labels":9,"quotient_rank":855,"nullity":0,"peak_block_width":18,"negative_count":2,"lambda_1e3":-0.2613285389956703,"certificate_1e3":5.0686794734818836e-05,"residual":8.275599556451061e-11,"quotient_zero_floor":4.992667641863506e-07,"peak_rss_mib":74.0,"wall_seconds":4.465149499941617},
+    {"alignment":"caption","quadrature":"gauss5","parity":1,"L":7,"entries":7,"labels":13,"quotient_rank":1235,"nullity":0,"peak_block_width":26,"negative_count":3,"lambda_1e3":-0.5744099421735117,"certificate_1e3":8.194840173184371e-05,"residual":7.882426209959403e-11,"quotient_zero_floor":5.080125290974942e-07,"peak_rss_mib":79.375,"wall_seconds":5.898132708156481},
+    {"alignment":"caption","quadrature":"gauss5","parity":2,"L":3,"entries":3,"labels":5,"quotient_rank":475,"nullity":0,"peak_block_width":10,"negative_count":2,"lambda_1e3":-0.1906290461448627,"certificate_1e3":2.8814991645980566e-05,"residual":7.521263532677168e-11,"quotient_zero_floor":4.904154099789435e-07,"peak_rss_mib":76.328125,"wall_seconds":3.106050166999921},
+    {"alignment":"caption","quadrature":"gauss5","parity":2,"L":5,"entries":5,"labels":9,"quotient_rank":855,"nullity":0,"peak_block_width":18,"negative_count":2,"lambda_1e3":-0.2613285386614037,"certificate_1e3":5.069467702056801e-05,"residual":9.063820413801879e-11,"quotient_zero_floor":4.992667641863506e-07,"peak_rss_mib":82.296875,"wall_seconds":4.462052291026339},
+    {"alignment":"caption","quadrature":"gauss5","parity":2,"L":7,"entries":7,"labels":13,"quotient_rank":1235,"nullity":0,"peak_block_width":26,"negative_count":3,"lambda_1e3":-0.5744099465512778,"certificate_1e3":8.195906384903867e-05,"residual":8.948636761907569e-11,"quotient_zero_floor":5.080125290974942e-07,"peak_rss_mib":79.96875,"wall_seconds":5.832319041946903},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":1,"L":3,"entries":4,"labels":7,"quotient_rank":665,"nullity":0,"peak_block_width":14,"negative_count":2,"lambda_1e3":-0.18268696376505394,"certificate_1e3":3.908179000664301e-05,"residual":6.53670326555886e-11,"quotient_zero_floor":6.571743876275829e-07,"peak_rss_mib":73.359375,"wall_seconds":0.6660727080889046},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":1,"L":5,"entries":6,"labels":11,"quotient_rank":1045,"nullity":0,"peak_block_width":22,"negative_count":3,"lambda_1e3":-0.31264547374243057,"certificate_1e3":6.48862212553437e-05,"residual":1.007007400450899e-10,"quotient_zero_floor":6.667685960653369e-07,"peak_rss_mib":74.34375,"wall_seconds":0.9054857911542058},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":1,"L":7,"entries":8,"labels":15,"quotient_rank":1425,"nullity":0,"peak_block_width":30,"negative_count":4,"lambda_1e3":-0.7472971015759865,"certificate_1e3":0.00010142864186485865,"residual":1.3158137645343393e-10,"quotient_zero_floor":6.749022324808623e-07,"peak_rss_mib":76.578125,"wall_seconds":1.1577762921806425},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":2,"L":3,"entries":4,"labels":7,"quotient_rank":665,"nullity":0,"peak_block_width":14,"negative_count":2,"lambda_1e3":-0.18268696336244936,"certificate_1e3":3.9078123833509305e-05,"residual":6.170075320484577e-11,"quotient_zero_floor":6.571743876275829e-07,"peak_rss_mib":76.625,"wall_seconds":0.6664496248122305},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":2,"L":5,"entries":6,"labels":11,"quotient_rank":1045,"nullity":0,"peak_block_width":22,"negative_count":3,"lambda_1e3":-0.31264547490754707,"certificate_1e3":6.488904134693898e-05,"residual":1.0352083871196233e-10,"quotient_zero_floor":6.667685960653369e-07,"peak_rss_mib":74.296875,"wall_seconds":0.9005157919600606},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":2,"L":7,"entries":8,"labels":15,"quotient_rank":1425,"nullity":0,"peak_block_width":30,"negative_count":4,"lambda_1e3":-0.7472971061927716,"certificate_1e3":0.00010145567116273441,"residual":1.5861061298027941e-10,"quotient_zero_floor":6.749022324808623e-07,"peak_rss_mib":76.453125,"wall_seconds":1.157233916921541},
+    {"alignment":"terminal","quadrature":"gauss5","parity":1,"L":3,"entries":4,"labels":7,"quotient_rank":665,"nullity":0,"peak_block_width":14,"negative_count":2,"lambda_1e3":-0.25526316886854167,"certificate_1e3":4.07569325415014e-05,"residual":6.159355730019223e-11,"quotient_zero_floor":4.948684187517511e-07,"peak_rss_mib":79.375,"wall_seconds":3.7524250829592347},
+    {"alignment":"terminal","quadrature":"gauss5","parity":1,"L":5,"entries":6,"labels":11,"quotient_rank":1045,"nullity":0,"peak_block_width":22,"negative_count":2,"lambda_1e3":-0.39817790898926436,"certificate_1e3":6.605961885396942e-05,"residual":9.051690372552596e-11,"quotient_zero_floor":5.020816699309343e-07,"peak_rss_mib":78.515625,"wall_seconds":5.138486667070538},
+    {"alignment":"terminal","quadrature":"gauss5","parity":1,"L":7,"entries":8,"labels":15,"quotient_rank":1425,"nullity":0,"peak_block_width":30,"negative_count":3,"lambda_1e3":-0.8394598594307676,"certificate_1e3":0.00010112561586829079,"residual":1.6452597520550305e-10,"quotient_zero_floor":5.08576283439663e-07,"peak_rss_mib":80.515625,"wall_seconds":6.56647775019519},
+    {"alignment":"terminal","quadrature":"gauss5","parity":2,"L":3,"entries":4,"labels":7,"quotient_rank":665,"nullity":0,"peak_block_width":14,"negative_count":2,"lambda_1e3":-0.25526316792138387,"certificate_1e3":4.074657057601896e-05,"residual":5.123160297252178e-11,"quotient_zero_floor":4.948684187517511e-07,"peak_rss_mib":84.625,"wall_seconds":3.7680766659323126},
+    {"alignment":"terminal","quadrature":"gauss5","parity":2,"L":5,"entries":6,"labels":11,"quotient_rank":1045,"nullity":0,"peak_block_width":22,"negative_count":2,"lambda_1e3":-0.39817791349096415,"certificate_1e3":6.606514337996799e-05,"residual":9.604141170426584e-11,"quotient_zero_floor":5.020816699309343e-07,"peak_rss_mib":82.671875,"wall_seconds":5.130085540935397},
+    {"alignment":"terminal","quadrature":"gauss5","parity":2,"L":7,"entries":8,"labels":15,"quotient_rank":1425,"nullity":0,"peak_block_width":30,"negative_count":3,"lambda_1e3":-0.8394598759317585,"certificate_1e3":0.00010114050764537314,"residual":1.794178260024633e-10,"quotient_zero_floor":5.08576283439663e-07,"peak_rss_mib":83.578125,"wall_seconds":6.519619749858975}
+  ],
+  "comparisons": [
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":1,"L":3,"absolute_error_plotted":0.015538002217500207,"historical_broad_bound_plotted":0.08653250000000001,"historical_broad_window_passed":true,"inside_approx_digitization_interval":false},
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":1,"L":5,"absolute_error_plotted":0.02059987650850595,"historical_broad_bound_plotted":0.0918125,"historical_broad_window_passed":true,"inside_approx_digitization_interval":false},
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":2,"L":3,"absolute_error_plotted":0.015537995591234338,"historical_broad_bound_plotted":0.08653250000000001,"historical_broad_window_passed":true,"inside_approx_digitization_interval":false},
+    {"alignment":"caption","quadrature":"cas3d_midpoint","parity":2,"L":5,"absolute_error_plotted":0.02059988179941455,"historical_broad_bound_plotted":0.0918125,"historical_broad_window_passed":true,"inside_approx_digitization_interval":false},
+    {"alignment":"caption","quadrature":"gauss5","parity":1,"L":3,"absolute_error_plotted":0.04449904335991883,"historical_broad_bound_plotted":0.08653250000000001,"historical_broad_window_passed":true,"inside_approx_digitization_interval":false},
+    {"alignment":"caption","quadrature":"gauss5","parity":1,"L":5,"absolute_error_plotted":0.09407853899567031,"historical_broad_bound_plotted":0.0918125,"historical_broad_window_passed":false,"inside_approx_digitization_interval":false},
+    {"alignment":"caption","quadrature":"gauss5","parity":2,"L":3,"absolute_error_plotted":0.04449904614486269,"historical_broad_bound_plotted":0.08653250000000001,"historical_broad_window_passed":true,"inside_approx_digitization_interval":false},
+    {"alignment":"caption","quadrature":"gauss5","parity":2,"L":5,"absolute_error_plotted":0.0940785386614037,"historical_broad_bound_plotted":0.0918125,"historical_broad_window_passed":false,"inside_approx_digitization_interval":false},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":1,"L":3,"absolute_error_plotted":0.036556963765053935,"historical_broad_bound_plotted":0.08653250000000001,"historical_broad_window_passed":true,"inside_approx_digitization_interval":false},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":1,"L":5,"absolute_error_plotted":0.14539547374243056,"historical_broad_bound_plotted":0.0918125,"historical_broad_window_passed":false,"inside_approx_digitization_interval":false},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":2,"L":3,"absolute_error_plotted":0.036556963362449346,"historical_broad_bound_plotted":0.08653250000000001,"historical_broad_window_passed":true,"inside_approx_digitization_interval":false},
+    {"alignment":"terminal","quadrature":"cas3d_midpoint","parity":2,"L":5,"absolute_error_plotted":0.14539547490754706,"historical_broad_bound_plotted":0.0918125,"historical_broad_window_passed":false,"inside_approx_digitization_interval":false},
+    {"alignment":"terminal","quadrature":"gauss5","parity":1,"L":3,"absolute_error_plotted":0.10913316886854166,"historical_broad_bound_plotted":0.08653250000000001,"historical_broad_window_passed":false,"inside_approx_digitization_interval":false},
+    {"alignment":"terminal","quadrature":"gauss5","parity":1,"L":5,"absolute_error_plotted":0.23092790898926435,"historical_broad_bound_plotted":0.0918125,"historical_broad_window_passed":false,"inside_approx_digitization_interval":false},
+    {"alignment":"terminal","quadrature":"gauss5","parity":2,"L":3,"absolute_error_plotted":0.10913316792138386,"historical_broad_bound_plotted":0.08653250000000001,"historical_broad_window_passed":false,"inside_approx_digitization_interval":false},
+    {"alignment":"terminal","quadrature":"gauss5","parity":2,"L":5,"absolute_error_plotted":0.23092791349096414,"historical_broad_bound_plotted":0.0918125,"historical_broad_window_passed":false,"inside_approx_digitization_interval":false}
+  ],
+  "corrected_solver_recheck": {"source_patch_base":"a26beee22e4820373bcc03e5aacf447a4b669fd8","production_source_sha256":{"src/marginality_spectrum.f90":"44498bd8cd7f73140d249733df9ebbcd5e069ebddadbd9f2a8ffe328348bafdc","src/cas3d_phase_envelope_transform.f90":"bd9b8922f2a67ae12a7f9dd7a4d04fc47bdf6e796a646058304638a4cceb0d43"},"library_sha256":"6e14e0d52088533dce111391226daf1f4facb2467da2c41335936b8bba01d899","scope":"Corrected solver; same frozen caption/Gauss settings and parity1, L3/L5. Eigenvalues and counts unchanged; reported coefficient floor corrected.","receipt_sha256":"d3357ac25b3f01ea9836220a6275a8d0c3ca1bfde84aaac70e50cb81bd418f22","runs":[{"L":3,"lambda":-0.00019062904335991884,"baseline_delta":0.0,"negative_count":2,"coefficient_zero_floor":5.62005458549051e-07},{"L":5,"lambda":-0.0002613285389956703,"baseline_delta":0.0,"negative_count":2,"coefficient_zero_floor":5.634056884472282e-07}]},
+  "qualification_limits": ["Partial implementation-derived table is not independent Figure6 verification.", "No exact same-deck CAS3D agreement or qualified physical equilibrium is established.", "All 16 approximate digitization comparisons fail; retain every broad-window failure.", "The 24 cases have zero labeled nullity and do not certify colliding/null-space solver behavior."]
+}

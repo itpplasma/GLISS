@@ -15,13 +15,25 @@ module exact_cylinder
     implicit none
     private
     public :: assemble_exact_cylinder
+
+    type, public :: exact_cylinder_parameters_t
+        real(dp) :: radius = 0.5_dp
+        real(dp) :: length = 6.0_dp*acos(-1.0_dp)
+        real(dp) :: magnetic_field = 1.0_dp
+        real(dp) :: pressure = 100.0_dp
+        real(dp) :: density = 2.0_dp
+        real(dp) :: adiabatic_index = 5.0_dp/3.0_dp
+    end type exact_cylinder_parameters_t
 contains
     subroutine assemble_exact_cylinder(ns, degree, parity, stiffness, mass, &
-            poloidal_mode)
+            poloidal_mode, parameters, normal_dofs, tangential_dofs)
         integer, intent(in) :: ns, degree, parity
         real(dp), allocatable, intent(out) :: stiffness(:, :), mass(:, :)
         integer, optional, intent(in) :: poloidal_mode
+        type(exact_cylinder_parameters_t), optional, intent(in) :: parameters
+        integer, optional, intent(out) :: normal_dofs, tangential_dofs
         type(radial_feec_complex_t) :: complex
+        type(exact_cylinder_parameters_t) :: physical
         real(dp), allocatable :: breaks(:), nodes(:), weights(:)
         real(dp) :: coordinate, weight
         integer :: i, cell, point, pass, dimension, info, mode
@@ -29,6 +41,8 @@ contains
         mode = 3
         if (present(poloidal_mode)) mode = poloidal_mode
         if (mode < 1) error stop 'Poloidal mode must be positive'
+        physical = exact_cylinder_parameters_t()
+        if (present(parameters)) physical = parameters
 
         allocate (breaks(ns + 1))
         do i = 1, ns + 1
@@ -37,6 +51,8 @@ contains
         call build_radial_feec_complex(breaks, degree, .true., .true., &
             complex, info)
         if (info /= 0) error stop 'Radial complex failed'
+        if (present(normal_dofs)) normal_dofs = complex%h1_dofs
+        if (present(tangential_dofs)) tangential_dofs = complex%l2_dofs
         dimension = complex%h1_dofs + 2*complex%l2_dofs
         allocate (stiffness(dimension, dimension), mass(dimension, dimension))
         stiffness = 0.0_dp
@@ -55,20 +71,20 @@ contains
                         + 0.5_dp*nodes(point))/real(ns, dp)
                     weight = 0.5_dp*weights(point)/real(ns, dp)
                     call accumulate(complex, coordinate, weight, parity, &
-                        mode, pass, stiffness, mass)
+                        mode, pass, physical, stiffness, mass)
                 end do
             end do
         end do
     end subroutine assemble_exact_cylinder
 
-    subroutine accumulate(complex, s, weight, parity, mode, pass, stiffness, &
-            mass)
+    subroutine accumulate(complex, s, weight, parity, mode, pass, physical, &
+            stiffness, mass)
         type(radial_feec_complex_t), intent(in) :: complex
+        type(exact_cylinder_parameters_t), intent(in) :: physical
         real(dp), intent(in) :: s, weight
         integer, intent(in) :: parity, mode, pass
         real(dp), intent(inout) :: stiffness(:, :), mass(:, :)
-        real(dp), parameter :: pi = acos(-1.0_dp), radius = 0.5_dp
-        real(dp), parameter :: length = 6.0_dp*pi
+        real(dp), parameter :: pi = acos(-1.0_dp)
         real(dp) :: fields(8, 4, 13), zeros(8, 4), gamma_p(8, 4)
         real(dp), allocatable :: h1(:), dh1(:), l2(:), h(:, :), dh(:, :), l(:, :)
         real(dp), allocatable :: e(:, :)
@@ -102,15 +118,15 @@ contains
         map(nh + 1:nh + nl) = complex%h1_dofs + li
         map(nh + nl + 1:) = complex%h1_dofs + complex%l2_dofs + li
         ! Exact right-handed (s=r²/a², theta/2pi, z/L) cylinder geometry.
-        ! B=1 T, zero current, constant pressure100 Pa, physical rho=2.
+        ! Zero current and pressure gradient; no reconstructed torus chart.
         fields = 0.0_dp
-        fields(:, :, 1) = pi*radius**2
-        fields(:, :, 5) = length
-        fields(:, :, 7) = pi*radius**2*length
-        fields(:, :, 8) = 1.0_dp
-        fields(:, :, 9) = 4.0_dp*s/radius**2
+        fields(:, :, 1) = pi*physical%radius**2*physical%magnetic_field
+        fields(:, :, 5) = physical%length*physical%magnetic_field
+        fields(:, :, 7) = pi*physical%radius**2*physical%length
+        fields(:, :, 8) = physical%magnetic_field
+        fields(:, :, 9) = 4.0_dp*s/physical%radius**2
         zeros = 0.0_dp
-        gamma_p = (5.0_dp/3.0_dp)*100.0_dp
+        gamma_p = physical%adiabatic_index*physical%pressure
         allocate (local_k(dim, dim), local_m(dim, dim), terms(dim, dim, 5))
         local_k = 0.0_dp
         local_m = 0.0_dp
@@ -128,7 +144,8 @@ contains
         end do
         call scatter_matrix(map, local_k, 1.0_dp, stiffness)
         if (pass == 1) then
-            call assemble_compatible_physical_mass_surface(fields, 2.0_dp, &
+            call assemble_compatible_physical_mass_surface(fields, &
+                physical%density, &
                 mode_table, toroidal_table, parity_table, 1, h, e, l, weight, &
                 phase_assembly_transformed, local_m, info)
             if (info /= 0) error stop 'Production surface mass failed'

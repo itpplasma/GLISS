@@ -953,6 +953,25 @@ if(BUILD_TESTING)
         benchmarks/analytic/theta_pinch.f90)
     target_link_libraries(benchmark_theta_pinch PRIVATE gliss gliss_test_support)
 
+    add_executable(test_analytical_production_spectrum
+        benchmarks/analytic/exact_cylinder.f90
+        test/test_analytical_production_spectrum.f90)
+    target_link_libraries(test_analytical_production_spectrum PRIVATE gliss)
+    set_target_properties(test_analytical_production_spectrum PROPERTIES
+        Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/analytical-mod")
+    add_test(NAME analytical_production_spectrum
+        COMMAND test_analytical_production_spectrum)
+    set_tests_properties(analytical_production_spectrum PROPERTIES
+        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+
+    add_executable(test_vacuum_torus_analytic
+        test/vacuum_torus_analytic_fixture.f90
+        test/test_vacuum_torus_analytic.f90)
+    target_link_libraries(test_vacuum_torus_analytic PRIVATE gliss)
+    add_test(NAME vacuum_torus_analytic COMMAND test_vacuum_torus_analytic)
+    set_tests_properties(vacuum_torus_analytic PROPERTIES
+        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+
     add_library(gliss_test_support test/cylinder_fixture.f90)
     target_link_libraries(gliss_test_support PUBLIC gliss)
 
@@ -990,6 +1009,12 @@ if(BUILD_TESTING)
     target_link_libraries(test_cas3d_phase_envelope_transform PRIVATE gliss)
     add_test(NAME cas3d_phase_envelope_transform
         COMMAND test_cas3d_phase_envelope_transform)
+
+    add_executable(test_cas3d_quotient_spectrum
+        test/test_cas3d_quotient_spectrum.f90)
+    target_link_libraries(test_cas3d_quotient_spectrum PRIVATE
+        gliss gliss_test_support)
+    add_test(NAME cas3d_quotient_spectrum COMMAND test_cas3d_quotient_spectrum)
 
     add_executable(test_gliss_header cmake/test_gliss_header.c)
     target_include_directories(test_gliss_header PRIVATE include)

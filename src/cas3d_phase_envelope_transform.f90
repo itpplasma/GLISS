@@ -21,10 +21,10 @@ module cas3d_phase_envelope_transform
     ! Dimensions of the labeled coefficient pencil. The envelope columns of
     ! one radial basis function map onto the physical modes of the same
     ! function (degree one), so the labeled pencil is the congruence of the
-    ! physical one by a block-diagonal C of full row rank: its rank per
-    ! component is the number of physical modes reached, the rest of the
-    ! labels span an exact null space, and the physical inertia is the
-    ! quotient inertia.
+    ! physical one by a block-diagonal C of full row rank: the map rank per
+    ! component is the number of active physical modes reached, the remaining
+    ! labels span an exact null space. Physical marginal modes can create
+    ! additional null directions in the stiffness.
     type, public :: cas3d_quotient_t
         integer :: envelope_unknowns = 0
         integer :: physical_unknowns = 0
@@ -215,17 +215,21 @@ contains
 
 
     subroutine apply_cas3d_phase_envelope_block_congruence(map, h1_dofs, &
-            l2_dofs, mass_scale, stiffness, mass, quotient, info)
+            l2_dofs, mass_scale, stiffness, mass, quotient, info, &
+            normal_active, eta_active)
         type(cas3d_phase_envelope_map_t), intent(in) :: map
         integer, intent(in) :: h1_dofs, l2_dofs
         real(dp), intent(in) :: mass_scale
         type(variable_block_tridiagonal_t), intent(inout) :: stiffness, mass
         type(cas3d_quotient_t), intent(out) :: quotient
         integer, intent(out) :: info
+        logical, optional, intent(in) :: normal_active(:), eta_active(:)
         type(variable_block_tridiagonal_t) :: labeled, labeled_mass
         integer, allocatable :: rows(:, :, :)
+        integer, allocatable :: normal_rank(:), eta_rank(:)
         real(dp), allocatable :: weights(:, :, :)
         integer :: allocation_status, block, blocks, column, envelope, width
+        integer :: normal_count, eta_count, mode, support
 
         ! Degree-one block pencil of the physical problem: block b holds the
         ! normal unknowns of H1 function b (b <= h1_dofs), mode-minor, then
@@ -237,6 +241,42 @@ contains
         if (.not. valid_map(map)) return
         if (h1_dofs < 0 .or. l2_dofs /= h1_dofs + 1) return
         if (.not. ieee_is_finite(mass_scale) .or. mass_scale <= 0.0_dp) return
+        if (present(normal_active)) then
+            if (size(normal_active) /= map%physical_mode_count) return
+        end if
+        if (present(eta_active)) then
+            if (size(eta_active) /= map%physical_mode_count) return
+        end if
+        allocate (normal_rank(map%physical_mode_count), &
+            eta_rank(map%physical_mode_count), source=0, &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = cas3d_phase_transform_allocation
+            return
+        end if
+        normal_count = 0
+        eta_count = 0
+        do mode = 1, map%physical_mode_count
+            if (present(normal_active)) then
+                if (normal_active(mode)) then
+                    normal_count = normal_count + 1
+                    normal_rank(mode) = normal_count
+                end if
+            else
+                normal_count = normal_count + 1
+                normal_rank(mode) = normal_count
+            end if
+            if (present(eta_active)) then
+                if (eta_active(mode)) then
+                    eta_count = eta_count + 1
+                    eta_rank(mode) = eta_count
+                end if
+            else
+                eta_count = eta_count + 1
+                eta_rank(mode) = eta_count
+            end if
+        end do
+        if (eta_count < 1) return
         blocks = l2_dofs
         if (.not. allocated(stiffness%widths)) return
         if (size(stiffness%widths) /= blocks) return
@@ -264,19 +304,27 @@ contains
             width = 0
             if (block <= h1_dofs) then
                 do column = 1, envelope
-                    rows(:, width + column, block) = map%physical_row(:, column)
-                    weights(:, width + column, block) = &
-                        map%normal_weight(:, column)
+                    do support = 1, 2
+                        mode = map%physical_row(support, column)
+                        if (mode == 0) cycle
+                        rows(support, width + column, block) = normal_rank(mode)
+                        if (normal_rank(mode) == 0) cycle
+                        weights(support, width + column, block) = &
+                            map%normal_weight(support, column)
+                    end do
                 end do
                 width = envelope
             end if
             do column = 1, envelope
-                where (map%physical_row(:, column) > 0)
-                    rows(:, width + column, block) = &
-                        physical_normal_width(block) &
-                        + map%physical_row(:, column)
-                end where
-                weights(:, width + column, block) = map%eta_weight(:, column)
+                do support = 1, 2
+                    mode = map%physical_row(support, column)
+                    if (mode == 0) cycle
+                    if (eta_rank(mode) == 0) cycle
+                    rows(support, width + column, block) = &
+                        physical_normal_width(block) + eta_rank(mode)
+                    weights(support, width + column, block) = &
+                        map%eta_weight(support, column)
+                end do
             end do
             labeled%widths(block) = width + envelope
         end do
@@ -311,8 +359,7 @@ contains
         if (info /= cas3d_phase_transform_ok) return
         quotient%physical_unknowns = sum(stiffness%widths)
         quotient%envelope_unknowns = sum(labeled%widths)
-        quotient%quotient_rank = (h1_dofs + l2_dofs) &
-            * reached_rows(map)
+        quotient%quotient_rank = h1_dofs * normal_count + l2_dofs * eta_count
         quotient%nullity = quotient%envelope_unknowns - quotient%quotient_rank
         quotient%peak_block_width = maxval(labeled%widths)
         info = cas3d_phase_transform_invalid
@@ -327,31 +374,15 @@ contains
             integer, intent(in) :: index
 
             count = 0
-            if (index <= h1_dofs) count = map%physical_mode_count
+            if (index <= h1_dofs) count = normal_count
         end function physical_normal_width
 
         pure integer function physical_width(index) result(count)
             integer, intent(in) :: index
 
-            count = physical_normal_width(index) + map%physical_mode_count
+            count = physical_normal_width(index) + eta_count
         end function physical_width
     end subroutine apply_cas3d_phase_envelope_block_congruence
-
-    ! Rank of the per-component map: the number of physical modes reached by
-    ! a label with a nonzero weight. Each pair of labels spans its two
-    ! modes and a single-support label spans its mode, so this integer count
-    ! is the exact rank; valid_map requires every mode to be reached.
-    pure integer function reached_rows(map) result(count)
-        type(cas3d_phase_envelope_map_t), intent(in) :: map
-        integer :: row
-
-        count = 0
-        do row = 1, map%physical_mode_count
-            if (any(map%physical_row == row .and. map%normal_weight /= 0.0_dp) &
-                .and. any(map%physical_row == row &
-                .and. map%eta_weight /= 0.0_dp)) count = count + 1
-        end do
-    end function reached_rows
 
     pure subroutine block_congruence(left_rows, left_weights, right_rows, &
             right_weights, source, target)

@@ -70,8 +70,8 @@ module marginality_spectrum
         real(dp) :: eigenpair_residual = 0.0_dp
         real(dp) :: force_balance_residual = 0.0_dp
         real(dp) :: zero_floor = 0.0_dp
-        ! CAS3D2MN coefficient normalization only: rank of the labeled
-        ! pencil (the physical unknown count), its exact null space from
+        ! CAS3D2MN coefficient normalization only: rank of the coefficient
+        ! map (the physical quotient-space dimension), its nullity from
         ! coincident labels, and the widest block of the labeled pencil.
         integer :: quotient_rank = 0
         integer :: labeled_nullity = 0
@@ -250,11 +250,10 @@ contains
         real(dp), optional, intent(in) :: radial_breaks(:)
         type(compatible_two_component_problem_t) :: problem
         type(field_profile_identity_result_t) :: identities
-        type(marginality_spectrum_result_t) :: quotient_result
         type(cas3d_quotient_t) :: quotient
         integer, allocatable :: labeled_widths(:)
+        logical, allocatable :: normal_active(:), eta_active(:)
         real(dp) :: coefficient_scale
-        integer :: quotient_negative_count
 
         result = marginality_spectrum_result_t()
         if (present(radial_breaks)) then
@@ -314,20 +313,19 @@ contains
             coefficient_scale = cas3d2mn_envelope_mass_scale( &
                 radial_cells, coefficient_n_theta, &
                 coefficient_n_zeta, reference_length)
-            call solve_compatible_marginality_problem(problem, .false., &
-                quotient_result, info, message)
-            if (info /= marginality_spectrum_ok) then
-                message = "physical quotient inertia failed before " &
-                    // "CAS3D2MN congruence"
-                return
-            end if
-            quotient_negative_count = quotient_result%negative_count
+            ! sin(0) is absent from the physical trial topology. Keep the
+            ! labeled coefficient space while removing that physical row
+            ! from the affected component of its congruence map.
+            normal_active = .not. (mode_m == 0 .and. mode_n == 0 &
+                .and. parity_class == 2)
+            eta_active = .not. (mode_m == 0 .and. mode_n == 0 &
+                .and. parity_class == 1)
             ! Blockwise congruence of the sparse pencil: no dense global
             ! matrix at physical or labeled size (#11).
             call apply_cas3d_phase_envelope_block_congruence( &
                 coefficient_map, problem%h1_dofs, problem%l2_dofs, &
                 coefficient_scale, problem%sparse_stiffness, &
-                problem%sparse_mass, quotient, info)
+                problem%sparse_mass, quotient, info, normal_active, eta_active)
             if (info /= cas3d_phase_transform_ok) then
                 info = marginality_spectrum_compute_error
                 message = "CAS3D2MN coefficient congruence failed"
@@ -354,13 +352,12 @@ contains
         end if
         if (normalization_policy == marginality_normalization_cas3d2mn) then
             call solve_compatible_marginality_problem(problem, &
-                solve_eigenpair, result, info, message, &
-                negative_count_override=quotient_negative_count)
-            ! The count, and hence its floor, is that of the quotient pencil;
-            ! the labeled null directions lie in the floor band and are never
-            ! reported as the lowest eigenvalue.
+                solve_eigenpair, result, info, message)
+            ! The coefficient mass is scale*I, not the congruence of the
+            ! physical mass. Its eigenvalue units and numerical floor differ
+            ! from that pencil. Count and select with the same labeled floor;
+            ! the exact label null directions lie inside its marginal band.
             if (info == marginality_spectrum_ok) then
-                result%zero_floor = quotient_result%zero_floor
                 result%quotient_rank = quotient%quotient_rank
                 result%labeled_nullity = quotient%nullity
                 result%peak_block_width = quotient%peak_block_width

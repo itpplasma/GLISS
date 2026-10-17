@@ -6,6 +6,102 @@ BUILD_TESTING. Outputs are fresh CSVs, PDF/PNG figures, numerical metrics,
 source copies, and toolchain/source provenance. Neither archived CSV values
 nor fitted references enter the calculation.
 
+## Registered assembly-to-certifier acceptance
+
+Run `ctest --test-dir build -R '^analytical_production_spectrum$' --output-on-failure`.
+The native test assembles exact cylinder fields with the same production FEEC,
+axis factors, split quadrature, surface energy and physical mass as the runner
+below. It then uses the public full-spectrum solver's equilibrated dense seed,
+refinement, mass orthogonality and gap-inertia routines. Additional direct
+inertia probes and mass-inverse residual eigenvalue bounds identify branches
+inside independent analytical windows, including unresolved-cluster safeguards.
+The test also rejects any negative eigenvalue through zero-shift inertia.
+
+The acceptance case has m=3,n=1, sound speed equal to Alfvén speed and L=2πa,
+so ka=1. This choice separates the first radial slow branch from the cusp by
+about 1.38%, instead of about 3.3e-7 relative in the historical low-pressure
+case. Bessel J3' roots define the first two fast and slow reference branches;
+the third root defines their outer separating windows. Slow branches are
+ordered from largest to smallest toward the cusp. The minimum is never used
+as the first radial slow branch, and no nearest-eigenvalue fit is performed.
+
+Both parities and degrees 1–4 use 8, 16 and 32 radial cells. Fixed finest-mesh
+relative accuracy budgets are 1e-3, 1e-5, 1e-7 and 1e-8 respectively, with
+numerical eigenvalue uncertainty below one tenth of each budget and one
+quarter of the analytical separating gap. The computed enclosure must remain
+inside its branch window. Coarse errors must remain below 2%, and refinement
+must reduce errors until they reach a numerical plateau below the budget.
+These are engineering acceptance targets, not variational or optimal-order
+theorems. Signed relative errors are compared between parities. Each slow
+and fast family has dim(L2) eigenvalues; the Alfvén eigenspace has dim(H1).
+Its frequency and multiplicity are checked as a cluster, without selecting an
+arbitrary eigenvector from the degenerate space.
+
+Additional independently assembled cases check inverse-density scaling,
+joint B/p scaling, uniform geometric dilation, and independent pressure,
+magnetic-field and axial-period changes against the same dispersion relations.
+These degree-3, 16-cell cases must also meet the 1e-7 branch accuracy budget;
+the three exact common spectral scalings are checked to 1e-8 relative.
+The historical B=1 T, p=100 Pa cylinder remains a separate conditioning stress
+diagnostic, with its defaults preserved.
+
+This gate starts at exact analytical fields. It does not exercise Cartesian
+export reconstruction, public problem admission, the public lowest-mode
+entrypoint or its cross-check with the full spectrum. A periodic straight
+cylinder is a different geometry from the toroidal winding chart of an
+imported equilibrium. A public straight-cylinder comparison still needs a
+supported embedding and a separately controlled curvature limit; the invalid
+legacy fixture described below cannot provide it. The vacuum-torus test below
+instead supplies a valid finite-aspect-ratio equilibrium for the public path.
+
+## Analytical vacuum torus through the public API
+
+Run `ctest --test-dir build -R '^vacuum_torus_analytic$' --output-on-failure`.
+This registered test starts with an exact zero-pressure, current-free toroidal
+equilibrium, writes and reads the native Cartesian equilibrium format, fits
+primitive splines, builds the public fixed-boundary problem and runs both
+public lowest-mode certification and the full-spectrum solver. It has no
+GVEC dependency and does not use the legacy cylinder fixture.
+
+The major radius is R0=3 m, minor radius a=1 m and field constant F=3 T m.
+Define C=R0-sqrt(R0²-a²), D=R0-Cs, r²=2R0Cs-C²s² and q=r/(R0+D).
+The co-rotating Cartesian coefficients represent
+R=D[1+2 sum(m>=1) q^m cos(2πmθ)] and
+Z=-2D sum(m>=1) q^m sin(2πmθ), with yhat=0 and physical azimuth 2πζ.
+The closed form R+iZ=D(1+q exp(-2πiθ))/(1-q exp(-2πiθ)) shows that
+(R-R0)²+Z²=r². The chart has positive signed J=4π²CR². In the committed
+GLISS convention B^ζ=-Phi_s/J, so the **negative** toroidal flux slope
+Phi_s=-2πFC, chi_s=0 and p=0 give B=(F/R)e_phi. Its covariants are exactly
+(B_s,B_θ,B_ζ)=(0,0,2πF), hence curl(B)=0.
+
+For this equilibrium the stiffness quadratic form is
+vᵀKv=2δW=integral |curl(xi cross B)|²/μ0 dV, and physical mass is
+vᵀMv=integral ρ|xi|² dV. The regular fixed-boundary displacement
+xi^s=s(1-s), xi^θ=xi^ζ=0 is represented exactly at degree 2 and has
+vᵀKv=Phi_s²/(3Cμ0). Its mass oracle independently integrates the closed
+Cartesian metric, without the production mass or energy kernels. The public
+energy and physical mass must agree with these absolute references to 2e-7
+relative. Zero pressure drive and plasma compressibility are checked too.
+
+Joint radial/Fourier refinement uses (surfaces,maximum m)=(9,4),(17,8),(33,12).
+Seven off-knot radii include s=1e-8 near the axis; positions, signed J,
+Cartesian B and radial covariant-field derivatives are checked against the
+closed map and force-free identities. The public solve uses a degree-2,
+three-cell space with (m,n)=(0,0),(2,1), 96×8 angular points and both parities.
+It must have no certified negative inertia and must retain the parallel
+zero-energy subspace, using a declared 1e-6 s⁻² numerical zero floor; positive
+density is chosen to keep the frequency scale moderate. A forced coupled
+solve must reproduce the union of the parity spectra. Independent changes
+to B and density must scale all eigenvalues as B²/ρ. Collapsed geometry and
+zero-field controls must reject.
+
+This qualifies a finite-aspect-ratio stable equilibrium, absolute magnetic
+energy and physical mass, import refinement and the public solve path. It
+does not assert closed-form toroidal eigenfrequencies, an unstable threshold,
+the straight-cylinder curvature limit or a CAS3D literature comparison.
+
+## Historical full-spectrum diagnostic
+
 The default theta-pinch runner prescribes exact straight-cylinder kernel fields
 and calls the **current production** radial FEEC basis, axis factor, split
 quadrature, compressible surface assembly and physical mass assembly. The
