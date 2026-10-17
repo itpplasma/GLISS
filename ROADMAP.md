@@ -758,11 +758,18 @@ CTest. NVHPC and the Linux-only linker-wrapper runtime were unavailable on this
 macOS host, so those qualifications remain open. The linker fixture's Linux
 registration and wrapper flags are preserved.
 
-Fo's final native qualification uses APFS fixtures on GNU macOS. The process
-journal-recovery oracle requires Linux and is explicitly skipped here. A real
-receipt-before-coverage process-crash cut and CMake oracle identity remain
-unqualified. An earlier HFS scratch exec fixture flaked; its evidence is retained
-separately from the final passing APFS run.
+Fo's macOS qualification uses APFS fixtures; its process journal-recovery oracle
+explicitly skips on Darwin. The same published revision was then built natively
+on mailuefterl with GCC 16.2.1 and the audited FortFront/Fx revisions. All ten
+named Linux deployment cases pass, with zero skips, including the asserting
+journal-recovery process oracle and coverage restart. The tested image (SHA256
+`72975f8d51eb2b16e71b10b773d8c4c42bcc6b219fbd3f27293c1e192ede1e67`)
+is atomically installed at `~/.local/bin/fo` on mailuefterl; installed-byte,
+version and help checks pass, and the previous image is retained for rollback.
+Existing client-owned MCP processes keep their loaded image until those clients
+restart. A real receipt-before-coverage process-crash cut and CMake oracle
+identity remain unqualified. An earlier HFS scratch exec fixture flaked; its
+evidence is retained separately from the final passing APFS run.
 
 This closes branch accounting for these revisions, rather than the scientific
 acceptance gates. The next GLISS repair must address the weighted trial space
