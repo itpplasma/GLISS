@@ -307,3 +307,14 @@ integrated terms are checked. This supplies a prescribed negative-energy
 trial through production surface assemblies; it does not establish an
 isolated eigenvalue, continuum growth rate, public primitive cylinder import
 or the global Newcomb/Suydam threshold gates.
+
+## Sheared pinch at a simple rational surface
+
+The [sheared pinch benchmark](sheared_pinch/README.md) adds production matrix,
+physical-mass and static tangential-reduction checks on an exact force-balanced
+equilibrium with a simple field-line resonance. Its 48 stencil cases reproduce
+the local Newcomb coefficients and positive, zero and negative Frobenius
+discriminant controls within acceptance frozen before measurement. The raw
+energy and SI marginal condition have a reproducible strict symbolic derivation.
+This qualifies the local threshold; global helical stability and admissible
+physical-mass singular modes remain separate gates.

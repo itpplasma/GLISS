@@ -1011,6 +1011,12 @@ if(BUILD_TESTING)
     set_tests_properties(resonant_screw_pinch_spectrum PROPERTIES
         ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
 
+    add_executable(test_sheared_pinch_newcomb test/test_sheared_pinch_newcomb.f90)
+    target_link_libraries(test_sheared_pinch_newcomb PRIVATE gliss)
+    add_test(NAME sheared_pinch_newcomb COMMAND test_sheared_pinch_newcomb)
+    set_tests_properties(sheared_pinch_newcomb PROPERTIES
+        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+
     add_library(gliss_test_support test/cylinder_fixture.f90)
     target_link_libraries(gliss_test_support PUBLIC gliss)
 

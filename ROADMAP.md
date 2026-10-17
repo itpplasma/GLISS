@@ -49,7 +49,7 @@ reference values or repeatedly pursue inaccessible data.
 | Gate | Existing evidence | Required work and acceptance |
 | --- | --- | --- |
 | A0: equation and normalization audit | Exact pinch raw energy/mass pass; matched W7-X trial exposes a raw/production energy gap on a force-defective retained equilibrium; zero completed whole-component reviews | Qualify equilibrium over the actual trial support, converge raw three-dimensional energy and P0 interface terms, and audit units, flux signs, axis constraints and boundaries |
-| A1: analytical spectra and thresholds | Cylinder fast/slow/Alfvén branches, imported exact vacuum torus, 144 exact resonant screw-pinch negative-energy trials and 36 global radial pinch ground-eigenvalue cases pass | Add Newcomb/Suydam and helical unstable/marginal thresholds and import qualification; retain exact-surface/global-radial scope for the pinch and stable-domain scope for the imported vacuum torus |
+| A1: analytical spectra and thresholds | Cylinder branches, imported exact vacuum torus, 144 resonant-pinch energy trials, 36 global radial ground-eigenvalue cases and 48 simple-resonant Newcomb local-threshold cases pass | Add global helical unstable/marginal thresholds, rational-surface admissibility and import qualification; retain the separate local-threshold, global-radial and stable imported-vacuum scopes |
 | A2: axis, resonance and small eigenvalues | Higher-degree Solov'ev bracket controls pass; degree 1 still misses a tested marginal endpoint; a weighted derivative-space obstruction is derived; dense slow-cluster ordering sensitivity is diagnosed | Resolve #35's frozen degree-1 criterion and retain the failed gate until it passes; test rational-surface domain and refinement; check slow-cluster accuracy using independent higher-precision pencils before attributing any failure to the production solver |
 | A3: CAS3D formulation and numerical comparison | Independent dense quotient oracle reproduces floor inconsistency and zero-carrier component-topology defects; integrated repairs and ordered-CSV experiments pass their software gates | Recover and audit the full published mode mask; resolve provisional numerical discrepancies and compare matched signs/inertia, marginal parameters, energies and subspaces |
 | A4: independent published-code comparisons | DCON sign bracket, TERPSICHORE replay and bounded independent QAS3 controls exist | Converge the Solov'ev marginal interval and higher-n controls; rerun current independent QAS3 assembly with qualified input; explain count/branch differences through energy and subspace comparisons; complete ideal-limit MISHKA/CASTOR transfer and the failed stable control under #12 |
@@ -661,7 +661,7 @@ At `f468362`, the isolated Fo audit passes clean lint, strict optimized
 compilation with array temporaries treated as errors, and all 185 default
 native tests (39.77 s test wall time).
 Source accounting contains
-369 records and still zero completed whole-component equation reviews.
+373 records and still zero completed whole-component equation reviews.
 At published `ddaa8f6`, the isolated Fo audit also passes clean lint, strict
 optimized compilation with array temporaries treated as errors, and all 184
 then-registered tests. At published `fbb2430`, hosted GNU, Flang, runtime-check,
@@ -724,6 +724,31 @@ trial energy to a global radial eigenvalue; exact cylindrical fields still
 bypass equilibrium import and public problem orchestration. Infinitely many
 negative radial modes approach zero, so no finite total instability count
 or gap at zero is claimed. Other mode families and marginal thresholds remain.
+
+The [sheared pinch local control](benchmarks/analytic/sheared_pinch/README.md)
+adds a simple rational surface absent from the globally resonant benchmark.
+Independent raw Bernstein reduction gives the exact Newcomb coefficients and
+positive, zero and negative Frobenius-discriminant controls. The reduction,
+chart mapping and marginal coefficients pass 88 strict FortSym/SymEngine
+checks with zero probes. All 48 native
+stencil cases (288 point matrices) pass the acceptance frozen before the first
+measurement. Full raw-matrix and physical point-mass errors are at most
+1.403e-15 and 2.998e-15; the tangential Schur coefficient error is 4.901e-12.
+Richardson coefficient and discriminant errors are 2.782e-5 and 8.088e-5,
+within unchanged 1e-4 and 1e-3 budgets. Independent 80-digit finite-step
+values agree with the native discriminants to 1.953e-10, identifying the
+critical-case offset as truncation. The local threshold does not establish
+global finite-mode stability, an admissible physical-mass singular eigenpair
+or imported-equilibrium qualification.
+
+A redundant expanded-minimum identity exposed a second native FortSym verdict
+defect: normalization refused a product above its 2,000-term bound, but the
+fallback inferred NONZERO. SymEngine proves the same residual ZERO. The accepted
+proof checks the full raw completion with both engines and then instantiates
+that exact completion; the disputed verdict is preserved and not used. This
+non-blocking generic verifier defect is diagnosed, not repaired in this wave.
+The symbolic check also caught and corrected the new proof draft's eta/mu/nu
+chart transcription before acceptance; the production mapping was correct.
 
 The imported exact vacuum torus exercises the native writer/reader, Cartesian
 primitive spline, public fixed-boundary assembly, lowest-mode and full-spectrum

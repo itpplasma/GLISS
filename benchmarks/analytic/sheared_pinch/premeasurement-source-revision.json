@@ -1,0 +1,9 @@
+{
+  "original_protocol_sha256": "c38cc262274b89d1135920b983be48a7f8ff495703d69c5d6ca69e94218370f4",
+  "old_source_sha256": "201492f8f23c083665fe20186230a8af2b245277ca038f55d56c439ac8ac8d5f",
+  "new_source_sha256": "34ec7d3d09e3c86793d137999f1e72930d13be0cda8c467769abe450018c9918",
+  "unchanged_acceptance": true,
+  "native_measurements_so_far": 0,
+  "reason": "Werror=array-temporaries rejects result=[three scalars] constructor in compiler build. Replace with three explicit scalar assignments; no arithmetic or acceptance change. First build failure retained unchanged in build.log.",
+  "build_failure_sha256": "9367a807afcf6eafee140dddc8547e7da896d43276fd11ce0b0ae95500cc550a"
+}

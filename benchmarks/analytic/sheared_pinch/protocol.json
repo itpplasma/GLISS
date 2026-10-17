@@ -1,0 +1,72 @@
+{
+  "frozen_utc": "2026-10-17T08:41:16.875752+00:00",
+  "scope": "Private local Newcomb/Frobenius coefficient and discriminant control using production surface stiffness and mass, before first native measurement. No global spectrum, finite-m stability, physical-mass pole mode, import qualification, or finite total negative-count claim. Root will rebuild current source before promotion.",
+  "git_head_context": "e62b916aaf3e35be524cd5dc35fe4f5bd834fe1c",
+  "cases": {
+    "rs_m": 1,
+    "a_m": "11/10",
+    "A_T_per_m": 1,
+    "Zs_T": 1,
+    "pe_Pa": 17000,
+    "m": 2,
+    "L_m": "2*pi",
+    "C": [
+      "-9/5",
+      "4-4*sqrt(2)",
+      "-1"
+    ],
+    "offsets": [
+      "+/-1/16",
+      "+/-1/32",
+      "+/-1/64"
+    ],
+    "parity": [
+      1,
+      2
+    ],
+    "phase": [
+      "direct",
+      "transformed"
+    ],
+    "handedness": [
+      -1,
+      1
+    ],
+    "gamma": [
+      "1",
+      "5/3"
+    ],
+    "local_stencil_cases": 48,
+    "point_matrices": 288
+  },
+  "acceptance": {
+    "full_raw_Bernstein_matrix_scaled_max_abs": 1e-10,
+    "physical_point_mass_diagonal_1_0_1_1_max_abs": 1e-11,
+    "physical_tangential_condition_cap": 100000000.0,
+    "reduced_coefficients_max_abs": 1e-08,
+    "central_alpha_beta_error_ratio_each_refinement": [
+      3.5,
+      4.5
+    ],
+    "Richardson_alpha_relative": 0.0001,
+    "Richardson_beta_abs_scaled_max_1_abs_beta": 0.0001,
+    "Richardson_discriminant_abs": 0.001,
+    "controls": "positive discriminant forC=-9/5,negative forC=-1; critical only within unchanged absolute budget"
+  },
+  "premasurement_budget_justification": {
+    "exact_stencil_file": "premeasurement-exact-stencils.json",
+    "exact_stencils": "Independent 80-digit mpmath evaluation of analytical a,b,c before native measurements. Worst alpha relative Richardson truncation2.439e-5,beta scaledabs2.782e-5,Deltaabs8.089e-5; coarse/mid ratios4.03..4.17. Chosen budgets allow truncation with margin.",
+    "condition": "For all frozen points r in[15/16,17/16], Bz\u00b2 in[0.76,1.22], B\u00b2<2.35,K\u00b2 in[7,9],mu0*gamma*p in[0.02,0.32],F\u00b2>0.0008. Physical tangential trace<24,det=K\u00b2*mu0*gamma*p*F\u00b2>0.000112,so kappa2<trace\u00b2/det<5.15e6; cap1e8 leaves arithmetic margin. No floor/shift permitted."
+  },
+  "artifact_bindings": {
+    "source_sha256": "201492f8f23c083665fe20186230a8af2b245277ca038f55d56c439ac8ac8d5f",
+    "cmake_sha256": "c3a6f37d8d93bd1f206b3d413c87dc852af8d34c5274c67555e000f67cb0737b",
+    "archive": "/tmp/gliss-a2-derivative-eta-oracle-20261017/frozen/libgliss.a",
+    "archive_sha256": "473a85566d726ba772aa88830a58ae2dc57625d9507968fbffff2c720cde0c5e",
+    "modules_manifest": "/tmp/gliss-a2-derivative-eta-oracle-20261017/modules-manifest.json",
+    "modules_manifest_sha256": "788831fbcd11f7754711bda55bf3282a822bdc0a220b62689dbafed940da259f",
+    "module_count": 99,
+    "premeasurement_exact_stencils_sha256": "c20c8863480e96292ab7c340bf3342e776696f9a04b0d38c2e27658c0e652dee"
+  },
+  "execution_policy": "Native CMake/CTest,Release gfortran,O3,Wall,Wextra,Werror=array-temporaries,fcheck=all,build-j2,OMP/BLAS1. Stop on full raw Bernstein mismatch. Preserve failures and frozen settings; no postmeasurement budget tuning."
+}

@@ -1,0 +1,69 @@
+{
+  "scope": "Independent local static sheared-pinch algebra; no production kernels, numerical spectra, global stability or physical-mass eigenpair claim.",
+  "fortsym_revision": "bdeb96e0777b1eafcb7c3b4845ca2ba9362a2b00",
+  "fortsym_dylib": "/tmp/gliss-fortsym-symbolic-power-prefix/lib/libfortsym.dylib",
+  "fortsym_dylib_sha256": "d402298d89954addd8f9e870b58e544e544eb1d2815ac3ed76eb030693516ad6",
+  "compiler": "GNU Fortran 16.1.0; Release -O3 -Wall -Wextra -Werror=array-temporaries -fcheck=all",
+  "max_build_jobs": 2,
+  "test_environment": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "source_sha256": {
+    "benchmarks/analytic/sheared_pinch/symbolic/src/sheared_pinch_proof.f90": "0e939878ea0828ea19de7af977cae192f669acd7a2a7acafb5d43520455f4e83",
+    "benchmarks/analytic/sheared_pinch/symbolic/src/CMakeLists.txt": "97102dda7d8714850b52141fb7dedc1680cdc92e2559de9357d155b0809ade47",
+    "benchmarks/analytic/sheared_pinch/symbolic/derivation.md": "111d58a5acbf7fa8da16b86c283eb0892c14c7dad3d28834bc3784173d337b6a"
+  },
+  "source_contract_sha256": {
+    "test/test_resonant_screw_pinch_energy.f90": "ceb6480c4e8effdda3a60b85cd551f4821a27eb3ea09d6c7e8a3aa03f3601dba",
+    "gen/gliss_energy_gen.f90": "ae9ff8b1f86309607833cc03db58c80219c5d8b19211198d49efcc4b39014f7c",
+    "src/compatible_compressible_stiffness_assembly.f90": "7e6769aeb1eacd1d48133ec4953bb622ab4def9085c120257852146f2489abf2",
+    "src/compatible_physical_mass_assembly.f90": "596f3ca859ff02ca94303f6cd508a78b105e054da65f091806df7944691043c1"
+  },
+  "proof": {
+    "suite": "Sheared pinch raw energy, static reduction and local threshold",
+    "total": 88,
+    "passed": 88,
+    "proved": 88,
+    "by_probe": 0,
+    "failed": 0
+  },
+  "engine_scope": "44 expressions checked independently by native FortSym and SymEngine using check_identity, with no probes. Exact full raw completion is checked directly; its minimum is then instantiated from that proved completion.",
+  "ctest": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "test": "strict_sheared_pinch_identities",
+    "seconds": 0.44
+  },
+  "format_check": "fo fmt --check on the exact proof source passed",
+  "artifact_sha256": {
+    "/tmp/gliss-sheared-pinch-symbolic-proof/configure.log": "55a21097e0ee99db40a8b8ab4082fed5f8b8851a76d190c5131c6f505b8f9552",
+    "/tmp/gliss-sheared-pinch-symbolic-proof/build.log": "020184250f1cc634522ac54300aff557918519d620064a2d130fa169f86ee63d",
+    "/tmp/gliss-sheared-pinch-symbolic-proof/ctest.log": "524cb4405d28bd4349c5983169c4c340bcf5717d1e83ad38595a0cb9bdab4344",
+    "/tmp/gliss-sheared-pinch-symbolic-proof/build/strict-identities.json": "54537aec71a23e5af4bf4145697d83ce1aec028d19d49fd8d9bda7b613882b39",
+    "/tmp/gliss-sheared-pinch-symbolic-proof/build/Testing/Temporary/LastTest.log": "78abe8d8946cdbab0e2e0901b75c6f3e78efa882e47a817f92a7678c281cc7d3",
+    "/tmp/gliss-sheared-pinch-symbolic-proof/build/CMakeCache.txt": "7e988dab16be994c56e50803134bc460773964d56fb28d0da3ff476dac34a505",
+    "/tmp/gliss-sheared-pinch-symbolic-proof/build/build.ninja": "5e8374d4cae632cbddfdf9d507fbcf49a4c2b8323302dc4b197b75ed6cbd61ed",
+    "/tmp/gliss-sheared-pinch-symbolic-proof/build/sheared_pinch_proof": "05c2691fc4deeea6d18d57ede01bb2ba9d531b2f439c3bcf81700c99944eb924"
+  },
+  "domain": "Physical radius r>0, mu0>0, real amplitudes, Bz>0, gamma*p>0, K2>0; invert tangents only for F nonzero. Simple resonance uses interior rs>0, Zs>0, A*C*m nonzero, k=-m*A/Zs, positive Bz squared and pressure on the interval. Boundary cross term must vanish. At F=0 the inverse and finite physical mass are not inferred.",
+  "draft_chart_correction": "Strict checking rejected a draft that swapped eta/mu derivative groups and omitted J factors. Final source uses T*(J*eta)_theta-P*(J*eta)_zeta+P*mu_theta+T*mu_zeta, with mu=nu+J*(P/T)*eta; the existing production contract was unchanged.",
+  "nonblocking_native_discrepancy": {
+    "label": "static minimum away from F zero",
+    "residual": "replace2(transformed,tangent,d,center,0*d)-qmin",
+    "observed": "Native NONZERO; SymEngine strict ZERO. Direct raw completion and staged minimum pass both engines.",
+    "diagnosis": "A 2000-term polynomial-normalization refusal can fall through to native NONZERO. This verifier defect is recorded, not repaired or endorsed.",
+    "artifact_sha256": {
+      "/tmp/gliss-sheared-pinch-symbolic-proof/expanded-static-minimum-source.f90": "dd8d5f7a380b5987b0581d715fe6dd1c4ff414b9c29d8d0dbded7a12f785660e",
+      "/tmp/gliss-sheared-pinch-symbolic-proof/expanded-static-minimum-ctest.log": "c6d26fdc49c3bda32b4ac41f05a86c0fe53110ef00935464406aa356e1710596",
+      "/tmp/gliss-native-zero-static-diagnosis-20261017/diagnosis.md": "f449dcbc73cb740747006837ec383f9550324f7d48536a27e5fdbbab374114d2",
+      "/tmp/gliss-native-zero-static-diagnosis-20261017/receipt.json": "7eff300f1431fc9d068debb653d2ac9ee1969ae929e52c5b6f5e038c10ec21a0",
+      "/tmp/gliss-native-zero-static-diagnosis-20261017/src/diagnose.f90": "293f9d62c3a168458d6c0b219a3667e7ed1662c9f83983e2cc381ba21133009c",
+      "/tmp/gliss-native-zero-static-diagnosis-20261017/ctest.log": "e5d216c7c3267f3e4298307a694694f540d95e883adc56b669c294fb80604f92"
+    }
+  },
+  "written_proof_limits": "Square positivity, boundary integration, local Hardy threshold, and mass integrability use the written domain argument. These are not inferred merely from counts. Complex branch mass uses absolute squares and retains the nu=0 leading-derivative exception.",
+  "worker_status": "Only three assigned new consumer files edited. Native CMake/CTest completed; no resident lane, commit, push, promotion or root-registration edits."
+}

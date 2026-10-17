@@ -1,0 +1,53 @@
+{
+  "scope": "Private candidate measured against frozen production archive, not a current-committed-source build. All executable source provenance bound separately.",
+  "native_ctest": "1/1 PASS,0.31s",
+  "local_stencil_cases": 48,
+  "point_matrices": 288,
+  "reported_worst": {
+    "raw_Bernstein_matrix_scaled_max_abs": 1.4029e-15,
+    "reduced_coefficients_max_abs": 4.90097e-12,
+    "physical_tangent_kappa2": 314794.0,
+    "Richardson_local_scaled_error": 2.78183e-05,
+    "Richardson_discriminant_abs_error": 8.08818e-05,
+    "physical_mass_congruence_max_abs": 2.9976e-15
+  },
+  "reported_worst_precision": "Five digits after decimal in ES14.5 native summary; full alpha,beta,Delta rows retain ES25.16.",
+  "independent_finite_stencil_comparison": [
+    {
+      "profile": 1,
+      "max_error_against_independent_80_digit_finite_stencil": [
+        1.4879875109841123e-11,
+        1.8137435997545026e-12,
+        6.236566818529354e-12
+      ]
+    },
+    {
+      "profile": 2,
+      "max_error_against_independent_80_digit_finite_stencil": [
+        1.052824494252036e-11,
+        7.143174940438257e-13,
+        9.752711035678277e-12
+      ]
+    },
+    {
+      "profile": 3,
+      "max_error_against_independent_80_digit_finite_stencil": [
+        1.2249756764504127e-11,
+        1.6511236822225328e-12,
+        1.9525536743003613e-10
+      ]
+    }
+  ],
+  "premeasurement_protocol_sha256": "c38cc262274b89d1135920b983be48a7f8ff495703d69c5d6ca69e94218370f4",
+  "candidate_source_sha256": "34ec7d3d09e3c86793d137999f1e72930d13be0cda8c467769abe450018c9918",
+  "candidate_library_archive_sha256": "473a85566d726ba772aa88830a58ae2dc57625d9507968fbffff2c720cde0c5e",
+  "candidate_receipt_sha256": "1a4ca6b68150a9cb8b833653b227e84903a3b44e660489a0ebb63545a4f93633",
+  "compiler_only_revision": "Before numerical measurement, three scalar assignments replaced an array constructor rejected by Werror=array-temporaries. Original source and compiler failure remain in the scratch receipt. No acceptance change.",
+  "integrated_source_sha256": "da3163b7c75c2ba2b4e57a652c7fb54a717e0d24a866bee807bf779f71ed4be3",
+  "integrated_source_change": "Native Fo formatting after candidate measurement, verified to change only whitespace. No arithmetic or acceptance change. Required current-source build and registered CTest are recorded separately.",
+  "limitations": [
+    "Local Newcomb marginal/Frobenius coefficients only; no global stability classification or physical-mass singular eigenpair.",
+    "No evaluation atF=0. Both stable and unstable discriminant controls have negativepressuregradient. Critical case judged only with absolute budget.",
+    "Condition cap and empirical finite-stencil error budget are not a universal roundoff theorem."
+  ]
+}
