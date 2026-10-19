@@ -2,10 +2,10 @@ name: macOS wheels
 
 on:
   push:
-    branches: [main]
     tags: ["v[0-9]*"]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -21,7 +21,7 @@ env:
 jobs:
   build:
     # Full tier: upper layers of a PR stack skip it unless labeled full-ci.
-    if: github.event_name != 'pull_request' || github.event.pull_request.base.ref == github.event.repository.default_branch || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     strategy:
       fail-fast: false
       matrix:
@@ -114,3 +114,17 @@ jobs:
           "$python_exe" "$GITHUB_WORKSPACE/ci/check_installed.py" \
             --tests "$GITHUB_WORKSPACE/python/tests" \
             --equilibrium "$GITHUB_WORKSPACE/artifacts/installed_wheel_fixture.nc"
+
+  # Required check for the merge queue: fails if a wheel job failed or was
+  # cancelled; the wheel jobs skipped on pull requests count as passed.
+  result:
+    name: macOS wheels result
+    if: always()
+    needs: [build, installed]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check wheel jobs
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "A wheel job failed or was cancelled; see the jobs above."
+          exit 1

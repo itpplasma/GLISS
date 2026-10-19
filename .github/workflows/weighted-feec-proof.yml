@@ -1,11 +1,6 @@
 name: weighted FEEC proof
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - benchmarks/feec/lean/**
-      - .github/workflows/weighted-feec-proof.yml
   pull_request:
     paths:
       - benchmarks/feec/lean/**
