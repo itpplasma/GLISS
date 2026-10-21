@@ -1,7 +1,7 @@
 module perpendicular_kinetic_kernel
     use, intrinsic :: iso_c_binding, only: c_double
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use gliss_energy_generated, only: generated_perpendicular_matrix, &
+    use ideal_mhd_energy_generated, only: generated_perpendicular_matrix, &
         generated_perpendicular_energy, generated_perpendicular_jvp, &
         generated_perpendicular_vjp
     implicit none

@@ -2,7 +2,7 @@ module three_component_kernel
     use, intrinsic :: iso_c_binding, only: c_double
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use physical_constants, only: vacuum_permeability
-    use gliss_energy_generated, only: generated_divergence, generated_three_energy, &
+    use ideal_mhd_energy_generated, only: generated_divergence, generated_three_energy, &
         generated_three_jvp, generated_three_vjp
     implicit none
     private
