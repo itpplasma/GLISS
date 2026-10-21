@@ -1,7 +1,10 @@
 module variable_block_tridiagonal
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use gliss_sparse_backend, only: gliss_sparse_factor_t, &
+        factor_sparse_csc, solve_sparse_factored
     use symmetric_pivot_inertia, only: pivot_negative_count
+    !$ use omp_lib, only: omp_get_thread_num, omp_get_num_threads
     implicit none
     private
 
@@ -25,6 +28,8 @@ module variable_block_tridiagonal
     end type variable_integer_block_t
 
     type, public :: variable_block_factor_t
+        type(gliss_sparse_factor_t) :: sparse
+        logical :: uses_sparse = .false.
         integer, allocatable :: widths(:)
         type(variable_matrix_block_t), allocatable :: schur(:)
         type(variable_matrix_block_t), allocatable :: lower(:)
@@ -39,6 +44,7 @@ module variable_block_tridiagonal
     end type variable_block_factor_t
 
     public :: apply_variable_block_tridiagonal
+    public :: factorize_sparse_blocks
     public :: factorize_variable_shifted
     public :: pack_permuted_variable_blocks
     public :: pack_variable_blocks
@@ -86,6 +92,67 @@ module variable_block_tridiagonal
     end interface
 
 contains
+
+    ! Full sorted CSC, assembled directly from radial blocks. The retained
+    ! sparse factor may pivot across radial interfaces without a dense fallback.
+    subroutine factorize_sparse_blocks(blocks, factor, info)
+        type(variable_block_tridiagonal_t), intent(in) :: blocks
+        type(variable_block_factor_t), intent(out) :: factor
+        integer, intent(out) :: info
+        integer, allocatable :: pointers(:), rows(:), offsets(:)
+        real(dp), allocatable :: values(:)
+        integer :: n, nnz, block, column, row, entry, global_column
+
+        call validate_variable_blocks(blocks, info)
+        if (info /= variable_block_ok) return
+        n = sum(blocks%widths)
+        nnz = sum(blocks%widths**2)
+        do block = 1, size(blocks%widths) - 1
+            nnz = nnz + 2 * blocks%widths(block) * blocks%widths(block + 1)
+        end do
+        allocate (pointers(n + 1), rows(nnz), values(nnz))
+        call build_block_offsets(blocks%widths, offsets)
+        entry = 1
+        do block = 1, size(blocks%widths)
+            do column = 1, blocks%widths(block)
+                global_column = offsets(block) + column - 1
+                pointers(global_column) = entry
+                if (block > 1) then
+                    do row = 1, blocks%widths(block - 1)
+                        rows(entry) = offsets(block - 1) + row - 1
+                        values(entry) = blocks%lower(block - 1)%values(column, row)
+                        entry = entry + 1
+                    end do
+                end if
+                do row = 1, blocks%widths(block)
+                    rows(entry) = offsets(block) + row - 1
+                    ! Match the upper-triangle convention of DSYTRF. GLISS
+                    ! admits roundoff asymmetry; FortSparse requires exact
+                    ! canonical symmetry in its full CSC input.
+                    values(entry) = blocks%diagonal(block)%values( &
+                        min(row, column), max(row, column))
+                    entry = entry + 1
+                end do
+                if (block < size(blocks%widths)) then
+                    do row = 1, blocks%widths(block + 1)
+                        rows(entry) = offsets(block + 1) + row - 1
+                        values(entry) = blocks%lower(block)%values(row, column)
+                        entry = entry + 1
+                    end do
+                end if
+            end do
+        end do
+        pointers(n + 1) = entry
+        call factor_sparse_csc(n, pointers, rows, values, factor%sparse, &
+            factor%negative_count, factor%count_reliable, info)
+        if (info /= 0) then
+            info = variable_block_singular
+            return
+        end if
+        factor%uses_sparse = .true.
+        factor%complete = .true.
+        info = variable_block_ok
+    end subroutine factorize_sparse_blocks
 
     subroutine factorize_variable_shifted(blocks, shift, factor, info)
         type(variable_block_tridiagonal_t), intent(in) :: blocks
@@ -239,13 +306,18 @@ contains
     end subroutine update_variable_schur
 
     subroutine solve_variable_factored(factor, rhs, info)
-        type(variable_block_factor_t), intent(in) :: factor
+        type(variable_block_factor_t), intent(inout) :: factor
         real(dp), contiguous, intent(inout) :: rhs(:)
         integer, intent(out) :: info
         integer, allocatable :: offsets(:)
         real(dp), allocatable :: partial(:)
         integer :: block, first, last, next_first, width
 
+        if (factor%uses_sparse) then
+            call solve_sparse_factored(factor%sparse, rhs, info)
+            if (info /= 0) info = variable_block_invalid
+            return
+        end if
         call validate_variable_factor(factor, info)
         if (info /= variable_block_ok) return
         info = variable_block_invalid
@@ -407,6 +479,7 @@ contains
         real(dp), contiguous, intent(out) :: image(:)
         integer, intent(out) :: info
         integer :: block, first, last, next_first
+        integer :: rank, team, first_block, last_block, base, extra, count
 
         call validate_variable_blocks(blocks, info)
         if (info /= variable_block_ok) return
@@ -414,8 +487,22 @@ contains
         if (size(vector) /= sum(blocks%widths)) return
         if (size(image) /= size(vector)) return
         if (.not. all(ieee_is_finite(vector))) return
-        first = 1
-        do block = 1, size(blocks%widths)
+        ! Contiguous block chunks need one integer prefix sum per thread,
+        ! rather than allocating an offsets workspace on every application.
+        !$omp parallel if (size(vector) >= 256) &
+        !$omp private(rank, team, first_block, last_block, base, extra, count, &
+        !$omp block, first, last, next_first)
+        rank = 0
+        team = 1
+        !$ rank = omp_get_thread_num()
+        !$ team = omp_get_num_threads()
+        base = size(blocks%widths) / team
+        extra = mod(size(blocks%widths), team)
+        count = base + merge(1, 0, rank < extra)
+        first_block = 1 + rank * base + min(rank, extra)
+        last_block = first_block + count - 1
+        first = 1 + sum(blocks%widths(:first_block - 1))
+        do block = first_block, last_block
             last = first + blocks%widths(block) - 1
             call dgemv("N", blocks%widths(block), blocks%widths(block), &
                 1.0_dp, blocks%diagonal(block)%values, &
@@ -437,6 +524,7 @@ contains
             end if
             first = last + 1
         end do
+        !$omp end parallel
         info = variable_block_ok
     end subroutine apply_variable_block_tridiagonal
 

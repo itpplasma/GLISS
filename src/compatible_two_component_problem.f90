@@ -510,9 +510,8 @@ contains
         integer, optional, intent(in) :: quadrature_policy
         real(dp), allocatable :: constraint_nodes(:), constraint_weights(:)
         real(dp), allocatable :: axis_nodes(:), axis_weights(:)
-        real(dp) :: coordinate, half_width, midpoint, radial_weight
-        integer :: cell, point, trace_index, trace_point, orientation
-        integer :: policy
+        integer, allocatable :: cell_status(:)
+        integer :: cell, color, orientation, policy
 
         info = compatible_problem_assembly_error
         policy = compatible_quadrature_gauss
@@ -527,7 +526,41 @@ contains
         end if
         info = compatible_problem_assembly_error
         orientation = 0
-        do cell = 1, size(breaks) - 1
+        allocate (cell_status(size(breaks) - 1))
+        ! The first cell fixes orientation and owns all axis ties. C0 degree-p
+        ! splines have element-local interiors and shared endpoint values only.
+        ! Nonadjacent cells therefore write disjoint scalar matrix entries.
+        call assemble_cell(1, cell_status(1), orientation)
+        if (cell_status(1) /= compatible_problem_ok) then
+            info = cell_status(1)
+            return
+        end if
+        do color = 0, 1
+            !$omp parallel do schedule(static) firstprivate(orientation) &
+            !$omp if (size(breaks) > 4)
+            do cell = 2 + color, size(breaks) - 1, 2
+                call assemble_cell(cell, cell_status(cell), orientation)
+            end do
+            !$omp end parallel do
+        end do
+        if (any(cell_status /= compatible_problem_ok)) then
+            info = minval(cell_status)
+            return
+        end if
+        if (.not. problem%has_sparse_storage) &
+            call sum_tensor(problem%stiffness_terms, problem%stiffness)
+        info = compatible_problem_ok
+
+    contains
+
+        subroutine assemble_cell(cell, status, cell_orientation)
+            integer, intent(in) :: cell
+            integer, intent(out) :: status
+            integer, intent(inout) :: cell_orientation
+            real(dp) :: coordinate, half_width, midpoint, radial_weight
+            integer :: point, trace_index, trace_point
+
+            status = compatible_problem_assembly_error
             trace_index = 0
             if (present(trace_cells)) then
                 trace_index = findloc(trace_cells, cell, dim=1)
@@ -554,21 +587,21 @@ contains
                             axis_nodes(point), axis_weights(point), theta, &
                             zeta, mode_m, mode_n, parity, stored_power, &
                             topology, normal_rank, eta_rank, problem, &
-                            all_terms, .true., info, &
+                            all_terms, .true., status, &
                             trace(trace_index)%points(point), density_kg_m3, &
-                            orientation=orientation)
+                            orientation=cell_orientation)
                     else
                         call assemble_radial_point(spline, complex, &
                             axis_nodes(point), axis_weights(point), theta, &
                             zeta, mode_m, mode_n, parity, stored_power, &
                             topology, normal_rank, eta_rank, problem, &
-                            all_terms, .true., info, &
+                            all_terms, .true., status, &
                             density_kg_m3=density_kg_m3, &
-                            orientation=orientation)
+                            orientation=cell_orientation)
                     end if
-                    if (info /= compatible_problem_ok) return
+                    if (status /= compatible_problem_ok) return
                 end do
-                cycle
+                return
             end if
             if (policy == compatible_quadrature_cas3d_midpoint) then
                 radial_weight = 2.0_dp * half_width
@@ -577,18 +610,18 @@ contains
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
                         problem, all_terms, .true., &
-                        info, trace(trace_index)%points(1), density_kg_m3, &
-                        orientation=orientation)
+                        status, trace(trace_index)%points(1), density_kg_m3, &
+                        orientation=cell_orientation)
                 else
                     call assemble_radial_point(spline, complex, midpoint, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
                         problem, all_terms, .true., &
-                        info, density_kg_m3=density_kg_m3, &
-                        orientation=orientation)
+                        status, density_kg_m3=density_kg_m3, &
+                        orientation=cell_orientation)
                 end if
-                if (info /= compatible_problem_ok) return
-                cycle
+                if (status /= compatible_problem_ok) return
+                return
             end if
             do point = 1, size(accurate_nodes)
                 coordinate = midpoint + half_width * accurate_nodes(point)
@@ -597,18 +630,18 @@ contains
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
-                        problem, accurate_term, .true., info, &
+                        problem, accurate_term, .true., status, &
                         trace(trace_index)%points(point), density_kg_m3, &
-                        orientation=orientation)
+                        orientation=cell_orientation)
                 else
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
-                        problem, accurate_term, .true., info, &
+                        problem, accurate_term, .true., status, &
                         density_kg_m3=density_kg_m3, &
-                        orientation=orientation)
+                        orientation=cell_orientation)
                 end if
-                if (info /= compatible_problem_ok) return
+                if (status /= compatible_problem_ok) return
             end do
             do point = 1, size(constraint_nodes)
                 coordinate = midpoint + half_width * constraint_nodes(point)
@@ -618,23 +651,21 @@ contains
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
-                        problem, constraint_term, .false., info, &
+                        problem, constraint_term, .false., status, &
                         trace(trace_index)%points(trace_point), density_kg_m3, &
-                        orientation=orientation)
+                        orientation=cell_orientation)
                 else
                     call assemble_radial_point(spline, complex, coordinate, &
                         radial_weight, theta, zeta, mode_m, mode_n, parity, &
                         stored_power, topology, normal_rank, eta_rank, &
-                        problem, constraint_term, .false., info, &
+                        problem, constraint_term, .false., status, &
                         density_kg_m3=density_kg_m3, &
-                        orientation=orientation)
+                        orientation=cell_orientation)
                 end if
-                if (info /= compatible_problem_ok) return
+                if (status /= compatible_problem_ok) return
             end do
-        end do
-        if (.not. problem%has_sparse_storage) &
-            call sum_tensor(problem%stiffness_terms, problem%stiffness)
-        info = compatible_problem_ok
+            status = compatible_problem_ok
+        end subroutine assemble_cell
     end subroutine assemble_problem
 
     subroutine assemble_radial_point(spline, complex, coordinate, weight, &

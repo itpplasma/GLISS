@@ -32,6 +32,7 @@ program test_cartesian_harmonic_spline
         symmetric_eigensolver_ok
     use variable_block_tridiagonal, only: variable_block_ok, &
         variable_block_to_dense
+    !$ use omp_lib, only: omp_set_num_threads
     implicit none
 
     real(dp), parameter :: nodes(6) = [0.04_dp, 0.17_dp, 0.36_dp, &
@@ -544,11 +545,13 @@ contains
         integer :: degree, expected_h1, expected_l2, status, term
 
         do degree = 1, 4
+            !$ call omp_set_num_threads(1)
             call build_compatible_two_component_problem(equilibrium, &
                 [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, &
                 degree, 16, 16, problem, status)
             call require(status == compatible_problem_ok, &
                 "compatible problem assembly failed")
+            !$ call omp_set_num_threads(4)
             call build_compatible_two_component_problem(equilibrium, &
                 [0, 1, 2], [0, 0, 0], [0.0_dp, 0.5_dp, 1.0_dp], 1, &
                 degree, 16, 16, sparse_problem, status, &
@@ -668,6 +671,7 @@ contains
             [0.0_dp], 1, 0, 16, 16, problem, status)
         call require(status == compatible_problem_invalid, &
             "degree-zero compatible problem was accepted")
+        !$ call omp_set_num_threads(1)
     end subroutine check_compatible_problem
 
     subroutine sparse_problem_to_canonical(problem, stiffness, mass, info)
