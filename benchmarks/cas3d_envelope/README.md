@@ -235,3 +235,36 @@ published CAS3D W7-X L139 study, whose angular grid, radial form functions
 and reference length are not public, so the digitized CAS3D eigenvalue is
 not a target for these numbers: the table measures scaling, quotient
 dimensions and certified inertia, not same-deck agreement.
+
+## Pinned Figure 6 transcription (2026-10-21)
+
+[V] [figure6_numbered_cells.csv](figure6_numbered_cells.csv) preserves all
+204 numbered cells in Figure 6 of
+[Nuehrenberg (1996)](https://doi.org/10.1063/1.871924). The hashes, method,
+phase and parity conventions are in [figure6_fixture.json](figure6_fixture.json).
+Separate row-wise and column-wise readings from the two private PDFs agree
+with the archived native-raster audit on every cell and with the retained
+L8 control on its eight rows and 15 physical sidebands. The PDFs contain
+byte-identical figure rasters; this is a second reading, not independent
+image evidence. The private dossier retains both explicit readings and a
+reproducible reconciliation script.
+
+[V] Section III B states `L=203` and `2L+1=407`: 204 envelope rows including
+the origin produce 407 labeled sideband contributions before quotienting.
+The Figure 6 caption instead relates printed cell `l` and its `l-1`
+predecessors to the plotted eigenvalue. [H] The full endpoint supports
+`terminal_l_plus_one`; historical small-L alignment remains conditional.
+Keep `caption_l` and `terminal_l_plus_one` explicit and preserve existing
+failed comparisons. Equation (3) recovers even normal parity (`parity=1`)
+for the paper's results except Figure 13. The printed n sign is opposite
+to GLISS, with carrier `(3,2)` and sidebands `(3+m,2-5n)`, `(3-m,2+5n)`.
+No reference-length or radial-form normalization is recovered by counting
+cells, and none is fitted.
+
+[V] The latest retained full-support NS289 control still fails the frozen
+force and energy-gap gates in [source_radial_comparison.json](source_radial_comparison.json).
+The frozen CAS3D pair and conditional literature bands remain unexecuted
+until those gates pass. A P0 interface flux belongs to the cellwise
+completed-square identity; it must not be added again to raw Bernstein
+volume energy. Quadrature refinement must retain all near-axis and outer
+cells and split at both FE interfaces and equilibrium-spline joins.
