@@ -4,6 +4,7 @@ module variable_block_tridiagonal
     use gliss_sparse_backend, only: gliss_sparse_factor_t, &
         factor_sparse_csc, solve_sparse_factored
     use symmetric_pivot_inertia, only: pivot_negative_count
+    !$ use omp_lib, only: omp_get_thread_num, omp_get_num_threads
     implicit none
     private
 
@@ -478,7 +479,7 @@ contains
         real(dp), contiguous, intent(out) :: image(:)
         integer, intent(out) :: info
         integer :: block, first, last, next_first
-        integer :: offsets(size(vector) + 1)
+        integer :: rank, team, first_block, last_block, base, extra, count
 
         call validate_variable_blocks(blocks, info)
         if (info /= variable_block_ok) return
@@ -486,14 +487,22 @@ contains
         if (size(vector) /= sum(blocks%widths)) return
         if (size(image) /= size(vector)) return
         if (.not. all(ieee_is_finite(vector))) return
-        offsets(1) = 1
-        do block = 1, size(blocks%widths)
-            offsets(block + 1) = offsets(block) + blocks%widths(block)
-        end do
-        !$omp parallel do schedule(static) private(first, last, next_first) &
-        !$omp if (size(vector) >= 256)
-        do block = 1, size(blocks%widths)
-            first = offsets(block)
+        ! Contiguous block chunks need one integer prefix sum per thread,
+        ! rather than allocating an offsets workspace on every application.
+        !$omp parallel if (size(vector) >= 256) &
+        !$omp private(rank, team, first_block, last_block, base, extra, count, &
+        !$omp block, first, last, next_first)
+        rank = 0
+        team = 1
+        !$ rank = omp_get_thread_num()
+        !$ team = omp_get_num_threads()
+        base = size(blocks%widths) / team
+        extra = mod(size(blocks%widths), team)
+        count = base + merge(1, 0, rank < extra)
+        first_block = 1 + rank * base + min(rank, extra)
+        last_block = first_block + count - 1
+        first = 1 + sum(blocks%widths(:first_block - 1))
+        do block = first_block, last_block
             last = first + blocks%widths(block) - 1
             call dgemv("N", blocks%widths(block), blocks%widths(block), &
                 1.0_dp, blocks%diagonal(block)%values, &
@@ -513,8 +522,9 @@ contains
                     blocks%lower(block)%values, blocks%widths(block + 1), &
                     vector(next_first:), 1, 1.0_dp, image(first:), 1)
             end if
+            first = last + 1
         end do
-        !$omp end parallel do
+        !$omp end parallel
         info = variable_block_ok
     end subroutine apply_variable_block_tridiagonal
 
