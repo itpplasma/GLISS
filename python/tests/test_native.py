@@ -283,7 +283,7 @@ def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data, monk
             patch.setattr(gliss.VacuumModel, "_native", lambda self: (legacy, None))
             with pytest.raises(gliss.GlissComputationError, match="edge flux slopes"):
                 gliss.StabilityProblem(
-                    equilibrium, modes, degree=1, angular_theta=64,
+                    equilibrium, modes, degree=1, radial_cells=2, angular_theta=64,
                     angular_zeta=8, vacuum=gliss.VacuumModel((24, 12)),
                 )
         with pytest.raises(gliss.GlissComputationError, match="edge flux slopes"):
