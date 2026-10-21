@@ -474,6 +474,7 @@ contains
         real(dp), contiguous, intent(out) :: image(:)
         integer, intent(out) :: info
         integer :: block, first, last, next_first
+        integer :: offsets(size(blocks%widths) + 1)
 
         call validate_variable_blocks(blocks, info)
         if (info /= variable_block_ok) return
@@ -481,8 +482,14 @@ contains
         if (size(vector) /= sum(blocks%widths)) return
         if (size(image) /= size(vector)) return
         if (.not. all(ieee_is_finite(vector))) return
-        first = 1
+        offsets(1) = 1
         do block = 1, size(blocks%widths)
+            offsets(block + 1) = offsets(block) + blocks%widths(block)
+        end do
+        !$omp parallel do schedule(static) private(first, last, next_first) &
+        !$omp if (size(vector) >= 256)
+        do block = 1, size(blocks%widths)
+            first = offsets(block)
             last = first + blocks%widths(block) - 1
             call dgemv("N", blocks%widths(block), blocks%widths(block), &
                 1.0_dp, blocks%diagonal(block)%values, &
@@ -502,8 +509,8 @@ contains
                     blocks%lower(block)%values, blocks%widths(block + 1), &
                     vector(next_first:), 1, 1.0_dp, image(first:), 1)
             end if
-            first = last + 1
         end do
+        !$omp end parallel do
         info = variable_block_ok
     end subroutine apply_variable_block_tridiagonal
 
