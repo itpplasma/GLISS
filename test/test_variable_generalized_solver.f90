@@ -360,8 +360,16 @@ contains
             -floor + 64.0_dp * epsilon(1.0_dp)
         call analyze_variable_spectrum(packed_k, packed_m, floor, summary, &
             info, lowest_only=.true.)
-        call require(info /= variable_spectrum_ok, &
-            "neighboring probes crossed a physical eigenvalue without rejection")
+        if (gliss_sparse_enabled) then
+            ! Global pivoting resolves the original floor directly. The added
+            ! diagonal eigenvalue is inside the floor band, not below it.
+            call require(info == variable_spectrum_ok &
+                .and. summary%negative_count == 1 .and. summary%zero_count == 1, &
+                "sparse floor count disagrees with the exact diagonal eigenvalue")
+        else
+            call require(info /= variable_spectrum_ok, &
+                "neighboring probes crossed a physical eigenvalue without rejection")
+        end if
     end subroutine check_large_directed_probes
 
     ! For an ill-conditioned mass the Euclidean residual ||r||/||Mx|| can
