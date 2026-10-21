@@ -2,19 +2,11 @@ name: generated kernels
 
 on:
   pull_request:
-    paths:
-      - CMakeLists.txt
-      - cmake/**
-      - gen/**
-      - src/**
-      - test/**
-      - benchmarks/cas3d_envelope/symbolic_interpolation/**
-      - benchmarks/cas3d_envelope/symbolic_metric/**
-      - benchmarks/analytic/resonant_pinch/symbolic/**
-      - benchmarks/analytic/sheared_pinch/symbolic/**
-      - benchmarks/solovev/public/symbolic_derivative/**
-      - benchmarks/qas3/symbolic_current/**
-      - .github/workflows/generated-kernels.yml
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   workflow_dispatch:
   merge_group:
   push:
@@ -30,7 +22,9 @@ env:
 
 jobs:
   reproduce:
-    runs-on: ubuntu-24.04
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     steps:
       - uses: actions/checkout@v4
       - name: Read the FortSym source pin

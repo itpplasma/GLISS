@@ -22,7 +22,9 @@ concurrency:
 
 jobs:
   released-guides:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     strategy:
       fail-fast: false
       matrix:
@@ -72,11 +74,11 @@ jobs:
           path: ${{ runner.temp }}/release-html/
           if-no-files-found: error
 
-    if: >-
-      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
   publish:
     needs: released-guides
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     permissions:
       contents: write
       pages: read
@@ -158,11 +160,11 @@ jobs:
         with:
           path: ${{ runner.temp }}/pages
 
-    if: >-
-      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
   deploy:
     needs: publish
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     permissions:
       pages: write
       id-token: write
@@ -173,5 +175,3 @@ jobs:
       - name: Deploy the versioned documentation site
         id: deployment
         uses: actions/deploy-pages@v4
-    if: >-
-      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))

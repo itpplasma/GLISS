@@ -183,10 +183,10 @@ python -m build
     load_job_environment
     echo 'Test installed wheel'
     (
-python -m venv /tmp/gliss-wheel
-/tmp/gliss-wheel/bin/pip install "$(echo dist/*.whl)[vmec]" pytest
-/tmp/gliss-wheel/bin/pip check
-/tmp/gliss-wheel/bin/python ci/check_installed.py \
+python -m venv $RUNNER_TEMP/gliss-wheel
+$RUNNER_TEMP/gliss-wheel/bin/pip install "$(echo dist/*.whl)[vmec]" pytest
+$RUNNER_TEMP/gliss-wheel/bin/pip check
+$RUNNER_TEMP/gliss-wheel/bin/python ci/check_installed.py \
   --tests python/tests --equilibrium build/installed_wheel_fixture.nc
 
 
@@ -194,11 +194,11 @@ python -m venv /tmp/gliss-wheel
     load_job_environment
     echo 'Test installed sdist'
     (
-python -m venv /tmp/gliss-sdist
-/tmp/gliss-sdist/bin/pip install dist/gliss-*.tar.gz
-/tmp/gliss-sdist/bin/pip check
-cd /tmp
-/tmp/gliss-sdist/bin/python - <<'PY'
+python -m venv $RUNNER_TEMP/gliss-sdist
+$RUNNER_TEMP/gliss-sdist/bin/pip install dist/gliss-*.tar.gz
+$RUNNER_TEMP/gliss-sdist/bin/pip check
+cd "$RUNNER_TEMP"
+$RUNNER_TEMP/gliss-sdist/bin/python - <<'PY'
 from pathlib import Path
 import gliss
 

@@ -6,7 +6,11 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   merge_group:
   workflow_dispatch:
 
@@ -29,11 +33,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-15-intel
-            architecture: x86_64
           - runner: macos-15
             architecture: arm64
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ (startsWith(matrix.runner, 'windows') || contains(matrix.runner, 'intel') || matrix.runner == 'macos-13' || matrix.runner == 'macos-12') && matrix.runner || startsWith(matrix.runner, 'macos') && fromJSON('["self-hosted","macOS","ARM64","itp-macos"]') || contains(matrix.runner, '22.04') && fromJSON('["self-hosted","itp-ubuntu22"]') || fromJSON('["self-hosted","itp-ubuntu24"]') }}
     steps:
       - uses: actions/checkout@v4
       - name: Install the locked native toolchain
@@ -84,14 +86,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
-        architecture: [x86_64, arm64]
         include:
-          - runner: macos-15-intel
-            architecture: x86_64
-          - runner: macos-15
+          - python: '3.9'
             architecture: arm64
-    runs-on: ${{ matrix.runner }}
+            runner: macos-15
+          - python: '3.10'
+            architecture: arm64
+            runner: macos-15
+          - python: '3.11'
+            architecture: arm64
+            runner: macos-15
+          - python: '3.12'
+            architecture: arm64
+            runner: macos-15
+          - python: '3.13'
+            architecture: arm64
+            runner: macos-15
+          - python: '3.14'
+            architecture: arm64
+            runner: macos-15
+    runs-on: ${{ (startsWith(matrix.runner, 'windows') || contains(matrix.runner, 'intel') || matrix.runner == 'macos-13' || matrix.runner == 'macos-12') && matrix.runner || startsWith(matrix.runner, 'macos') && fromJSON('["self-hosted","macOS","ARM64","itp-macos"]') || contains(matrix.runner, '22.04') && fromJSON('["self-hosted","itp-ubuntu22"]') || fromJSON('["self-hosted","itp-ubuntu24"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -127,13 +141,129 @@ jobs:
     if: >-
       (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (always())
     needs: [build, installed]
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - itp-light
     steps:
       - name: Check wheel jobs
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: |
           echo "A wheel job failed or was cancelled; see the jobs above."
           exit 1
+  build-informative:
+    # Full tier: upper layers of a PR stack skip it unless labeled full-ci.
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ (startsWith(matrix.runner, 'windows') || contains(matrix.runner, 'intel') || matrix.runner == 'macos-13' || matrix.runner == 'macos-12') && matrix.runner || startsWith(matrix.runner, 'macos') && fromJSON('["self-hosted","macOS","ARM64","itp-macos"]') || contains(matrix.runner, '22.04') && fromJSON('["self-hosted","itp-ubuntu22"]') || fromJSON('["self-hosted","itp-ubuntu24"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the locked native toolchain
+        uses: mamba-org/setup-micromamba@add3a49764cedee8ee24e82dfde87f5bc2914462 # v2
+        with:
+          environment-file: ci/macos-${{ matrix.architecture }}.lock
+          environment-name: gliss-build
+          micromamba-version: 2.9.0-0
+          generate-run-shell: true
+          init-shell: none
+      - name: Build and test the native library
+        shell: micromamba-shell {0}
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          test "$(uname -m)" = "${{ matrix.architecture }}"
+          export MACOSX_DEPLOYMENT_TARGET=15.0
+          SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          export SDKROOT
+          export CMAKE_PREFIX_PATH="$CONDA_PREFIX"
+          export PKG_CONFIG_PATH="$CONDA_PREFIX/lib/pkgconfig"
+          python -m pip install build==1.3.0 delocate==0.13.0 twine==6.2.0 scipy
+          mkdir -p artifacts
+          micromamba list --explicit > artifacts/toolchain.lock
+          python -m pip freeze > artifacts/python-build.txt
+          cp pyproject.toml artifacts/build-metadata.toml
+          "$FC" --version > artifacts/fortran.txt
+          sw_vers > artifacts/macos.txt
+          xcodebuild -version > artifacts/xcode.txt
+          cmake -S . -B build -G Ninja -DGLISS_REQUIRE_OPENBLAS=ON
+          cmake --build build --parallel 3
+          ctest --test-dir build --output-on-failure
+          build/gliss_wheel_fixture artifacts/installed_wheel_fixture.nc
+          python -m build --wheel
+          delocate-wheel --require-archs "${{ matrix.architecture }}" \
+            --sanitize-rpaths -w artifacts dist/*.whl
+          delocate-listdeps --all artifacts/*.whl > artifacts/dependencies.txt
+          python -m twine check artifacts/*.whl
+      - name: Retain repaired wheel and build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.architecture }}
+          path: artifacts/
+          if-no-files-found: error
+
+    continue-on-error: true
+  installed-informative:
+    needs:
+      - build-informative
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: '3.9'
+            architecture: x86_64
+            runner: macos-15-intel
+          - python: '3.10'
+            architecture: x86_64
+            runner: macos-15-intel
+          - python: '3.11'
+            architecture: x86_64
+            runner: macos-15-intel
+          - python: '3.12'
+            architecture: x86_64
+            runner: macos-15-intel
+          - python: '3.13'
+            architecture: x86_64
+            runner: macos-15-intel
+          - python: '3.14'
+            architecture: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ (startsWith(matrix.runner, 'windows') || contains(matrix.runner, 'intel') || matrix.runner == 'macos-13' || matrix.runner == 'macos-12') && matrix.runner || startsWith(matrix.runner, 'macos') && fromJSON('["self-hosted","macOS","ARM64","itp-macos"]') || contains(matrix.runner, '22.04') && fromJSON('["self-hosted","itp-ubuntu22"]') || fromJSON('["self-hosted","itp-ubuntu24"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: ${{ matrix.architecture == 'arm64' && 'arm64' || 'x64' }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-${{ matrix.architecture }}
+          path: artifacts/
+      - name: Test the installed wheel outside the checkout
+        run: |
+          unset GLISS_LIB PYTHONPATH
+          for loader_variable in ${!DYLD_@}; do unset "$loader_variable"; done
+          python -m venv "$RUNNER_TEMP/gliss-wheel"
+          python_exe="$RUNNER_TEMP/gliss-wheel/bin/python"
+          "$python_exe" -m pip install artifacts/*.whl pytest scipy
+          "$python_exe" -m pip check
+          cd "$RUNNER_TEMP"
+          "$python_exe" "$GITHUB_WORKSPACE/ci/check_macos_wheel.py" \
+            --architecture "${{ matrix.architecture }}" \
+            --c-consumer "$GITHUB_WORKSPACE/cmake/test_gliss_header.c"
+          "$python_exe" "$GITHUB_WORKSPACE/ci/check_installed.py" \
+            --tests "$GITHUB_WORKSPACE/python/tests" \
+            --equilibrium "$GITHUB_WORKSPACE/artifacts/installed_wheel_fixture.nc"
+
+  # Required check for the merge queue: fails if a wheel job failed or was
+  # cancelled; the wheel jobs skipped on pull requests count as passed.
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
+    continue-on-error: true
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

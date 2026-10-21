@@ -2,9 +2,11 @@ name: weighted FEEC proof
 
 on:
   pull_request:
-    paths:
-      - benchmarks/feec/lean/**
-      - .github/workflows/weighted-feec-proof.yml
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   workflow_dispatch:
   merge_group:
   push:
@@ -15,7 +17,9 @@ permissions:
 
 jobs:
   prove:
-    runs-on: ubuntu-24.04
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     defaults:
       run:
         working-directory: benchmarks/feec/lean
