@@ -15,6 +15,14 @@ import gliss
 
 pytestmark = pytest.mark.native
 
+def _solovev_edge_slopes(q0):
+    # Independent analytic edge flux and q for the same Solov'ev family;
+    # q scales linearly with q0. These are not fitted to half-grid profiles.
+    flux = 0.707167955307641101367244024889350287
+    qedge = 2.576058910296802175534660440404489880 * q0 / 1.5
+    return (flux, -flux / qedge)
+
+
 
 def test_native_solovev_mercier_sign_matches_dcon(native_library, test_data):
     # Independent GPEC/DCON Newcomb runs of this analytic Solov'ev family near
@@ -176,7 +184,7 @@ def test_native_free_boundary_kink_and_wall(native_library, test_data):
             fixed = problem.solve_class(1)
         lowest = {}
         for name, wall in (("none", None), ("shell", shell), ("close", 0.03)):
-            vacuum = gliss.VacuumModel((24, 12), wall)
+            vacuum = gliss.VacuumModel((24, 12), wall, edge_flux_slopes=_solovev_edge_slopes(1.045))
             with gliss.StabilityProblem(
                 equilibrium, modes, vacuum=vacuum, **options
             ) as problem:
@@ -232,7 +240,7 @@ def test_native_enclosing_wall_can_couple_plasma_parities(
             with gliss.StabilityProblem(
                 equilibrium, [(0, 1), (1, 1), (2, 1)], degree=1,
                 angular_theta=64, angular_zeta=8, zero_floor=1e-8,
-                radial_cells=radial_cells, vacuum=gliss.VacuumModel((24, 12), wall),
+                radial_cells=radial_cells, vacuum=gliss.VacuumModel((24, 12), wall, edge_flux_slopes=_solovev_edge_slopes(1.045)),
             ) as problem:
                 assert problem.coupled == (offset != 0.0)
                 assert problem.parity_classes == ((0,) if offset else (1, 2))
@@ -260,13 +268,30 @@ def test_native_enclosing_wall_can_couple_plasma_parities(
     )
 
 
-def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
+def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data, monkeypatch):
     modes = [(1, 1), (2, 1)]
     with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
+        # Earlier C struct layouts remain admitted, but cannot authorize
+        # half-grid extrapolation. This also exercises the prefix decoder.
+        from gliss.vacuum import _VacuumModel
+        legacy = _VacuumModel(struct_size=_VacuumModel.edge_flux_slopes.offset,
+                              edge_nu=24, edge_nv=12, wall_kind=0)
+        with monkeypatch.context() as patch:
+            patch.setattr(gliss.VacuumModel, "_native", lambda self: (legacy, None))
+            with pytest.raises(gliss.GlissComputationError, match="edge flux slopes"):
+                gliss.StabilityProblem(
+                    equilibrium, modes, degree=1, radial_cells=2, angular_theta=64,
+                    angular_zeta=8, vacuum=gliss.VacuumModel((24, 12)),
+                )
+        with pytest.raises(gliss.GlissComputationError, match="edge flux slopes"):
+            gliss.StabilityProblem(
+                equilibrium, modes, degree=1, angular_theta=64,
+                angular_zeta=8, vacuum=gliss.VacuumModel((24, 12)),
+            )
         with pytest.raises(gliss.GlissArgumentError, match="edge mesh"):
             gliss.StabilityProblem(
                 equilibrium, modes, degree=1, angular_theta=64,
-                angular_zeta=8, vacuum=gliss.VacuumModel((4, 12)),
+                angular_zeta=8, vacuum=gliss.VacuumModel((4, 12), edge_flux_slopes=_solovev_edge_slopes(1.045)),
             )
         inside = np.zeros((3, 8, 8))
         inside[0] = 0.9
@@ -276,7 +301,7 @@ def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
             gliss.StabilityProblem(
                 equilibrium, modes, degree=1, angular_theta=64,
                 angular_zeta=8,
-                vacuum=gliss.VacuumModel((24, 12), inside),
+                vacuum=gliss.VacuumModel((24, 12), inside, edge_flux_slopes=_solovev_edge_slopes(1.045)),
             )
     with pytest.raises(ValueError, match="positive"):
         gliss.VacuumModel((24, 12), -0.1)
@@ -395,7 +420,7 @@ def test_native_stability_problem_radial_cells(native_library, test_data, tmp_pa
                 fine.write_manifest(tmp_path / "wrong-mesh.json", coarse_results)
         with gliss.StabilityProblem(
             equilibrium, modes, degree=1, angular_theta=64, angular_zeta=8,
-            radial_cells=32, vacuum=gliss.VacuumModel((24, 12)),
+            radial_cells=32, vacuum=gliss.VacuumModel((24, 12), edge_flux_slopes=_solovev_edge_slopes(1.035)),
         ) as free:
             assert free.boundary_condition == "free"
             assert free.configuration.radial_cells == 32
@@ -410,7 +435,7 @@ def test_native_stability_problem_radial_cells(native_library, test_data, tmp_pa
                 gliss.RunManifest.from_dict(tampered)
             changed_wall = gliss.StabilityConfiguration(
                 modes, degree=1, angular_theta=64, angular_zeta=8,
-                radial_cells=32, vacuum=gliss.VacuumModel((24, 12), 0.03),
+                radial_cells=32, vacuum=gliss.VacuumModel((24, 12), 0.03, edge_flux_slopes=_solovev_edge_slopes(1.035)),
             )
             with pytest.raises(ValueError, match="configuration SHA-256"):
                 gliss.write_run_manifest(

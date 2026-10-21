@@ -17,7 +17,7 @@ module plasma_vacuum_boundary
     use fourier_phase_kind, only: phase_cosine, phase_sine
     use physical_constants, only: vacuum_permeability
     use primitive_boundary_geometry, only: evaluate_primitive_boundary, &
-        primitive_boundary_ok
+        primitive_boundary_ok, primitive_boundary_missing_edge_slopes
     use primitive_equilibrium_spline, only: primitive_equilibrium_spline_t
     use scalar_potential_vacuum, only: assemble_exterior_vacuum, &
         edge_triangle_centroids, vacuum_bie_not_nested, vacuum_bie_ok
@@ -32,6 +32,7 @@ module plasma_vacuum_boundary
     integer, parameter, public :: plasma_vacuum_underresolved = -3
     integer, parameter, public :: plasma_vacuum_wall_not_nested = -4
     integer, parameter, public :: plasma_vacuum_singular = -5
+    integer, parameter, public :: plasma_vacuum_missing_edge_slopes = -6
 
     integer, parameter, public :: vacuum_wall_none = 0
     integer, parameter, public :: vacuum_wall_conformal = 1
@@ -44,6 +45,8 @@ module plasma_vacuum_boundary
         integer :: nu = 0
         integer :: nv = 0
         integer :: wall_kind = vacuum_wall_none
+        ! Optional independent [Phi'(1), chi'(1)] for schema-0 half grids.
+        real(dp), allocatable :: edge_flux_slopes(:)
         ! Normal offset of a conformal wall, in metres.
         real(dp) :: wall_distance = 0.0_dp
         ! Explicit wall nodes (3, wall_nu, wall_nv), Cartesian metres.
@@ -61,6 +64,11 @@ contains
         valid = .false.
         if (model%nu < 3 .or. model%nv < 3) return
         if (model%nu > huge(1) / model%nv) return
+        if (allocated(model%edge_flux_slopes)) then
+            if (size(model%edge_flux_slopes) /= 2) return
+            if (.not. all(ieee_is_finite(model%edge_flux_slopes))) return
+            if (model%edge_flux_slopes(1) == 0.0_dp) return
+        end if
         select case (model%wall_kind)
         case (vacuum_wall_none)
         case (vacuum_wall_conformal)
@@ -78,13 +86,14 @@ contains
     end function valid_plasma_vacuum_model
 
     subroutine build_plasma_boundary_surface(spline, nu, nv, surface, &
-            normal, fp, ft, info)
+            normal, fp, ft, info, edge_flux_slopes)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         integer, intent(in) :: nu, nv
         ! Nodes (3, nu, nv) and outward unit normals on the plasma edge.
         real(dp), allocatable, intent(out) :: surface(:, :, :), normal(:, :, :)
         real(dp), intent(out) :: fp, ft
         integer, intent(out) :: info
+        real(dp), optional, intent(in) :: edge_flux_slopes(:)
         type(cartesian_jet_grid_t) :: jet
         real(dp), allocatable :: theta(:), zeta(:)
         real(dp) :: area(3), length
@@ -104,7 +113,12 @@ contains
             zeta(k) = real(spline%field_periods * (k - 1), dp) / real(nv, dp)
         end do
         info = plasma_vacuum_geometry_error
-        call evaluate_primitive_boundary(spline, theta, zeta, jet, fp, ft, local_info)
+        call evaluate_primitive_boundary(spline, theta, zeta, jet, fp, ft, &
+            local_info, edge_flux_slopes)
+        if (local_info == primitive_boundary_missing_edge_slopes) then
+            info = plasma_vacuum_missing_edge_slopes
+            return
+        end if
         if (local_info /= primitive_boundary_ok) return
         allocate (surface(3, nu, nv), normal(3, nu, nv))
         do k = 1, nv
@@ -164,7 +178,7 @@ contains
             return
         end if
         call build_plasma_boundary_surface(spline, model%nu, model%nv, &
-            surface, normal, fp, ft, info)
+            surface, normal, fp, ft, info, model%edge_flux_slopes)
         if (info /= plasma_vacuum_ok) return
         call trial_edge_flux(model%nu, model%nv, fp, ft, topology, flux)
         select case (model%wall_kind)
