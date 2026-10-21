@@ -273,11 +273,8 @@ def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data, monk
     with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
         # Earlier C struct layouts remain admitted, but cannot authorize
         # half-grid extrapolation. This also exercises the prefix decoder.
-        import ctypes
         from gliss.vacuum import _VacuumModel
-        class LegacyVacuum(ctypes.Structure):
-            _fields_ = _VacuumModel._fields_[:-1]
-        legacy = LegacyVacuum(struct_size=ctypes.sizeof(LegacyVacuum),
+        legacy = _VacuumModel(struct_size=_VacuumModel.edge_flux_slopes.offset,
                               edge_nu=24, edge_nv=12, wall_kind=0)
         with monkeypatch.context() as patch:
             patch.setattr(gliss.VacuumModel, "_native", lambda self: (legacy, None))
