@@ -2,27 +2,22 @@ name: generated kernels
 
 on:
   pull_request:
-    paths:
-      - CMakeLists.txt
-      - cmake/**
-      - gen/**
-      - src/**
-      - test/**
-      - benchmarks/cas3d_envelope/symbolic_interpolation/**
-      - benchmarks/cas3d_envelope/symbolic_metric/**
-      - benchmarks/analytic/resonant_pinch/symbolic/**
-      - benchmarks/analytic/sheared_pinch/symbolic/**
-      - benchmarks/solovev/public/symbolic_derivative/**
-      - benchmarks/qas3/symbolic_current/**
-      - .github/workflows/generated-kernels.yml
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   workflow_dispatch:
-
+  merge_group:
+  push:
+    branches:
+      - main
 permissions:
   contents: read
 
 env:
-  OMP_NUM_THREADS: "1"
-  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
   CCACHE_DIR: ${{ github.workspace }}/.codegen-ccache
 
 # Only PR runs share a group; pending push and merge-group runs stay independent.
@@ -32,6 +27,8 @@ concurrency:
 
 jobs:
   reproduce:
+    # nix-community/cache-nix-action v7 chowns the Nix database to the hosted
+    # `runner` user, which the owned portable image does not have.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -224,3 +221,5 @@ jobs:
             build-symbolic_current/strict-identities.json
             build-symbolic_current/Testing/Temporary/LastTest.log
           if-no-files-found: warn
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')

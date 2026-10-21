@@ -2,11 +2,16 @@ name: weighted FEEC proof
 
 on:
   pull_request:
-    paths:
-      - benchmarks/feec/lean/**
-      - .github/workflows/weighted-feec-proof.yml
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   workflow_dispatch:
-
+  merge_group:
+  push:
+    branches:
+      - main
 permissions:
   contents: read
 
@@ -17,7 +22,9 @@ concurrency:
 
 jobs:
   prove:
-    runs-on: ubuntu-24.04
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     defaults:
       run:
         working-directory: benchmarks/feec/lean
@@ -43,3 +50,5 @@ jobs:
             Mathlib/Algebra/Polynomial/Derivative.lean Mathlib/Tactic.lean
       - name: Check the weighted FEEC theorems
         run: lake build
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')

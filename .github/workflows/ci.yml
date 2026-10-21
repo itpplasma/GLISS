@@ -2,16 +2,23 @@ name: ci
 
 on:
   push:
-    tags: ["v[0-9]*"]
+    tags: ['v[0-9]*']
+    branches:
+      - main
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   merge_group:
   workflow_dispatch:
 
 env:
-  OMP_NUM_THREADS: "1"
-  OPENBLAS_NUM_THREADS: "1"
-  MKL_NUM_THREADS: "1"
-  BLIS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  BLIS_NUM_THREADS: '1'
 
 # Only PR runs share a group; pending push and merge-group runs stay independent.
 concurrency:
@@ -20,48 +27,111 @@ concurrency:
 
 jobs:
   gfortran:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && fromJSON('["self-hosted","itp-ubuntu24"]') || (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && fromJSON('["self-hosted","itp-slurm"]') || fromJSON('["self-hosted","itp-build"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run native checks in the build container
+        if: ${{ !github.event.pull_request.head.repo.fork && !(github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          ci/run.sh ci-gfortran
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        env:
+          SCI_TIER: ci-gfortran
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran cmake ninja-build \
             liblapack-dev libnetcdf-dev pkg-config
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Configure
         run: cmake -S . -B build -G Ninja
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build
         run: cmake --build build
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')
   sparse:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && fromJSON('["self-hosted","itp-ubuntu24"]') || (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && fromJSON('["self-hosted","itp-slurm"]') || fromJSON('["self-hosted","itp-build"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run native checks in the build container
+        if: ${{ !github.event.pull_request.head.repo.fork && !(github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          ci/run.sh ci-sparse
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        env:
+          SCI_TIER: ci-sparse
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran cmake ninja-build libopenblas-dev \
             libnetcdf-dev libsuitesparse-dev pkg-config
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Configure native sparse consumer
         run: |
           cmake -S . -B build -G Ninja -DGLISS_ENABLE_FORTSPARSE=ON \
             -DGLISS_REQUIRE_OPENBLAS=ON
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build and test sparse path
         run: |
           cmake --build build --parallel 2
           ctest --test-dir build --output-on-failure
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')
   gfortran-runtime:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && fromJSON('["self-hosted","itp-ubuntu24"]') || (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && fromJSON('["self-hosted","itp-slurm"]') || fromJSON('["self-hosted","itp-build"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run native checks in the build container
+        if: ${{ !github.event.pull_request.head.repo.fork && !(github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          ci/run.sh ci-gfortran-runtime
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        env:
+          SCI_TIER: ci-gfortran-runtime
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran cmake ninja-build \
             libopenblas-dev libnetcdf-dev pkg-config
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Configure with runtime checks
         run: |
           cmake -S . -B build -G Ninja \
@@ -69,31 +139,63 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_Fortran_FLAGS_DEBUG="-O1 -g -fcheck=all -fbacktrace" \
             -DGLISS_REQUIRE_OPENBLAS=ON
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build
         run: cmake --build build --parallel 2
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Test with runtime checks
         run: ctest --test-dir build --output-on-failure
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && fromJSON('["self-hosted","itp-ubuntu24"]') || (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && fromJSON('["self-hosted","itp-slurm"]') || fromJSON('["self-hosted","itp-build"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run native checks in the build container
+        if: ${{ !github.event.pull_request.head.repo.fork && !(github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          ci/run.sh ci-lint
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        env:
+          SCI_TIER: ci-lint
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran cmake ninja-build \
             liblapack-dev libnetcdf-dev pkg-config
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Configure with warnings as errors
         run: cmake -S . -B build -G Ninja -DCMAKE_Fortran_FLAGS=-Werror
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build
         run: cmake --build build
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')
   format:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     steps:
       - uses: actions/checkout@v4
       - name: Install fprettify
-        run: pip install fprettify
+        run: |
+          python3 -m venv "$RUNNER_TEMP/format-venv"
+          "$RUNNER_TEMP/format-venv/bin/python" -m pip install fprettify
+          echo "$RUNNER_TEMP/format-venv/bin" >> "$GITHUB_PATH"
       - name: Format check (informational)
         # Canonical formatting is `fo fmt` (native formatter; this repo has
         # no .fprettify.rc, so fo does not fall back to fprettify). fo is a
@@ -111,10 +213,29 @@ jobs:
             exit 1
           fi
 
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')
   python:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && fromJSON('["self-hosted","itp-ubuntu24"]') || (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && fromJSON('["self-hosted","itp-slurm"]') || fromJSON('["self-hosted","itp-build"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run native checks in the build container
+        if: ${{ !github.event.pull_request.head.repo.fork && !(github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          ci/run.sh ci-python
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        env:
+          SCI_TIER: ci-python
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -122,21 +243,26 @@ jobs:
             liblapack-dev libnetcdf-dev pkg-config
           python -m pip install --upgrade pip
           pip install build "numpy<2" pytest scipy booz-xform==0.0.9
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build shared library
         run: |
           cmake -S . -B build -G Ninja
           cmake --build build --target gliss_c gliss_wheel_fixture
           build/gliss_wheel_fixture build/installed_wheel_fixture.nc
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Run Python binding tests
         # Most tests are contract tests against a fake library. Tests marked
         # native load the built libgliss_c and check it against independent
         # oracles (test/data Solov'ev fixtures); they fail without it. The
         # golden and simsopt tests skip without the LFS fixtures / simsopt.
         run: GLISS_LIB=$PWD/build/libgliss_c.so python -m pytest python/tests -v
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Check the public analytic equilibrium generator
         run: python benchmarks/solovev/public/test_solovev.py
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build distributions
         run: python -m build
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Test installed wheel
         run: |
           python -m venv /tmp/gliss-wheel
@@ -144,6 +270,7 @@ jobs:
           /tmp/gliss-wheel/bin/pip check
           /tmp/gliss-wheel/bin/python ci/check_installed.py \
             --tests python/tests --equilibrium build/installed_wheel_fixture.nc
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Test installed sdist
         run: |
           python -m venv /tmp/gliss-sdist
@@ -158,12 +285,21 @@ jobs:
           assert (Path(gliss.get_include()) / "gliss.h").is_file()
           PY
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')
   flang:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     steps:
       - uses: actions/checkout@v4
       - name: Install LLVM 22 (flang)
         run: |
+          # llvm.sh needs add-apt-repository, which the owned portable
+          # image lacks; hosted images already have it.
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends software-properties-common gnupg
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 22
@@ -190,13 +326,22 @@ jobs:
   # Enzyme is not apt-installable and a from-source build takes tens of
   # minutes, so this must never run on push/pull_request. Trigger manually
   # from the Actions tab (workflow_dispatch) when Enzyme-covered code changes.
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')
   enzyme:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (github.event_name == 'workflow_dispatch')
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     steps:
       - uses: actions/checkout@v4
       - name: Install LLVM 22 (flang, opt, llvm-link, dev headers)
         run: |
+          # llvm.sh needs add-apt-repository, which the owned portable
+          # image lacks; hosted images already have it.
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends software-properties-common gnupg
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 22
