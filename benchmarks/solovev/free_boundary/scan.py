@@ -32,17 +32,29 @@ def main():
                         help="plasma half-width in metres")
     parser.add_argument("--poloidal-max", type=int, default=8)
     parser.add_argument("--degree", type=int, default=2)
-    parser.add_argument("--angular", type=int, nargs=2, default=(128, 8))
+    parser.add_argument("--angular", type=int, nargs=2, default=(256, 8))
+    parser.add_argument("--radial-cells", type=int, default=None)
     parser.add_argument("--edge", type=int, nargs=2, default=(128, 128))
     parser.add_argument("--bisect", type=float, nargs=2, metavar=("LOW", "HIGH"))
     parser.add_argument("--tolerance", type=float, default=1e-3)
     args = parser.parse_args()
+    if not math.isfinite(args.half_width) or args.half_width <= 0:
+        parser.error("--half-width must be positive and finite")
+    if not math.isfinite(args.tolerance) or args.tolerance <= 0:
+        parser.error("--tolerance must be positive and finite")
+    if any(not math.isfinite(wall) or wall <= 0 for wall in args.walls):
+        parser.error("walls must be positive and finite")
+    if args.bisect is not None:
+        low, high = args.bisect
+        if not (math.isfinite(low) and math.isfinite(high) and 0 < low < high):
+            parser.error("--bisect requires finite 0 < LOW < HIGH")
     modes = [(0, 1)] + [
         (m, n) for m in range(1, args.poloidal_max + 1) for n in (-1, 1)
     ]
     writer = csv.writer(sys.stdout)
     writer.writerow(["wall_half_widths", "wall_distance_m", "negative_count",
-                     "lowest_eigenvalue", "certificate"])
+                     "lowest_eigenvalue", "certificate", "vacuum_energy",
+                     "potential_energy", "closure_error"])
     with gliss.Equilibrium(args.export) as equilibrium:
 
         def unstable(wall):
@@ -52,11 +64,14 @@ def main():
                 # A floor far below the kink eigenvalues near the threshold.
                 equilibrium, modes, degree=args.degree, zero_floor=1e-8,
                 angular_theta=args.angular[0], angular_zeta=args.angular[1],
-                vacuum=vacuum,
+                vacuum=vacuum, radial_cells=args.radial_cells,
             ) as problem:
                 result = problem.solve_class(1)
+                energy = problem.energy(1, result.eigenvector)
             writer.writerow([wall, distance, result.negative_count,
-                             result.lowest_eigenvalue, result.certificate])
+                             result.lowest_eigenvalue, result.certificate,
+                             energy.vacuum_energy, energy.potential_energy,
+                             energy.closure_error])
             sys.stdout.flush()
             return result.negative_count > 0
 
@@ -73,7 +88,7 @@ def main():
                 high = middle
             else:
                 low = middle
-        writer.writerow(["critical", low, high, "", ""])
+        writer.writerow(["critical", low, high, "", "", "", "", ""])
 
 
 if __name__ == "__main__":

@@ -50,11 +50,14 @@ requires the coupled parity operator so its cross-parity stiffness is retained.
 The native toroidal-harmonic oracle checks absolute vacuum energies with
 and without a wall. The public Solov'ev benchmark compares a critical
 conformal wall distance with DCON and studies discretization convergence.
-The October 2 export qualification found that an ordinary GVEC
-half-grid export does not meet the frozen native edge flux-slope and
-rotational-transform limits. The complete quantitative plasma-vacuum
-acceptance case therefore remains open; the vacuum oracle alone does not
-qualify that imported equilibrium.
+[V] The archived 3.1952e-7 edge-transform error is due to differentiating
+and extrapolating the interior half-grid flux spline, rather than an error in
+the vacuum solve. The schema-1 native-edge fixture reduces it to 1.20e-14
+against the unchanged 1e-12 limit. The benchmark runner now requires this
+explicit-edge qualification and uses an admitted 256 x 8 volume grid. The
+[FortSym proof](../gen/free_boundary/README.md) checks the edge-flux chain rule
+and cylindrical wall limits exactly. Equilibrium exterior matching and a
+fresh converged quantitative plasma-vacuum comparison remain unqualified.
 Historical benchmark results obtained before the current angular admission
 policy require a fresh run; qualitative stabilization and energy closure
 alone do not establish quantitative agreement of the complete
