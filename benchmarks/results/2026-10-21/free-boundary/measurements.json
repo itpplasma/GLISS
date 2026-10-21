@@ -1,0 +1,194 @@
+{
+  "archived_dcon_interval": [
+    0.152422,
+    0.1525
+  ],
+  "frozen_gliss_window": [
+    0.1514,
+    0.1535
+  ],
+  "runs": [
+    {
+      "index": 0,
+      "settings": {
+        "nu": 64,
+        "nv": 64,
+        "m": 8,
+        "degree": 2,
+        "cells": 64,
+        "theta": 256
+      },
+      "bracket": [
+        0.15042968750000002,
+        0.15046875
+      ],
+      "in_frozen_window": false,
+      "overlaps_archived_dcon": false,
+      "maximum_closure_error": 6.561468808286008e-07
+    },
+    {
+      "index": 1,
+      "settings": {
+        "nu": 128,
+        "nv": 128,
+        "m": 8,
+        "degree": 2,
+        "cells": 64,
+        "theta": 256
+      },
+      "bracket": [
+        0.15187500000000004,
+        0.15191406250000003
+      ],
+      "in_frozen_window": true,
+      "overlaps_archived_dcon": false,
+      "maximum_closure_error": 5.71948362448893e-07
+    },
+    {
+      "index": 2,
+      "settings": {
+        "nu": 256,
+        "nv": 256,
+        "m": 8,
+        "degree": 2,
+        "cells": 64,
+        "theta": 256
+      },
+      "bracket": [
+        0.15230468750000004,
+        0.15234375000000003
+      ],
+      "in_frozen_window": true,
+      "overlaps_archived_dcon": false,
+      "maximum_closure_error": 2.5651159774042753e-07
+    },
+    {
+      "index": 3,
+      "settings": {
+        "nu": 128,
+        "nv": 128,
+        "m": 12,
+        "degree": 2,
+        "cells": 64,
+        "theta": 256
+      },
+      "bracket": [
+        0.15187500000000004,
+        0.15191406250000003
+      ],
+      "in_frozen_window": true,
+      "overlaps_archived_dcon": false,
+      "maximum_closure_error": 2.817675426314281e-07
+    },
+    {
+      "index": 4,
+      "settings": {
+        "nu": 128,
+        "nv": 128,
+        "m": 8,
+        "degree": 3,
+        "cells": 64,
+        "theta": 256
+      },
+      "bracket": [
+        0.15187500000000004,
+        0.15191406250000003
+      ],
+      "in_frozen_window": true,
+      "overlaps_archived_dcon": false,
+      "maximum_closure_error": 7.684000138397096e-07
+    },
+    {
+      "index": 5,
+      "settings": {
+        "nu": 128,
+        "nv": 128,
+        "m": 8,
+        "degree": 2,
+        "cells": 128,
+        "theta": 256
+      },
+      "bracket": [
+        0.15187500000000004,
+        0.15191406250000003
+      ],
+      "in_frozen_window": true,
+      "overlaps_archived_dcon": false,
+      "maximum_closure_error": 7.65379468248284e-07
+    },
+    {
+      "index": 6,
+      "settings": {
+        "nu": 128,
+        "nv": 128,
+        "m": 8,
+        "degree": 2,
+        "cells": 64,
+        "theta": 512
+      },
+      "bracket": [
+        0.15187500000000004,
+        0.15191406250000003
+      ],
+      "in_frozen_window": true,
+      "overlaps_archived_dcon": false,
+      "maximum_closure_error": 1.2411400120981853e-06
+    },
+    {
+      "index": 7,
+      "settings": {
+        "nu": 256,
+        "nv": 128,
+        "m": 8,
+        "degree": 2,
+        "cells": 64,
+        "theta": 256
+      },
+      "bracket": [
+        0.15226562500000002,
+        0.15230468750000004
+      ],
+      "in_frozen_window": true,
+      "overlaps_archived_dcon": false,
+      "maximum_closure_error": 4.145587126913597e-07
+    },
+    {
+      "index": 8,
+      "settings": {
+        "nu": 128,
+        "nv": 256,
+        "m": 8,
+        "degree": 2,
+        "cells": 64,
+        "theta": 256
+      },
+      "bracket": [
+        0.15199218750000004,
+        0.15203125000000003
+      ],
+      "in_frozen_window": true,
+      "overlaps_archived_dcon": false,
+      "maximum_closure_error": 3.760700337807066e-07
+    }
+  ],
+  "limit": "No exterior equilibrium matching, finite-k cylinder convergence or exact DCON-interval overlap is established. Coarse edge64 fails the frozen GLISS window.",
+  "status": "[V] Measured discrete wall brackets; [H] physical free-boundary acceptance remains open.",
+  "gliss_revision": "6e9a3d330a7c7809b83c3f9880c997d752ee64aa",
+  "fixture_sha256": "2959c3f694339a1c5d3c5ed22c6e96b2e3b47c8a7d72194ed26576df28b244e4",
+  "source_archive_sha256": "f87980d574b17c7e7d6f7e4829a14140628cc850ee30f3a7f39bcbc09d432ada",
+  "native_library_sha256": "694c0f83448a05a62007c0fa9c7491c1ef6df5843325da1b91b533eb0d854d10",
+  "jobs": {
+    "build_tests": 3296130,
+    "pilot": 3296131,
+    "ladder": 3296132
+  },
+  "wall_units": "analytic plasma half-width 0.3526573415939913 m",
+  "parity": 1,
+  "n": 1,
+  "zero_floor": 1e-08,
+  "zeta_points": 8,
+  "bisection_tolerance": 6e-05,
+  "primary_evidence": "20 strict exact FortSym identities and independent native toroidal-harmonic/vacuum-torus/screw-pinch oracles; full CTest 187/187.",
+  "secondary_reference": "Archived GPEC f5595c0689c624834d720068ddc8b5a7e4028248 DCON interval, not a newly rebuilt DCON run.",
+  "raw_evidence": "/home/ert/data/handoffs/20261021_cluster_triage/GL3/cluster"
+}

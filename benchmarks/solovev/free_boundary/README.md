@@ -66,6 +66,16 @@ data while retaining the interior half-grid. This resolves the export and
 ingestion defect for that fixture. Current-free exterior matching and a
 fresh quantitative wall-window comparison remain required.
 
+[V] [Fresh October 21 measurements](../../results/2026-10-21/free-boundary/README.md)
+use the qualified fixture and admitted volume grid. At edge256² the measured
+critical bracket is 0.15230469–0.15234375, inside the unchanged broad GLISS
+window [0.1514,0.1535], but below the archived DCON interval. Its midpoint is
+0.107% below the DCON midpoint. Degree, radial, volume-angular and mode-range
+controls preserve the edge128² bracket to the 3.90625e-5 bisection width;
+separate vacuum-edge refinements move it. [H] Edge discretization is the leading
+remaining explanation, not a demonstrated DCON defect or exact interval match.
+A guarded edge512² follow-up was submitted; no physical acceptance is inferred.
+
 The GLISS numbers below are historical results obtained with 64 x 8 angular
 quadrature and the approximate half-width 0.35245 m, before the cubic MDE
 forcing admission rule was enforced and that normalization was corrected. That
