@@ -187,7 +187,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install fprettify
-        run: pip install fprettify
+        run: |
+          python3 -m venv "$RUNNER_TEMP/format-venv"
+          "$RUNNER_TEMP/format-venv/bin/python" -m pip install fprettify
+          echo "$RUNNER_TEMP/format-venv/bin" >> "$GITHUB_PATH"
       - name: Format check (informational)
         # Canonical formatting is `fo fmt` (native formatter; this repo has
         # no .fprettify.rc, so fo does not fall back to fprettify). fo is a
