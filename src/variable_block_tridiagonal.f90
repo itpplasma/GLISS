@@ -125,7 +125,11 @@ contains
                 end if
                 do row = 1, blocks%widths(block)
                     rows(entry) = offsets(block) + row - 1
-                    values(entry) = blocks%diagonal(block)%values(row, column)
+                    ! Match the upper-triangle convention of DSYTRF. GLISS
+                    ! admits roundoff asymmetry; FortSparse requires exact
+                    ! canonical symmetry in its full CSC input.
+                    values(entry) = blocks%diagonal(block)%values( &
+                        min(row, column), max(row, column))
                     entry = entry + 1
                 end do
                 if (block < size(blocks%widths)) then

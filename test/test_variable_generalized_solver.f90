@@ -5,6 +5,7 @@ program test_variable_generalized_solver
     use dense_spectrum_support, only: certify_dense_spectrum_inertia, &
         certify_dense_spectrum_orthogonality, dense_spectrum_ok, &
         diagnose_dense_spectrum, refine_dense_spectrum
+    use gliss_sparse_backend, only: gliss_sparse_enabled
     use fixed_boundary_eigen_bracket, only: fixed_boundary_bracket_ok, &
         bracket_lowest_positive
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
@@ -294,8 +295,13 @@ contains
         packed_k%diagonal(2)%values = 0.0_dp
         packed_k%lower(1)%values = 1.0_dp
         call variable_generalized_inertia(packed_k, packed_m, 0.0_dp, count, info)
-        call require(info == variable_generalized_invalid .and. count == -1, &
-            "large unresolved radial pivot did not fail explicitly")
+        if (gliss_sparse_enabled) then
+            call require(info == variable_generalized_ok .and. count == 1, &
+                "sparse global pivot did not recover the exact 2x2 inertia")
+        else
+            call require(info == variable_generalized_invalid .and. count == -1, &
+                "large unresolved radial pivot did not fail explicitly")
+        end if
     end subroutine check_global_pivot_ceiling
 
     ! Above the global-pivot ceiling, symmetric nearby counts can resolve a
@@ -337,8 +343,13 @@ contains
         floor = 64.0_dp * pencil_roundoff(packed_k, packed_m)
         call variable_generalized_inertia(packed_k, packed_m, -floor, &
             negative, info)
-        call require(info == variable_generalized_invalid, &
-            "large radial-pivot fixture unexpectedly resolved the exact shift")
+        if (gliss_sparse_enabled) then
+            call require(info == variable_generalized_ok .and. negative == 1, &
+                "sparse global pivot disagrees with the analytic arrow sign")
+        else
+            call require(info == variable_generalized_invalid, &
+                "large radial-pivot fixture unexpectedly resolved the exact shift")
+        end if
         call analyze_variable_spectrum(packed_k, packed_m, floor, summary, &
             info, lowest_only=.true.)
         call require(info == variable_spectrum_ok, &
