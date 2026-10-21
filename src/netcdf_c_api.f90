@@ -336,7 +336,8 @@ contains
         integer(c_int) :: c_varid
 
         call build_c_string(name, c_name)
-        c_dimids = int(dimids, c_int)
+        allocate (c_dimids(size(dimids)))
+        c_dimids(:) = int(dimids, c_int)
         status = c_nc_def_var(int(ncid, c_int), c_name, int(xtype, c_int), &
             int(size(dimids), c_int), c_loc(c_dimids(1)), c_varid)
         varid = int(c_varid)
