@@ -87,3 +87,7 @@ radial force-balance residuals above 1e-2. It stores the residuals in the
 export. Precomputed files must contain a centered uniform subset of the
 VMEC half grid and all required asymmetric harmonics. The native tests also
 compare BOOZ_XFORM with an independent upstream LI383 field-harmonic reference.
+
+The `vmec` extra requires NumPy <2: the booz-xform 0.0.9 binary wheel can
+segfault when assigning surface indices with NumPy 2. Install the extra in a
+fresh environment so pip resolves the compatible NumPy version.
