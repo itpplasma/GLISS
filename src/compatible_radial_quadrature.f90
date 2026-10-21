@@ -54,12 +54,11 @@ contains
         integer, intent(in) :: degree, maximum_poloidal_mode
         integer :: points
 
-        ! On the axis element a regular trial function of poloidal number m
-        ! and degree p is s^(|m|/2) times a polynomial of degree p - 1 in s,
-        ! a polynomial of degree |m| + 2p - 2 in u = sqrt(s/h). A product of
-        ! two such functions with ds = 2 h u du has degree 2|m| + 4p - 3;
-        ! the Gauss rule is exact from |m| + 2p - 1 points. Four further
-        ! points absorb the smooth, non-polynomial geometry factors.
+        ! For the regular-quotient normal s^(|m|/2) Pp, a product
+        ! including ds=2 h u du has degree 2|m|+4p+1 in u=sqrt(s/h).
+        ! Exact integration needs |m|+2p+1 points; two additional points
+        ! resolve smooth non-polynomial geometry. This also covers the
+        ! legacy s^(|m|/2) P(p-1) normal and its axis-tied companion.
         points = max(size(accurate_nodes), &
             max(0, maximum_poloidal_mode) + 2 * degree + 3)
     end function axis_quadrature_points

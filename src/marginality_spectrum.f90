@@ -39,6 +39,7 @@ module marginality_spectrum
         variable_generalized_inertia, variable_generalized_ok
     use variable_spectrum_analysis, only: analyze_variable_spectrum, &
         variable_spectrum_ok, variable_spectrum_summary_t
+    use compatible_problem_assembly_support, only: physical_axis_powers
     implicit none
     private
 
@@ -293,7 +294,9 @@ contains
                 mode_m, mode_n, stored_power, parity_class, degree, n_theta, &
                 n_zeta, problem, info, density_kg_m3=1.0_dp, &
                 radial_quadrature_policy=radial_quadrature_policy, &
-                sparse_storage=.true., radial_cells=radial_cells, &
+                sparse_storage=.true., &
+                regular_quotient=physical_axis_powers(mode_m, stored_power), &
+                radial_cells=radial_cells, &
                 radial_breaks=radial_breaks)
         end if
         if (info == compatible_problem_asymmetric) then

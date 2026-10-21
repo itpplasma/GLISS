@@ -84,7 +84,9 @@ contains
 
     subroutine assemble_compatible_perpendicular_mass_surface(fields, &
             density_kg_m3, trial_m, trial_n, trial_parity, field_periods, &
-            h1_values, l2_values, radial_weight, phase_assembly, mass, info)
+            h1_values, l2_values, radial_weight, phase_assembly, mass, info, &
+            normal_eta)
+        real(dp), optional, intent(in) :: normal_eta(:, :)
         real(dp), intent(in) :: fields(:, :, :), density_kg_m3
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods, phase_assembly
@@ -99,6 +101,11 @@ contains
             trial_parity, field_periods, h1_values, l2_values, &
             radial_weight, phase_assembly, 1, mass, info)
         if (info /= 0) return
+        info = -1
+        if (present(normal_eta)) then
+            if (any(shape(normal_eta) /= shape(h1_values))) return
+            if (.not. all(ieee_is_finite(normal_eta))) return
+        end if
         if (phase_assembly == phase_assembly_direct) then
             angular_weight = radial_weight / real(size(fields, 1) &
                 * size(fields, 2) * field_periods, dp)
@@ -110,14 +117,14 @@ contains
                             field_periods, h1_values, l2_values, &
                             real(j - 1, dp) / real(size(fields, 1), dp), &
                             real(k - 1, dp) / real(size(fields, 2), dp) &
-                            + real(period, dp), angular_weight, mass)
+                            + real(period, dp), angular_weight, mass, normal_eta)
                     end do
                 end do
             end do
         else
             call assemble_transformed(fields, density_kg_m3, trial_m, &
                 trial_n, trial_parity, field_periods, h1_values, l2_values, &
-                l2_values, radial_weight, 2, mass, info)
+                l2_values, radial_weight, 2, mass, info, normal_eta=normal_eta)
             if (info /= 0) return
         end if
         info = 0
@@ -130,7 +137,8 @@ contains
     ! perpendicular (xi^s, eta) form, which ignores eta.
     subroutine assemble_transformed(fields, density, trial_m, trial_n, &
             parity, field_periods, h1, eta, l2, radial_weight, components, &
-            mass, info, sine_mass)
+            mass, info, sine_mass, normal_eta)
+        real(dp), optional, intent(in) :: normal_eta(:, :)
         real(dp), intent(in) :: fields(:, :, :), density
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:)
         integer, intent(in) :: field_periods, components
@@ -166,7 +174,7 @@ contains
         if (components == 3) then
             call build_basis_coefficients(parity, h1, eta, l2, coefficients)
         else
-            call build_perpendicular_basis(parity, h1, l2, coefficients)
+            call build_perpendicular_basis(parity, h1, l2, coefficients, normal_eta)
         end if
         call period_masks(trial_n, field_periods, plus, minus, mixed)
         ! The sine-parity basis turns the normal component a quarter period
@@ -236,7 +244,8 @@ contains
 
     subroutine accumulate_perpendicular_direct(fields, j, k, density, &
             trial_m, trial_n, parity, field_periods, h1, l2, theta, zeta, &
-            weight, mass)
+            weight, mass, normal_eta)
+        real(dp), optional, intent(in) :: normal_eta(:, :)
         real(dp), intent(in) :: fields(:, :, :), density, h1(:, :), l2(:, :)
         integer, intent(in) :: j, k
         integer, intent(in) :: trial_m(:), trial_n(:), parity(:), field_periods
@@ -247,7 +256,7 @@ contains
         real(dp) :: phase, cosine, sine
         integer :: column, trial, trials
 
-        call build_perpendicular_basis(parity, h1, l2, coefficients)
+        call build_perpendicular_basis(parity, h1, l2, coefficients, normal_eta)
         call perpendicular_point_mass(fields, j, k, density, point_mass)
         trials = size(trial_m)
         do column = 1, size(mass, 1)
@@ -263,7 +272,9 @@ contains
         call rank_update(basis, point_mass, weight, mass)
     end subroutine accumulate_perpendicular_direct
 
-    pure subroutine build_perpendicular_basis(parity, h1, l2, coefficients)
+    pure subroutine build_perpendicular_basis(parity, h1, l2, coefficients, &
+            normal_eta)
+        real(dp), optional, intent(in) :: normal_eta(:, :)
         integer, intent(in) :: parity(:)
         real(dp), intent(in) :: h1(:, :), l2(:, :)
         real(dp), intent(out) :: coefficients(:, :, :)
@@ -275,6 +286,10 @@ contains
             do trial = 1, trials
                 column = (basis - 1) * trials + trial
                 coefficients(1, parity(trial), column) = h1(basis, trial)
+                kind = phase_cosine
+                if (parity(trial) == phase_cosine) kind = phase_sine
+                if (present(normal_eta)) coefficients(2, kind, column) = &
+                    normal_eta(basis, trial)
             end do
         end do
         do basis = 1, size(l2, 1)

@@ -2,8 +2,10 @@
 
 This work connects the physical axis weights to the radial derivative spaces.
 It supplies generated local kernels, an independent native compatibility
-test and a bounded Lean proof. It does not change the production trial space
-or satisfy the outstanding degree-1 Solov'ev acceptance criterion.
+test and a bounded Lean proof. The [regular-quotient space](regular_quotient.md) now changes the physical
+two-component marginality path and resolves the frozen uniform-64 signs for
+all degrees. The legacy-space obstruction results below remain applicable to
+the legacy representation.
 
 ## The compatibility question
 

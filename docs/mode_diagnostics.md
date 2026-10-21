@@ -13,6 +13,11 @@ use bounded dense matrices because they retain decomposed potential terms.
 The conservative input limit is 2048 unknowns; larger diagnostic requests fail
 before matrix assembly.
 
+The diagnostic retains the legacy weighted coefficient space. Physical
+marginality and axisymmetric spectrum helpers use the
+[regular-quotient space](../benchmarks/feec/regular_quotient.md).
+Their coefficient vectors require an explicit conversion before use here.
+
 ## Coefficients and axis regularity
 
 For each active Fourier trial, normal coefficients use the retained H1 basis

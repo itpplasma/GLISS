@@ -55,6 +55,18 @@ reference values or repeatedly pursue inaccessible data.
 | A4: independent published-code comparisons | DCON sign bracket, TERPSICHORE replay and bounded independent QAS3 controls exist | Converge the Solov'ev marginal interval and higher-n controls; rerun current independent QAS3 assembly with qualified input; explain count/branch differences through energy and subspace comparisons; complete ideal-limit MISHKA/CASTOR transfer and the failed stable control under #12 |
 | A5: physical free-boundary references | Analytic vacuum-energy oracle and true-edge ingestion pass | Qualify edge pressure, tangential-field continuity and exterior matching, then reproduce the DCON critical-wall interval and applicable published helical/wall limits with separate volume, edge and wall refinement |
 
+[V] The GL2 regular-quotient space is now implemented for physical
+perpendicular-inertia marginality, including `solve_axisymmetric`.
+Its smooth-quotient degree-one space detects the frozen q0=1.035 instability
+at 64 uniform cells; all degrees retain the q0=1.045 stable sign.
+The [derivation and degree convention](benchmarks/feec/regular_quotient.md)
+state the changed vector space explicitly. FortSym checks 72 identities
+without probes, and the new exact-cylinder test checks degree 1–4 zero-curl,
+Cartesian mass and expected eigenvalue orders. [H] Regenerated-export
+convergence and the narrow marginal bracket remain open under #35;
+the legacy-space experiments below are retained as historical evidence.
+The three-component compressible path is unchanged.
+
 The [weighted FEEC derivation](benchmarks/feec/README.md) now supplies generated
 value, first/second derivative and JVP/VJP leaves from one definition, plus
 21 kernel-checked Lean theorems for the first-cell coefficient/polynomial

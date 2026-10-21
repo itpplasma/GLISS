@@ -441,6 +441,16 @@ contains
             'physical normal-only assembly failed')
         call require(physical%normal_unknowns == 2 &
             .and. physical%eta_unknowns == 0, 'normal-only topology differs')
+        ! The high-level physical solve uses regular quotients; compare
+        ! dense and sparse pencils in that same space. Keep the legacy
+        ! topology assertion above as a separate compatibility control.
+        call build_compatible_two_component_problem(equilibrium, [0], [0], &
+            [0.0_dp], 1, 1, 13, 13, physical, local_info, radial_cells=3, &
+            density_kg_m3=1.0_dp, regular_quotient=.true.)
+        call require(local_info == compatible_problem_ok, &
+            'regular-quotient normal-only assembly failed')
+        call require(physical%normal_unknowns == 3 &
+            .and. physical%eta_unknowns == 0, 'quotient normal-only topology differs')
         call solve_symmetric_generalized_allocated(physical%stiffness, &
             physical%mass, values, vectors, local_info)
         call require(local_info == symmetric_eigensolver_ok, &

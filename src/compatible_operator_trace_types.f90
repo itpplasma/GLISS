@@ -11,6 +11,7 @@ module compatible_operator_trace_types
         integer, allocatable :: map(:)
         real(dp), allocatable :: fields(:, :, :), drive(:, :)
         real(dp), allocatable :: h1(:, :), dh1(:, :), l2(:, :)
+        real(dp), allocatable :: normal_eta(:, :)
         real(dp), allocatable :: stiffness_terms(:, :, :), mass(:, :)
     end type compatible_radial_point_trace_t
 
