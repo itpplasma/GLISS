@@ -140,8 +140,10 @@ reference length 10, then vary both parities, both quadratures and both prefix
 conventions. These are hypotheses, not recovered settings or fitted values.
 The first eight envelope entries can be reconstructed exactly from a retained
 native L8 control; their full Figure 6 transcription is not independently
-verified. The pinned research server currently refuses connections, and the
-primary PDF is inaccessible. Do not invent later mode entries.
+verified. The primary paper (doi:10.1063/1.871924) is available in the
+private gvec-stability `references/` ledger as two independent publisher
+copies; transcribe and audit the full Figure 6 mask and the `L` convention
+from it next. Do not invent later mode entries.
 
 All 24 provisional L3/L5/L7 baseline runs completed. Of 16 L3/L5 comparisons
 with available digitized values, eight miss the frozen broad tolerance and
@@ -213,7 +215,8 @@ comparisons still miss the cached digitization bands. The final L5/L3 ratio is
 about 1.3487, with certificate-expanded interval [1.3221,1.3758], versus the
 cached reference interval [1.0451,1.2542]. A common positive reference-length
 or eigenvalue rescaling cannot align both values. These references remain
-conditional on the unrecovered primary figure and full mask; do not fit them.
+conditional on the not yet transcribed primary figure and full mask; do not
+fit them.
 
 Eight unchanged CAS3D comparisons on the improved source13/11 and 17/15,
 retained26, 144-surface inputs all complete. At FE192 and assembly192x192,
