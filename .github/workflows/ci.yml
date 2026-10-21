@@ -30,6 +30,24 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+  sparse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran cmake ninja-build libopenblas-dev \
+            libnetcdf-dev libamd2 libsuitesparse-dev pkg-config
+      - name: Configure native sparse consumer
+        run: |
+          cmake -S . -B build -G Ninja -DGLISS_ENABLE_FORTSPARSE=ON \
+            -DGLISS_REQUIRE_OPENBLAS=ON
+      - name: Build and test sparse path
+        run: |
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+
   gfortran-runtime:
     runs-on: ubuntu-latest
     steps:

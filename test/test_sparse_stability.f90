@@ -36,6 +36,8 @@ program test_sparse_stability
         l(i, i) = 1.0_dp
         if (i > 1) l(i, i - 1) = 0.25_dp
         x(i) = real(i, dp)
+    end do
+    do i = 1, n
         ld(:, i) = l(:, i) * d(i)
     end do
     k = matmul(ld, transpose(l))

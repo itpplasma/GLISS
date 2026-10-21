@@ -380,7 +380,18 @@ target_link_libraries(gliss_terpsichore_pseudoplasma_stiffness PRIVATE gliss)
 set_target_properties(gliss_terpsichore_pseudoplasma_stiffness PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fo/bin")
 
+option(GLISS_BUILD_BENCHMARKS "Build bounded performance drivers" OFF)
+if(GLISS_BUILD_BENCHMARKS)
+    add_executable(gliss_sparse_performance benchmarks/feec/sparse_performance.f90)
+    target_link_libraries(gliss_sparse_performance PRIVATE gliss)
+endif()
+
 if(BUILD_TESTING)
+    if(GLISS_ENABLE_FORTSPARSE)
+        add_executable(test_sparse_stability test/test_sparse_stability.f90)
+        target_link_libraries(test_sparse_stability PRIVATE gliss)
+        add_test(NAME sparse_stability COMMAND test_sparse_stability)
+    endif()
     add_executable(test_parallel_blas test/test_parallel_blas.f90)
     target_link_libraries(test_parallel_blas PRIVATE gliss)
     add_test(NAME parallel_blas COMMAND test_parallel_blas)
