@@ -15,7 +15,7 @@ before matrix assembly.
 
 The diagnostic retains the legacy weighted coefficient space. Physical
 marginality and axisymmetric spectrum helpers use the
-[regular-quotient space](../benchmarks/feec/regular_quotient.md).
+regular-quotient space (`benchmarks/feec/regular_quotient.md` in the repository).
 Their coefficient vectors require an explicit conversion before use here.
 
 ## Coefficients and axis regularity
