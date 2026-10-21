@@ -18,6 +18,11 @@ env:
   MKL_NUM_THREADS: "1"
   BLIS_NUM_THREADS: "1"
 
+# Only PR runs share a group; pending push and merge-group runs stay independent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     # Full tier: upper layers of a PR stack skip it unless labeled full-ci.
