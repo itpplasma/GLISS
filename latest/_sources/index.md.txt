@@ -14,6 +14,7 @@ source_inventory
 conventions
 angular_grids
 free_boundary
+sparse_stability
 api
 ```
 

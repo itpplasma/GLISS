@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Sparse stability &#8212; GLISS 0.0.3</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=47de8214"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API reference" href="api.html" />
+    <link rel="prev" title="Free-boundary model" href="free_boundary.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="sparse-stability">
+<h1>Sparse stability<a class="headerlink" href="#sparse-stability" title="Link to this heading">¶</a></h1>
+<p>Configure with <code class="docutils literal notranslate"><span class="pre">-DGLISS_ENABLE_FORTSPARSE=ON</span></code> to use pinned
+<a class="reference external" href="https://github.com/lazy-fortran/fortsparse">FortSparse</a> native LDLT for the
+shifted self-adjoint pencils. This option retains global pivoting across radial
+interfaces without allocating a dense global matrix. The default build keeps
+the existing block/dense path for reference. Native external backends are
+not required. Offline builds may provide the pinned FortNum, FortSparse and
+FortGen runtime trees through CMake’s <code class="docutils literal notranslate"><span class="pre">FETCHCONTENT_SOURCE_DIR_*</span></code> options.</p>
+<p>For SPD mass M, Sylvester’s law gives the number of eigenvalues below sigma
+from the negative pivots of K-sigma M. An uncertain or singular pivot is not
+accepted as a stability sign; existing bracketing handles unresolved probes.
+FortSparse’s reliability threshold is a floating-point heuristic, not an
+outward-rounded proof of the exact continuous operator’s sign. Mesh, mode and
+equilibrium convergence remain separate requirements.</p>
+<p>The adapter uses <code class="docutils literal notranslate"><span class="pre">fortnum_precision</span></code> stage policies. This first increment
+supports <code class="docutils literal notranslate"><span class="pre">cpu-fp64</span></code> only; candidate evaluation, factors, accepted residuals,
+estimators and certificates all remain FP64. No mixed-precision result is
+claimed. Lower-precision policies are explicitly rejected by the adapter’s
+admission query until corresponding kernels and error controls are supported.</p>
+<p>C0 radial assembly uses two colors of nonadjacent cells after the first cell
+fixes axis orientation. Each color writes disjoint scalar entries. Block matrix
+applications also assign disjoint output rows to OpenMP threads. Set
+<code class="docutils literal notranslate"><span class="pre">OPENBLAS_NUM_THREADS=1</span></code> when measuring <code class="docutils literal notranslate"><span class="pre">OMP_NUM_THREADS</span></code> strong scaling to
+avoid nested BLAS oversubscription. The LDLT factorization itself is currently
+serial; assembly speedup is not a claim of parallel factorization.</p>
+<p><code class="docutils literal notranslate"><span class="pre">-DGLISS_BUILD_BENCHMARKS=ON</span></code> builds <code class="docutils literal notranslate"><span class="pre">gliss_sparse_performance</span></code>. It reports
+actual team size, assembly/solve wall times, eigenvalue, certificate and inertia
+for a fixed Solov’ev export, cell count and degree. Its final argument selects
+sparse (1) or dense (0) matrix storage. The sparse build changes factorization;
+the default build supplies the independent dense/block comparison. Compare
+physical eigenvalues within the reported certificates and solver stopping
+accuracy, rather than requiring last-digit equality.</p>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compatibility.html">TERPSICHORE compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mode_diagnostics.html">Mode diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="source_inventory.html">Source inventory</a></li>
+<li class="toctree-l1"><a class="reference internal" href="conventions.html">Conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="angular_grids.html">Angular grids</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free_boundary.html">Free-boundary model</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Sparse stability</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="free_boundary.html" title="previous chapter">Free-boundary model</a></li>
+      <li>Next: <a href="api.html" title="next chapter">API reference</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.1</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/sparse_stability.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
