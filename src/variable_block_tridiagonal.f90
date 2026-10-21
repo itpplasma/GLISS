@@ -1,6 +1,8 @@
 module variable_block_tridiagonal
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use gliss_sparse_backend, only: gliss_sparse_factor_t, &
+        factor_sparse_csc, solve_sparse_factored
     use symmetric_pivot_inertia, only: pivot_negative_count
     implicit none
     private
@@ -25,6 +27,8 @@ module variable_block_tridiagonal
     end type variable_integer_block_t
 
     type, public :: variable_block_factor_t
+        type(gliss_sparse_factor_t) :: sparse
+        logical :: uses_sparse = .false.
         integer, allocatable :: widths(:)
         type(variable_matrix_block_t), allocatable :: schur(:)
         type(variable_matrix_block_t), allocatable :: lower(:)
@@ -39,6 +43,7 @@ module variable_block_tridiagonal
     end type variable_block_factor_t
 
     public :: apply_variable_block_tridiagonal
+    public :: factorize_sparse_blocks
     public :: factorize_variable_shifted
     public :: pack_permuted_variable_blocks
     public :: pack_variable_blocks
@@ -86,6 +91,63 @@ module variable_block_tridiagonal
     end interface
 
 contains
+
+    ! Full sorted CSC, assembled directly from radial blocks. The retained
+    ! sparse factor may pivot across radial interfaces without a dense fallback.
+    subroutine factorize_sparse_blocks(blocks, factor, info)
+        type(variable_block_tridiagonal_t), intent(in) :: blocks
+        type(variable_block_factor_t), intent(out) :: factor
+        integer, intent(out) :: info
+        integer, allocatable :: pointers(:), rows(:), offsets(:)
+        real(dp), allocatable :: values(:)
+        integer :: n, nnz, block, column, row, entry, global_column
+
+        call validate_variable_blocks(blocks, info)
+        if (info /= variable_block_ok) return
+        n = sum(blocks%widths)
+        nnz = sum(blocks%widths**2)
+        do block = 1, size(blocks%widths) - 1
+            nnz = nnz + 2 * blocks%widths(block) * blocks%widths(block + 1)
+        end do
+        allocate (pointers(n + 1), rows(nnz), values(nnz))
+        call build_block_offsets(blocks%widths, offsets)
+        entry = 1
+        do block = 1, size(blocks%widths)
+            do column = 1, blocks%widths(block)
+                global_column = offsets(block) + column - 1
+                pointers(global_column) = entry
+                if (block > 1) then
+                    do row = 1, blocks%widths(block - 1)
+                        rows(entry) = offsets(block - 1) + row - 1
+                        values(entry) = blocks%lower(block - 1)%values(column, row)
+                        entry = entry + 1
+                    end do
+                end if
+                do row = 1, blocks%widths(block)
+                    rows(entry) = offsets(block) + row - 1
+                    values(entry) = blocks%diagonal(block)%values(row, column)
+                    entry = entry + 1
+                end do
+                if (block < size(blocks%widths)) then
+                    do row = 1, blocks%widths(block + 1)
+                        rows(entry) = offsets(block + 1) + row - 1
+                        values(entry) = blocks%lower(block)%values(row, column)
+                        entry = entry + 1
+                    end do
+                end if
+            end do
+        end do
+        pointers(n + 1) = entry
+        call factor_sparse_csc(n, pointers, rows, values, factor%sparse, &
+            factor%negative_count, factor%count_reliable, info)
+        if (info /= 0) then
+            info = variable_block_singular
+            return
+        end if
+        factor%uses_sparse = .true.
+        factor%complete = .true.
+        info = variable_block_ok
+    end subroutine factorize_sparse_blocks
 
     subroutine factorize_variable_shifted(blocks, shift, factor, info)
         type(variable_block_tridiagonal_t), intent(in) :: blocks
@@ -239,13 +301,18 @@ contains
     end subroutine update_variable_schur
 
     subroutine solve_variable_factored(factor, rhs, info)
-        type(variable_block_factor_t), intent(in) :: factor
+        type(variable_block_factor_t), intent(inout) :: factor
         real(dp), contiguous, intent(inout) :: rhs(:)
         integer, intent(out) :: info
         integer, allocatable :: offsets(:)
         real(dp), allocatable :: partial(:)
         integer :: block, first, last, next_first, width
 
+        if (factor%uses_sparse) then
+            call solve_sparse_factored(factor%sparse, rhs, info)
+            if (info /= 0) info = variable_block_invalid
+            return
+        end if
         call validate_variable_factor(factor, info)
         if (info /= variable_block_ok) return
         info = variable_block_invalid

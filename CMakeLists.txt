@@ -87,6 +87,24 @@ if(NOT LAPACK_FOUND)
     find_package(LAPACK REQUIRED)
 endif()
 include(cmake/GLISSOpenMP.cmake)
+option(GLISS_ENABLE_FORTSPARSE "Use native FortSparse LDLT for shifted pencils" OFF)
+if(GLISS_ENABLE_FORTSPARSE)
+    include(FetchContent)
+    set(FORTNUM_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(FORTNUM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(FORTSPARSE_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(FORTSPARSE_ENABLE_SUPERLU OFF CACHE BOOL "" FORCE)
+    set(FORTSPARSE_ENABLE_UMFPACK_IPC OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(fortnum
+        GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
+        GIT_TAG 8dde92d7706e7a5ab21a128a93e2a7344c346494)
+    FetchContent_MakeAvailable(fortnum)
+    FetchContent_Declare(fortsparse
+        GIT_REPOSITORY https://github.com/lazy-fortran/fortsparse.git
+        GIT_TAG b88bc10e987d23302661ceb36e3c4b6de2040304)
+    FetchContent_MakeAvailable(fortsparse)
+endif()
+
 message(STATUS "GLISS BLAS/LAPACK vendor: ${BLA_VENDOR}")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NETCDF_C REQUIRED IMPORTED_TARGET netcdf)
@@ -111,6 +129,7 @@ set_source_files_properties(src/generated/gliss_geometry_primal.inc
 set_source_files_properties(src/generated/gliss_weighted_feec_primal.inc
     PROPERTIES HEADER_FILE_ONLY TRUE)
 add_library(gliss
+    src/gliss_sparse_backend.F90
     src/generated/gliss_cartesian_field_generated.f90
     src/generated/gliss_energy_generated.f90
     src/generated/gliss_geometry_generated.f90
@@ -216,6 +235,10 @@ target_link_libraries(gliss PUBLIC
     LAPACK::LAPACK
     GLISS::OpenMP_Fortran
     PkgConfig::NETCDF_C)
+if(GLISS_ENABLE_FORTSPARSE)
+    target_compile_definitions(gliss PRIVATE GLISS_HAVE_FORTSPARSE)
+    target_link_libraries(gliss PUBLIC fortsparse fortnum)
+endif()
 set_target_properties(gliss PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules"
     POSITION_INDEPENDENT_CODE ON)
