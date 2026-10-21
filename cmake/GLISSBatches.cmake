@@ -13,6 +13,24 @@ if(GLISS_ENABLE_CODEGEN)
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/batch-codegen-modules)
     target_link_libraries(gliss_batch_gen PRIVATE fortsym::fortsym)
     file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/gen/fortsym-revision.txt" batch_revision)
+    add_custom_target(gliss_check_batch
+        COMMAND ${CMAKE_COMMAND}
+            -DGENERATOR=$<TARGET_FILE:gliss_batch_gen>
+            -DREVISION=${batch_revision}
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/batch-check
+            -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/generated
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/gen/ideal_mhd/check_batches.cmake
+        DEPENDS gliss_batch_gen VERBATIM)
+    add_dependencies(gliss_check_generated gliss_check_batch)
+    add_custom_target(gliss_regenerate_batch
+        COMMAND ${CMAKE_COMMAND}
+            -DGENERATOR=$<TARGET_FILE:gliss_batch_gen>
+            -DREVISION=${batch_revision} -DREGENERATE=ON
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/batch-regenerate
+            -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/generated
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/gen/ideal_mhd/check_batches.cmake
+        DEPENDS gliss_batch_gen VERBATIM)
+    add_dependencies(gliss_regenerate_kernels gliss_regenerate_batch)
     add_test(NAME generated_batch_reproduction COMMAND ${CMAKE_COMMAND}
         -DGENERATOR=$<TARGET_FILE:gliss_batch_gen>
         -DREVISION=${batch_revision}

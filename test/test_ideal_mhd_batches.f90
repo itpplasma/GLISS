@@ -2,10 +2,14 @@ program test_ideal_mhd_batches
     use, intrinsic :: iso_fortran_env, only: real32, real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use omp_lib, only: omp_get_wtime, omp_get_max_threads
+    use physical_constants, only: vacuum_permeability
     use ideal_mhd_batch, only: mhd_xi_fp64, mhd_xi_fp32, mhd_xi_mixed
-    use two_component_kernel, only: two_component_energy_batch
-    use three_component_kernel, only: three_component_energy_batch
-    use perpendicular_kinetic_kernel, only: perpendicular_kinetic_energy_batch
+    use two_component_kernel, only: two_component_energy_batch, &
+        two_component_energy_jvp, two_component_energy_vjp
+    use three_component_kernel, only: three_component_energy_batch, &
+        three_component_energy_jvp, three_component_energy_vjp
+    use perpendicular_kinetic_kernel, only: perpendicular_kinetic_energy_batch, &
+        perpendicular_kinetic_energy_jvp, perpendicular_kinetic_energy_vjp
     implicit none
     integer, parameter :: dp = real64, sp = real32
     integer :: n = 257, repeats = 0, family = 0
@@ -16,12 +20,86 @@ program test_ideal_mhd_batches
         call get_command_argument(3, arg); read (arg, *) repeats
     end if
     if (n < 1 .or. repeats < 0) error stop 'invalid batch dimensions'
+    call check_dense_scalar()
     if (family == 0 .or. family == 1) call check_two()
     if (family == 0 .or. family == 2) call check_three()
     if (family == 0 .or. family == 3) call check_mass()
     if (family == 0 .or. family == 4) call check_xi()
     print *, "PASS shared MHD batch analytical/derivative/kind oracles"
 contains
+    subroutine check_dense_scalar()
+        ! Nondyadic geometry/background inputs exercise every derivative entry.
+        integer, parameter :: count=17
+        real(dp) :: a(count,55), y(count,29), gradient(27), value, tangent
+        real(dp) :: inputs27(27), direction27(27)
+        real(sp) :: single(count,55), low(count,29)
+        integer :: j,k
+        a=0
+        do j=1,count
+            do k=1,27
+                a(j,k)=0.1_dp*sin(real(7*j+3*k,dp))
+                a(j,27+k)=cos(real(2*j+k,dp))/100
+            end do
+            a(j,1)=1.1_dp; a(j,2)=0.23_dp; a(j,7)=1.2_dp
+            if(mod(j,2)==0) a(j,7)=-1.2_dp
+            a(j,8)=1.7_dp; a(j,9)=1.3_dp; a(j,15)=0.3_dp
+            a(j,27)=vacuum_permeability; a(j,54)=0; a(j,55)=1
+        end do
+        call three_component_energy_batch(count,a,y)
+        do j=1,count
+            inputs27=a(j,1:27); direction27=a(j,28:54)
+            call three_component_energy_jvp(inputs27(:26),direction27(:26), &
+                value,tangent)
+            call three_component_energy_vjp(inputs27(:26),1.0_dp,value, &
+                gradient(:26))
+            if(abs(y(j,1)-value)>2e-12_dp*(1+abs(value))) error stop 'dense three value'
+            if(abs(y(j,2)-tangent)>2e-12_dp*(1+abs(tangent))) error stop 'dense three JVP'
+            if(maxval(abs(y(j,3:28)-gradient(:26))/(1+abs(gradient(:26))))>2e-12_dp) &
+                error stop 'dense three VJP'
+        end do
+        single=real(a,sp)
+        call three_component_energy_batch(count,single,low)
+        if(maxval(abs(real(low,dp)-y)/(1+abs(y)))>512*epsilon(1.0_sp)) error stop 'dense three fp32'
+        ! Compress the two-component physical input order (gamma is omitted).
+        do j=1,count
+            inputs27=a(j,1:27); direction27=a(j,28:54)
+            a(j,1:20)=[inputs27(:14),inputs27(16:21)]
+            a(j,21:40)=[direction27(:14),direction27(16:21)]
+            a(j,41)=1
+        end do
+        call two_component_energy_batch(count,a(:,:41),y(:,:22))
+        do j=1,count
+            inputs27(:20)=a(j,:20); direction27(:20)=a(j,21:40)
+            call two_component_energy_jvp(inputs27(:20),direction27(:20), &
+                value,tangent)
+            call two_component_energy_vjp(inputs27(:20),1.0_dp,value,gradient(:20))
+            if(abs(y(j,1)-value)>2e-12_dp*(1+abs(value))) error stop 'dense two value'
+            if(abs(y(j,2)-tangent)>2e-12_dp*(1+abs(tangent))) error stop 'dense two JVP'
+            if(maxval(abs(y(j,3:22)-gradient(:20))/(1+abs(gradient(:20))))>2e-12_dp) &
+                error stop 'dense two VJP'
+        end do
+        do j=1,count
+            a(j,:7)=[1.2_dp,1.7_dp,1.3_dp,0.1_dp,2.3_dp,0.4_dp,-0.3_dp]
+            if(mod(j,2)==0) a(j,1)=-1.2_dp
+            do k=1,7
+                a(j,7+k)=cos(real(2*j+k,dp))/100
+            end do
+            a(j,15)=1
+        end do
+        call perpendicular_kinetic_energy_batch(count,a(:,:15),y(:,:9))
+        do j=1,count
+            inputs27(:7)=a(j,:7); direction27(:7)=a(j,8:14)
+            call perpendicular_kinetic_energy_jvp(inputs27(:7),direction27(:7), &
+                value,tangent)
+            call perpendicular_kinetic_energy_vjp(inputs27(:7),1.0_dp,value, &
+                gradient(:7))
+            if(abs(y(j,1)-value)>2e-12_dp*(1+abs(value))) error stop 'dense mass value'
+            if(abs(y(j,2)-tangent)>2e-12_dp*(1+abs(tangent))) error stop 'dense mass JVP'
+            if(maxval(abs(y(j,3:9)-gradient(:7))/(1+abs(gradient(:7))))>2e-12_dp) &
+                error stop 'dense mass VJP'
+        end do
+    end subroutine check_dense_scalar
+
     subroutine check_two()
         real(dp), allocatable :: x(:, :), y(:, :), z(:, :), yp(:, :), ym(:, :), xm(:, :)
         real(sp), allocatable :: xs(:, :), ys(:, :)

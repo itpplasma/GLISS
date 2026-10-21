@@ -2,7 +2,7 @@ file(MAKE_DIRECTORY "${WORK}")
 execute_process(COMMAND "${GENERATOR}" "${WORK}" "${WORK}/identities.json" "${REVISION}"
     RESULT_VARIABLE status OUTPUT_VARIABLE evidence ERROR_VARIABLE errors)
 if(NOT status EQUAL 0)
-    message(FATAL_ERROR "Batch generation failed: ${evidence}${errors}")
+    message(FATAL_ERROR "Batch generation failed (${status}): ${evidence}${errors}")
 endif()
 file(READ "${WORK}/identities.json" report)
 foreach(key total proved by_probe failed)
@@ -12,8 +12,13 @@ if(total LESS 167 OR NOT proved EQUAL total OR NOT by_probe EQUAL 0 OR NOT faile
     message(FATAL_ERROR "Shared MHD batch identities are not all proved")
 endif()
 foreach(product ideal_mhd_batches.f90 ideal_mhd_batches.cuh)
-    execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files
-        "${WORK}/${product}" "${SOURCE}/${product}" RESULT_VARIABLE status)
+    if(REGENERATE)
+        execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${WORK}/${product}" "${SOURCE}/${product}" RESULT_VARIABLE status)
+    else()
+        execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files
+            "${WORK}/${product}" "${SOURCE}/${product}" RESULT_VARIABLE status)
+    endif()
     if(NOT status EQUAL 0)
         message(FATAL_ERROR "Batch product differs: ${product}")
     endif()
