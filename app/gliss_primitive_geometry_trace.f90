@@ -53,6 +53,8 @@ program gliss_primitive_geometry_trace
 
     write (*, "(a)") "s,field,relative_l2,normalized_max,scaled_max," // &
         "absolute_max,reference_rms,reference_max,comparison_scale"
+    allocate (covariant_theta(n_theta, n_zeta), &
+        covariant_zeta(n_theta, n_zeta))
     do surface = 1, size(equilibrium%s)
         call evaluate_primitive_equilibrium(spline, equilibrium%s(surface), &
             theta, zeta, geometry, pressure, pressure_slope, info)
@@ -64,8 +66,8 @@ program gliss_primitive_geometry_trace
             primitive_drive, info, geometric_drive=geometric_drive)
         call require(info == primitive_kernel_ok, &
             "primitive kernel geometry failed")
-        covariant_theta = g_tt * b_theta + g_tz * b_zeta
-        covariant_zeta = g_tz * b_theta + g_zz * b_zeta
+        covariant_theta(:, :) = g_tt * b_theta + g_tz * b_zeta
+        covariant_zeta(:, :) = g_tz * b_theta + g_zz * b_zeta
         call write_comparison("Jac", geometry%signed_jacobian, jacobian, &
             equilibrium%s(surface))
         call write_comparison("Jac_s", geometry%jacobian_s, jacobian_s, &

@@ -92,6 +92,10 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(NETCDF_C REQUIRED IMPORTED_TARGET netcdf)
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    if(CMAKE_Fortran_COMPILER_VERSION VERSION_LESS 13)
+        # GNU 12 can miscompile reallocating MATMUL assignments.
+        add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-finline-matmul-limit=0>)
+    endif()
     add_compile_options(
         $<$<COMPILE_LANGUAGE:Fortran>:-Wall>
         $<$<COMPILE_LANGUAGE:Fortran>:-Wextra>

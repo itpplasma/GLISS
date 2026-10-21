@@ -406,7 +406,8 @@ contains
         integer, intent(in) :: values(:)
         integer(c_int), allocatable, target :: c_values(:)
 
-        c_values = int(values, c_int)
+        allocate (c_values(size(values)))
+        c_values(:) = int(values, c_int)
         status = c_nc_put_var_int(int(ncid, c_int), int(varid, c_int), &
             c_loc(c_values(1)))
     end function nc_put_integer_vector
