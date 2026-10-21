@@ -26,13 +26,6 @@ if(GLISS_ENABLE_CODEGEN)
     # FortSym's installed Fortran modules must match this compiler. The package
     # exports no compiler/revision metadata; CI builds both with one pinned
     # toolchain, and compilation plus exact reproduction are the native gates.
-    include(FetchContent)
-    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/gen/ideal-mhd-revision.txt"
-        GLISS_IDEAL_MHD_REVISION)
-    FetchContent_Declare(gliss_shared_mhd
-        URL "https://github.com/itpplasma/kin6d/archive/${GLISS_IDEAL_MHD_REVISION}.tar.gz"
-        SOURCE_SUBDIR gen/shared_mhd_codegen_only)
-    FetchContent_MakeAvailable(gliss_shared_mhd)
     add_custom_target(gliss_regenerate_kernels)
     add_custom_target(gliss_check_generated)
     foreach(kernel physical_mass pressure_adjoint energy geometry cartesian_field
@@ -43,8 +36,8 @@ if(GLISS_ENABLE_CODEGEN)
         endif()
         if(kernel STREQUAL "energy")
             set(generator_source
-                ${gliss_shared_mhd_SOURCE_DIR}/gen/gen_ideal_mhd_coordinates.f90
-                ${gliss_shared_mhd_SOURCE_DIR}/gen/kin6d_symbolic_ideal.f90)
+                gen/ideal_mhd/gen_ideal_mhd_coordinates.f90
+                gen/ideal_mhd/ideal_mhd_symbolic.f90)
         endif()
         add_executable(gliss_${kernel}_gen ${generator_source})
         target_link_libraries(gliss_${kernel}_gen PRIVATE fortsym::fortsym)
