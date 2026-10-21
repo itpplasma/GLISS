@@ -27,9 +27,9 @@ concurrency:
 
 jobs:
   reproduce:
-    runs-on:
-      - self-hosted
-      - itp-ubuntu24
+    # nix-community/cache-nix-action v7 chowns the Nix database to the hosted
+    # `runner` user, which the owned portable image does not have.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Read the FortSym source pin
