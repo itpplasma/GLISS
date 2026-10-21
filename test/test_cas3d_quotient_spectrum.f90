@@ -232,6 +232,7 @@ contains
         integer :: local_info, variant, nt, nz
         character(len=160) :: message
 
+        baseline = 0.0_dp
         call tables(which, parity, pm, pn, lm, ln, orientation, em, en, cn, ce)
         allocate (powers(size(pm)), source=0.0_dp)
         call build_compatible_two_component_problem(equilibrium, pm, pn, &

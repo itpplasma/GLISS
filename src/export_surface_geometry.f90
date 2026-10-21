@@ -412,8 +412,10 @@ contains
         real(dp), intent(inout) :: drive(:, :)
         integer, intent(out) :: info
         type(harmonic_pair_t) :: operand_pair
-        real(dp), allocatable :: operand(:, :), grad_s2(:, :)
-        real(dp), allocatable :: upper_ts(:, :), upper_zs(:, :)
+        real(dp) :: operand(size(theta), size(zeta))
+        real(dp) :: grad_s2(size(theta), size(zeta))
+        real(dp) :: upper_ts(size(theta), size(zeta))
+        real(dp) :: upper_zs(size(theta), size(zeta))
         real(dp), allocatable :: operand_values(:, :)
         real(dp), allocatable :: operand_theta(:, :), operand_zeta(:, :)
         real(dp) :: operand_cosine(size(poloidal_modes), size(toroidal_modes))

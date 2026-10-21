@@ -187,7 +187,7 @@ contains
     subroutine check_marginality(symmetric, shifted)
         type(gvec_cas3d_equilibrium_t), intent(in) :: symmetric, shifted
         type(marginality_spectrum_result_t) :: first, second, coupled
-        real(dp), allocatable :: powers(:)
+        real(dp) :: powers(size(mode_m))
         character(len=256) :: message
         integer :: info
 
