@@ -14,7 +14,8 @@ program test_sparse_stability
     type(variable_block_tridiagonal_t) :: stiffness, mass
     type(variable_block_factor_t) :: factor
     type(precision_policy_t) :: policy
-    real(dp) :: l(n, n), ld(n, n), k(n, n), m(n, n), x(n), rhs(n), shift
+    real(dp) :: l(n, n), ld(n, n), k(n, n), m(n, n), x(n), rhs(n)
+    real(dp) :: shifts(0:n)
     integer :: i, info, negative
     logical :: ok
 
@@ -34,8 +35,10 @@ program test_sparse_stability
     l = 0.0_dp
     do i = 1, n
         l(i, i) = 1.0_dp
-        if (i > 1) l(i, i - 1) = 0.25_dp
         x(i) = real(i, dp)
+    end do
+    do i = 2, n
+        l(i, i - 1) = 0.25_dp
     end do
     do i = 1, n
         ld(:, i) = l(:, i) * d(i)
@@ -46,11 +49,11 @@ program test_sparse_stability
     call require(info == 0, 'pack K')
     call pack_variable_blocks(m, [1, 2, 1, 2], mass, info)
     call require(info == 0, 'pack M')
+    shifts(0) = d(1) - 1.0_dp
+    shifts(1:n - 1) = 0.5_dp * (d(:n - 1) + d(2:))
+    shifts(n) = d(n) + 1.0_dp
     do i = 0, n
-        shift = d(1) - 1.0_dp
-        if (i > 0 .and. i < n) shift = 0.5_dp * (d(i) + d(i + 1))
-        if (i == n) shift = d(n) + 1.0_dp
-        call variable_generalized_inertia(stiffness, mass, shift, negative, info)
+        call variable_generalized_inertia(stiffness, mass, shifts(i), negative, info)
         call require(info == 0 .and. negative == i, 'exact pencil inertia')
     end do
     call factorize_sparse_blocks(stiffness, factor, info)
