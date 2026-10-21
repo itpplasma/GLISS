@@ -20,6 +20,11 @@ env:
   MKL_NUM_THREADS: '1'
   BLIS_NUM_THREADS: '1'
 
+# Only PR runs share a group; pending push and merge-group runs stay independent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   gfortran:
     runs-on: ${{ github.event.pull_request.head.repo.fork && fromJSON('["self-hosted","itp-ubuntu24"]') || (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && fromJSON('["self-hosted","itp-slurm"]') || fromJSON('["self-hosted","itp-build"]') }}
@@ -366,6 +371,3 @@ jobs:
         run: cmake --build build
       - name: Test Enzyme derivatives
         run: ctest --test-dir build -R enzyme --output-on-failure
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
