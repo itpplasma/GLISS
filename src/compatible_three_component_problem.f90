@@ -30,6 +30,7 @@ module compatible_three_component_problem
     use phase_factor_topology, only: phase_cosine, phase_sine
     use plasma_vacuum_boundary, only: build_vacuum_edge_block, &
         plasma_vacuum_model_t, plasma_vacuum_ok, &
+        plasma_vacuum_missing_edge_slopes, &
         plasma_vacuum_underresolved, plasma_vacuum_wall_not_nested
     use primitive_equilibrium_spline, only: fit_primitive_equilibrium, &
         primitive_equilibrium_ok, primitive_equilibrium_spline_t
@@ -61,6 +62,7 @@ module compatible_three_component_problem
     integer, parameter, public :: compatible_three_component_vacuum_mesh = -5
     integer, parameter, public :: compatible_three_component_wall = -6
     integer, parameter, public :: compatible_three_component_vacuum = -7
+    integer, parameter, public :: compatible_three_component_edge_slopes = -8
 
     type, public :: compatible_three_component_problem_t
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
@@ -712,6 +714,8 @@ contains
             local_info)
         if (local_info == plasma_vacuum_ok) then
             info = compatible_three_component_ok
+        else if (local_info == plasma_vacuum_missing_edge_slopes) then
+            info = compatible_three_component_edge_slopes
         else if (local_info == plasma_vacuum_underresolved) then
             info = compatible_three_component_vacuum_mesh
         else if (local_info == plasma_vacuum_wall_not_nested) then

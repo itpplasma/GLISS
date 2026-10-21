@@ -13,6 +13,7 @@ module fixed_boundary_spectrum
         compatible_three_component_asymmetric, &
         compatible_three_component_invalid, compatible_three_component_ok, &
         compatible_three_component_problem_t, &
+        compatible_three_component_edge_slopes, &
         compatible_three_component_vacuum, &
         compatible_three_component_vacuum_mesh, &
         compatible_three_component_wall, compatible_vacuum_preserves_parity
@@ -61,6 +62,7 @@ module fixed_boundary_spectrum
     integer, parameter, public :: fixed_boundary_vacuum_mesh = -7
     integer, parameter, public :: fixed_boundary_wall = -8
     integer, parameter, public :: fixed_boundary_vacuum = -9
+    integer, parameter, public :: fixed_boundary_edge_slopes = -11
     integer, parameter, public :: fixed_boundary_n_theta = 64
     integer, parameter, public :: fixed_boundary_n_zeta = 64
 
@@ -355,6 +357,8 @@ contains
             info = fixed_boundary_vacuum_mesh
         case (compatible_three_component_wall)
             info = fixed_boundary_wall
+        case (compatible_three_component_edge_slopes)
+            info = fixed_boundary_edge_slopes
         case (compatible_three_component_vacuum)
             info = fixed_boundary_vacuum
         case default

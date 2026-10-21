@@ -23,6 +23,7 @@ class _VacuumModel(ctypes.Structure):
         ("wall_nu", ctypes.c_int32),
         ("wall_nv", ctypes.c_int32),
         ("wall_xyz", ctypes.POINTER(ctypes.c_double)),
+        ("edge_flux_slopes", ctypes.POINTER(ctypes.c_double)),
     ]
 
 
@@ -47,6 +48,10 @@ class VacuumModel:
     outward edge normal), or a Cartesian node array of shape (3, nu, nv) in
     metres, poloidal index first, that encloses the plasma.
 
+    ``edge_flux_slopes`` optionally supplies independent ``(Phi'(1), chi'(1))``
+    for schema-0 half-grid inputs. Otherwise a schema-1 true-edge export is
+    required; GLISS never extrapolates flux profiles for a boundary condition.
+
     The equilibrium must have zero pressure at the edge and a continuous
     tangential magnetic field matching a current-free exterior. This model
     assembles no equilibrium surface-current-sheet term. The caller must
@@ -56,6 +61,7 @@ class VacuumModel:
 
     edge_resolution: Tuple[int, int] = (32, 32)
     wall: Union[None, float, np.ndarray] = None
+    edge_flux_slopes: Optional[Tuple[float, float]] = None
 
     def __post_init__(self) -> None:
         resolution = self.edge_resolution
@@ -69,6 +75,13 @@ class VacuumModel:
                 _node_count(resolution[1], "edge_resolution[1]"),
             ),
         )
+        if self.edge_flux_slopes is not None:
+            slopes = np.asarray(self.edge_flux_slopes, dtype=np.float64)
+            if slopes.shape != (2,) or not np.all(np.isfinite(slopes)):
+                raise ValueError("edge_flux_slopes must contain two finite slopes")
+            if slopes[0] == 0.0:
+                raise ValueError("the edge toroidal flux slope must be nonzero")
+            object.__setattr__(self, "edge_flux_slopes", tuple(map(float, slopes)))
         wall = self.wall
         if wall is None:
             return
@@ -91,6 +104,8 @@ class VacuumModel:
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, VacuumModel):
             return NotImplemented
+        if self.edge_flux_slopes != other.edge_flux_slopes:
+            return False
         if self.edge_resolution != other.edge_resolution:
             return False
         if isinstance(self.wall, np.ndarray) or isinstance(other.wall, np.ndarray):
@@ -128,6 +143,12 @@ class VacuumModel:
             model.wall_nu = keep.shape[1]
             model.wall_nv = keep.shape[2]
             model.wall_xyz = keep.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        if self.edge_flux_slopes is not None:
+            # Keep the two-double payload alive for the synchronous C call.
+            model._edge_slopes = np.asarray(self.edge_flux_slopes, dtype=np.float64)
+            model.edge_flux_slopes = model._edge_slopes.ctypes.data_as(
+                ctypes.POINTER(ctypes.c_double)
+            )
         return model, keep
 
     def to_dict(self) -> Dict[str, Any]:
@@ -140,6 +161,8 @@ class VacuumModel:
             document["wall_distance_m"] = self.wall
         elif isinstance(self.wall, np.ndarray):
             document["wall_nodes_m"] = self.wall.tolist()
+        if self.edge_flux_slopes is not None:
+            document["edge_flux_slopes"] = list(self.edge_flux_slopes)
         return document
 
     @classmethod
@@ -149,6 +172,8 @@ class VacuumModel:
             raise ValueError("vacuum must be an object")
         kind = document.get("wall_kind")
         expected = {"edge_resolution", "wall_kind"}
+        if "edge_flux_slopes" in document:
+            expected.add("edge_flux_slopes")
         if kind == "conformal":
             expected.add("wall_distance_m")
         elif kind == "surface":
@@ -174,6 +199,6 @@ class VacuumModel:
             if not isinstance(wall, list):
                 raise ValueError("vacuum.wall_nodes_m must be a nested array")
         try:
-            return cls(tuple(resolution), wall)
+            return cls(tuple(resolution), wall, document.get("edge_flux_slopes"))
         except (TypeError, ValueError) as error:
             raise ValueError(f"vacuum: {error}") from error

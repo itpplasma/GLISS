@@ -21,7 +21,8 @@ program test_plasma_vacuum_boundary
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t, harmonic_pair_t
     use plasma_vacuum_boundary, only: build_plasma_boundary_surface, &
         plasma_vacuum_geometry_error, plasma_vacuum_model_t, &
-        plasma_vacuum_ok, vacuum_wall_conformal, &
+        plasma_vacuum_ok, plasma_vacuum_missing_edge_slopes, &
+        vacuum_wall_conformal, &
         vacuum_wall_none, vacuum_wall_surface
     use primitive_equilibrium_spline, only: fit_primitive_equilibrium, &
         primitive_equilibrium_ok, primitive_equilibrium_spline_t
@@ -32,6 +33,11 @@ program test_plasma_vacuum_boundary
     real(dp), parameter :: edge_flux = 0.7071679553076464_dp
     real(dp), parameter :: edge_r(2) = [0.5831_dp, 1.288_dp]
     real(dp), parameter :: edge_z = 0.5642_dp
+    ! Independent analytic Solov'ev edge q scales linearly with q0.
+    ! Schema-0 geometry tests explicitly supply these slopes, never an
+    ! extrapolation of the interior profile. True-edge exports own their slopes.
+    real(dp), parameter :: edge_q = 2.5760589102968021755_dp * 1.035_dp / 1.5_dp
+    real(dp), parameter :: edge_slopes(2) = [edge_flux, -edge_flux / edge_q]
     integer, parameter :: nu = 24, nv = 12
     integer, parameter :: mode_m(5) = [0, 1, 1, 2, 2]
     integer, parameter :: mode_n(5) = [1, -1, 1, -1, 1]
@@ -47,6 +53,7 @@ program test_plasma_vacuum_boundary
     call read_gvec_cas3d_file(trim(directory)//"/solovev_q1.035.nc", &
         equilibrium, info)
     call require(info == reader_ok, "fixture read failed")
+    call test_missing_edge_slopes()
     call test_edge_surface()
     call test_true_edge_export()
     call test_wall_ordering_and_energy()
@@ -55,6 +62,39 @@ program test_plasma_vacuum_boundary
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine build_test_boundary(spline, nu, nv, surface, normal, fp, ft, status)
+        type(primitive_equilibrium_spline_t), intent(in) :: spline
+        integer, intent(in) :: nu, nv
+        real(dp), allocatable, intent(out) :: surface(:, :, :), normal(:, :, :)
+        real(dp), intent(out) :: fp, ft
+        integer, intent(out) :: status
+
+        call build_plasma_boundary_surface(spline, nu, nv, surface, normal, &
+            fp, ft, status, edge_flux_slopes=edge_slopes)
+    end subroutine build_test_boundary
+
+    subroutine test_missing_edge_slopes()
+        type(primitive_equilibrium_spline_t) :: spline
+        real(dp), allocatable :: surface(:, :, :), normal(:, :, :)
+        real(dp) :: fp, ft
+
+        call fit_primitive_equilibrium(equilibrium, spline, info)
+        call require(info == primitive_equilibrium_ok, "legacy fit failed")
+        call build_plasma_boundary_surface(spline, nu, nv, surface, normal, &
+            fp, ft, info)
+        call require(info == plasma_vacuum_missing_edge_slopes, &
+            "half-grid profiles silently supplied extrapolated edge slopes")
+        call require(.not. allocated(surface) .and. fp == 0.0_dp .and. &
+            ft == 0.0_dp, "missing-edge failure exposed partial flux data")
+        call build_test_boundary(spline, nu, nv, surface, normal, fp, ft, info)
+        call require(info == plasma_vacuum_ok, "explicit edge slopes failed")
+        call require(fp == -edge_slopes(2) .and. ft == -edge_slopes(1), &
+            "explicit edge slopes were replaced by extrapolation")
+        call build_plasma_boundary_surface(spline, nu, nv, surface, normal, &
+            fp, ft, info, edge_flux_slopes=[edge_flux])
+        call require(info /= plasma_vacuum_ok, "wrong-size edge slopes accepted")
+    end subroutine test_missing_edge_slopes
 
     subroutine test_true_edge_export()
         ! Fresh public analytic Solov'ev q0=1.5, GVEC native force <=1e-10.
@@ -77,7 +117,7 @@ contains
             "true-edge producer fixture lost its explicit declaration")
         call fit_primitive_equilibrium(edge_equilibrium, spline, info)
         call require(info == primitive_equilibrium_ok, "true-edge fixture fit failed")
-        call build_plasma_boundary_surface(spline, 97, 12, surface, normal, &
+        call build_test_boundary(spline, 97, 12, surface, normal, &
             fp, ft, info)
         call require(info == plasma_vacuum_ok, "true-edge fixture boundary failed")
         call require(abs(-ft - exact_flux) <= 1.0e-14_dp, &
@@ -255,10 +295,11 @@ contains
         call require(info == reader_ok, "cylinder fixture read failed")
         call fit_primitive_equilibrium(cylinder, spline, info)
         call require(info == primitive_equilibrium_ok, "spline fit failed")
-        call build_plasma_boundary_surface(spline, 12, 24, surface, normal, &
+        call build_test_boundary(spline, 12, 24, surface, normal, &
             fp, ft, info)
         call require(info == plasma_vacuum_geometry_error, &
             "a doubly covered edge was accepted")
+        model%edge_flux_slopes = edge_slopes
         model%nu = 12
         model%nv = 24
         call build_fixed_boundary_problem(cylinder, 5.0_dp / 3.0_dp, &
@@ -308,7 +349,7 @@ contains
         explicit%rotational_transform = 9.0_dp
         call fit_primitive_equilibrium(explicit, spline, info)
         call require(info == primitive_equilibrium_ok, "explicit-edge fit failed")
-        call build_plasma_boundary_surface(spline, 12, 24, surface, normal, &
+        call build_test_boundary(spline, 12, 24, surface, normal, &
             fp, ft, info)
         call require(info == plasma_vacuum_ok, "explicit edge was rejected")
         call require(fp == 0.3_dp .and. ft == -0.7_dp, &
@@ -341,14 +382,14 @@ contains
         explicit%boundary%xhat%cosine(1, m1, n0) = minor
         call fit_primitive_equilibrium(explicit, spline, info)
         call require(info == primitive_equilibrium_ok, "rotating-edge fit failed")
-        call build_plasma_boundary_surface(spline, 12, 24, rotated, &
+        call build_test_boundary(spline, 12, 24, rotated, &
             rotated_normal, fp, ft, info)
         call require(info == plasma_vacuum_ok, "rotating-frame edge was rejected")
         call require(maxval(abs(surface - rotated)) < 1.0e-12_dp &
             .and. maxval(abs(normal - rotated_normal)) < 1.0e-12_dp, &
             "explicit rotating frame changed positions or normals")
         spline%boundary%schema_version = 2
-        call build_plasma_boundary_surface(spline, 12, 24, rotated, &
+        call build_test_boundary(spline, 12, 24, rotated, &
             rotated_normal, fp, ft, info)
         call require(info == plasma_vacuum_geometry_error, &
             "unsupported explicit edge schema fell back to legacy extrapolation")
@@ -376,7 +417,7 @@ contains
         single%winding = 0
         call fit_primitive_equilibrium(single, spline, info)
         call require(info == primitive_equilibrium_ok, "single-cover fit failed")
-        call build_plasma_boundary_surface(spline, 12, 24, reference, &
+        call build_test_boundary(spline, 12, 24, reference, &
             reference_normal, reference_fp, reference_ft, info)
         call require(info == plasma_vacuum_ok, "single-cover torus was rejected")
         do k = 1, size(reference, 3)
@@ -397,7 +438,7 @@ contains
             changed%xhat%cosine(:, zero_m, zero_n) + 10.0_dp
         call fit_primitive_equilibrium(changed, spline, info)
         call require(info == primitive_equilibrium_ok, "translated fit failed")
-        call build_plasma_boundary_surface(spline, 12, 24, surface, normal, &
+        call build_test_boundary(spline, 12, 24, surface, normal, &
             fp, ft, info)
         call require(info == plasma_vacuum_ok, "translated torus was rejected")
         surface(1, :, :) = surface(1, :, :) - 10.0_dp
@@ -415,7 +456,7 @@ contains
         changed%zhat = single%xhat
         call fit_primitive_equilibrium(changed, spline, info)
         call require(info == primitive_equilibrium_ok, "rotated fit failed")
-        call build_plasma_boundary_surface(spline, 12, 24, surface, normal, &
+        call build_test_boundary(spline, 12, 24, surface, normal, &
             fp, ft, info)
         call require(info == plasma_vacuum_ok, "rotated torus was rejected")
         call require(maxval(abs(surface(1, :, :) - reference(3, :, :))) &
@@ -434,7 +475,7 @@ contains
         changed%yhat%sine(:, zero_m, negative_n) = 0.2_dp
         call fit_primitive_equilibrium(changed, spline, info)
         call require(info == primitive_equilibrium_ok, "spindle fit failed")
-        call build_plasma_boundary_surface(spline, 12, 24, surface, normal, &
+        call build_test_boundary(spline, 12, 24, surface, normal, &
             fp, ft, info)
         call require(info == plasma_vacuum_geometry_error, &
             "a self-intersecting spindle torus was accepted")
@@ -448,7 +489,7 @@ contains
 
         call fit_primitive_equilibrium(equilibrium, spline, info)
         call require(info == primitive_equilibrium_ok, "spline fit failed")
-        call build_plasma_boundary_surface(spline, nu, nv, surface, normal, &
+        call build_test_boundary(spline, nu, nv, surface, normal, &
             fp, ft, info)
         call require(info == plasma_vacuum_ok, "edge surface failed")
         ! s is the normalized toroidal flux, so |ft| is the edge flux.
@@ -471,7 +512,7 @@ contains
                 call require(outward > 0.0_dp, "edge normal is not outward")
             end do
         end do
-        call build_plasma_boundary_surface(spline, 8, 4, surface, normal, &
+        call build_test_boundary(spline, 8, 4, surface, normal, &
             fp, ft, info)
         call require(info == plasma_vacuum_ok, &
             "a coarse 8-by-4 Solov'ev edge was rejected")
@@ -485,6 +526,7 @@ contains
         integer :: wall
 
         call solve(model, fixed, .false.)
+        model%edge_flux_slopes = edge_slopes
         model%nu = nu
         model%nv = nv
         model%wall_kind = vacuum_wall_none
@@ -534,6 +576,7 @@ contains
         real(dp) :: boundary(2 * size(mode_m)), expected, separated, quadratic
         integer :: i, k, modes, position(2), full_index, target
 
+        model%edge_flux_slopes = edge_slopes
         model%nu = nu
         model%nv = nv
         model%wall_kind = vacuum_wall_surface
@@ -697,11 +740,13 @@ contains
         real(dp), allocatable :: surface(:, :, :), normal(:, :, :)
         real(dp) :: fp, ft
 
+        model%edge_flux_slopes = edge_slopes
         model%nu = 4
         model%nv = nv
         call build(model, problem, info)
         call require(info == fixed_boundary_vacuum_mesh, &
             "an edge mesh aliasing m=2 was accepted")
+        model%edge_flux_slopes = edge_slopes
         model%nu = nu
         model%wall_kind = vacuum_wall_conformal
         model%wall_distance = -0.1_dp
@@ -715,7 +760,7 @@ contains
 
         call fit_primitive_equilibrium(equilibrium, spline, info)
         call require(info == primitive_equilibrium_ok, "spline fit failed")
-        call build_plasma_boundary_surface(spline, nu, nv, surface, normal, &
+        call build_test_boundary(spline, nu, nv, surface, normal, &
             fp, ft, info)
         call require(info == plasma_vacuum_ok, "edge surface failed")
         model%wall_kind = vacuum_wall_surface
