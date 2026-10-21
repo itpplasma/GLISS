@@ -46,6 +46,18 @@ The runner supplies exploration evidence until equilibrium exterior matching and
 The fresh independent DCON refinement confirms its crossing near 0.152488;
 it does not qualify GLISS's imported equilibrium.
 
+[V] The qualifier now separates producer sample error from interpolation:
+replacing the archived M32 half-grid fluxes by independently evaluated analytic
+values on the identical nodes still gives a 3.1805e-7 extrapolated transform
+error. The stored-minus-analytic extrapolation difference is 1.47e-9, compared
+to the original 3.1952e-7 total. The native extrapolation is at
+`src/boundary/primitive_boundary_geometry.f90:50` and the cubic derivative at
+`src/radial_cubic_spline.f90:255`; this error exists before vacuum assembly.
+The remedy already on main is native profile differentiation at s=1 in the
+producer plus schema-1 ingestion (`primitive_boundary_geometry.f90:71`).
+The runner now requires that remedy instead of silently regenerating the
+failed half-grid-only case.
+
 The October 16 explicit-edge fixture in `test/data/solovev_q1.5_edge.nc`
 passes the original export limits: toroidal flux-slope error `1.99e-16` Wb,
 transform error `1.20e-14`, and implicit-boundary error `3.75e-10`. The
