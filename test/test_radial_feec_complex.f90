@@ -349,7 +349,8 @@ contains
     function numerical_rank(matrix) result(rank)
         real(dp), intent(in) :: matrix(:, :)
         integer :: rank
-        real(dp), allocatable :: work(:, :), row_buffer(:)
+        real(dp) :: work(size(matrix, 1), size(matrix, 2))
+        real(dp), allocatable :: row_buffer(:)
         real(dp) :: pivot_value, tolerance
         integer :: column, pivot, row
 
