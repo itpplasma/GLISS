@@ -15,7 +15,7 @@ program generate_cartesian_field
     implicit none
 
     character(*), parameter :: default_revision = &
-        '37f67f996913252dab8bf7f1b32996ba2fcce636'
+        'ab86cc4cbf3e3afd6fd3f229ed855f3095e668e3'
     type(arena_t), target :: arena
     type(symengine_engine_t) :: engine
     type(suite_t) :: checks

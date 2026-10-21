@@ -16,7 +16,7 @@ program gliss_energy_gen
     implicit none
 
     character(*), parameter :: default_revision = &
-        '37f67f996913252dab8bf7f1b32996ba2fcce636'
+        'ab86cc4cbf3e3afd6fd3f229ed855f3095e668e3'
     character(len=32), parameter :: names(27) = [character(len=32) :: &
         'flux_t_slope', 'flux_p_slope', 'flux_t_curve', 'flux_p_curve', &
         'current_i', 'current_j', 'signed_sqrtg', 'bmag', 'grad_s2', &
