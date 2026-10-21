@@ -268,9 +268,24 @@ def test_native_enclosing_wall_can_couple_plasma_parities(
     )
 
 
-def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
+def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data, monkeypatch):
     modes = [(1, 1), (2, 1)]
     with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
+        # Earlier C struct layouts remain admitted, but cannot authorize
+        # half-grid extrapolation. This also exercises the prefix decoder.
+        import ctypes
+        from gliss.vacuum import _VacuumModel
+        class LegacyVacuum(ctypes.Structure):
+            _fields_ = _VacuumModel._fields_[:-1]
+        legacy = LegacyVacuum(struct_size=ctypes.sizeof(LegacyVacuum),
+                              edge_nu=24, edge_nv=12, wall_kind=0)
+        with monkeypatch.context() as patch:
+            patch.setattr(gliss.VacuumModel, "_native", lambda self: (legacy, None))
+            with pytest.raises(gliss.GlissComputationError, match="edge flux slopes"):
+                gliss.StabilityProblem(
+                    equilibrium, modes, degree=1, angular_theta=64,
+                    angular_zeta=8, vacuum=gliss.VacuumModel((24, 12)),
+                )
         with pytest.raises(gliss.GlissComputationError, match="edge flux slopes"):
             gliss.StabilityProblem(
                 equilibrium, modes, degree=1, angular_theta=64,
