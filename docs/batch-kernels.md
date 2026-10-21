@@ -42,9 +42,9 @@ the CPU reference and checks tail sentinels. Timing arguments are family
 executable takes batch size and repetitions. Each uses two warmups.
 
 [V] GNU 12.2 cluster measurements at 262144 points, 11 samples: FP32/FP64
-speedups at 1/8/24 threads are two 2.01/2.19/3.82, three 2.00/1.99/2.40,
-mass 1.44/1.61/1.61, xi 2.14/2.13/2.70. FP64 24-thread scaling is
-8.03/9.31/14.02/14.18 respectively. These shared-host kernel results include
+speedups at 1/8/24 threads are two 1.98/2.21/3.10, three 2.03/1.91/2.69,
+mass 1.42/1.54/1.59, xi 2.13/2.13/2.22. FP64 24-thread scaling is
+10.74/11.72/14.03/17.29 respectively. These shared-host kernel results include
 value/JVP/VJP output, with FP64 reductions outside the timed kernel. They
 establish neither a solver speedup nor general FP32 admission.
 
