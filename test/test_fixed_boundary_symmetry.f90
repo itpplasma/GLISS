@@ -107,7 +107,8 @@ contains
         real(dp), intent(out) :: coupling
         type(primitive_equilibrium_spline_t) :: spline
         type(primitive_geometry_grid_t) :: geometry
-        real(dp), allocatable :: theta(:), zeta(:), weight(:, :)
+        real(dp), allocatable :: theta(:), zeta(:)
+        real(dp) :: weight(96, 96)
         real(dp) :: pressure, slope, phase, value, normalization
         integer :: status, j, k, m, n
 
@@ -164,6 +165,7 @@ contains
             sheared%yhat%sine(surface, :, :) = sin(angle) * original &
                 + cos(angle) * sheared%yhat%sine(surface, :, :)
         end do
+        reference = 0.0_dp
         do exponent = 0, -12, -6
             amplitude = 10.0_dp**exponent
             scaled = equilibrium
