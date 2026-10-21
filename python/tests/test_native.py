@@ -271,7 +271,7 @@ def test_native_enclosing_wall_can_couple_plasma_parities(
 def test_native_free_boundary_rejects_bad_vacuum(native_library, test_data):
     modes = [(1, 1), (2, 1)]
     with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
-        with pytest.raises(gliss.GlissComputeError, match="edge flux slopes"):
+        with pytest.raises(gliss.GlissComputationError, match="edge flux slopes"):
             gliss.StabilityProblem(
                 equilibrium, modes, degree=1, angular_theta=64,
                 angular_zeta=8, vacuum=gliss.VacuumModel((24, 12)),

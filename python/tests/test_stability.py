@@ -801,3 +801,16 @@ def test_full_spectrum_bind_reports_missing_native_symbol():
 def test_energy_bind_reports_missing_native_symbol():
     with pytest.raises(OSError, match="energy decomposition.*matching"):
         _bind_energy(object())
+
+
+def test_vacuum_independent_edge_slopes():
+    model = gliss.VacuumModel((8, 8), 0.1, edge_flux_slopes=(0.7, -0.3))
+    restored = gliss.VacuumModel.from_dict(model.to_dict())
+    assert restored == model
+    assert model != gliss.VacuumModel((8, 8), 0.1)
+    native, _ = model._native()
+    assert native.edge_flux_slopes[0] == 0.7
+    assert native.edge_flux_slopes[1] == -0.3
+    for slopes in ((0.7,), (0.0, 1.0), (float("nan"), 1.0)):
+        with pytest.raises(ValueError):
+            gliss.VacuumModel(edge_flux_slopes=slopes)
