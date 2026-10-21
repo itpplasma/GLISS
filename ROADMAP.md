@@ -4,6 +4,47 @@ Updated October 17, 2026. This is the active execution roadmap. [PLAN.md](PLAN.m
 retains the earlier audit, measurements and scientific limitations; completed
 checks there apply to their recorded revisions, not automatically to new code.
 
+## October 21 source and measurement continuation
+
+The user requested that agents conclude and preserve the current work. Do not
+start a new scientific campaign from this checkpoint. The controller retains
+promotion authority; check current forge state before acting.
+
+[PR #59](https://github.com/itpplasma/GLISS/pull/59) remains draft at
+6f770a3a383e7d8e990b389733724127c99caf51. Its only change pins merged
+[FortSparse](https://github.com/lazy-fortran/fortsparse) source
+6d17059c7741b280d04998f479a160c341506629. Exact-pin native job 3321660 passes
+3/3 GNU 12.2-Werror tests and both public P4 physical sign/inertia controls;
+reported reference values remain -345.83992596 and +453.364596995. The
+controller approved ready plus normal SQUASH queue only after strict owned
+[CI #58](https://github.com/itpplasma/GLISS/pull/58) actually merges. At this
+checkpoint #58 is still open at ef4a3dfc557a3ee7bf64e29e2e27d2812f844997. Preserve
+that ownership boundary and do not bypass required checks. All PR CI must skip;
+only actual owned merge-queue checks may block promotion. Hosted checks remain
+advisory. Retain the qualified production pin even though a later FortSparse
+change repairs a test-only fpm interface.
+
+Matched cluster job 3321625 retains 150 fresh processes: block control, original
+sparse and repaired sparse paths, two public P4 configurations, five trials at
+1/2/4/8/16 cores. At one thread, the repair improves sparse solve medians by
+21.2%/17.4% and total wall by 5.8%/6.7%, with similar CPU cost. Default block
+remains faster and smaller (about 65 MiB versus sparse 125 MiB). Additional
+threads slow all paths. No strong-scaling, Pareto, broad physical-convergence
+or continuous-certificate claim follows from these measurements.
+
+Canonical collected receipts and the refreshed report are indexed locally by
+~/data/handoffs/20261021_completion/sparse_gliss.md. The two current comparison
+and scaling figures live under ~/data/plots/libraries/2026-10-21/; their source
+metadata and hashes are preserved by the shared library renderer. The full
+sparse_gliss artifact manifest was verified for 1618 files. No collector or new
+science job remains active in this GLISS lane. Keep raw private experiment
+inputs outside Git and retain the declared limitations in the report.
+
+The next action is to confirm #58's actual merge, then execute the already
+approved normal #59 promotion at its exact head, with original native consumer
+oracles and required owned gates. Other physical acceptance work below remains
+open; these bounded source/performance results do not close it.
+
 ## Target and supported domain
 
 Deliver a physically qualified ideal-MHD stability solver with reproducible
