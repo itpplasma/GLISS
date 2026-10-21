@@ -262,7 +262,7 @@ contains
         type(terpsichore_matrix_fixture_t) :: fixture
         type(dynamic_family_layout_t) :: fixed_layout, free_layout
         real(dp), allocatable :: fixed(:, :), free(:, :)
-        integer, allocatable :: retained(:)
+        integer :: retained(10)
         integer :: info
 
         call build_adapter_fixture(fixture)
