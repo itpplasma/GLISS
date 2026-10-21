@@ -25,6 +25,8 @@ classifiers = [
 simsopt = ["simsopt"]
 test = ["pytest>=8"]
 vmec = [
+    # booz-xform 0.0.9 wheels are unsafe with NumPy 2 (native crash).
+    "numpy>=1.23,<2",
     "booz-xform>=0.0.9,<0.1",
     "scipy>=1.10",
 ]
