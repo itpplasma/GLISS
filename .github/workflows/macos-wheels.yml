@@ -26,7 +26,7 @@ env:
 
 jobs:
   build:
-    # Full tier: upper layers of a PR stack skip it unless labeled full-ci.
+    # Native integration follows admission or an explicit development dispatch.
     if: >-
       (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))
     strategy:
@@ -108,10 +108,8 @@ jobs:
     runs-on: ${{ (startsWith(matrix.runner, 'windows') || contains(matrix.runner, 'intel') || matrix.runner == 'macos-13' || matrix.runner == 'macos-12') && matrix.runner || startsWith(matrix.runner, 'macos') && fromJSON('["self-hosted","macOS","ARM64","itp-macos"]') || contains(matrix.runner, '22.04') && fromJSON('["self-hosted","itp-ubuntu22"]') || fromJSON('["self-hosted","itp-ubuntu24"]') }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
-          architecture: ${{ matrix.architecture == 'arm64' && 'arm64' || 'x64' }}
+      - name: Set up native private Python
+        run: /opt/itp-ci-macos/setup-python.sh '${{ matrix.python }}'
       - uses: actions/download-artifact@v4
         with:
           name: macos-${{ matrix.architecture }}
@@ -151,7 +149,7 @@ jobs:
           echo "A wheel job failed or was cancelled; see the jobs above."
           exit 1
   build-informative:
-    # Full tier: upper layers of a PR stack skip it unless labeled full-ci.
+    # Native integration follows admission or an explicit development dispatch.
     if: >-
       (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))
     strategy:
