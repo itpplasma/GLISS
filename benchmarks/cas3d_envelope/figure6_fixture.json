@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "label": "[V]",
+  "doi": "10.1063/1.871924",
+  "publisher_pages": {
+    "figure6": 2405,
+    "L_count": 2404,
+    "parity_equation_3": 2402
+  },
+  "fixture": {
+    "path": "figure6_numbered_cells.csv",
+    "sha256": "e5e5faaf42c0bc51d941548da5ad5635482a3a2690b08598c654d55befa7431f"
+  },
+  "source_pdf_sha256": {
+    "Nuehrenberg_1996_PhysPlasmas_3_2401_W7X_configurational_space.pdf": "694fa4b0d30494f1f71b48e36f11b98c0b66fa30649ddfbd5a68558b6abdcf8f",
+    "Nuehrenberg_1996_PhysPlasmas_3_2401_W7X_configurational_space_aip2014.pdf": "fab087d1e5842eddf5763328bd4b1c0293d0233f69ef33f763d3f65cad0fc4ae"
+  },
+  "native_raster_sha256": "cda852a679357d23bb943c1f7e577a41d19fa87882765a097cb024b4a82f8be6",
+  "source_images_independent": false,
+  "transcription_method": "One run, separate row-wise first-file and column-wise second-file visual readings; reconcile afterward with archived native-raster audit and retained L8 control.",
+  "transcription_sha256": {
+    "numbered_cells.csv": "e5e5faaf42c0bc51d941548da5ad5635482a3a2690b08598c654d55befa7431f",
+    "scan0_rows.json": "acbb1e58c0a5670d913869318e870ccd879cc1443fb78c70d936ab2a41f21ea7",
+    "scan1_columns.json": "35894e7788d2e7fb099319f5304c727a1d461777735cbe251d5db87100e7ed16"
+  },
+  "printed_numbered_cells": 204,
+  "nonconstant_envelope_pairs": 203,
+  "full_endpoint_labeled_contributions": 407,
+  "native_L8_control_agrees": true,
+  "repeated_support_orders": [
+    [
+      8,
+      9
+    ],
+    [
+      46,
+      48
+    ],
+    [
+      71,
+      119
+    ],
+    [
+      87,
+      95
+    ]
+  ],
+  "full_endpoint_interpretation": {
+    "label": "[H]",
+    "prefix_convention": "terminal_l_plus_one",
+    "reason": "204 rows including the origin imply 2*204-1=407, as the body states for L=203."
+  },
+  "small_L_alignment": "[H] Caption L-row and body L+1-row interpretations remain separately declared; do not infer a historical small-L prefix from the implementation control.",
+  "published_parity": {
+    "label": "[V]",
+    "gliss_parity": 1,
+    "normal_component": "even/cosine",
+    "X_e": "even",
+    "X_o": "odd",
+    "exception": "Figure 13"
+  },
+  "phase_conversion": {
+    "paper_carrier": [
+      3,
+      -2
+    ],
+    "gliss_carrier": [
+      3,
+      2
+    ],
+    "envelope_n_sign": "opposite",
+    "NFP": 5,
+    "sidebands": [
+      "(3+m,2-5*n)",
+      "(3-m,2+5*n)"
+    ]
+  },
+  "qualification": "[V] Fixture and parity recovered. Whole-support A0 qualification, historical radial form functions, angular grid and reference length remain open; no normalization fitted."
+}
