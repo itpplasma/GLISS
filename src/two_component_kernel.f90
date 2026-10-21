@@ -1,6 +1,6 @@
 module two_component_kernel
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use gliss_energy_generated, only: generated_bending, generated_shear, &
+    use ideal_mhd_energy_generated, only: generated_bending, generated_shear, &
         generated_compression, generated_components, generated_component_coefficients, &
         generated_two_energy, generated_two_jvp, generated_two_vjp
     implicit none
