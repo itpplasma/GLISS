@@ -15,48 +15,95 @@ env:
 
 jobs:
   gfortran:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","itp-slurm"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        env:
+          SCI_TIER: ci-gfortran
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran cmake ninja-build \
             liblapack-dev libnetcdf-dev pkg-config
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Configure
         run: cmake -S . -B build -G Ninja
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build
         run: cmake --build build
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
   sparse:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","itp-slurm"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        env:
+          SCI_TIER: ci-sparse
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran cmake ninja-build libopenblas-dev \
             libnetcdf-dev libsuitesparse-dev pkg-config
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Configure native sparse consumer
         run: |
           cmake -S . -B build -G Ninja -DGLISS_ENABLE_FORTSPARSE=ON \
             -DGLISS_REQUIRE_OPENBLAS=ON
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build and test sparse path
         run: |
           cmake --build build --parallel 2
           ctest --test-dir build --output-on-failure
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
   gfortran-runtime:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","itp-slurm"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        env:
+          SCI_TIER: ci-gfortran-runtime
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran cmake ninja-build \
             libopenblas-dev libnetcdf-dev pkg-config
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Configure with runtime checks
         run: |
           cmake -S . -B build -G Ninja \
@@ -64,25 +111,44 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_Fortran_FLAGS_DEBUG="-O1 -g -fcheck=all -fbacktrace" \
             -DGLISS_REQUIRE_OPENBLAS=ON
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build
         run: cmake --build build --parallel 2
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Test with runtime checks
         run: ctest --test-dir build --output-on-failure
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","itp-slurm"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        env:
+          SCI_TIER: ci-lint
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran cmake ninja-build \
             liblapack-dev libnetcdf-dev pkg-config
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Configure with warnings as errors
         run: cmake -S . -B build -G Ninja -DCMAKE_Fortran_FLAGS=-Werror
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build
         run: cmake --build build
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
   format:
     runs-on: ubuntu-latest
     steps:
@@ -107,9 +173,22 @@ jobs:
           fi
 
   python:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","itp-slurm"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bundle exact sources for Slurm
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        env:
+          SCI_TIER: ci-python
+        run: |-
+          TMPDIR="$RUNNER_TEMP" ci/bundle.sh "$RUNNER_TEMP/ci.tar.zst"
+      - name: Run native checks on sCluster
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |-
+          sci-dispatch native "$RUNNER_TEMP/ci.tar.zst"
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -117,21 +196,26 @@ jobs:
             liblapack-dev libnetcdf-dev pkg-config
           python -m pip install --upgrade pip
           pip install build "numpy<2" pytest scipy booz-xform==0.0.9
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build shared library
         run: |
           cmake -S . -B build -G Ninja
           cmake --build build --target gliss_c gliss_wheel_fixture
           build/gliss_wheel_fixture build/installed_wheel_fixture.nc
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Run Python binding tests
         # Most tests are contract tests against a fake library. Tests marked
         # native load the built libgliss_c and check it against independent
         # oracles (test/data Solov'ev fixtures); they fail without it. The
         # golden and simsopt tests skip without the LFS fixtures / simsopt.
         run: GLISS_LIB=$PWD/build/libgliss_c.so python -m pytest python/tests -v
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Check the public analytic equilibrium generator
         run: python benchmarks/solovev/public/test_solovev.py
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Build distributions
         run: python -m build
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Test installed wheel
         run: |
           python -m venv /tmp/gliss-wheel
@@ -139,6 +223,7 @@ jobs:
           /tmp/gliss-wheel/bin/pip check
           /tmp/gliss-wheel/bin/python ci/check_installed.py \
             --tests python/tests --equilibrium build/installed_wheel_fixture.nc
+        if: ${{ github.event.pull_request.head.repo.fork }}
       - name: Test installed sdist
         run: |
           python -m venv /tmp/gliss-sdist
@@ -153,6 +238,7 @@ jobs:
           assert (Path(gliss.get_include()) / "gliss.h").is_file()
           PY
 
+        if: ${{ github.event.pull_request.head.repo.fork }}
   flang:
     runs-on: ubuntu-latest
     steps:
