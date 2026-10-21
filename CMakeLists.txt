@@ -1388,3 +1388,5 @@ if(GLISS_ENABLE_ENZYME)
             src/three_component_kernel.f90
             test/enzyme_three_component_gradient.f90)
 endif()
+
+include(cmake/GLISSBatches.cmake)

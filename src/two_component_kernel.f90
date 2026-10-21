@@ -3,6 +3,7 @@ module two_component_kernel
     use ideal_mhd_energy_generated, only: generated_bending, generated_shear, &
         generated_compression, generated_components, generated_component_coefficients, &
         generated_two_energy, generated_two_jvp, generated_two_vjp
+    use ideal_mhd_batch, only: mhd_two_fp64, mhd_two_fp32, mhd_two_mixed
     implicit none
     private
 
@@ -15,6 +16,11 @@ module two_component_kernel
 
     public :: two_component_coefficients, two_component_energy_jvp, two_component_energy_vjp
     integer, parameter, public :: two_component_input_count = 20
+
+    public :: two_component_energy_batch
+    interface two_component_energy_batch
+        procedure mhd_two_fp64, mhd_two_fp32, mhd_two_mixed
+    end interface
 
 contains
 
