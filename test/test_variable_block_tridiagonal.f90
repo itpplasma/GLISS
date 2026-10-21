@@ -6,6 +6,7 @@ program test_variable_block_tridiagonal
         apply_variable_block_tridiagonal, pack_permuted_variable_blocks, &
         pack_variable_blocks, variable_block_invalid, variable_block_ok, &
         variable_block_to_dense, variable_block_tridiagonal_t
+    !$ use omp_lib, only: omp_set_num_threads
     implicit none
 
     integer, parameter :: widths(3) = [2, 3, 1]
@@ -72,9 +73,44 @@ program test_variable_block_tridiagonal
     call require(info == variable_block_invalid, &
         "duplicate permutation index was accepted")
 
+    call check_threaded_apply()
     write (*, "(a)") "PASS"
 
 contains
+
+    subroutine check_threaded_apply()
+        integer, parameter :: widths(7) = [1, 50, 2, 250, 5, 200, 3]
+        integer, parameter :: n = sum(widths)
+        type(variable_block_tridiagonal_t) :: chain
+        real(dp) :: dense(n, n), vector(n), image(n), expected(n)
+        integer :: i, threads, status
+
+        dense = 0.0_dp
+        do i = 1, n
+            dense(i, i) = 2.0_dp
+            vector(i) = real(i, dp) / 128.0_dp
+        end do
+        do i = 1, n - 1
+            dense(i + 1, i) = -0.25_dp
+            dense(i, i + 1) = -0.25_dp
+        end do
+        expected = 2.0_dp * vector
+        expected(2:) = expected(2:) - 0.25_dp * vector(:n - 1)
+        expected(:n - 1) = expected(:n - 1) - 0.25_dp * vector(2:)
+        call pack_variable_blocks(dense, widths, chain, status)
+        call require(status == variable_block_ok, "threaded chain packing")
+        ! Unequal chunks, with more threads than blocks at the last count.
+        do threads = 1, 8
+            !$ call omp_set_num_threads(threads)
+            call apply_variable_block_tridiagonal(chain, vector, image, status)
+            call require(status == variable_block_ok, "threaded chain apply")
+            call require(maxval(abs(image - expected)) &
+                <= 4.0_dp * epsilon(1.0_dp) * maxval(abs(expected)), &
+                "threaded block apply differs from exact dyadic stencil")
+        end do
+        !$ call omp_set_num_threads(1)
+    end subroutine check_threaded_apply
+
 
     pure subroutine matrix_vector_product(matrix, vector, image)
         real(dp), intent(in) :: matrix(:, :), vector(:)
