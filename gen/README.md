@@ -200,3 +200,7 @@ FortSym. Independent tests cover curved charts, a true nested vacuum torus,
 a finite-pressure screw pinch and Cartesian finite-difference convergence.
 These are spatial derivatives. Parameter JVP/VJP, C/Python bindings and a
 force-balanced equilibrium design response remain unimplemented for this API.
+
+Shared CPU SIMD and CUDA batch products, derivative packing, domains and
+standalone oracles are documented in [batch kernels](../docs/batch-kernels.md).
+The batch generator adds 167 exact identities, with no probe substitutions.

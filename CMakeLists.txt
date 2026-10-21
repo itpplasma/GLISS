@@ -1392,6 +1392,7 @@ if(GLISS_ENABLE_ENZYME)
     add_enzyme_fortran_test(enzyme_perpendicular_kinetic_gradient
         SOURCES
             src/generated/ideal_mhd_energy_generated.f90
+            src/generated/ideal_mhd_batches.f90
             src/perpendicular_kinetic_kernel.f90
             test/enzyme_perpendicular_kinetic_gradient.f90)
     add_enzyme_fortran_test(enzyme_terpsichore_reduced_mass_gradient
@@ -1417,8 +1418,11 @@ if(GLISS_ENABLE_ENZYME)
     add_enzyme_fortran_test(enzyme_three_component_gradient
         SOURCES
             src/generated/ideal_mhd_energy_generated.f90
+            src/generated/ideal_mhd_batches.f90
             src/physical_constants.f90
             src/two_component_kernel.f90
             src/three_component_kernel.f90
             test/enzyme_three_component_gradient.f90)
 endif()
+
+include(cmake/GLISSBatches.cmake)

@@ -4,6 +4,7 @@ module perpendicular_kinetic_kernel
     use ideal_mhd_energy_generated, only: generated_perpendicular_matrix, &
         generated_perpendicular_energy, generated_perpendicular_jvp, &
         generated_perpendicular_vjp
+    use ideal_mhd_batch, only: mhd_mass_fp64, mhd_mass_fp32, mhd_mass_mixed
     implicit none
     private
 
@@ -13,6 +14,11 @@ module perpendicular_kinetic_kernel
 
     public :: perpendicular_kinetic_energy_jvp, perpendicular_kinetic_energy_vjp
     integer, parameter, public :: perpendicular_kinetic_input_count = 7
+
+    public :: perpendicular_kinetic_energy_batch
+    interface perpendicular_kinetic_energy_batch
+        procedure mhd_mass_fp64, mhd_mass_fp32, mhd_mass_mixed
+    end interface
 
 contains
 

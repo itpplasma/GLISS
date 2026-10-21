@@ -4,6 +4,7 @@ module three_component_kernel
     use physical_constants, only: vacuum_permeability
     use ideal_mhd_energy_generated, only: generated_divergence, generated_three_energy, &
         generated_three_jvp, generated_three_vjp
+    use ideal_mhd_batch, only: mhd_three_fp64, mhd_three_fp32, mhd_three_mixed
     implicit none
     private
 
@@ -15,6 +16,11 @@ module three_component_kernel
 
     public :: three_component_energy_jvp, three_component_energy_vjp
     integer, parameter, public :: three_component_input_count = 26
+
+    public :: three_component_energy_batch
+    interface three_component_energy_batch
+        procedure mhd_three_fp64, mhd_three_fp32, mhd_three_mixed
+    end interface
 
 contains
 
