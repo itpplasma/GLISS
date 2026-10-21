@@ -15,7 +15,7 @@ program gliss_weighted_feec_gen
     implicit none
 
     character(*), parameter :: default_revision = &
-        'f5ef0572a524378abf3ae83669ee856684691c0a'
+        '37f67f996913252dab8bf7f1b32996ba2fcce636'
     character(len=32), parameter :: names(5) = [character(len=32) :: &
         'coordinate', 'alpha', 'basis_value', &
         'basis_derivative', &

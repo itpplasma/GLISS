@@ -16,7 +16,7 @@ program gliss_geometry_gen
     implicit none
 
     character(*), parameter :: default_revision = &
-        'f5ef0572a524378abf3ae83669ee856684691c0a'
+        '37f67f996913252dab8bf7f1b32996ba2fcce636'
     type(arena_t), target :: arena
     type(symengine_engine_t) :: engine
     type(suite_t) :: checks
