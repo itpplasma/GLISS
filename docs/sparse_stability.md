@@ -35,3 +35,9 @@ sparse (1) or dense (0) matrix storage. The sparse build changes factorization;
 the default build supplies the independent dense/block comparison. Compare
 physical eigenvalues within the reported certificates and solver stopping
 accuracy, rather than requiring last-digit equality.
+
+The opt-in native backend uses bounded BLAS-3 LDLT panels with OpenMP assembly
+and scatter. Panels needing an interchange recover through unrestricted sparse
+Bunch–Kaufman pivoting, preserving the inertia and near-zero rejection contract.
+The block backend remains the default: the native panels improve the old sparse
+path but have not beaten the block solver on the measured large controls.

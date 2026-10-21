@@ -70,6 +70,7 @@ contains
         if (.not. sparse_precision_supported(factor%precision)) return
         factor%solver%backend_id = FORTSPARSE_BACKEND_NATIVE
         factor%solver%options%symmetry = FORTSPARSE_SYM_INDEFINITE
+        factor%solver%options%ldlt_blocked = .true.
         ! Raw CSC avoids a triplet sort and any dense n-by-n allocation.
         call sparse_factor(factor%solver, n, n, size(values), pointers, &
             rows, values, status)
