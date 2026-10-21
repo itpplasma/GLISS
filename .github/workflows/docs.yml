@@ -10,7 +10,7 @@ name: docs
 on:
   push:
     branches: [main]
-    tags: ["v*.*.*"]
+    tags: [v*.*.*]
   workflow_dispatch:
 
 permissions:
@@ -32,9 +32,9 @@ jobs:
           - tag: v0.0.2
             commit: b994f51aa9ebe1a5e03bad2c72c6fde730fcaa1b
     env:
-      CMAKE_BUILD_PARALLEL_LEVEL: "2"
-      OMP_NUM_THREADS: "1"
-      OPENBLAS_NUM_THREADS: "1"
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
     steps:
       - uses: actions/checkout@v4
       - name: Check out the released package and guide
@@ -72,6 +72,8 @@ jobs:
           path: ${{ runner.temp }}/release-html/
           if-no-files-found: error
 
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
   publish:
     needs: released-guides
     runs-on: ubuntu-latest
@@ -156,6 +158,8 @@ jobs:
         with:
           path: ${{ runner.temp }}/pages
 
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
   deploy:
     needs: publish
     runs-on: ubuntu-latest
@@ -169,3 +173,5 @@ jobs:
       - name: Deploy the versioned documentation site
         id: deployment
         uses: actions/deploy-pages@v4
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))

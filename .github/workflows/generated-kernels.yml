@@ -16,13 +16,17 @@ on:
       - benchmarks/qas3/symbolic_current/**
       - .github/workflows/generated-kernels.yml
   workflow_dispatch:
+  merge_group:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
 env:
-  OMP_NUM_THREADS: "1"
-  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
   CCACHE_DIR: ${{ github.workspace }}/.codegen-ccache
 
 jobs:
@@ -219,3 +223,8 @@ jobs:
             build-symbolic_current/strict-identities.json
             build-symbolic_current/Testing/Temporary/LastTest.log
           if-no-files-found: warn
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
