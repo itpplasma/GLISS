@@ -410,7 +410,8 @@ contains
         real(dp), intent(out) :: d_integral_jbsq_poloidal
         real(dp), intent(in) :: iota_spread
         real(dp), allocatable :: d_beta_theta(:, :), d_beta_zeta(:, :)
-        real(dp), allocatable :: d_mu0_toroidal(:, :), d_mu0_poloidal(:, :)
+        real(dp) :: d_mu0_toroidal(size(theta), size(zeta))
+        real(dp) :: d_mu0_poloidal(size(theta), size(zeta))
 
         call beta_flux_slope_derivative(equilibrium, beta_forcing, &
             poloidal_flux_slope, toroidal_flux_slope, 0.0_dp, 1.0_dp, &

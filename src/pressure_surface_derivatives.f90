@@ -190,7 +190,8 @@ contains
         real(dp), intent(inout) :: drive_slope(:, :)
         integer, intent(out) :: info
         type(harmonic_pair_t) :: pair
-        real(dp), allocatable :: operand(:, :), values(:, :), dt(:, :), dz(:, :)
+        real(dp) :: operand(size(theta), size(zeta))
+        real(dp), allocatable :: values(:, :), dt(:, :), dz(:, :)
         real(dp) :: cosine(size(m), size(n)), sine(size(m), size(n))
         integer :: status
 
