@@ -506,6 +506,10 @@ typedef struct gliss_vacuum_model {
     int32_t wall_nu;
     int32_t wall_nv;
     const double *wall_xyz;
+    /* Optional two doubles [Phi'(1), chi'(1)] for schema-0 half-grid inputs.
+     * NULL requires independently exported edge data. Earlier struct_size
+     * values remain accepted and act as NULL. Schema 1 owns its edge slopes. */
+    const double *edge_flux_slopes;
 } gliss_vacuum_model;
 
 /* The physical free-boundary problem: the edge normal displacement is

@@ -1,7 +1,7 @@
 module primitive_boundary_geometry
     ! Resolve the interface from independently exported s=1 data when present.
-    ! The legacy path remains the interior half-grid extrapolation. Neither
-    ! path certifies pressure balance or an equilibrium exterior magnetic field.
+    ! Schema-0 positions retain the legacy half-grid extrapolation; flux slopes
+    ! require edge data. Neither path certifies exterior equilibrium matching.
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use cartesian_harmonic_spline, only: cartesian_harmonic_ok, &
@@ -19,12 +19,14 @@ module primitive_boundary_geometry
 
     integer, parameter, public :: primitive_boundary_ok = 0
     integer, parameter, public :: primitive_boundary_invalid = -1
+    integer, parameter, public :: primitive_boundary_missing_edge_slopes = -2
 
     public :: evaluate_primitive_boundary
 
 contains
 
-    subroutine evaluate_primitive_boundary(spline, theta, zeta, jet, fp, ft, info)
+    subroutine evaluate_primitive_boundary(spline, theta, zeta, jet, fp, ft, &
+            info, edge_flux_slopes)
         type(primitive_equilibrium_spline_t), intent(in) :: spline
         real(dp), intent(in) :: theta(:), zeta(:)
         ! Only values and angular derivatives are defined by the edge schema.
@@ -32,6 +34,8 @@ contains
         type(cartesian_jet_grid_t), intent(out) :: jet
         real(dp), intent(out) :: fp, ft
         integer, intent(out) :: info
+        ! Independently supplied [Phi'(1), chi'(1)] for schema-0 inputs.
+        real(dp), optional, intent(in) :: edge_flux_slopes(:)
         real(dp) :: profiles(3), slopes(3), seconds(3)
         integer :: local_info
 
@@ -47,11 +51,24 @@ contains
             call evaluate_cartesian_harmonic_spline(spline%radial_grid, &
                 spline%position, 1.0_dp, theta, zeta, jet, local_info)
             if (local_info /= cartesian_harmonic_ok) return
-            call evaluate_radial_cubic_spline_field(spline%radial_grid, &
-                spline%profiles, 1.0_dp, profiles, slopes, seconds, local_info)
-            if (local_info /= radial_cubic_spline_ok) return
-            fp = -slopes(2)
-            ft = -slopes(1)
+            if (present(edge_flux_slopes)) then
+                if (size(edge_flux_slopes) /= 2) return
+                if (.not. all(ieee_is_finite(edge_flux_slopes))) return
+                if (edge_flux_slopes(1) == 0.0_dp) return
+                ft = -edge_flux_slopes(1)
+                fp = -edge_flux_slopes(2)
+            else
+                if (.not. allocated(spline%radial_grid%nodes)) return
+                if (maxval(spline%radial_grid%nodes) < 1.0_dp) then
+                    info = primitive_boundary_missing_edge_slopes
+                    return
+                end if
+                call evaluate_radial_cubic_spline_field(spline%radial_grid, &
+                    spline%profiles, 1.0_dp, profiles, slopes, seconds, local_info)
+                if (local_info /= radial_cubic_spline_ok) return
+                fp = -slopes(2)
+                ft = -slopes(1)
+            end if
         case (1)
             if (.not. allocated(spline%position%poloidal_modes)) return
             if (.not. allocated(spline%position%toroidal_modes)) return

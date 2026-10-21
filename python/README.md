@@ -862,6 +862,10 @@ with Equilibrium(Path("equilibrium_export.nc")) as equilibrium:
 print(result.boundary_condition, result.negative_count, energy.vacuum_energy)
 ```
 
+A schema-1 true-edge export supplies the edge flux slopes. A legacy half-grid
+export instead requires independently known `edge_flux_slopes=(dPhi_ds, dchi_ds)`
+in Wb; GLISS returns an error rather than extrapolating its interior flux profiles.
+
 `edge_resolution` counts the poloidal and toroidal edge nodes; each must
 exceed twice the largest `|m|` and `|n|` of the mode table. The vacuum
 energy converges at second order in the mesh spacing. When the edge and wall

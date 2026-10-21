@@ -126,16 +126,22 @@ A `VacuumModel` frees the plasma edge: its normal displacement drives a
 current-free vacuum field, whose energy (a scalar-potential boundary integral
 over the edge and wall) enters the stiffness. The model sets the full-torus edge mesh and an optional
 ideal wall, here conformal at 3 cm. Without a wall this q0 = 1.045 Solov'ev
-edge is kink unstable; the close wall stabilizes it.
+edge is kink unstable; the close wall stabilizes it. These legacy half-grid
+fixtures need independently known edge flux slopes. For this analytic family,
+the toroidal edge flux is fixed and edge q scales linearly with q0.
 
 ```python
 free_modes = [(0, 1), (1, -1), (1, 1), (2, -1), (2, 1)]
 lowest_free = {}
+edge_flux = 0.7071679553076411
+edge_q = 2.5760589102968022 * 1.045 / 1.5
+edge_slopes = (edge_flux, -edge_flux / edge_q)
 with gliss.Equilibrium(stable) as equilibrium:
     for wall in (None, 0.03):
         with gliss.StabilityProblem(
             equilibrium, free_modes, degree=2, angular_theta=64,
-            angular_zeta=8, vacuum=gliss.VacuumModel((24, 12), wall),
+            angular_zeta=8,
+            vacuum=gliss.VacuumModel((24, 12), wall, edge_flux_slopes=edge_slopes),
         ) as problem:
             lowest_free[wall] = problem.solve_class(1)
 assert lowest_free[None].negative_count >= 1

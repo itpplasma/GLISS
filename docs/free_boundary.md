@@ -33,9 +33,14 @@ The vacuum operator uses these positions and independently evaluated flux
 derivatives directly. Interior geometry and profile splines retain their
 half-grid contract. Malformed or unsupported declarations fail ingestion.
 
-Without an explicit boundary declaration, the legacy path extrapolates the
-interior splines to `s=1`. That behavior remains available, but its accuracy
-requires separate qualification. Schema 1 supplies no edge pressure or matched
+Without an explicit boundary declaration, positions retain the legacy
+extrapolation to `s=1`, whose accuracy requires separate qualification. Flux
+profiles are never silently extrapolated: a half-grid input requires independent
+edge slopes via `VacuumModel(edge_flux_slopes=(dPhi_ds, dchi_ds))` (Wb), or
+`plasma_vacuum_model_t%edge_flux_slopes` in Fortran. The slopes are recorded in
+configuration documents and hashes. A profile grid containing `s=1` can instead
+supply its endpoint derivative. Schema 1 owns its declared slopes and ignores
+this schema-0 override. Schema 1 supplies no edge pressure or matched
 exterior field, so its presence alone does not certify the physical assumptions
 above.
 

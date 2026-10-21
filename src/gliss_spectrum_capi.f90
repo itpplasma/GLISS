@@ -9,6 +9,7 @@ module gliss_spectrum_capi
         fixed_boundary_is_free, fixed_boundary_ok, &
         fixed_boundary_problem_t, fixed_boundary_vacuum, &
         fixed_boundary_vacuum_mesh, fixed_boundary_wall, &
+        fixed_boundary_edge_slopes, &
         fixed_boundary_spectrum_result_t, fixed_boundary_unknown_count, &
         solve_fixed_boundary_class
     use gliss_c_abi_support, only: error_buffer_status, status_allocation_error, &
@@ -32,6 +33,11 @@ module gliss_spectrum_capi
         integer(c_int32_t) :: wall_nv
         type(c_ptr) :: wall_xyz
     end type vacuum_model_c
+
+    type, bind(c) :: vacuum_model_edge_c
+        type(vacuum_model_c) :: base
+        type(c_ptr) :: edge_flux_slopes
+    end type vacuum_model_edge_c
 
     type, bind(c) :: spectrum_summary_c
         integer(c_size_t) :: struct_size
@@ -196,6 +202,8 @@ contains
         integer(c_size_t), value, intent(in) :: error_capacity
         integer(c_int) :: status
         type(vacuum_model_c), pointer :: model
+        type(vacuum_model_edge_c), pointer :: edge_model
+        real(c_double), pointer :: edge_slopes(:)
         real(c_double), pointer :: wall(:, :, :)
         integer :: allocation_status, extent(3)
 
@@ -206,10 +214,23 @@ contains
             return
         end if
         call c_f_pointer(vacuum_pointer, model)
-        if (model%struct_size /= c_sizeof(model)) then
+        if (model%struct_size /= c_sizeof(model) .and. &
+            model%struct_size /= c_sizeof(edge_model)) then
             call write_error(error_pointer, error_capacity, &
                 "vacuum model struct_size is incompatible")
             return
+        end if
+        if (model%struct_size == c_sizeof(edge_model)) then
+            call c_f_pointer(vacuum_pointer, edge_model)
+            if (c_associated(edge_model%edge_flux_slopes)) then
+                call c_f_pointer(edge_model%edge_flux_slopes, edge_slopes, [2])
+                allocate (vacuum%edge_flux_slopes(2), stat=allocation_status)
+                if (allocation_status /= 0) then
+                    status = status_allocation_error
+                    return
+                end if
+                vacuum%edge_flux_slopes = edge_slopes
+            end if
         end if
         vacuum%nu = int(model%edge_nu)
         vacuum%nv = int(model%edge_nv)
@@ -689,6 +710,11 @@ contains
             status = status_invalid_argument
             call write_error(error_pointer, error_capacity, &
                 "wall must enclose the plasma without intersecting it")
+        else if (info == fixed_boundary_edge_slopes) then
+            call write_error(error_pointer, error_capacity, &
+                "half-grid free boundary requires independent edge flux slopes; " // &
+                "supply a schema-1 true-edge export")
+            status = status_compute_error
         else if (info == fixed_boundary_vacuum) then
             status = status_compute_error
             call write_error(error_pointer, error_capacity, &

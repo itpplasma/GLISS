@@ -162,9 +162,10 @@ def test_pressure_owner_is_retained_by_each_problem(native_library, test_data):
 
 
 def test_pressure_derivatives_reject_free_boundary(native_library, test_data):
-    with gliss.Equilibrium(test_data / "solovev_q1.045.nc") as equilibrium:
+    with gliss.Equilibrium(test_data / "solovev_q1.5_edge.nc") as equilibrium:
         with gliss.StabilityProblem(
-            equilibrium, MODES, **OPTIONS, vacuum=gliss.VacuumModel((8, 4), 0.1)
+            equilibrium, MODES, **dict(OPTIONS, angular_theta=256),
+            vacuum=gliss.VacuumModel((8, 4), 0.1)
         ) as problem:
             nodes, pressure = problem.pressure_samples()
             with pytest.raises(ValueError, match="fixed-boundary"):
