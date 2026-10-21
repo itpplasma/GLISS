@@ -116,7 +116,7 @@ jobs:
           sudo apt-get install -y gfortran cmake ninja-build \
             liblapack-dev libnetcdf-dev pkg-config
           python -m pip install --upgrade pip
-          pip install build numpy pytest scipy booz-xform==0.0.9
+          pip install build "numpy<2" pytest scipy booz-xform==0.0.9
       - name: Build shared library
         run: |
           cmake -S . -B build -G Ninja
@@ -135,7 +135,7 @@ jobs:
       - name: Test installed wheel
         run: |
           python -m venv /tmp/gliss-wheel
-          /tmp/gliss-wheel/bin/pip install dist/*.whl pytest scipy 'booz-xform>=0.0.9,<0.1'
+          /tmp/gliss-wheel/bin/pip install "$(echo dist/*.whl)[vmec]" pytest
           /tmp/gliss-wheel/bin/pip check
           /tmp/gliss-wheel/bin/python ci/check_installed.py \
             --tests python/tests --equilibrium build/installed_wheel_fixture.nc
