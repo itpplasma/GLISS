@@ -17,7 +17,8 @@ contains
 
     subroutine assemble_compatible_direct_surface(fields, drive, trial_m, &
             trial_n, trial_parity, field_periods, h1_values, h1_derivatives, &
-            l2_values, full, info, terms)
+            l2_values, full, info, terms, normal_eta)
+        real(dp), optional, intent(in) :: normal_eta(:, :)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods
@@ -33,6 +34,11 @@ contains
             field_periods, h1_values, h1_derivatives, l2_values, full, info, &
             terms)
         if (info /= 0) return
+        info = -1
+        if (present(normal_eta)) then
+            if (any(shape(normal_eta) /= shape(h1_values))) return
+            if (.not. all(ieee_is_finite(normal_eta))) return
+        end if
         weight = 1.0_dp / real(size(fields, 1) * size(fields, 2) &
             * field_periods, dp)
         do period = 0, field_periods - 1
@@ -43,7 +49,7 @@ contains
                         h1_values, h1_derivatives, l2_values, &
                         real(j - 1, dp) / real(size(fields, 1), dp), &
                         real(k - 1, dp) / real(size(fields, 2), dp) &
-                        + real(period, dp), weight, full, terms)
+                        + real(period, dp), weight, full, terms, normal_eta)
                 end do
             end do
         end do
@@ -55,7 +61,8 @@ contains
     ! components and the drive are four weighted channels.
     subroutine assemble_compatible_transformed_surface(fields, drive, &
             trial_m, trial_n, trial_parity, field_periods, h1_values, &
-            h1_derivatives, l2_values, full, info, terms)
+            h1_derivatives, l2_values, full, info, terms, normal_eta)
+        real(dp), optional, intent(in) :: normal_eta(:, :)
         real(dp), intent(in) :: fields(:, :, :), drive(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
         integer, intent(in) :: field_periods
@@ -80,6 +87,11 @@ contains
             field_periods, h1_values, h1_derivatives, l2_values, full, info, &
             terms)
         if (info /= 0) return
+        info = -1
+        if (present(normal_eta)) then
+            if (any(shape(normal_eta) /= shape(h1_values))) return
+            if (.not. all(ieee_is_finite(normal_eta))) return
+        end if
         columns = size(full, 1)
         trials = size(trial_m)
         points = size(fields, 1) * size(fields, 2)
@@ -104,7 +116,7 @@ contains
                 k = (first + point - 2) / size(fields, 1) + 1
                 call phase_rows(fields(j, k, :), trial_m, trial_n, &
                     trial_parity, field_periods, h1_values, h1_derivatives, &
-                    l2_values, cosine_rows, sine_rows)
+                    l2_values, cosine_rows, sine_rows, normal_eta)
                 weight(point, 1:3) = angular_weight * abs(fields(j, k, 7))
                 weight(point, 4) = -drive(j, k) * angular_weight &
                     * abs(fields(j, k, 7))
@@ -141,7 +153,8 @@ contains
     ! Kernel rows multiplying cos and sin of each trial phase.
     subroutine phase_rows(fields, trial_m, trial_n, trial_parity, &
             field_periods, h1_values, h1_derivatives, l2_values, cosine_rows, &
-            sine_rows)
+            sine_rows, normal_eta)
+        real(dp), optional, intent(in) :: normal_eta(:, :)
         real(dp), intent(in) :: fields(:), h1_values(:, :)
         real(dp), intent(in) :: h1_derivatives(:, :), l2_values(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
@@ -160,27 +173,28 @@ contains
                 call add_trial_columns(cosine_rows, trial, trial_m(trial), &
                     toroidal_wave, h1_values(:, trial), &
                     h1_derivatives(:, trial), l2_values(:, trial), &
-                    1.0_dp, 0.0_dp, 1.0_dp, coefficients)
+                    1.0_dp, 0.0_dp, 1.0_dp, coefficients, normal_eta)
                 call add_trial_columns(sine_rows, trial, trial_m(trial), &
                     toroidal_wave, h1_values(:, trial), &
                     h1_derivatives(:, trial), l2_values(:, trial), &
-                    0.0_dp, -1.0_dp, 0.0_dp, coefficients)
+                    0.0_dp, -1.0_dp, 0.0_dp, coefficients, normal_eta)
             else
                 call add_trial_columns(cosine_rows, trial, trial_m(trial), &
                     toroidal_wave, h1_values(:, trial), &
                     h1_derivatives(:, trial), l2_values(:, trial), &
-                    0.0_dp, 1.0_dp, 0.0_dp, coefficients)
+                    0.0_dp, 1.0_dp, 0.0_dp, coefficients, normal_eta)
                 call add_trial_columns(sine_rows, trial, trial_m(trial), &
                     toroidal_wave, h1_values(:, trial), &
                     h1_derivatives(:, trial), l2_values(:, trial), &
-                    1.0_dp, 0.0_dp, -1.0_dp, coefficients)
+                    1.0_dp, 0.0_dp, -1.0_dp, coefficients, normal_eta)
             end if
         end do
     end subroutine phase_rows
 
     subroutine accumulate_direct(fields, drive, trial_m, trial_n, &
             trial_parity, field_periods, h1_values, h1_derivatives, &
-            l2_values, theta, zeta, weight, full, terms)
+            l2_values, theta, zeta, weight, full, terms, normal_eta)
+        real(dp), optional, intent(in) :: normal_eta(:, :)
         real(dp), intent(in) :: fields(:), drive, h1_values(:, :)
         real(dp), intent(in) :: h1_derivatives(:, :), l2_values(:, :)
         integer, intent(in) :: trial_m(:), trial_n(:), trial_parity(:)
@@ -204,13 +218,15 @@ contains
             call add_trial_columns(rows, trial, trial_m(trial), &
                 toroidal_wave, h1_values(:, trial), &
                 h1_derivatives(:, trial), l2_values(:, trial), value, &
-                dvalue, dother, coefficients)
+                dvalue, dother, coefficients, normal_eta)
         end do
         call rank_update(rows, drive, weight * abs(fields(7)), full, terms)
     end subroutine accumulate_direct
 
     subroutine add_trial_columns(rows, trial, m, toroidal_wave, h1_values, &
-            h1_derivatives, l2_values, value, dvalue, dother, coefficients)
+            h1_derivatives, l2_values, value, dvalue, dother, coefficients, &
+            normal_eta)
+        real(dp), optional, intent(in) :: normal_eta(:, :)
         real(dp), intent(inout) :: rows(:, :)
         integer, intent(in) :: trial, m
         real(dp), intent(in) :: toroidal_wave, h1_values(:)
@@ -227,6 +243,10 @@ contains
             inputs(3) = two_pi * real(m, dp) * dvalue * h1_values(basis)
             inputs(4) = -two_pi * toroidal_wave * dvalue * h1_values(basis)
             inputs(5:6) = 0.0_dp
+            if (present(normal_eta)) then
+                inputs(5) = two_pi * real(m, dp) * dother * normal_eta(basis, trial)
+                inputs(6) = -two_pi * toroidal_wave * dother * normal_eta(basis, trial)
+            end if
             rows(1:3, column) = matmul(coefficients, inputs)
             rows(4, column) = value * h1_values(basis)
         end do

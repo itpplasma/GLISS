@@ -51,6 +51,19 @@ def test_native_solovev_n1_stability_matches_dcon(
     assert 0.0 < result.inertia_zero_floor < abs(result.lowest_eigenvalue)
 
 
+@pytest.mark.parametrize(("name", "unstable"), [("1.035", True), ("1.045", False)])
+def test_native_solovev_regular_quotient_degree_one(
+    native_library, test_data, name, unstable
+):
+    with gliss.Equilibrium(test_data / f"solovev_q{name}.nc") as equilibrium:
+        result = gliss.solve_axisymmetric(
+            equilibrium, poloidal_max=6, degree=1, radial_cells=64
+        )
+    assert result.negative_count == int(unstable)
+    assert (result.lowest_eigenvalue < 0.0) == unstable
+    assert result.certificate < abs(result.lowest_eigenvalue)
+
+
 def test_native_rayleigh_gradient_matches_finite_differences(
     native_library, test_data
 ):

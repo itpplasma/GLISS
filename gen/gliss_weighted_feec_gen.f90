@@ -30,8 +30,12 @@ program gliss_weighted_feec_gen
     type(expr_t) :: log_jet(3), log_derived(3)
     type(expr_t) :: from_scale(2), residual, lhs, rhs, b, c, q, left, h, t
     type(expr_t) :: affine, coefficient, flux, pi, m, canonical
+    type(expr_t) :: u, du, e, r, beta, physical_weight, normal, normal_s
+    type(expr_t) :: eta, lift, lift_args(5), lift_seed(5), lift_jvp
+    type(expr_t) :: lift_vjp(5), lift_bar, radial, tangent, sigma_value
+    type(expr_t) :: y, dy, ddy, lambda, quotient_r, quotient_s, quotient_ss
     type(kernel_spec_t) :: spec
-    type(str_t) :: sources(6)
+    type(str_t) :: sources(9)
     character(len=1024) :: directory, evidence
     character(len=40) :: revision
     character(len=80) :: label
@@ -172,6 +176,74 @@ program gliss_weighted_feec_gen
     call prove('zero-curl physical eta cancellation', &
         jet(2) + 2*pi*m*(-flux*jet(2)/(2*pi*m))/flux)
 
+    ! Smooth Cartesian quotients: x=s^(m/2) U and
+    ! eta=s^(m/2) E-sigma*T*x/(4*pi*s), for m>0. The normal
+    ! quotient is C0 Pp, E is broken P(p-1). No trace is removed
+    ! at s=0: the physical weight and lift impose the axis conditions.
+    u = sym(arena, 'quotient')
+    du = sym(arena, 'quotient_derivative')
+    e = sym(arena, 'companion')
+    r = sym(arena, 'radius')
+    beta = m/2
+    physical_weight = exp(beta*log(x(1)))
+    normal = physical_weight*u
+    normal_s = physical_weight*(du + beta*u/x(1))
+    call prove('regular quotient total derivative', &
+        diff(normal, x(1)) + diff(normal, u)*du - normal_s)
+    do i = -1, 1, 2
+        sigma_value = rat(arena, int(i, int64), 1_int64)
+        eta = physical_weight*e - sigma_value*flux*normal/(4*pi*x(1))
+        call prove('regular quotient divergence parity', &
+            normal_s + sigma_value*2*pi*m*eta/flux &
+            - physical_weight*(du + sigma_value*2*pi*m*e/flux))
+        ! Transverse helicities have radial orders r^(m-1), r^(m+1).
+        ! Here physical_weight=r^m and s=r^2; factoring the common
+        ! weight makes this a rational identity, independent of m.
+        radial = physical_weight*u/(2*r)
+        tangent = -sigma_value*physical_weight*u/(2*r) &
+            + 2*pi*r*physical_weight*e/flux
+        call prove('regular high helicity parity', radial + sigma_value*tangent &
+            - sigma_value*2*pi*r*physical_weight*e/flux)
+        call prove('regular low helicity parity', radial - sigma_value*tangent &
+            - physical_weight*u/r + sigma_value*2*pi*r*physical_weight*e/flux)
+    end do
+    call prove('axisymmetric normal quotient derivative', &
+        diff(x(1)*u, x(1)) + diff(x(1)*u, u)*du - (u + x(1)*du))
+
+    ! Independently derive the exact m=0 cylinder differential operator.
+    ! U(s)=y(r)/r, s=r^2: the radial normal space x=s*U gives
+    ! s U_ss+2 U_s+lambda U/4=0 iff y solves Bessel's order-one ODE.
+    y = sym(arena, 'bessel_value')
+    dy = sym(arena, 'bessel_first')
+    ddy = sym(arena, 'bessel_second')
+    lambda = sym(arena, 'eigenvalue')
+    quotient_r = y/r
+    quotient_s = (diff(quotient_r, r) + diff(quotient_r, y)*dy)/(2*r)
+    quotient_ss = (diff(quotient_s, r) + diff(quotient_s, y)*dy &
+        + diff(quotient_s, dy)*ddy)/(2*r)
+    call prove('cylinder Bessel quotient operator', &
+        r**2*quotient_ss + 2*quotient_s + lambda*quotient_r/4 &
+        - (r**2*ddy + r*dy + (lambda*r**2 - 1)*y)/(4*r**3))
+
+    lift_args = [x(1), flux, sym(arena, 'phase_sign'), &
+        sym(arena, 'normal_value'), pi]
+    lift = -lift_args(3)*flux*lift_args(4)/(4*pi*x(1))
+    lift_jvp = 0*lift
+    do i = 1, size(lift_args)
+        write (label, '(a,i0)') 'lift_direction_', i
+        lift_seed(i) = sym(arena, trim(label))
+        lift_jvp = lift_jvp + diff(lift, lift_args(i))*lift_seed(i)
+    end do
+    lift_bar = sym(arena, 'lift_cotangent')
+    do i = 1, size(lift_args)
+        lift_vjp(i) = diff(lift, lift_args(i))*lift_bar
+    end do
+    lhs = 0*lift
+    do i = 1, size(lift_args)
+        lhs = lhs + lift_vjp(i)*lift_seed(i)
+    end do
+    call prove('regular lift JVP/VJP duality', lift_bar*lift_jvp - lhs)
+
     call configure(spec, 'generated_weighted_feec_scale', .false., .false.)
     spec%args = [str('coordinate'), str('alpha')]
     spec%outputs = [str('scale')]
@@ -220,6 +292,27 @@ program gliss_weighted_feec_gen
     end do
     sources(6) = checked_emission([jet, reverse], spec)
 
+    call configure(spec, 'generated_regular_eta_lift', .false., .false.)
+    spec%args = [str('coordinate'), str('flux_t_slope'), str('phase_sign'), &
+        str('normal_value'), str('pi')]
+    spec%outputs = [str('eta_lift')]
+    sources(7) = checked_emission([lift], spec)
+
+    call configure(spec, 'generated_regular_eta_lift_jvp', .false., .false.)
+    spec%args = [str('coordinate'), str('flux_t_slope'), str('phase_sign'), &
+        str('normal_value'), str('pi'), str('lift_direction_1'), &
+        str('lift_direction_2'), str('lift_direction_3'), &
+        str('lift_direction_4'), str('lift_direction_5')]
+    spec%outputs = [str('eta_lift'), str('tangent')]
+    sources(8) = checked_emission([lift, lift_jvp], spec)
+
+    call configure(spec, 'generated_regular_eta_lift_vjp', .false., .false.)
+    spec%args = [str('coordinate'), str('flux_t_slope'), str('phase_sign'), &
+        str('normal_value'), str('pi'), str('lift_cotangent')]
+    spec%outputs = [str('eta_lift'), str('gradient_1'), str('gradient_2'), &
+        str('gradient_3'), str('gradient_4'), str('gradient_5')]
+    sources(9) = checked_emission([lift, lift_vjp], spec)
+
     if (checks%by_probe /= 0) error stop 'probe evidence is forbidden'
     if (checks%proved /= checks%total) error stop 'unproved weighted FEEC identity'
     if (len_trim(evidence) > 0) then
@@ -237,6 +330,7 @@ program gliss_weighted_feec_gen
     do i = 1, 3
         write (primal_unit, '(a)') chars(sources(i))
     end do
+    write (primal_unit, '(a)') chars(sources(7))
     write (primal_unit, '(a)') '! End of generated weighted FEEC primal leaves.'
     close (primal_unit)
     open (newunit=unit, file=trim(directory)//'/gliss_weighted_feec_generated.f90', &
@@ -256,9 +350,13 @@ program gliss_weighted_feec_gen
     write (unit, '(a)') '    public :: generated_weighted_feec_jet'
     write (unit, '(a)') &
         '    public :: generated_weighted_feec_jvp, generated_weighted_feec_vjp'
+    write (unit, '(a)') '    public :: generated_regular_eta_lift'
+    write (unit, '(a)') '    public :: generated_regular_eta_lift_jvp'
+    write (unit, '(a)') '    public :: generated_regular_eta_lift_vjp'
     write (unit, '(a)') 'contains'
     write (unit, '(a)') "    include 'gliss_weighted_feec_primal.inc'"
     do i = 4, size(sources)
+        if (i == 7) cycle
         write (unit, '(a)') chars(sources(i))
     end do
     write (unit, '(a)') 'end module gliss_weighted_feec_generated'

@@ -499,6 +499,10 @@ if(BUILD_TESTING)
     target_link_libraries(test_radial_feec_complex PRIVATE gliss)
     add_test(NAME radial_feec_complex COMMAND test_radial_feec_complex)
 
+    add_executable(test_regular_quotient_feec test/test_regular_quotient_feec.f90)
+    target_link_libraries(test_regular_quotient_feec PRIVATE gliss)
+    add_test(NAME regular_quotient_feec COMMAND test_regular_quotient_feec)
+
     add_executable(test_weighted_feec_compatibility
         test/test_weighted_feec_compatibility.f90)
     target_link_libraries(test_weighted_feec_compatibility PRIVATE gliss)
