@@ -47,6 +47,10 @@ storage directly. External vector energies, seeded subspaces and radial profiles
 use bounded dense matrices because they retain decomposed potential terms.
 The conservative input limit is 2048 unknowns; larger diagnostic requests fail
 before matrix assembly.</p>
+<p>The diagnostic retains the legacy weighted coefficient space. Physical
+marginality and axisymmetric spectrum helpers use the
+regular-quotient space (<code class="docutils literal notranslate"><span class="pre">benchmarks/feec/regular_quotient.md</span></code> in the repository).
+Their coefficient vectors require an explicit conversion before use here.</p>
 <section id="coefficients-and-axis-regularity">
 <h2>Coefficients and axis regularity<a class="headerlink" href="#coefficients-and-axis-regularity" title="Link to this heading">¶</a></h2>
 <p>For each active Fourier trial, normal coefficients use the retained H1 basis
