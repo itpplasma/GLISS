@@ -38,7 +38,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran cmake ninja-build libopenblas-dev \
-            libnetcdf-dev libamd2 libsuitesparse-dev pkg-config
+            libnetcdf-dev libsuitesparse-dev pkg-config
       - name: Configure native sparse consumer
         run: |
           cmake -S . -B build -G Ninja -DGLISS_ENABLE_FORTSPARSE=ON \
