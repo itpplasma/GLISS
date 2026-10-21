@@ -63,8 +63,10 @@ contains
         ! Compress the two-component physical input order (gamma is omitted).
         do j=1,count
             inputs27=a(j,1:27); direction27=a(j,28:54)
-            a(j,1:20)=[inputs27(:14),inputs27(16:21)]
-            a(j,21:40)=[direction27(:14),direction27(16:21)]
+            a(j,1:14)=inputs27(:14)
+            a(j,15:20)=inputs27(16:21)
+            a(j,21:34)=direction27(:14)
+            a(j,35:40)=direction27(16:21)
             a(j,41)=1
         end do
         call two_component_energy_batch(count,a(:,:41),y(:,:22))
