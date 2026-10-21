@@ -10,6 +10,8 @@ module compatible_problem_assembly_support
     integer, parameter, public :: compatible_support_allocation = -2
 
     public :: angular_grid_aliases
+    public :: physical_axis_powers
+    public :: apply_regular_normal_lift
     public :: apply_stored_power
     public :: apply_tangential_axis_weight
     public :: build_active_indices
@@ -31,6 +33,54 @@ module compatible_problem_assembly_support
 contains
 
     include 'generated/gliss_weighted_feec_primal.inc'
+
+    pure logical function physical_axis_powers(mode_m, stored_power) result(physical)
+        integer, intent(in) :: mode_m(:)
+        real(dp), intent(in) :: stored_power(:)
+        real(dp) :: expected
+        integer :: trial
+
+        physical = .false.
+        if (size(mode_m) /= size(stored_power)) return
+        do trial = 1, size(mode_m)
+            if (mode_m(trial) < 0) return
+            expected = 0.0_dp
+            if (mode_m(trial) > 0) expected = 1.0_dp - 0.5_dp * mode_m(trial)
+            if (stored_power(trial) /= expected) return
+        end do
+        physical = .true.
+    end function physical_axis_powers
+
+    subroutine apply_regular_normal_lift(coordinate, flux_slope, mode_m, parity, &
+            normal, lift, info)
+        real(dp), intent(in) :: coordinate, flux_slope, normal(:, :)
+        integer, intent(in) :: mode_m(:), parity(:)
+        real(dp), intent(out) :: lift(:, :)
+        integer, intent(out) :: info
+        real(dp) :: sigma
+        integer :: basis, trial
+
+        info = compatible_support_invalid
+        if (coordinate <= 0.0_dp) return
+        if (.not. ieee_is_finite(flux_slope)) return
+        if (size(mode_m) /= size(normal, 2)) return
+        if (size(parity) /= size(mode_m)) return
+        if (any(mode_m < 0)) return
+        if (any(parity < 1) .or. any(parity > 2)) return
+        if (any(shape(lift) /= shape(normal))) return
+        lift = 0.0_dp
+        do trial = 1, size(mode_m)
+            if (mode_m(trial) == 0) cycle
+            sigma = 1.0_dp
+            if (parity(trial) == 2) sigma = -1.0_dp
+            do basis = 1, size(normal, 1)
+                call generated_regular_eta_lift(coordinate, flux_slope, sigma, &
+                    normal(basis, trial), acos(-1.0_dp), lift(basis, trial))
+            end do
+        end do
+        if (.not. all(ieee_is_finite(lift))) return
+        info = compatible_support_ok
+    end subroutine apply_regular_normal_lift
 
     pure function angular_grid_aliases(equilibrium, mode_m, mode_n, n_theta, &
             n_zeta) result(aliases)

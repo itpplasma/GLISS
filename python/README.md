@@ -270,12 +270,16 @@ operator. It uses normalized toroidal flux `s`, a fixed plasma boundary at
 the regular physical behavior `xi^s ~ s^(m/2)` at the magnetic axis. Fourier
 phases use `2*pi*(m*theta-n*zeta)`. Angular quadrature is fixed at 64 by 8.
 `degree` selects the compatible radial FEEC degree from 1 through 4 and
-defaults to 2.
+defaults to 2. For this physical marginality path, degree describes the
+smooth quotient U in `xi^s=s^(m/2) U` (and `xi^s=s U` for m=0).
+The tangential component includes its Cartesian axis lift; see the
+[space definition](../benchmarks/feec/regular_quotient.md). The legacy
+coefficient representation has a different degree convention.
 
-The eigenvalue and certificate use the native normalization of this
-two-component comparison operator. They are not an SI `omega^2` or a growth
-rate. Use their sign, convergence under radial and Fourier refinement, and a
-matched normalization for cross-code comparisons. The residual is the
+The eigenvalue and certificate use unit physical perpendicular inertia,
+with eigenvalue units of `s^-2`. A full compressible growth rate requires the
+compressible problem. Use matched normalization and converged radial and
+Fourier spaces for cross-code comparisons. The residual is the
 `M^-1`-norm residual `||K x - lambda M x||_(M^-1) / ||x||_M`, which has the
 units of the eigenvalue and bounds its distance to the discrete spectrum; the
 inertia count is dimensionless.
@@ -328,9 +332,10 @@ omega^2 in s^-2 for perpendicular inertia only; it is not the physical growth
 rate of the compressible problem. The plain coefficient norm of `(xi^s, eta)`
 used before is unbounded for regular |m|=1 displacements, whose `eta` grows
 like `s^(-1/2)`, and made eigenvalue convergence depend on the axis
-quadrature. The trial space ties the leading |m|=1 coefficients of `xi^s`
-and `eta` as a smooth Cartesian displacement requires, and the axis element
-is integrated in `sqrt(s)`. Matrix inertia and the zero crossing are independent of the
+quadrature. The regular-quotient trial space includes the leading-axis relation between
+`xi^s` and `eta` in every normal basis column; it is integrated in `sqrt(s)`
+on the axis element. Degree describes the smooth normal quotient, as in the
+[axisymmetric space](../benchmarks/feec/regular_quotient.md). Matrix inertia and the zero crossing are independent of the
 chosen positive norm. A finite numerical eigenvalue is comparable to CAS3D
 only when the equilibrium, Fourier table, radial space, boundary condition,
 and normalization are matched. `degree` selects FEEC degree 1 through 4 and

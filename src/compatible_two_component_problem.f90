@@ -14,7 +14,8 @@ module compatible_two_component_problem
     use compatible_operator_trace_types, only: build_trace_radial_mass, &
         compatible_cell_trace_t, compatible_radial_point_trace_t
     use compatible_problem_assembly_support, only: apply_stored_power, &
-        apply_tangential_axis_weight, &
+        apply_tangential_axis_weight, apply_regular_normal_lift, &
+        physical_axis_powers, &
         build_active_indices, build_problem_breaks, &
         compatible_support_allocation, compatible_support_ok, &
         mode_table_is_unique, scale_matrix, surface_preserves_parity, &
@@ -24,6 +25,7 @@ module compatible_two_component_problem
         accurate_weights, axis_quadrature_points, build_axis_quadrature, &
         build_constraint_quadrature, compatible_quadrature_ok
     use export_surface_geometry, only: build_angular_grids
+    use gliss_weighted_feec_generated, only: generated_regular_eta_lift
     use gvec_cas3d_types, only: gvec_cas3d_equilibrium_t
     use primitive_equilibrium_spline, only: fit_primitive_equilibrium, &
         primitive_equilibrium_ok, primitive_equilibrium_spline_t
@@ -53,10 +55,11 @@ module compatible_two_component_problem
     type, public :: compatible_two_component_problem_t
         real(dp), allocatable :: stiffness(:, :), mass(:, :)
         real(dp), allocatable :: stiffness_terms(:, :, :)
-        real(dp), allocatable :: eta_axis_power(:)
+        real(dp), allocatable :: eta_axis_power(:), normal_axis_power(:)
         type(variable_block_tridiagonal_t) :: sparse_stiffness, sparse_mass
         integer, allocatable :: sparse_block_index(:), sparse_local_index(:)
         type(axis_tie_t) :: axis_tie
+        logical :: regular_quotient = .false.
         logical :: axis_conforming = .false.
         integer :: axis_quadrature_points = 0
         ! Parity class 0: both parities of every mode (trials are the table
@@ -87,7 +90,10 @@ contains
 
     subroutine evaluate_compatible_two_component_vector(intervals, mode_m, &
             mode_n, stored_power, eta_stored_power, parity_class, degree, &
-            coordinates, vector, normal, eta, info, axis_tie, radial_breaks)
+            coordinates, vector, normal, eta, info, axis_tie, radial_breaks, &
+            regular_quotient, flux_slope)
+        logical, optional, intent(in) :: regular_quotient
+        real(dp), optional, intent(in) :: flux_slope(:)
         integer, intent(in) :: intervals, mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:), eta_stored_power(:)
         integer, intent(in) :: parity_class, degree
@@ -105,8 +111,19 @@ contains
         integer, allocatable :: normal_rank(:), parity(:)
         integer :: allocation_status, basis, eta_count, local_info
         integer :: normal_count, point, trial, vector_index
+        logical :: quotient_space
+        real(dp) :: lift_value, sigma
+        real(dp), allocatable :: normal_power(:), eta_power(:)
 
+        quotient_space = .false.
+        if (present(regular_quotient)) quotient_space = regular_quotient
         info = compatible_problem_invalid
+        if (quotient_space) then
+            if (.not. present(flux_slope)) return
+            if (size(flux_slope) /= size(coordinates)) return
+            if (.not. all(ieee_is_finite(flux_slope))) return
+            if (.not. physical_axis_powers(mode_m, stored_power)) return
+        end if
         if (intervals < 1 .or. size(mode_m) < 1) return
         if (size(mode_n) /= size(mode_m)) return
         if (size(stored_power) /= size(mode_m)) return
@@ -114,6 +131,18 @@ contains
         if (parity_class < 1 .or. parity_class > 2) return
         if (degree < 1 .or. degree > 4) return
         if (size(coordinates) < 1) return
+        allocate (normal_power(size(stored_power)), eta_power(size(eta_stored_power)), &
+            stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
+        normal_power = stored_power
+        eta_power = eta_stored_power
+        if (quotient_space) then
+            normal_power = stored_power - 1.0_dp
+            where (mode_m > 0) eta_power = stored_power - 1.0_dp
+        end if
         do trial = 1, size(mode_m)
             if (.not. ieee_is_finite(stored_power(trial))) return
             if (.not. ieee_is_finite(eta_stored_power(trial))) return
@@ -136,7 +165,7 @@ contains
         call build_problem_breaks(intervals, breaks, local_info, &
             radial_cells=intervals, radial_breaks=radial_breaks)
         if (local_info /= compatible_support_ok) return
-        call build_radial_feec_complex(breaks, degree, .true., .true., &
+        call build_radial_feec_complex(breaks, degree, .not. quotient_space, .true., &
             complex, local_info)
         if (local_info /= radial_feec_ok) return
         parity = parity_class
@@ -205,10 +234,10 @@ contains
             call evaluate_radial_feec_complex(complex, coordinates(point), &
                 h1, dh1, l2, local_info)
             if (local_info /= radial_feec_ok) return
-            call apply_stored_power(coordinates(point), stored_power, h1, &
+            call apply_stored_power(coordinates(point), normal_power, h1, &
                 dh1, h1_index, h1_values, derivatives, local_info)
             if (local_info /= compatible_support_ok) return
-            call apply_tangential_axis_weight(coordinates(point), eta_stored_power, &
+            call apply_tangential_axis_weight(coordinates(point), eta_power, &
                 l2, l2_index, l2_values, local_info)
             if (local_info /= compatible_support_ok) return
             do trial = 1, size(mode_m)
@@ -228,6 +257,14 @@ contains
                             + full_vector(vector_index) * l2_values(basis, trial)
                     end do
                 end if
+                if (quotient_space .and. mode_m(trial) > 0) then
+                    sigma = 1.0_dp
+                    if (parity(trial) == 2) sigma = -1.0_dp
+                    call generated_regular_eta_lift(coordinates(point), &
+                        flux_slope(point), sigma, normal(point, trial), &
+                        acos(-1.0_dp), lift_value)
+                    eta(point, trial) = eta(point, trial) + lift_value
+                end if
             end do
         end do
         info = compatible_problem_ok
@@ -237,7 +274,12 @@ contains
             mode_n, stored_power, parity_class, degree, n_theta, n_zeta, &
             problem, info, trace_cells, trace, density_kg_m3, &
             radial_quadrature_policy, sparse_storage, axis_conforming, &
-            radial_cells, eta_stored_power, radial_breaks)
+            radial_cells, eta_stored_power, radial_breaks, &
+            regular_quotient)
+        ! Smooth Cartesian quotients; requires the physical stored-power
+        ! presets and the conforming Gauss policy. Legacy/custom spaces
+        ! remain available when absent or false.
+        logical, optional, intent(in) :: regular_quotient
         type(gvec_cas3d_equilibrium_t), intent(in) :: equilibrium
         integer, intent(in) :: mode_m(:), mode_n(:)
         real(dp), intent(in) :: stored_power(:)
@@ -269,6 +311,7 @@ contains
         integer :: unknowns
         logical :: use_sparse, conforming
 
+        if (present(regular_quotient)) problem%regular_quotient = regular_quotient
         info = compatible_problem_invalid
         quadrature_policy = compatible_quadrature_gauss
         use_sparse = .false.
@@ -281,6 +324,10 @@ contains
             quadrature_policy /= compatible_quadrature_gauss) return
         if (.not. inputs_are_valid(equilibrium, mode_m, mode_n, stored_power, &
             parity_class, degree, n_theta, n_zeta, quadrature_policy)) return
+        if (problem%regular_quotient) then
+            if (.not. conforming) return
+            if (.not. physical_axis_powers(mode_m, stored_power)) return
+        end if
         if (present(density_kg_m3)) then
             if (.not. ieee_is_finite(density_kg_m3) &
                 .or. density_kg_m3 <= 0.0_dp) return
@@ -336,8 +383,18 @@ contains
             info = compatible_problem_allocation_error
             return
         end if
-        call build_radial_feec_complex(breaks, degree, .true., .true., &
-            complex, local_info)
+        allocate (problem%normal_axis_power, source=trial_power, stat=allocation_status)
+        if (allocation_status /= 0) then
+            info = compatible_problem_allocation_error
+            return
+        end if
+        if (problem%regular_quotient) then
+            if (.not. conforming) return
+            problem%normal_axis_power = trial_power - 1.0_dp
+            where (trial_m > 0) problem%eta_axis_power = trial_power - 1.0_dp
+        end if
+        call build_radial_feec_complex(breaks, degree, &
+            .not. problem%regular_quotient, .true., complex, local_info)
         if (local_info /= radial_feec_ok) return
         call build_trial_space_topology(trial_m, trial_n, parity, topology, &
             local_info)
@@ -355,8 +412,8 @@ contains
             return
         end if
         call build_trial_axis_tie(spline, complex, trial_m, parity, &
-            trial_power, normal_rank, eta_rank, unknowns, conforming, &
-            problem%axis_tie, local_info)
+            trial_power, normal_rank, eta_rank, unknowns, &
+            conforming .and. .not. problem%regular_quotient, problem%axis_tie, local_info)
         if (local_info /= axis_regularity_ok) then
             info = compatible_problem_assembly_error
             return
@@ -605,6 +662,7 @@ contains
         real(dp), allocatable :: local_h1(:, :), local_l2(:, :)
         real(dp), allocatable :: tie_scale(:)
         integer, allocatable :: h1_index(:), l2_index(:), map(:), full_map(:)
+        real(dp), allocatable :: normal_eta(:, :)
         real(dp) :: stiffness_scale
         integer :: local_info, term, trials
 
@@ -635,8 +693,13 @@ contains
             info = compatible_problem_allocation_error
             return
         end if
-        call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
-            local_h1, local_dh1, local_info)
+        if (problem%regular_quotient) then
+            call apply_stored_power(coordinate, problem%normal_axis_power, h1, dh1, &
+                h1_index, local_h1, local_dh1, local_info)
+        else
+            call apply_stored_power(coordinate, stored_power, h1, dh1, h1_index, &
+                local_h1, local_dh1, local_info)
+        end if
         if (local_info /= compatible_support_ok) return
         call apply_tangential_axis_weight(coordinate, problem%eta_axis_power, l2, &
             l2_index, local_l2, local_info)
@@ -666,9 +729,19 @@ contains
             info = compatible_problem_allocation_error
             return
         end if
+        if (problem%regular_quotient) then
+            allocate (normal_eta(size(local_h1, 1), trials), stat=local_info)
+            if (local_info /= 0) then
+                info = compatible_problem_allocation_error
+                return
+            end if
+            call apply_regular_normal_lift(coordinate, fields(1, 1, 1), mode_m, &
+                parity, local_h1, normal_eta, local_info)
+            if (local_info /= compatible_support_ok) return
+        end if
         call assemble_compatible_transformed_surface(fields, drive, mode_m, &
             mode_n, parity, spline%field_periods, local_h1, local_dh1, &
-            local_l2, local, local_info, local_terms)
+            local_l2, local, local_info, local_terms, normal_eta)
         if (local_info /= 0) return
         if (present(density_kg_m3) .and. assemble_mass) then
             allocate (local_mass(size(local, 1), size(local, 2)), &
@@ -680,7 +753,7 @@ contains
             call assemble_compatible_perpendicular_mass_surface(fields, &
                 density_kg_m3, mode_m, mode_n, parity, spline%field_periods, &
                 local_h1, local_l2, weight, phase_assembly_transformed, &
-                local_mass, local_info)
+                local_mass, local_info, normal_eta)
             if (local_info /= 0) return
         end if
         call build_local_map(complex, topology, normal_rank, eta_rank, &
@@ -701,6 +774,7 @@ contains
             point_trace%h1 = local_h1
             point_trace%dh1 = local_dh1
             point_trace%l2 = local_l2
+            if (problem%regular_quotient) point_trace%normal_eta = normal_eta
             if (present(density_kg_m3)) then
                 point_trace%stiffness_terms = local_terms
                 call scale_tensor(point_trace%stiffness_terms, &

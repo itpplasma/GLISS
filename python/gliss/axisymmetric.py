@@ -207,7 +207,11 @@ def solve_axisymmetric(
     degree: int = 2,
     radial_cells: Optional[int] = None,
 ) -> AxisymmetricResult:
-    """Return inertia and the certified lowest axisymmetric eigenpair."""
+    """Return inertia and the certified lowest axisymmetric eigenpair.
+
+    Degree is the polynomial degree of the regular normal quotient U in
+    xi^s=s^(m/2) U, with its paired tangential lift (xi^s=s U for m=0).
+    """
 
     return _calculate(
         equilibrium,
