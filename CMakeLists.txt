@@ -34,6 +34,11 @@ if(GLISS_ENABLE_CODEGEN)
         if(kernel STREQUAL "cartesian_field")
             set(generator_source gen/generate_cartesian_field.f90)
         endif()
+        if(kernel STREQUAL "energy")
+            set(generator_source
+                gen/ideal_mhd/gen_ideal_mhd_coordinates.f90
+                gen/ideal_mhd/ideal_mhd_symbolic.f90)
+        endif()
         add_executable(gliss_${kernel}_gen ${generator_source})
         target_link_libraries(gliss_${kernel}_gen PRIVATE fortsym::fortsym)
         set(codegen_arguments
@@ -131,7 +136,7 @@ set_source_files_properties(src/generated/gliss_weighted_feec_primal.inc
 add_library(gliss
     src/gliss_sparse_backend.F90
     src/generated/gliss_cartesian_field_generated.f90
-    src/generated/gliss_energy_generated.f90
+    src/generated/ideal_mhd_energy_generated.f90
     src/generated/gliss_geometry_generated.f90
     src/generated/gliss_geometry_primal.inc
     src/generated/gliss_physical_mass_generated.f90
@@ -1040,6 +1045,9 @@ if(BUILD_TESTING)
     set_tests_properties(vacuum_torus_analytic PROPERTIES
         ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
 
+    add_executable(test_ideal_mhd_coordinates test/test_ideal_mhd_coordinates.f90)
+    target_link_libraries(test_ideal_mhd_coordinates PRIVATE gliss)
+    add_test(NAME ideal_mhd_coordinate_analytic_limits COMMAND test_ideal_mhd_coordinates)
     add_executable(test_screw_pinch_analytic_energy
         test/test_screw_pinch_analytic_energy.f90)
     target_link_libraries(test_screw_pinch_analytic_energy PRIVATE gliss)
@@ -1383,7 +1391,7 @@ if(GLISS_ENABLE_ENZYME)
             test/enzyme_physical_mass_gradient.f90)
     add_enzyme_fortran_test(enzyme_perpendicular_kinetic_gradient
         SOURCES
-            src/generated/gliss_energy_generated.f90
+            src/generated/ideal_mhd_energy_generated.f90
             src/perpendicular_kinetic_kernel.f90
             test/enzyme_perpendicular_kinetic_gradient.f90)
     add_enzyme_fortran_test(enzyme_terpsichore_reduced_mass_gradient
@@ -1408,7 +1416,7 @@ if(GLISS_ENABLE_ENZYME)
             test/enzyme_terpsichore_reduced_mass_family_gradient.f90)
     add_enzyme_fortran_test(enzyme_three_component_gradient
         SOURCES
-            src/generated/gliss_energy_generated.f90
+            src/generated/ideal_mhd_energy_generated.f90
             src/physical_constants.f90
             src/two_component_kernel.f90
             src/three_component_kernel.f90
