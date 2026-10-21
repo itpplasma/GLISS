@@ -96,23 +96,23 @@ jobs:
         run: python -m build --wheel
       - name: Install the wheel and documentation tools
         run: |
-          python -m venv /tmp/docs
-          /tmp/docs/bin/pip install dist/*.whl sphinx myst-parser pytest scipy "numpy<2" booz-xform==0.0.9
+          python -m venv "$RUNNER_TEMP/docs"
+          "$RUNNER_TEMP/docs"/bin/pip install dist/*.whl sphinx myst-parser pytest scipy "numpy<2" booz-xform==0.0.9
       - name: Run the documentation examples against the installed wheel
         run: |
-          mkdir -p /tmp/docs-tests
-          cp python/tests/conftest.py python/tests/test_docs.py /tmp/docs-tests/
-          cd /tmp/docs-tests
-          GLISS_LIB="$(/tmp/docs/bin/python -c \
+          mkdir -p "$RUNNER_TEMP/docs-tests"
+          cp python/tests/conftest.py python/tests/test_docs.py "$RUNNER_TEMP/docs-tests"/
+          cd "$RUNNER_TEMP/docs-tests"
+          GLISS_LIB="$("$RUNNER_TEMP/docs"/bin/python -c \
             'import gliss; print(gliss._load_library()._name)')"
           export GLISS_LIB
           GLISS_DOCS="$GITHUB_WORKSPACE/docs" \
             GLISS_TEST_DATA="$GITHUB_WORKSPACE/test/data" \
-            /tmp/docs/bin/python -m pytest -q -p no:cacheprovider .
+            "$RUNNER_TEMP/docs"/bin/python -m pytest -q -p no:cacheprovider .
       - name: Select the site version
         id: version
         run: |
-          installed="$(/tmp/docs/bin/python -c 'import gliss; print(gliss.__version__)')"
+          installed="$("$RUNNER_TEMP/docs"/bin/python -c 'import gliss; print(gliss.__version__)')"
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             [ "$GITHUB_REF_NAME" = "v$installed" ] || {
               echo "tag $GITHUB_REF_NAME does not match package $installed"; exit 1; }
@@ -123,8 +123,8 @@ jobs:
       - name: Build HTML and check links from the installed package
         run: |
           cd /tmp
-          /tmp/docs/bin/sphinx-build -W -b html "$GITHUB_WORKSPACE/docs" /tmp/html
-          /tmp/docs/bin/sphinx-build -W -b linkcheck "$GITHUB_WORKSPACE/docs" \
+          "$RUNNER_TEMP/docs"/bin/sphinx-build -W -b html "$GITHUB_WORKSPACE/docs" /tmp/html
+          "$RUNNER_TEMP/docs"/bin/sphinx-build -W -b linkcheck "$GITHUB_WORKSPACE/docs" \
             /tmp/linkcheck
       - name: Collect the tag-built release guides
         uses: actions/download-artifact@v4
