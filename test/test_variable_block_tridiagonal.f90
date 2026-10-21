@@ -16,6 +16,9 @@ program test_variable_block_tridiagonal
     integer, allocatable :: dynamic_widths(:), permutation(:)
     integer :: expected_permutation(22), info
 
+    vector = 0.0_dp
+    call apply_variable_block_tridiagonal(blocks, vector, image, info)
+    call require(info == variable_block_invalid, "uninitialized blocks accepted")
     call build_dense_fixture(dense)
     call pack_variable_blocks(dense, widths, blocks, info)
     call require(info == variable_block_ok, "valid variable blocks rejected")

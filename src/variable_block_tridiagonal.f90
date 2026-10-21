@@ -474,7 +474,7 @@ contains
         real(dp), contiguous, intent(out) :: image(:)
         integer, intent(out) :: info
         integer :: block, first, last, next_first
-        integer :: offsets(size(blocks%widths) + 1)
+        integer :: offsets(size(vector) + 1)
 
         call validate_variable_blocks(blocks, info)
         if (info /= variable_block_ok) return
