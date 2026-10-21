@@ -25,6 +25,11 @@ env:
   OPENBLAS_NUM_THREADS: "1"
   CCACHE_DIR: ${{ github.workspace }}/.codegen-ccache
 
+# Only PR runs share a group; pending push and merge-group runs stay independent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   reproduce:
     runs-on: ubuntu-24.04
