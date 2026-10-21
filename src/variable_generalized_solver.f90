@@ -1,10 +1,12 @@
 module variable_generalized_solver
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use gliss_sparse_backend, only: gliss_sparse_enabled
     use fixed_boundary_solver_controls, only: fixed_boundary_solver_controls_t
     use stable_reduction, only: stable_dot_product, stable_norm2
     use variable_block_tridiagonal, only: &
         apply_variable_block_tridiagonal, factorize_variable_shifted, &
+        factorize_sparse_blocks, &
         solve_variable_factored, validate_variable_blocks, &
         variable_block_factor_t, variable_block_ok, &
         variable_block_singular, variable_block_to_dense, &
@@ -154,7 +156,7 @@ contains
     subroutine update_variable_iterate(stiffness, mass, factor, vector, &
             iterate, eigenvalue, residual, resolution, info)
         type(variable_block_tridiagonal_t), intent(in) :: stiffness, mass
-        type(variable_block_factor_t), intent(in) :: factor
+        type(variable_block_factor_t), intent(inout) :: factor
         real(dp), contiguous, intent(inout) :: vector(:), iterate(:)
         real(dp), intent(out) :: eigenvalue, residual, resolution
         integer, intent(out) :: info
@@ -213,6 +215,15 @@ contains
             if (info /= variable_generalized_ok) return
         end if
         call form_generalized_shift(stiffness, mass, shift, shifted)
+        if (gliss_sparse_enabled) then
+            call factorize_sparse_blocks(shifted, factor, info)
+            if (info /= variable_block_ok) then
+                info = variable_generalized_invalid
+                return
+            end if
+            info = variable_generalized_ok
+            return
+        end if
         call factorize_variable_shifted(shifted, 0.0_dp, factor, info)
         if (info == variable_block_singular) then
             call retry_global_pivoting(shifted, factor, info)
@@ -402,7 +413,7 @@ contains
         real(dp), intent(in) :: eigenvalue
         real(dp), intent(out) :: bound
         integer, intent(out) :: info
-        type(variable_block_factor_t), intent(in), optional, target :: &
+        type(variable_block_factor_t), intent(inout), optional, target :: &
             mass_factor
         type(variable_block_factor_t), target :: local_factor
         type(variable_block_factor_t), pointer :: factor
