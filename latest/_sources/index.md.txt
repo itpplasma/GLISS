@@ -15,6 +15,7 @@ conventions
 angular_grids
 free_boundary
 sparse_stability
+batch-kernels
 api
 ```
 
