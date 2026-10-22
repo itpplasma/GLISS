@@ -3,9 +3,9 @@
 # Solov'ev family at q0=1.5, from public sources: GPEC DCON (VACUUM ishape=6)
 # and GLISS on a GVEC export of the same analytic equilibrium.
 # usage: benchmarks/solovev/free_boundary/run.sh OUTPUT_DIRECTORY
-# Environment: GVEC_VENV (OUTPUT/venv), GLISS_LIB (bundled library),
+# Environment: GLISS_EXPORT/GLISS_PARAMETER (qualified fixture), GLISS_LIB,
 # THREADS (4), MMAX (8), EDGE ("128 128"). Needs what
-# benchmarks/solovev/dcon/run.sh and benchmarks/solovev/public/run.sh need.
+# benchmarks/solovev/dcon/run.sh needs, plus NumPy, SciPy and netCDF4.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
@@ -14,6 +14,14 @@ q0=1.5
 threads=${THREADS:-4}; mmax=${MMAX:-8}
 walls_dcon=(0.10 0.12 0.14 0.15 0.16 0.17 0.18 0.20)
 edge=${EDGE:-128 128}
+
+# GLISS: use the qualified native true-edge export of the same public family.
+# Overrides must supply a matching generator parameter file. Admission is a
+# hard gate; extrapolated half-grid flux slopes cannot qualify this benchmark.
+equilibrium=${GLISS_EXPORT:-$repo/test/data/solovev_q1.5_edge.nc}
+parameter=${GLISS_PARAMETER:-$repo/test/data/solovev_q1.5_edge.parameter.toml}
+python3 "$here/qualify_export.py" "$parameter" "$equilibrium" \
+    --require-explicit-boundary > "$out/qualification.json"
 
 # DCON: build GPEC once through the fixed-boundary script, then rerun the
 # regression example with the vacuum on and a conformal wall at distance
@@ -37,27 +45,14 @@ for a in "${walls_dcon[@]}" 20; do
     echo "$a,$energy" >> "$out/dcon_walls.csv"
 done
 
-# GLISS: the GVEC export of the public Solov'ev pipeline (48 surfaces, M=16).
-venv=${GVEC_VENV:-$out/venv}
-if [ ! -x "$venv/bin/pygvec" ]; then
-    python3 -m venv "$venv"
-    "$venv/bin/pip" install -q numpy scipy netCDF4 xarray "gvec==1.5.0"
-    package=$("$venv/bin/python" -c 'import gvec, os; print(os.path.dirname(gvec.__file__))')
-    patch -d "$package" -p3 < "$repo/benchmarks/solovev/public/gvec-1.5.0-cas3d.patch"
-fi
-equilibrium=$out/gvec/q$q0
-"$venv/bin/python" "$repo/benchmarks/solovev/public/make_gvec_input.py" "$q0" "$equilibrium"
-(cd "$equilibrium" && OMP_NUM_THREADS=$threads "$venv/bin/pygvec" run parameter.toml > gvec.log 2>&1)
-(cd "$equilibrium" && OMP_NUM_THREADS=$threads "$venv/bin/pygvec" to-cas3d --ns 48 \
-    --MN_out 16 0 --winding -1 -o export.nc > export.log 2>&1)
 # Bisect the critical wall between a stable 0.12 and an unstable 0.20.
-OMP_NUM_THREADS=$threads python3 "$here/scan.py" "$equilibrium/export.nc" \
-    --bisect 0.12 0.20 --poloidal-max "$mmax" --angular 128 8 --edge $edge \
+OMP_NUM_THREADS=$threads python3 "$here/scan.py" "$equilibrium" \
+    --bisect 0.12 0.20 --poloidal-max "$mmax" --angular 256 8 --edge $edge \
     > "$out/gliss_walls.csv"
 {
     git -C "$repo" rev-parse HEAD
     cat "$out/dcon/provenance.txt"
-    "$venv/bin/pip" show gvec | grep -i '^version'
+    sha256sum "$equilibrium" "$parameter"
     sha256sum "$here"/*.py "$here"/run.sh
 } > "$out/provenance.txt"
 cat "$out/dcon_walls.csv" "$out/gliss_walls.csv"

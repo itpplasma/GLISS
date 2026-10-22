@@ -186,6 +186,16 @@ jobs:
             cmake --build build-symbolic_derivative --parallel 2
             ctest --test-dir build-symbolic_derivative --output-on-failure
           '
+      - name: Check exact free-boundary identities
+        run: |
+          nix develop --impure --file .codegen-shell.nix --command bash -euo pipefail -c '
+            export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/fortsym-prefix/lib:$GLISS_CODEGEN_RUNTIME_LIBRARIES"
+            cmake -S gen/free_boundary -B build-free-boundary-proof -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release -DCMAKE_Fortran_COMPILER=gfortran \
+              -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/fortsym-prefix"
+            cmake --build build-free-boundary-proof --parallel 2
+            ctest --test-dir build-free-boundary-proof --output-on-failure
+          '
       - name: Check reference-current response identities
         run: |
           nix develop --impure --file .codegen-shell.nix --command bash -euo pipefail -c '
@@ -206,6 +216,8 @@ jobs:
             codegen-runtime-provenance.txt
             gen/fortsym-revision.txt
             fortsym-src/flake.lock
+            build-free-boundary-proof/identities.json
+            build-free-boundary-proof/Testing/Temporary/LastTest.log
             build-codegen/generated-kernels/
             build-codegen/Testing/Temporary/LastTest.log
             build-symbolic_interpolation/strict-identities.json
