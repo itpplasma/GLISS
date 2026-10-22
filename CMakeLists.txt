@@ -106,7 +106,7 @@ if(GLISS_ENABLE_FORTSPARSE)
     FetchContent_MakeAvailable(fortnum)
     FetchContent_Declare(fortsparse
         GIT_REPOSITORY https://github.com/lazy-fortran/fortsparse.git
-        GIT_TAG 4f716f68152a1db44e4b7c58521b52535d6585fa)
+        GIT_TAG 6d17059c7741b280d04998f479a160c341506629)
     FetchContent_MakeAvailable(fortsparse)
 endif()
 
