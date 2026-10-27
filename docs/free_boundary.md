@@ -60,9 +60,9 @@ and extrapolating the interior half-grid flux spline, rather than an error in
 the vacuum solve. Resampling the independent analytic flux on the same half-grid still gives
 3.1805e-7; the remaining stored-versus-analytic spline difference is 1.47e-9.
 Thus interpolation accounts for over 99% of this archived error. The native
-legacy call is `primitive_boundary_geometry.f90:50`, with the derivative
+legacy call is `primitive_boundary_geometry.f90:66`, with the derivative
 formula at `radial_cubic_spline.f90:255`; schema 1 uses declared slopes at
-`primitive_boundary_geometry.f90:71`. The schema-1 native-edge fixture reduces it to 1.20e-14
+`primitive_boundary_geometry.f90:88`. The schema-1 native-edge fixture reduces it to 1.20e-14
 against the unchanged 1e-12 limit. The benchmark runner now requires this
 explicit-edge qualification and uses an admitted 256 x 8 volume grid. The
 [FortSym proof](../gen/free_boundary/README.md) checks the edge-flux chain rule
