@@ -12,31 +12,51 @@ cmake -S . -B build -G Ninja && cmake --build build
 benchmarks/solovev/free_boundary/run.sh /tmp/solovev_free
 ```
 
-`run.sh` builds GPEC through `benchmarks/solovev/dcon/run.sh`, reruns its
-Solov'ev regression example with `vac_flag=t` and a VACUUM `ishape=6`
-conformal wall at `a` plasma half-widths for a list of `a` (`a=20` is no
-wall), and records DCON's total energy. It then solves the same analytic
-equilibrium with GVEC 1.5.0 (48 surfaces, export M=16, as in
-`benchmarks/solovev/public`) and bisects the GLISS critical wall with
-`scan.py --bisect 0.12 0.20`: parity class 1, modes (0, 1) and m=1..MMAX
-with n=+-1, FEEC degree 2, angular quadrature 128 x 8, zero floor 1e-8, and
-the conformal wall of `gliss.VacuumModel` at `a` times the half-width
-(R_max - R_min)/2 = 0.3526573415939913 m along the outward edge normal.
-The default half-width is derived from the public GPEC shape parameters:
-`(sqrt(R0^2+2*a*R0)-sqrt(R0^2-2*a*R0))/2`, with R0=1 m and a=0.33 m.
+[V] `run.sh` qualifies the checked-in native true-edge fixture
+`test/data/solovev_q1.5_edge.nc` against the frozen analytic edge limits
+before any stability solve. It rebuilds the pinned public GPEC benchmark,
+runs DCON with a conformal wall, then bisects the GLISS crossing. Override
+`GLISS_EXPORT` and `GLISS_PARAMETER` together to use another qualified export.
+Python needs NumPy, SciPy, netCDF4 and the built/installed GLISS binding.
+
+[V] Current GLISS settings are parity class 1, modes (0,1) and
+m=1..MMAX with n=+-1, FEEC degree 2, angular quadrature 256 x 8, zero floor
+1e-8, and the optional `--radial-cells` volume refinement. M=36 position data
+require more than 216 poloidal points. `scan.py` records the inertia, lowest
+omega², certificate, vacuum energy, total energy and closure error; energies
+are the native doubled-energy quadratic forms. The wall distance is in units
+of the exact analytic half-width 0.3526573415939913 m. The default half-width
+is `(sqrt(R0²+2*a*R0)-sqrt(R0²-2*a*R0))/2` for R0=1 m and a=0.33 m.
+
+[V] The primary exact derivation is
+[the FortSym edge and cylindrical-wall proof](../../../gen/free_boundary/README.md).
+Native tests independently check toroidal harmonic vacuum energies and the
+imported vacuum-torus plasma operator. DCON is a secondary comparison;
+agreement with its wall interval alone does not establish physical acceptance.
 
 ## Result
 
-The complete physical acceptance case remains open. Fresh October 2 checks
+[V] The complete physical acceptance case remains open. Fresh October 2 checks
 found that ordinary GVEC half-grid exports do not meet the frozen native
 boundary flux-derivative limits. The corrected M32 export passes the geometry
 checks, but extrapolated `chi'/Phi'` fails the boundary transform limit.
-The runner supplies exploration evidence until faithful true-edge export and
-ingestion and equilibrium exterior matching are qualified. See the
+The runner supplies exploration evidence until equilibrium exterior matching and a fresh quantitative wall comparison are qualified. See the
 [failed-control measurement record](../../results/2026-10-02/README.md) and
 [native M32 diagnostics](../../results/2026-10-02/free-boundary-m32-control/README.md).
 The fresh independent DCON refinement confirms its crossing near 0.152488;
 it does not qualify GLISS's imported equilibrium.
+
+[V] The qualifier now separates producer sample error from interpolation:
+replacing the archived M32 half-grid fluxes by independently evaluated analytic
+values on the identical nodes still gives a 3.1805e-7 extrapolated transform
+error. The stored-minus-analytic extrapolation difference is 1.47e-9, compared
+to the original 3.1952e-7 total. The native extrapolation is at
+`src/boundary/primitive_boundary_geometry.f90:50` and the cubic derivative at
+`src/radial_cubic_spline.f90:255`; this error exists before vacuum assembly.
+The remedy already on main is native profile differentiation at s=1 in the
+producer plus schema-1 ingestion (`primitive_boundary_geometry.f90:71`).
+The runner now requires that remedy instead of silently regenerating the
+failed half-grid-only case.
 
 The October 16 explicit-edge fixture in `test/data/solovev_q1.5_edge.nc`
 passes the original export limits: toroidal flux-slope error `1.99e-16` Wb,
@@ -45,6 +65,16 @@ independent qualifier and native boundary regression use the declared s=1
 data while retaining the interior half-grid. This resolves the export and
 ingestion defect for that fixture. Current-free exterior matching and a
 fresh quantitative wall-window comparison remain required.
+
+[V] [Fresh October 21 measurements](../../results/2026-10-21/free-boundary/README.md)
+use the qualified fixture and admitted volume grid. At edge256² the measured
+critical bracket is 0.15230469–0.15234375, inside the unchanged broad GLISS
+window [0.1514,0.1535], but below the archived DCON interval. Its midpoint is
+0.107% below the DCON midpoint. Degree, radial, volume-angular and mode-range
+controls preserve the edge128² bracket to the 3.90625e-5 bisection width;
+separate vacuum-edge refinements move it. [H] Edge discretization is the leading
+remaining explanation, not a demonstrated DCON defect or exact interval match.
+A guarded edge512² follow-up was submitted; no physical acceptance is inferred.
 
 The GLISS numbers below are historical results obtained with 64 x 8 angular
 quadrature and the approximate half-width 0.35245 m, before the cubic MDE

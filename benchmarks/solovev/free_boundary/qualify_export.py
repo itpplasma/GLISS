@@ -154,6 +154,12 @@ phi_spline = CubicSpline(s, np.asarray(data["Phi"][:]), bc_type="not-a-knot")
 iota_spline = CubicSpline(s, -np.asarray(data["iota"][:]), bc_type="not-a-knot")
 edge_psi_chi = -chi_spline(1) / (2 * np.pi * psi0)
 edge_iota_flux = -chi_spline(1, 1) / phi_spline(1, 1)
+# Replace stored flux values by the independent analytic values on exactly
+# the same half-grid. This isolates spline extrapolation error from producer
+# sample error without changing the native vacuum input or any acceptance gate.
+analytic_chi_spline = CubicSpline(s, -2 * np.pi * psi0 * psi_s,
+                                bc_type="not-a-knot")
+analytic_halfgrid_edge_iota = -analytic_chi_spline(1, 1) / edge_flux
 edge_shape_t = np.arctan2(re * ze / (elongation * minor * major),
                         (re**2 - major**2) / (2 * minor * major))
 edge_exact_r = np.sqrt(major**2 + 2 * minor * major * np.cos(edge_shape_t))
@@ -206,6 +212,10 @@ edge = {
     "flux_ratio_iota_positive": float(edge_iota_flux),
     "flux_ratio_iota_abs_error": float(abs(edge_iota_flux - float(1 / edge_q_decimal))),
     "flux_ratio_minus_exported_iota": float(edge_iota_flux - iota_spline(1)),
+    "analytic_halfgrid_flux_ratio_iota_abs_error": float(abs(
+        analytic_halfgrid_edge_iota - float(1 / edge_q_decimal))),
+    "stored_minus_analytic_halfgrid_edge_iota": float(
+        edge_iota_flux - analytic_halfgrid_edge_iota),
     "shape_parameter_matched_R_max_abs_error_m": maximum(re - edge_exact_r),
     "shape_parameter_matched_Z_max_abs_error_m": maximum(ze - edge_exact_z),
     "shape_parameter_matched_distance_max_m": maximum(np.hypot(re - edge_exact_r,
