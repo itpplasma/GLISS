@@ -160,6 +160,8 @@ jobs:
         if: ${{ !github.event.pull_request.head.repo.fork && !(github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
         run: |-
           ci/run.sh ci-lint
+      - name: Check the nightly triage
+        run: python3 ci/test_nightly_triage.py
       - name: Bundle exact sources for Slurm
         if: ${{ !github.event.pull_request.head.repo.fork && (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'full-ci')) }}
         env:
