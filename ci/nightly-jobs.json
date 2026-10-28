@@ -1,0 +1,9 @@
+{
+  "build (macos-15, arm64)": "ci/macos_wheel.sh arm64",
+  "installed (3.9, arm64, macos-15)": "ci/macos_wheel.sh arm64 && ci/macos_wheel_installed.sh arm64 3.9",
+  "installed (3.10, arm64, macos-15)": "ci/macos_wheel.sh arm64 && ci/macos_wheel_installed.sh arm64 3.10",
+  "installed (3.11, arm64, macos-15)": "ci/macos_wheel.sh arm64 && ci/macos_wheel_installed.sh arm64 3.11",
+  "installed (3.12, arm64, macos-15)": "ci/macos_wheel.sh arm64 && ci/macos_wheel_installed.sh arm64 3.12",
+  "installed (3.13, arm64, macos-15)": "ci/macos_wheel.sh arm64 && ci/macos_wheel_installed.sh arm64 3.13",
+  "installed (3.14, arm64, macos-15)": "ci/macos_wheel.sh arm64 && ci/macos_wheel_installed.sh arm64 3.14"
+}

@@ -1,0 +1,68 @@
+name: nightly
+
+# The slow tier once a night on main: the macOS wheel builds and installed-wheel
+# tests (about 30 minutes), which the merge queue no longer runs. When a wheel
+# job fails, the triage job bisects that job's command (ci/nightly-jobs.json)
+# between the last green nightly and this commit and files or updates one
+# issue labelled nightly-failure; the next green nightly closes it.
+
+on:
+  schedule:
+    - cron: "53 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  wheels:
+    name: macOS wheels
+    uses: ./.github/workflows/macos-wheels.yml
+
+  triage:
+    name: Bisect failing jobs and report
+    needs: [wheels]
+    if: failure()
+    runs-on: [self-hosted, macOS, ARM64, itp-macos]
+    timeout-minutes: 600
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install the locked native toolchain
+        uses: mamba-org/setup-micromamba@add3a49764cedee8ee24e82dfde87f5bc2914462 # v2
+        with:
+          environment-file: ci/macos-arm64.lock
+          environment-name: gliss-build
+          micromamba-version: 2.9.0-0
+          generate-run-shell: true
+          init-shell: none
+      - name: Bisect and file or update the nightly-failure issue
+        shell: micromamba-shell {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ci/nightly_triage.py failure
+
+  close:
+    name: Close the nightly-failure issue
+    needs: [wheels]
+    runs-on: [self-hosted, itp-light]
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Close the issue once the nightly is green
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ci/nightly_triage.py success
