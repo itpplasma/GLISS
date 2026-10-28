@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Building from source &#8212; GLISS 0.0.3</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=47de8214"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/versions.js?v=dbab6fce"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="VMEC and BOOZ_XFORM input" href="vmec.html" />
+    <link rel="prev" title="Quickstart" href="quickstart.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="building-from-source">
+<h1>Building from source<a class="headerlink" href="#building-from-source" title="Link to this heading">¶</a></h1>
+<section id="native-library-and-tests">
+<h2>Native library and tests<a class="headerlink" href="#native-library-and-tests" title="Link to this heading">¶</a></h2>
+<p>The build requires CMake 3.22 or newer, Ninja, a Fortran compiler, BLAS/LAPACK,
+PkgConfig and the NetCDF C library.</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build<span class="w"> </span>-G<span class="w"> </span>Ninja
+cmake<span class="w"> </span>--build<span class="w"> </span>build
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build<span class="w"> </span>--output-on-failure
+</pre></div>
+</div>
+<p>A clean single-configuration build defaults to the optimized <code class="docutils literal notranslate"><span class="pre">Release</span></code>
+configuration, enables OpenMP assembly and prefers threaded OpenBLAS, falling
+back to another BLAS/LAPACK provider when OpenBLAS is not installed. GLISS does
+not set thread counts; the OpenMP and BLAS runtimes use their defaults.</p>
+<p>The Python package is built from the same sources with
+<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">pip</span> <span class="pre">install</span> <span class="pre">.</span></code> (add <code class="docutils literal notranslate"><span class="pre">&quot;.[vmec]&quot;</span></code> for VMEC conversion); see the
+<a class="reference external" href="https://github.com/itpplasma/GLISS/blob/main/python/README.md">Python guide</a>.</p>
+</section>
+<section id="release-audit">
+<h2>Release audit<a class="headerlink" href="#release-audit" title="Link to this heading">¶</a></h2>
+<p>Before a release, check the committed tree for compiler-generated Fortran
+array temporaries and run the full test suite under the audited <code class="docutils literal notranslate"><span class="pre">-O3</span></code> build:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>./ci/array_temporary_audit.sh
+</pre></div>
+</div>
+<p>The script uses a detached temporary worktree and a private <code class="docutils literal notranslate"><span class="pre">fo</span></code> cache, so it
+does not reconfigure the normal build tree. Set <code class="docutils literal notranslate"><span class="pre">GLISS_AUDIT_TMPDIR</span></code> to place
+the temporary build on a large or fast filesystem.</p>
+</section>
+<section id="enzyme-derivative-checks">
+<h2>Enzyme derivative checks<a class="headerlink" href="#enzyme-derivative-checks" title="Link to this heading">¶</a></h2>
+<p>The Enzyme gradient tests need matching versions of Flang, <code class="docutils literal notranslate"><span class="pre">opt</span></code>, <code class="docutils literal notranslate"><span class="pre">llvm-link</span></code>
+and the LLVMEnzyme plugin:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build-enzyme<span class="w"> </span>-G<span class="w"> </span>Ninja<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_Fortran_COMPILER<span class="o">=</span>flang-new<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DGLISS_ENABLE_ENZYME<span class="o">=</span>ON<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DENZYME_PLUGIN<span class="o">=</span>/path/to/LLVMEnzyme-22.so
+cmake<span class="w"> </span>--build<span class="w"> </span>build-enzyme
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build-enzyme<span class="w"> </span>-L<span class="w"> </span>enzyme<span class="w"> </span>--output-on-failure
+</pre></div>
+</div>
+</section>
+<section id="documentation-site">
+<h2>Documentation site<a class="headerlink" href="#documentation-site" title="Link to this heading">¶</a></h2>
+<p>The Sphinx sources are in <code class="docutils literal notranslate"><span class="pre">docs/</span></code>. With <code class="docutils literal notranslate"><span class="pre">sphinx</span></code> and <code class="docutils literal notranslate"><span class="pre">myst-parser</span></code> installed,
+build them with</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>-C<span class="w"> </span>docs<span class="w"> </span>html
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">docs</span></code> workflow installs the wheel, runs every quickstart block against
+it, builds the site, checks links, and publishes it to the <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> branch
+with <code class="docutils literal notranslate"><span class="pre">ci/publish_docs.py</span></code>. <code class="docutils literal notranslate"><span class="pre">latest</span></code> follows the default branch; each release
+tag <code class="docutils literal notranslate"><span class="pre">vX.Y.Z</span></code> keeps its own directory, selected with the version menu.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">GLISS</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Building from source</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#native-library-and-tests">Native library and tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#release-audit">Release audit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#enzyme-derivative-checks">Enzyme derivative checks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#documentation-site">Documentation site</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compatibility.html">TERPSICHORE compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mode_diagnostics.html">Mode diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="source_inventory.html">Source inventory</a></li>
+<li class="toctree-l1"><a class="reference internal" href="conventions.html">Conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="angular_grids.html">Angular grids</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free_boundary.html">Free-boundary model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sparse_stability.html">Sparse stability</a></li>
+<li class="toctree-l1"><a class="reference internal" href="batch-kernels.html">Shared MHD batch kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="quickstart.html" title="previous chapter">Quickstart</a></li>
+      <li>Next: <a href="vmec.html" title="next chapter">VMEC and BOOZ_XFORM input</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.1</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/building.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

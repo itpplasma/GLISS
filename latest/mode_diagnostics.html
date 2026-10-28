@@ -51,6 +51,53 @@ before matrix assembly.</p>
 marginality and axisymmetric spectrum helpers use the
 regular-quotient space (<code class="docutils literal notranslate"><span class="pre">benchmarks/feec/regular_quotient.md</span></code> in the repository).
 Their coefficient vectors require an explicit conversion before use here.</p>
+<section id="eigenvalue-counts">
+<h2>Eigenvalue counts<a class="headerlink" href="#eigenvalue-counts" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">gliss_compatible_marginality</span></code> counts the generalized eigenvalues below fixed
+physical shifts without assigning level numbers to mesh-dependent continuum
+samples:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>fo<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>gliss_compatible_marginality<span class="w"> </span>equilibrium.nc<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="m">32</span><span class="w"> </span><span class="m">8</span><span class="w"> </span>1e-8<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--physical-density<span class="o">=</span>1e-7<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--count-shifts<span class="o">=</span><span class="m">0</span>,0.001,0.002,0.005<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="m">0</span>,0<span class="w"> </span><span class="m">1</span>,0<span class="w"> </span><span class="m">2</span>,0
+</pre></div>
+</div>
+<p>The output is CSV with columns <code class="docutils literal notranslate"><span class="pre">shift,eigenvalues_below_shift</span></code>; a row at shift
+<code class="docutils literal notranslate"><span class="pre">s</span></code> is the inertia count of eigenvalues <code class="docutils literal notranslate"><span class="pre">lambda</span> <span class="pre">&lt;</span> <span class="pre">s</span></code> of the assembled pencil.
+Shifts must be finite, nonnegative and strictly increasing. Count mode cannot
+be combined with bracketing or <code class="docutils literal notranslate"><span class="pre">--inertia-only</span></code>; malformed or conflicting
+input exits with nonzero status before the equilibrium is opened. The counts
+are intended for cross-grid and cross-code comparisons of spectral
+distributions.</p>
+</section>
+<section id="eigenfunction-profiles">
+<h2>Eigenfunction profiles<a class="headerlink" href="#eigenfunction-profiles" title="Link to this heading">¶</a></h2>
+<p>After an inertia bracket has isolated an eigenvalue, the same executable
+reconstructs its radial eigenfunction:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>fo<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>gliss_compatible_marginality<span class="w"> </span>equilibrium.nc<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="m">64</span><span class="w"> </span><span class="m">8</span><span class="w"> </span>1e-10<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--physical-density<span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--stored-powers<span class="o">=</span><span class="m">0</span>.5,0.5,0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--eta-stored-powers<span class="o">=</span><span class="m">0</span>.5,0.5,0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--eigenvalue-bracket<span class="o">=</span><span class="m">0</span>.003,0.004,0.005<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--eigenprofile-index<span class="o">=</span><span class="m">1</span><span class="w"> </span>--profile-points<span class="o">=</span><span class="m">201</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="m">0</span>,1<span class="w"> </span><span class="m">1</span>,1<span class="w"> </span><span class="m">2</span>,1
+</pre></div>
+</div>
+<p>The counts at the bracket endpoints must be <code class="docutils literal notranslate"><span class="pre">INDEX-1</span></code> and <code class="docutils literal notranslate"><span class="pre">INDEX</span></code>, otherwise
+the command fails. The eigenvalue interval is refined to a relative width of
+at most <code class="docutils literal notranslate"><span class="pre">min(TOLERANCE,1e-10)</span></code>, followed by shift-invert iteration at the
+midpoint of the outer bracket. A profile is written only if the isolated level
+is the eigenvalue closest to the shift and the mass-whitened residual bounds
+the eigenspace angle by <code class="docutils literal notranslate"><span class="pre">1e-3</span></code>.</p>
+<p>The first CSV row reports the outer and refined brackets and their midpoint,
+the Rayleigh quotient, raw and diagonally equilibrated action-relative
+residuals, a Frobenius-norm backward error, the mass-whitened absolute
+residual, the eigenspace-angle bound and the reciprocal condition estimate of
+the equilibrated mass matrix. These measure different things: a low mode of a
+strongly cancelling energy pencil can show a larger action-relative residual
+while being backward stable with a small subspace error. The following rows
+give <code class="docutils literal notranslate"><span class="pre">normal</span></code> and <code class="docutils literal notranslate"><span class="pre">eta</span></code> field values at cell-centred coordinates.</p>
+</section>
 <section id="coefficients-and-axis-regularity">
 <h2>Coefficients and axis regularity<a class="headerlink" href="#coefficients-and-axis-regularity" title="Link to this heading">¶</a></h2>
 <p>For each active Fourier trial, normal coefficients use the retained H1 basis
@@ -164,9 +211,12 @@ from isolated or clustered eigenmodes.</p>
 <script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building from source</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vmec.html">VMEC and BOOZ_XFORM input</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compatibility.html">TERPSICHORE compatibility</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Mode diagnostics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#eigenvalue-counts">Eigenvalue counts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#eigenfunction-profiles">Eigenfunction profiles</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#coefficients-and-axis-regularity">Coefficients and axis regularity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#numerical-evidence">Numerical evidence</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#integrated-branches">Integrated branches</a></li>

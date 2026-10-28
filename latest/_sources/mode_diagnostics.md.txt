@@ -18,6 +18,58 @@ marginality and axisymmetric spectrum helpers use the
 regular-quotient space (`benchmarks/feec/regular_quotient.md` in the repository).
 Their coefficient vectors require an explicit conversion before use here.
 
+## Eigenvalue counts
+
+`gliss_compatible_marginality` counts the generalized eigenvalues below fixed
+physical shifts without assigning level numbers to mesh-dependent continuum
+samples:
+
+```sh
+fo exec gliss_compatible_marginality equilibrium.nc 4 32 8 1e-8 1 \
+  --physical-density=1e-7 \
+  --count-shifts=0,0.001,0.002,0.005 \
+  0,0 1,0 2,0
+```
+
+The output is CSV with columns `shift,eigenvalues_below_shift`; a row at shift
+`s` is the inertia count of eigenvalues `lambda < s` of the assembled pencil.
+Shifts must be finite, nonnegative and strictly increasing. Count mode cannot
+be combined with bracketing or `--inertia-only`; malformed or conflicting
+input exits with nonzero status before the equilibrium is opened. The counts
+are intended for cross-grid and cross-code comparisons of spectral
+distributions.
+
+## Eigenfunction profiles
+
+After an inertia bracket has isolated an eigenvalue, the same executable
+reconstructs its radial eigenfunction:
+
+```sh
+fo exec gliss_compatible_marginality equilibrium.nc 4 64 8 1e-10 1 \
+  --physical-density=1 \
+  --stored-powers=0.5,0.5,0 \
+  --eta-stored-powers=0.5,0.5,0 \
+  --eigenvalue-bracket=0.003,0.004,0.005 \
+  --eigenprofile-index=1 --profile-points=201 \
+  0,1 1,1 2,1
+```
+
+The counts at the bracket endpoints must be `INDEX-1` and `INDEX`, otherwise
+the command fails. The eigenvalue interval is refined to a relative width of
+at most `min(TOLERANCE,1e-10)`, followed by shift-invert iteration at the
+midpoint of the outer bracket. A profile is written only if the isolated level
+is the eigenvalue closest to the shift and the mass-whitened residual bounds
+the eigenspace angle by `1e-3`.
+
+The first CSV row reports the outer and refined brackets and their midpoint,
+the Rayleigh quotient, raw and diagonally equilibrated action-relative
+residuals, a Frobenius-norm backward error, the mass-whitened absolute
+residual, the eigenspace-angle bound and the reciprocal condition estimate of
+the equilibrated mass matrix. These measure different things: a low mode of a
+strongly cancelling energy pencil can show a larger action-relative residual
+while being backward stable with a small subspace error. The following rows
+give `normal` and `eta` field values at cell-centred coordinates.
+
 ## Coefficients and axis regularity
 
 For each active Fourier trial, normal coefficients use the retained H1 basis
