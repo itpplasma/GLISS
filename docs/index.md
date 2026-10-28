@@ -7,6 +7,7 @@ energy principle on compatible FEEC radial spaces.
 :maxdepth: 2
 
 quickstart
+building
 vmec
 compatibility
 mode_diagnostics

@@ -65,7 +65,7 @@ formula at `radial_cubic_spline.f90:255`; schema 1 uses declared slopes at
 `primitive_boundary_geometry.f90:88`. The schema-1 native-edge fixture reduces it to 1.20e-14
 against the unchanged 1e-12 limit. The benchmark runner now requires this
 explicit-edge qualification and uses an admitted 256 x 8 volume grid. The
-[FortSym proof](../gen/free_boundary/README.md) checks the edge-flux chain rule
+[FortSym proof](https://github.com/itpplasma/GLISS/blob/main/gen/free_boundary/README.md) checks the edge-flux chain rule
 and cylindrical wall limits exactly. Equilibrium exterior matching and a
 fresh converged quantitative plasma-vacuum comparison remain unqualified.
 Historical benchmark results obtained before the current angular admission
