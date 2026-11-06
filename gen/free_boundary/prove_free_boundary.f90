@@ -6,8 +6,9 @@ program prove_free_boundary
     use fortsym_engine_native, only: native_engine_t, make_native_engine
     use fortsym_expr, only: expr_t, sym, operator(+), operator(-), &
         operator(*), operator(/), operator(**)
+    use fortsym_context, only: current_arena
     implicit none
-    type(arena_t), target :: arena
+    type(arena_t), pointer :: arena
     type(assumption_context_t), target :: assumptions
     type(native_engine_t) :: engine
     type(suite_t) :: checks
@@ -20,22 +21,22 @@ program prove_free_boundary
 
     report = 'free-boundary-identities.json'
     if (command_argument_count() == 1) call get_command_argument(1, report)
-    call arena%init()
+    arena => current_arena()
     call assumptions%init(arena)
-    r = sym(arena, 'R')
-    a = sym(arena, 'a')
-    b = sym(arena, 'b')
-    t = sym(arena, 't')
-    w = sym(arena, 'sqrt_psi_n')
-    e = sym(arena, 'elongation')
-    r0 = sym(arena, 'R0')
-    phi_edge = sym(arena, 'Phi_edge')
-    q = sym(arena, 'q')
-    psi0 = sym(arena, 'psi0')
-    radial_field = sym(arena, 'A')
-    axial = sym(arena, 'Bz')
-    k = sym(arena, 'k')
-    wall_ratio = sym(arena, 'wall_radius_squared_over_a_squared')
+    r = sym('R')
+    a = sym('a')
+    b = sym('b')
+    t = sym('t')
+    w = sym('sqrt_psi_n')
+    e = sym('elongation')
+    r0 = sym('R0')
+    phi_edge = sym('Phi_edge')
+    q = sym('q')
+    psi0 = sym('psi0')
+    radial_field = sym('A')
+    axial = sym('Bz')
+    k = sym('k')
+    wall_ratio = sym('wall_radius_squared_over_a_squared')
     call assume(assumptions, positive(r))
     call assume(assumptions, positive(a))
     call assume(assumptions, positive(b))
@@ -43,7 +44,7 @@ program prove_free_boundary
     call assume(assumptions, positive(q))
     call assume(assumptions, positive(phi_edge))
     call assume(assumptions, positive(psi0))
-    engine = make_native_engine(arena, assumptions)
+    engine = make_native_engine(assumptions)
     call suite_begin(checks, 'Exact free-boundary edge and cylindrical wall identities')
 
     ! Rational parametrization of the unit circle proves the contour Jacobian

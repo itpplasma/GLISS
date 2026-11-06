@@ -4,7 +4,6 @@ program gen_ideal_mhd_coordinates
     ! Appendix A1, A5--A12; PROVENANCE.md declares the GLISS sign map.
     ! No Mathematica or Wolfram source/output is an input to this generator.
     use, intrinsic :: iso_fortran_env, only: output_unit
-    use fortsym_arena, only: arena_t
     use fortsym_expr, only: expr_t, sym, sqrt, abs, &
         operator(+), operator(-), operator(*), operator(/), operator(**)
     use ideal_mhd_symbolic, only: coordinate_energy, &
@@ -28,7 +27,6 @@ program gen_ideal_mhd_coordinates
         'xi_s_zeta', 'eta_theta', 'eta_zeta', 'sqrtg_xi_s_radial', &
         'sqrtg_eta_theta', 'sqrtg_eta_zeta', 'mu_theta', 'mu_zeta', &
         'vacuum_permeability']
-    type(arena_t), target :: arena
     type(symengine_engine_t) :: engine
     type(suite_t) :: checks
     type(expr_t) :: x(27), perpendicular_inputs(7), components(3), coefficients(18)
@@ -48,11 +46,10 @@ program gen_ideal_mhd_coordinates
     if (command_argument_count() >= 2) call get_command_argument(2, evidence)
     if (command_argument_count() >= 3) call get_command_argument(3, revision)
     if (command_argument_count() > 3) error stop 'expected outputdir [proofJSON] [revision]'
-    call arena%init()
-    engine = make_symengine_engine(arena)
+    engine = make_symengine_engine()
     call suite_begin(checks, 'GLISS local energy exact identities')
     do i = 1, size(x)
-        x(i) = sym(arena, trim(names(i)))
+        x(i) = sym(trim(names(i)))
     end do
     count = 0
 
@@ -130,7 +127,7 @@ program gen_ideal_mhd_coordinates
     ! The kinetic projection retains the normal and binormal displacement
     ! squares of Appendix A8, and removes only the field-parallel square.
     perpendicular_inputs = [x(7), x(8), x(9), x(12), &
-        sym(arena, 'density_kg_m3'), x(16), sym(arena, 'eta')]
+        sym('density_kg_m3'), x(16), sym('eta')]
     normal = perpendicular_inputs(6)/sqrt(perpendicular_inputs(3))
     binormal = perpendicular_inputs(4)*normal &
         + sqrt(perpendicular_inputs(3))*perpendicular_inputs(7)/perpendicular_inputs(2)
@@ -183,8 +180,8 @@ contains
         ! Hessian and the reduced curl form coincide without a boundary term.
         type(expr_t) :: d(3,3), b(3), z, u, v, one, zero, jac, w, h, reduced
         integer :: j
-        z = sym(arena, 'slab_t'); u = sym(arena, 'slab_u')
-        v = sym(arena, 'slab_v'); zero = 0*z; one = 1 + zero
+        z = sym('slab_t'); u = sym('slab_u')
+        v = sym('slab_v'); zero = 0*z; one = 1 + zero
         d = zero; b = zero; b(3) = one
         do j = 1, 3
             d(j,j) = one
@@ -215,10 +212,10 @@ contains
         type(expr_t) :: partials(active), tangent(active), adjoint, forward, reverse(active)
         integer :: entry
 
-        adjoint = sym(arena, 'cotangent')
+        adjoint = sym('cotangent')
         do entry = 1, active
             partials(entry) = diff(value, variables(entry))
-            tangent(entry) = sym(arena, 'd_'//chars(variables(entry)%name()))
+            tangent(entry) = sym('d_'//chars(variables(entry)%name()))
             reverse(entry) = adjoint*partials(entry)
         end do
         forward = partials(1)*tangent(1)

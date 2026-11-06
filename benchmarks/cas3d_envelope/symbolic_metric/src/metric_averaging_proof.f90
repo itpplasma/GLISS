@@ -7,9 +7,10 @@ program metric_averaging_proof
     use fortsym_engine_symengine, only: symengine_engine_t, make_symengine_engine
     use fortsym_expr, only: expr_t, sym, rat, operator(+), operator(-), &
         operator(*), operator(**)
+    use fortsym_context, only: current_arena
     implicit none
 
-    type(arena_t), target :: arena
+    type(arena_t), pointer :: arena
     type(assumption_context_t), target :: assumptions
     type(native_engine_t) :: native
     type(symengine_engine_t) :: symengine
@@ -22,20 +23,20 @@ program metric_averaging_proof
     report = 'strict-identities.json'
     if (command_argument_count() == 1) call get_command_argument(1, report)
     if (command_argument_count() > 1) error stop 'expected optional report path'
-    call arena%init()
+    arena => current_arena()
     call assumptions%init(arena)
-    x0 = sym(arena, 'x0')
-    z0 = sym(arena, 'z0')
-    x1 = sym(arena, 'x1')
-    z1 = sym(arena, 'z1')
+    x0 = sym('x0')
+    z0 = sym('z0')
+    x1 = sym('x1')
+    z1 = sym('z1')
     call assume(assumptions, real_valued(x0))
     call assume(assumptions, real_valued(z0))
     call assume(assumptions, real_valued(x1))
     call assume(assumptions, real_valued(z1))
-    half = rat(arena, 1_int64, 2_int64)
-    quarter = rat(arena, 1_int64, 4_int64)
-    native = make_native_engine(arena, assumptions)
-    symengine = make_symengine_engine(arena)
+    half = rat(1_int64, 2_int64)
+    quarter = rat(1_int64, 4_int64)
+    native = make_native_engine(assumptions)
+    symengine = make_symengine_engine()
     call suite_begin(checks, 'Two-dimensional tangent metric averaging identity')
 
     average_squared_norm = half*(x0**2 + z0**2 + x1**2 + z1**2)

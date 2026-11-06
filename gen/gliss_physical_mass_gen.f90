@@ -5,7 +5,6 @@ program gliss_physical_mass_gen
     ! The three expressions below are orthonormal displacement components.
     ! Their squared norm defines the energy; its Hessian defines the mass.
     use, intrinsic :: iso_fortran_env, only: int64, output_unit
-    use fortsym_arena, only: arena_t
     use fortsym_expr, only: expr_t, sym, rat, sqrt, abs, &
         operator(+), operator(-), operator(*), operator(/), operator(**)
     use fortsym_diff, only: diff
@@ -22,7 +21,6 @@ program gliss_physical_mass_gen
         'flux_t_slope', 'flux_p_slope', 'current_i', 'current_j', &
         'signed_sqrtg', 'bmag', 'grad_s2', 'signed_sigma_tilde', &
         'beta_tilde', 'density_kg_m3', 'xi_s', 'eta', 'mu']
-    type(arena_t), target :: arena
     type(symengine_engine_t) :: engine
     type(suite_t) :: checks
     type(expr_t) :: x(13), direction(13), cotangent, components(3), flux_norm
@@ -44,14 +42,13 @@ program gliss_physical_mass_gen
     if (command_argument_count() > 3) then
         error stop 'expected output directory [evidence JSON] [FortSym revision]'
     end if
-    call arena%init()
-    engine = make_symengine_engine(arena)
+    engine = make_symengine_engine()
     call suite_begin(checks, 'GLISS physical mass exact identities')
     do i = 1, size(x)
-        x(i) = sym(arena, trim(names(i)))
-        direction(i) = sym(arena, 'd_'//trim(names(i)))
+        x(i) = sym(trim(names(i)))
+        direction(i) = sym('d_'//trim(names(i)))
     end do
-    cotangent = sym(arena, 'cotangent')
+    cotangent = sym('cotangent')
 
     ! Domain: J /= 0, B > 0, grad(s)^2 > 0, FT'^2 + FP'^2 > 0, rho > 0.
     ! Both signs of J are retained. The derivative of |J| is valid on each
@@ -62,7 +59,7 @@ program gliss_physical_mass_gen
     components(3) = x(9)*x(11)/x(6) &
         + (x(4)*x(1) - x(3)*x(2))*x(12)/(x(6)*flux_norm) &
         + x(6)*x(13)/flux_norm
-    energy = rat(arena, 1_int64, 2_int64)*x(10)*abs(x(5)) &
+    energy = rat(1_int64, 2_int64)*x(10)*abs(x(5)) &
         * (components(1)**2 + components(2)**2 + components(3)**2)
     do j = 1, 3
         do i = 1, 3
@@ -82,7 +79,7 @@ program gliss_physical_mass_gen
     do j = 1, 3
         do i = 1, 3
             quadratic = quadratic &
-                + rat(arena, 1_int64, 2_int64)*x(10 + i)*mass(i, j)*x(10 + j)
+                + rat(1_int64, 2_int64)*x(10 + i)*mass(i, j)*x(10 + j)
             write (label, '(a,i0,a,i0)') 'mass symmetry ', i, ',', j
             call check_identity(checks, engine, trim(label), mass(i, j) - mass(j, i))
         end do

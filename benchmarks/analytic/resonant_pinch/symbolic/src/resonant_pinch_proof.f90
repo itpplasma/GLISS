@@ -11,9 +11,10 @@ program resonant_pinch_proof
     use fortsym_expr, only: expr_t, sym, rat, operator(+), operator(-), &
         operator(*), operator(/), operator(**)
     use fortsym_subs, only: subs, subs_many
+    use fortsym_context, only: current_arena
     implicit none
 
-    type(arena_t), target :: arena
+    type(arena_t), pointer :: arena
     type(assumption_context_t), target :: assumptions
     type(native_engine_t) :: native
     type(symengine_engine_t) :: symengine
@@ -34,7 +35,7 @@ program resonant_pinch_proof
     report = 'strict-identities.json'
     if (command_argument_count() == 1) call get_command_argument(1, report)
     if (command_argument_count() > 1) error stop 'expected optional report path'
-    call arena%init()
+    arena => current_arena()
     call assumptions%init(arena)
     r = real_symbol('r')
     a = real_symbol('a')
@@ -66,7 +67,7 @@ program resonant_pinch_proof
     alpha = real_symbol('alpha')
     fc = real_symbol('F_axis')
     pc = real_symbol('P_axis')
-    one = rat(arena, 1_int64, 1_int64)
+    one = rat(1_int64, 1_int64)
     call assume(assumptions, positive(r))
     call assume(assumptions, positive(a))
     call assume(assumptions, positive(mu0))
@@ -83,8 +84,8 @@ program resonant_pinch_proof
     if (.not. assumptions%has(rho, FACT_POSITIVE)) error stop 'missing rho>0'
     if (.not. assumptions%has(z, FACT_NONZERO)) error stop 'missing Z nonzero'
     if (.not. assumptions%has(lambda, FACT_NEGATIVE)) error stop 'missing lambda<0'
-    native = make_native_engine(arena, assumptions)
-    symengine = make_symengine_engine(arena)
+    native = make_native_engine(assumptions)
+    symengine = make_symengine_engine()
     call suite_begin(checks, 'Resonant screw-pinch raw energy and radial ODE')
 
     btheta = aa*r
@@ -250,7 +251,7 @@ contains
     function real_symbol(name) result(expression)
         character(*), intent(in) :: name
         type(expr_t) :: expression
-        expression = sym(arena, name)
+        expression = sym(name)
         call assume(assumptions, real_valued(expression))
     end function real_symbol
 

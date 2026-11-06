@@ -3,7 +3,6 @@ program gliss_geometry_gen
     ! No external CAS expressions or fixtures enter this derivation.
     ! Discrete field-period count and orientation belong to the caller.
     use, intrinsic :: iso_fortran_env, only: output_unit, int64
-    use fortsym_arena, only: arena_t
     use fortsym_check, only: suite_t, suite_begin, suite_end, check_identity
     use fortsym_diff, only: diff
     use fortsym_engine, only: engine_result_t
@@ -11,13 +10,12 @@ program gliss_geometry_gen
     use fortsym_expr, only: expr_t, sym, sqrt, rat, &
         operator(+), operator(-), operator(*), operator(/), operator(**)
     use fortsym_kernel, only: kernel_spec_t, emit_kernel, CSE_NONE
-    use fortsym_string, only: str_t, str, chars
+    use fortsym_string, only: str_t, str, chars, itoa
     use fortsym_subs, only: subs_many
     implicit none
 
     character(*), parameter :: default_revision = &
         'ab86cc4cbf3e3afd6fd3f229ed855f3095e668e3'
-    type(arena_t), target :: arena
     type(symengine_engine_t) :: engine
     type(suite_t) :: checks
     type(expr_t) :: x(27), polynomial(13), field(5), curvature(3)
@@ -41,8 +39,7 @@ program gliss_geometry_gen
     if (command_argument_count() > 3) then
         error stop 'expected output directory [identity JSON] [FortSym revision]'
     end if
-    call arena%init()
-    engine = make_symengine_engine(arena)
+    engine = make_symengine_engine()
     call suite_begin(checks, 'GLISS Cartesian primitive geometry exact identities')
     do i = 1, size(x)
         x(i) = indexed_symbol('x', i)
@@ -145,7 +142,7 @@ program gliss_geometry_gen
     ! II_theta_zeta, II_zeta_zeta. Orientation is sign(J) held fixed.
     ! This is the second form with the outward signed-chart normal, not
     ! a derivative across J=0. Cross-product norm must be nonzero.
-    orientation = sym(arena, 'orientation')
+    orientation = sym('orientation')
     normal_squared = dot3(x(1:3), x(1:3))
     do i = 1, 3
         normal_values(i) = orientation*x(i)/sqrt(normal_squared)
@@ -172,7 +169,7 @@ program gliss_geometry_gen
     normal_substitution(1:3) = normal_values
     do i = 1, 3
         do j = 1, 12
-            composed_partial = rat(arena, 0_int64, 1_int64)
+            composed_partial = rat(0_int64, 1_int64)
             if (j <= 3) then
                 do k = 1, 3
                     partial = diff(contraction(i), x(k))
@@ -241,10 +238,8 @@ contains
         character(*), intent(in) :: name
         integer, intent(in) :: index
         type(expr_t) :: value
-        character(len=16) :: number
 
-        write (number, '(i0)') index
-        value = sym(arena, name//'_'//trim(number))
+        value = sym(name//'_'//itoa(index))
     end function indexed_symbol
 
     function dot3(left, right) result(value)
@@ -351,7 +346,7 @@ contains
         character(len=80) :: check_label
         integer :: input, output
 
-        half = rat(arena, 1_int64, 2_int64)
+        half = rat(1_int64, 2_int64)
         do output = 1, 5
             y(output) = indexed_symbol('values', output)
             d(output) = indexed_symbol('derivative', output)
@@ -391,8 +386,8 @@ contains
         reverse(10) = -total_bar(2)/inputs(4)
         reverse(11) = -total_bar(1)*(inputs(7)/inputs(4))
         reverse(12) = -total_bar(1)*(inputs(6)/inputs(4))
-        native_jvp = rat(arena, 0_int64, 1_int64)
-        native_vjp = rat(arena, 0_int64, 1_int64)
+        native_jvp = rat(0_int64, 1_int64)
+        native_vjp = rat(0_int64, 1_int64)
         do output = 1, 5
             do input = 1, 7
                 partial = diff(values(output), inputs(input))
@@ -400,7 +395,7 @@ contains
                 native_vjp(input) = native_vjp(input) + cotangent(output)*partial
             end do
         end do
-        residual = rat(arena, 0_int64, 1_int64)
+        residual = rat(0_int64, 1_int64)
         do output = 1, 5
             expanded = subs_many(primal(output), y, values)
             write (check_label, '(a,i0)') 'staged field primal ', output
@@ -459,8 +454,8 @@ contains
             reverse(3 + input) = orientation*cotangent(input)/area &
                 - y(input)*(dot3(y, cotangent)/(orientation*area))
         end do
-        native_jvp = rat(arena, 0_int64, 1_int64)
-        native_vjp = rat(arena, 0_int64, 1_int64)
+        native_jvp = rat(0_int64, 1_int64)
+        native_vjp = rat(0_int64, 1_int64)
         do output = 1, 3
             do input = 1, 3
                 partial = diff(values(output), inputs(input))
@@ -470,7 +465,7 @@ contains
         end do
         call prove('signed unit normal magnitude', &
             dot3(values, values) - orientation**2)
-        residual = rat(arena, 0_int64, 1_int64)
+        residual = rat(0_int64, 1_int64)
         do input = 1, 3
             expanded = subs_many(forward(3 + input), y, values)
             write (check_label, '(a,i0)') 'staged unit normal native JVP ', input
@@ -678,8 +673,8 @@ contains
                     '_', element
                 write (reference_name, '(a,a,i0,a)') chars(spec%args(argument)), &
                     '(', element, ')'
-                symbols(first + element - 1) = sym(arena, trim(symbol_name))
-                references(first + element - 1) = sym(arena, trim(reference_name))
+                symbols(first + element - 1) = sym(trim(symbol_name))
+                references(first + element - 1) = sym(trim(reference_name))
             end do
             first = last + 1
         end do
@@ -692,8 +687,8 @@ contains
                     '_', element
                 write (reference_name, '(a,a,i0,a)') chars(spec%outputs(argument)), &
                     '(', element, ')'
-                symbols(first + element - 1) = sym(arena, trim(symbol_name))
-                references(first + element - 1) = sym(arena, trim(reference_name))
+                symbols(first + element - 1) = sym(trim(symbol_name))
+                references(first + element - 1) = sym(trim(reference_name))
             end do
             first = last + 1
         end do

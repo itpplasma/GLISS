@@ -12,6 +12,7 @@ program gliss_weighted_feec_gen
         operator(*), operator(/), operator(**)
     use fortsym_kernel, only: kernel_spec_t, emit_kernel, KERNEL_SUBROUTINE
     use fortsym_string, only: str_t, str, chars
+    use fortsym_context, only: current_arena
     implicit none
 
     character(*), parameter :: default_revision = &
@@ -20,7 +21,7 @@ program gliss_weighted_feec_gen
         'coordinate', 'alpha', 'basis_value', &
         'basis_derivative', &
         'basis_second_derivative']
-    type(arena_t), target :: arena
+    type(arena_t), pointer :: arena
     type(assumption_context_t), target :: assumptions
     type(native_engine_t) :: native
     type(symengine_engine_t) :: symengine
@@ -50,17 +51,17 @@ program gliss_weighted_feec_gen
     if (command_argument_count() > 3) then
         error stop 'expected output directory [evidence JSON] [FortSym revision]'
     end if
-    call arena%init()
+    arena => current_arena()
     call assumptions%init(arena)
     do i = 1, size(x)
-        x(i) = sym(arena, trim(names(i)))
-        direction(i) = sym(arena, 'd_'//trim(names(i)))
+        x(i) = sym(trim(names(i)))
+        direction(i) = sym('d_'//trim(names(i)))
         call assume(assumptions, real_valued(x(i)))
         call assume(assumptions, real_valued(direction(i)))
     end do
     call assume(assumptions, positive(x(1)))
-    native = make_native_engine(arena, assumptions)
-    symengine = make_symengine_engine(arena)
+    native = make_native_engine(assumptions)
+    symengine = make_symengine_engine()
     call suite_begin(checks, 'GLISS weighted FEEC local jets exact identities')
 
     ! For s>0 and real alpha, real power is exp(-alpha*log(s)). Keeping
@@ -91,9 +92,9 @@ program gliss_weighted_feec_gen
         call prove(trim(label)//' real log definition', log_derived(i) - log_jet(i))
     end do
 
-    adjoint(1) = sym(arena, 'value_cotangent')
-    adjoint(2) = sym(arena, 'derivative_cotangent')
-    adjoint(3) = sym(arena, 'second_derivative_cotangent')
+    adjoint(1) = sym('value_cotangent')
+    adjoint(2) = sym('derivative_cotangent')
+    adjoint(3) = sym('second_derivative_cotangent')
     do i = 1, size(jet)
         forward(i) = 0*weight
         do j = 1, size(x)
@@ -117,7 +118,7 @@ program gliss_weighted_feec_gen
     ! A positive scale is an independently supplied value of s**(-alpha).
     ! Emit factored value/first-jet leaves so callers evaluate that power
     ! once per Fourier mode rather than once per active spline basis.
-    scale = sym(arena, 'scale')
+    scale = sym('scale')
     from_scale(1) = scale*x(3)
     from_scale(2) = scale*(x(4) - x(2)*x(3)/x(1))
     do i = 1, 2
@@ -127,12 +128,12 @@ program gliss_weighted_feec_gen
 
     ! Independently specified monomials cover every physical preset power
     ! m=0..6 and the positive-integer kernel that the custom API allows.
-    b = sym(arena, 'b')
-    c = sym(arena, 'c')
+    b = sym('b')
+    c = sym('c')
     do i = 0, 6
-        coefficient = rat(arena, int(2 - i, int64), 2_int64)
+        coefficient = rat(int(2 - i, int64), 2_int64)
         if (i == 0) coefficient = 0*x(2)
-        canonical = x(1)**rat(arena, int(i - 2, int64), 2_int64)
+        canonical = x(1)**rat(int(i - 2, int64), 2_int64)
         if (i == 0) canonical = x(1)**0
         write (label, '(a,i0)') 'physical axis preset m=', i
         call prove_power(trim(label), diff(canonical*x(1), x(1)) &
@@ -160,9 +161,9 @@ program gliss_weighted_feec_gen
 
     ! Reference-cell chain rule: s=left+h*t, h>0. The comparison is
     ! independent of B-spline knot topology and endpoint trace choices.
-    left = sym(arena, 'left')
-    h = sym(arena, 'h')
-    t = sym(arena, 't')
+    left = sym('left')
+    h = sym('h')
+    t = sym('t')
     q = left + h*t
     call prove_power('reference cell weighted affine derivative', &
         diff(q**(-x(2))*(b*q + c), t)/h &
@@ -170,9 +171,9 @@ program gliss_weighted_feec_gen
     call prove('reference cell real log affine derivative', &
         diff(exp(-x(2)*log(q))*(b*q + c), t)/h &
         - exp(-x(2)*log(q))*((1 - x(2))*b - x(2)*c/q))
-    flux = sym(arena, 'flux_t_slope')
-    pi = sym(arena, 'pi')
-    m = sym(arena, 'mode_m')
+    flux = sym('flux_t_slope')
+    pi = sym('pi')
+    m = sym('mode_m')
     call prove('zero-curl physical eta cancellation', &
         jet(2) + 2*pi*m*(-flux*jet(2)/(2*pi*m))/flux)
 
@@ -180,10 +181,10 @@ program gliss_weighted_feec_gen
     ! eta=s^(m/2) E-sigma*T*x/(4*pi*s), for m>0. The normal
     ! quotient is C0 Pp, E is broken P(p-1). No trace is removed
     ! at s=0: the physical weight and lift impose the axis conditions.
-    u = sym(arena, 'quotient')
-    du = sym(arena, 'quotient_derivative')
-    e = sym(arena, 'companion')
-    r = sym(arena, 'radius')
+    u = sym('quotient')
+    du = sym('quotient_derivative')
+    e = sym('companion')
+    r = sym('radius')
     beta = m/2
     physical_weight = exp(beta*log(x(1)))
     normal = physical_weight*u
@@ -191,7 +192,7 @@ program gliss_weighted_feec_gen
     call prove('regular quotient total derivative', &
         diff(normal, x(1)) + diff(normal, u)*du - normal_s)
     do i = -1, 1, 2
-        sigma_value = rat(arena, int(i, int64), 1_int64)
+        sigma_value = rat(int(i, int64), 1_int64)
         eta = physical_weight*e - sigma_value*flux*normal/(4*pi*x(1))
         call prove('regular quotient divergence parity', &
             normal_s + sigma_value*2*pi*m*eta/flux &
@@ -213,10 +214,10 @@ program gliss_weighted_feec_gen
     ! Independently derive the exact m=0 cylinder differential operator.
     ! U(s)=y(r)/r, s=r^2: the radial normal space x=s*U gives
     ! s U_ss+2 U_s+lambda U/4=0 iff y solves Bessel's order-one ODE.
-    y = sym(arena, 'bessel_value')
-    dy = sym(arena, 'bessel_first')
-    ddy = sym(arena, 'bessel_second')
-    lambda = sym(arena, 'eigenvalue')
+    y = sym('bessel_value')
+    dy = sym('bessel_first')
+    ddy = sym('bessel_second')
+    lambda = sym('eigenvalue')
     quotient_r = y/r
     quotient_s = (diff(quotient_r, r) + diff(quotient_r, y)*dy)/(2*r)
     quotient_ss = (diff(quotient_s, r) + diff(quotient_s, y)*dy &
@@ -225,16 +226,16 @@ program gliss_weighted_feec_gen
         r**2*quotient_ss + 2*quotient_s + lambda*quotient_r/4 &
         - (r**2*ddy + r*dy + (lambda*r**2 - 1)*y)/(4*r**3))
 
-    lift_args = [x(1), flux, sym(arena, 'phase_sign'), &
-        sym(arena, 'normal_value'), pi]
+    lift_args = [x(1), flux, sym('phase_sign'), &
+        sym('normal_value'), pi]
     lift = -lift_args(3)*flux*lift_args(4)/(4*pi*x(1))
     lift_jvp = 0*lift
     do i = 1, size(lift_args)
         write (label, '(a,i0)') 'lift_direction_', i
-        lift_seed(i) = sym(arena, trim(label))
+        lift_seed(i) = sym(trim(label))
         lift_jvp = lift_jvp + diff(lift, lift_args(i))*lift_seed(i)
     end do
-    lift_bar = sym(arena, 'lift_cotangent')
+    lift_bar = sym('lift_cotangent')
     do i = 1, size(lift_args)
         lift_vjp(i) = diff(lift, lift_args(i))*lift_bar
     end do

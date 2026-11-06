@@ -9,9 +9,10 @@ program axis_interpolation_proof
     use fortsym_engine_symengine, only: symengine_engine_t, make_symengine_engine
     use fortsym_expr, only: expr_t, sym, rat, operator(+), operator(-), &
         operator(*), operator(/), operator(**)
+    use fortsym_context, only: current_arena
     implicit none
 
-    type(arena_t), target :: arena
+    type(arena_t), pointer :: arena
     type(assumption_context_t), target :: assumptions
     type(native_engine_t) :: native
     type(symengine_engine_t) :: symengine
@@ -28,20 +29,20 @@ program axis_interpolation_proof
     report = 'strict-identities.json'
     if (command_argument_count() == 1) call get_command_argument(1, report)
     if (command_argument_count() > 1) error stop 'expected optional report path'
-    call arena%init()
+    arena => current_arena()
     call assumptions%init(arena)
-    h = sym(arena, 'h')
-    a = sym(arena, 'a')
-    b = sym(arena, 'b')
-    c = sym(arena, 'c')
-    s = sym(arena, 's')
-    j = sym(arena, 'j')
-    m0 = sym(arena, 'M0')
-    m1 = sym(arena, 'M1')
-    m2 = sym(arena, 'M2')
-    q0 = sym(arena, 'q0')
-    q1 = sym(arena, 'q1')
-    q2 = sym(arena, 'q2')
+    h = sym('h')
+    a = sym('a')
+    b = sym('b')
+    c = sym('c')
+    s = sym('s')
+    j = sym('j')
+    m0 = sym('M0')
+    m1 = sym('M1')
+    m2 = sym('M2')
+    q0 = sym('q0')
+    q1 = sym('q1')
+    q2 = sym('q2')
     call assume(assumptions, positive(h))
     call assume(assumptions, real_valued(a))
     call assume(assumptions, real_valued(b))
@@ -57,11 +58,11 @@ program axis_interpolation_proof
     if (.not. assumptions%has(h, FACT_POSITIVE)) error stop 'missing h>0'
     if (.not. assumptions%has(h, FACT_NONZERO)) error stop 'missing h nonzero'
     if (.not. assumptions%has(h, FACT_REAL)) error stop 'missing h real'
-    native = make_native_engine(arena, assumptions)
-    symengine = make_symengine_engine(arena)
+    native = make_native_engine(assumptions)
+    symengine = make_symengine_engine()
     call suite_begin(checks, 'Uniform-grid axis and BOOZ interpolation identities')
-    half = rat(arena, 1_int64, 2_int64)
-    quarter = rat(arena, 1_int64, 4_int64)
+    half = rat(1_int64, 2_int64)
+    quarter = rat(1_int64, 4_int64)
 
     ! K=0 is the uniform not-a-knot row. R=0 is the first cubic spline
     ! row after division by h. These are assumptions of the implication;

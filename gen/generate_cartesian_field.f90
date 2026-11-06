@@ -3,20 +3,18 @@ program generate_cartesian_field
     ! The defining flux field is differentiated natively by FortSym; staged
     ! emission preserves its quotient/product structure on either J /= 0 chart.
     use, intrinsic :: iso_fortran_env, only: output_unit, int64
-    use fortsym_arena, only: arena_t
     use fortsym_check, only: suite_t, suite_begin, suite_end, check_identity
     use fortsym_diff, only: diff
     use fortsym_engine_symengine, only: symengine_engine_t, make_symengine_engine
     use fortsym_expr, only: expr_t, sym, rat, sqrt, &
         operator(+), operator(-), operator(*), operator(/), operator(**)
     use fortsym_kernel, only: kernel_spec_t, emit_kernel, CSE_NONE
-    use fortsym_string, only: str_t, str, chars
+    use fortsym_string, only: str_t, str, chars, itoa
     use fortsym_subs, only: subs_many
     implicit none
 
     character(*), parameter :: default_revision = &
         'ab86cc4cbf3e3afd6fd3f229ed855f3095e668e3'
-    type(arena_t), target :: arena
     type(symengine_engine_t) :: engine
     type(suite_t) :: checks
     type(expr_t) :: x(32), y(46), roots(46), exact(46), frame(2)
@@ -40,8 +38,7 @@ program generate_cartesian_field
     if (command_argument_count() > 3) then
         error stop 'expected output directory [identity JSON] [FortSym revision]'
     end if
-    call arena%init()
-    engine = make_symengine_engine(arena)
+    engine = make_symengine_engine()
     call suite_begin(checks, 'GLISS Cartesian field exact identities')
     do i = 1, size(x)
         x(i) = indexed_symbol('x', i)
@@ -228,16 +225,14 @@ contains
         character(*), intent(in) :: name
         integer, intent(in) :: index
         type(expr_t) :: value
-        character(len=16) :: number
 
-        write (number, '(i0)') index
-        value = sym(arena, name//'_'//trim(number))
+        value = sym(name//'_'//itoa(index))
     end function indexed_symbol
 
     function zero() result(value)
         type(expr_t) :: value
 
-        value = rat(arena, 0_int64, 1_int64)
+        value = rat(0_int64, 1_int64)
     end function zero
 
     function dot3(left, right) result(value)
@@ -325,11 +320,11 @@ contains
         symbols(33:78) = y
         do index = 1, 32
             write (reference, '(a,i0,a)') 'x(', index, ')'
-            references(index) = sym(arena, trim(reference))
+            references(index) = sym(trim(reference))
         end do
         do index = 1, 46
             write (reference, '(a,i0,a)') 'work(', index, ')'
-            references(32 + index) = sym(arena, trim(reference))
+            references(32 + index) = sym(trim(reference))
         end do
         do index = 1, size(values)
             emitted(index) = subs_many(values(index), symbols, references)

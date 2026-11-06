@@ -10,8 +10,9 @@ program resonant_response_proof
     use fortsym_expr, only: expr_t, sym, rat, operator(+), operator(-), &
         operator(*), operator(/), operator(**)
     use fortsym_subs, only: subs
+    use fortsym_context, only: current_arena
     implicit none
-    type(arena_t), target :: arena
+    type(arena_t), pointer :: arena
     type(assumption_context_t), target :: assumptions
     type(native_engine_t) :: native
     type(symengine_engine_t) :: symengine
@@ -23,7 +24,7 @@ program resonant_response_proof
 
     report = 'strict-identities.json'
     if (command_argument_count() == 1) call get_command_argument(1, report)
-    call arena%init()
+    arena => current_arena()
     call assumptions%init(arena)
     d = real_symbol('D')
     pol = real_symbol('P')
@@ -43,9 +44,9 @@ program resonant_response_proof
     call assume(assumptions, positive(scale))
     call assume(assumptions, nonzero(kappa))
     call assume(assumptions, positive(nfp))
-    zero = rat(arena, 0_int64, 1_int64)
-    quarter = rat(arena, 1_int64, 4_int64)
-    qasdelta = rat(arena, 1_int64, 25_int64)
+    zero = rat(0_int64, 1_int64)
+    quarter = rat(1_int64, 4_int64)
+    qasdelta = rat(1_int64, 25_int64)
     aden = d**2 + delta*(d + pol)**2
     bden = d**2 + width**2
     ! This states the common rational-function domain. The separate
@@ -54,8 +55,8 @@ program resonant_response_proof
     call assume(assumptions, positive(bden))
     rt = d/aden
     rg = d/bden
-    native = make_native_engine(arena, assumptions)
-    symengine = make_symengine_engine(arena)
+    native = make_native_engine(assumptions)
+    symengine = make_symengine_engine()
     call suite_begin(checks, 'Pinned TERPSICHORE and GLISS resonant responses')
 
     call prove('TERPSICHORE inverse-equation residual', &
@@ -124,7 +125,7 @@ contains
     function real_symbol(name) result(expression)
         character(*), intent(in) :: name
         type(expr_t) :: expression
-        expression = sym(arena, name)
+        expression = sym(name)
         call assume(assumptions, real_valued(expression))
     end function real_symbol
 

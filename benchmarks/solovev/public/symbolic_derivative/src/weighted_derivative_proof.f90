@@ -8,8 +8,9 @@ program weighted_derivative_proof
     use fortsym_engine_symengine, only: symengine_engine_t, make_symengine_engine
     use fortsym_expr, only: expr_t, sym, rat, exp, log, operator(+), operator(-), &
         operator(*), operator(/), operator(**)
+    use fortsym_context, only: current_arena
     implicit none
-    type(arena_t), target :: arena
+    type(arena_t), pointer :: arena
     type(assumption_context_t), target :: assumptions
     type(native_engine_t) :: native
     type(symengine_engine_t) :: symengine
@@ -19,18 +20,18 @@ program weighted_derivative_proof
 
     report = 'strict-identities.json'
     if (command_argument_count() == 1) call get_command_argument(1, report)
-    call arena%init()
+    arena => current_arena()
     call assumptions%init(arena)
-    s = sym(arena, 's')
-    alpha = sym(arena, 'alpha')
-    b = sym(arena, 'b')
-    c = sym(arena, 'c')
-    flux = sym(arena, 'T')
-    pi = sym(arena, 'pi')
-    m = sym(arena, 'm')
-    n = sym(arena, 'N')
-    ns = sym(arena, 'N_s')
-    xs = sym(arena, 'x_s')
+    s = sym('s')
+    alpha = sym('alpha')
+    b = sym('b')
+    c = sym('c')
+    flux = sym('T')
+    pi = sym('pi')
+    m = sym('m')
+    n = sym('N')
+    ns = sym('N_s')
+    xs = sym('x_s')
     call assume(assumptions, positive(s))
     call assume(assumptions, real_valued(alpha))
     call assume(assumptions, real_valued(n))
@@ -41,10 +42,10 @@ program weighted_derivative_proof
     call assume(assumptions, positive(flux))
     call assume(assumptions, positive(pi))
     call assume(assumptions, positive(m))
-    native = make_native_engine(arena, assumptions)
-    symengine = make_symengine_engine(arena)
+    native = make_native_engine(assumptions)
+    symengine = make_symengine_engine()
     call suite_begin(checks, 'Weighted derivative exact identities and kernels')
-    half = rat(arena, 1_int64, 2_int64)
+    half = rat(1_int64, 2_int64)
     ! On s>0, this is the real definition of s**(-alpha); its
     ! logarithmic form avoids symbolic-exponent branch normalization.
     logweight = -alpha*log(s)

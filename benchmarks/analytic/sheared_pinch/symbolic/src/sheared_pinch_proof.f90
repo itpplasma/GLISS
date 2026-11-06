@@ -10,9 +10,10 @@ program sheared_pinch_proof
     use fortsym_expr, only: expr_t, sym, rat, sqrt, operator(+), operator(-), &
         operator(*), operator(/), operator(**)
     use fortsym_subs, only: subs, subs_many
+    use fortsym_context, only: current_arena
     implicit none
 
-    type(arena_t), target :: arena
+    type(arena_t), pointer :: arena
     type(assumption_context_t), target :: assumptions
     type(native_engine_t) :: native
     type(symengine_engine_t) :: symengine
@@ -34,7 +35,7 @@ program sheared_pinch_proof
     report = 'strict-identities.json'
     if (command_argument_count() == 1) call get_command_argument(1, report)
     if (command_argument_count() > 1) error stop 'expected optional report path'
-    call arena%init()
+    arena => current_arena()
     call assumptions%init(arena)
     r = real_symbol('r'); t = real_symbol('Btheta'); tp = real_symbol('Btheta_r')
     tpp = real_symbol('Btheta_rr'); z = real_symbol('Bz'); zp = real_symbol('Bz_r')
@@ -46,7 +47,7 @@ program sheared_pinch_proof
     rs = real_symbol('r_s'); zs = real_symbol('Z_s'); wall = real_symbol('a')
     pe = real_symbol('p_edge'); tau = real_symbol('two_pi'); length = real_symbol('L')
     exponent = real_symbol('nu_exponent'); x = real_symbol('distance_to_resonance')
-    half = rat(arena, 1_int64, 2_int64)
+    half = rat(1_int64, 2_int64)
     call assume(assumptions, positive(r))
     call assume(assumptions, positive(z))
     call assume(assumptions, positive(mu0))
@@ -67,8 +68,8 @@ program sheared_pinch_proof
     gg = mr*z - k*t
     jj = mr*z + k*t
     call assume(assumptions, nonzero(ff))
-    native = make_native_engine(arena, assumptions)
-    symengine = make_symengine_engine(arena)
+    native = make_native_engine(assumptions)
+    symengine = make_symengine_engine()
     call suite_begin(checks, &
         'Sheared pinch raw energy, static reduction and local threshold')
 
@@ -203,9 +204,9 @@ program sheared_pinch_proof
     call prove('physical pressure and shear form of threshold', &
         beta + alpha/4 - 2*aa**2*rs**2/(zs**2 + aa**2*rs**2) &
         *(shear**2*rs**3/(8*zs**2) + mu0*at_res(pressure_family_r)))
-    call prove('stable fixture Delta', fixture(delta, rat(arena, -9_int64, 5_int64)) &
-        - rat(arena, 41_int64, 81_int64))
-    critical_shear = 4 - 4*sqrt(rat(arena, 2_int64, 1_int64))
+    call prove('stable fixture Delta', fixture(delta, rat(-9_int64, 5_int64)) &
+        - rat(41_int64, 81_int64))
+    critical_shear = 4 - 4*sqrt(rat(2_int64, 1_int64))
     call prove('critical fixture Delta', fixture(delta, critical_shear))
     call prove('unstable fixture Delta', fixture(delta, -1 + 0*shear) + 7)
     if (checks%by_probe /= 0) error stop 'probe evidence is forbidden'
@@ -215,7 +216,7 @@ contains
     function real_symbol(name) result(expression)
         character(*), intent(in) :: name
         type(expr_t) :: expression
-        expression = sym(arena, name)
+        expression = sym(name)
         call assume(assumptions, real_valued(expression))
     end function real_symbol
 

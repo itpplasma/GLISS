@@ -3,7 +3,6 @@ program gliss_pressure_adjoint_gen
     ! The generator derives cotangents from the primal energy and spline maps.
     ! Intervals are positive; all geometry, field and quadrature data are fixed.
     use, intrinsic :: iso_fortran_env, only: output_unit
-    use fortsym_arena, only: arena_t
     use fortsym_check, only: suite_t, suite_begin, suite_end, check_identity
     use fortsym_diff, only: diff
     use fortsym_engine, only: engine_result_t
@@ -11,10 +10,9 @@ program gliss_pressure_adjoint_gen
     use fortsym_expr, only: expr_t, sym, operator(+), operator(-), &
         operator(*), operator(/), operator(**)
     use fortsym_kernel, only: kernel_spec_t, emit_kernel
-    use fortsym_string, only: str, chars
+    use fortsym_string, only: str, chars, itoa, words
     implicit none
 
-    type(arena_t), target :: arena
     type(native_engine_t) :: engine
     type(suite_t) :: suite
     type(expr_t) :: r2, r3, r4, r5, d2, d3, drive_slope, volume, inv_mu0
@@ -42,8 +40,7 @@ program gliss_pressure_adjoint_gen
         error stop 2
     end if
 
-    call arena%init()
-    engine = make_native_engine(arena)
+    engine = make_native_engine()
     call suite_begin(suite, 'GLISS pressure reverse scalar identities')
 
     open (newunit=unit, file=trim(output), status='replace', &
@@ -58,17 +55,17 @@ program gliss_pressure_adjoint_gen
     write (unit, '(a)') '    public :: gliss_spline_endpoint_vjp'
     write (unit, '(a)') 'contains'
 
-    r2 = sym(arena, 'r2')
-    r3 = sym(arena, 'r3')
-    r4 = sym(arena, 'r4')
-    r5 = sym(arena, 'r5')
-    d2 = sym(arena, 'd2')
-    d3 = sym(arena, 'd3')
-    drive_slope = sym(arena, 'drive_slope')
-    volume = sym(arena, 'volume')
-    inv_mu0 = sym(arena, 'inv_mu0')
-    pressure_slope = sym(arena, 'pressure_slope')
-    gamma = sym(arena, 'gamma')
+    r2 = sym('r2')
+    r3 = sym('r3')
+    r4 = sym('r4')
+    r5 = sym('r5')
+    d2 = sym('d2')
+    d3 = sym('d3')
+    drive_slope = sym('drive_slope')
+    volume = sym('volume')
+    inv_mu0 = sym('inv_mu0')
+    pressure_slope = sym('pressure_slope')
+    gamma = sym('gamma')
     energy = volume*inv_mu0*(r2**2 + r3**2 &
         - pressure_slope*drive_slope*r4**2) + gamma*volume*r5**2
     roots4 = [diff(energy, r2)*d2, diff(energy, r3)*d3, &
@@ -77,23 +74,21 @@ program gliss_pressure_adjoint_gen
         -drive_slope*volume*inv_mu0*r4**2, volume*r5**2]
     call prove_and_simplify(roots4, expected4, 'pressure energy')
     call initialize_spec('pressure_energy_pullback')
-    spec%args = [str('r2'), str('r3'), str('r4'), str('r5'), &
-        str('d2'), str('d3'), str('drive_slope'), str('volume'), str('inv_mu0')]
+    spec%args = words('r2 r3 r4 r5 d2 d3 drive_slope volume inv_mu0')
     spec%outputs = [str('terms')]
     spec%output_shapes = [str('(4)')]
-    spec%output_references = &
-        [str('terms(1)'), str('terms(2)'), str('terms(3)'), str('terms(4)')]
+    spec%output_references = words('terms(1) terms(2) terms(3) terms(4)')
     write (unit, '(a)') chars(emit_kernel(roots4, spec))
 
-    dl = sym(arena, 'distance_left')
-    dr = sym(arena, 'distance_right')
-    h = sym(arena, 'interval')
-    yl = sym(arena, 'value_left')
-    yr = sym(arena, 'value_right')
-    ml = sym(arena, 'second_left')
-    mr = sym(arena, 'second_right')
-    value_bar = sym(arena, 'value_cotangent')
-    slope_bar = sym(arena, 'slope_cotangent')
+    dl = sym('distance_left')
+    dr = sym('distance_right')
+    h = sym('interval')
+    yl = sym('value_left')
+    yr = sym('value_right')
+    ml = sym('second_left')
+    mr = sym('second_right')
+    value_bar = sym('value_cotangent')
+    slope_bar = sym('slope_cotangent')
     value = ml*dr**3/(6*h) + mr*dl**3/(6*h) &
         + (yl - ml*h**2/6)*dr/h + (yr - mr*h**2/6)*dl/h
     slope = -ml*dr**2/(2*h) + mr*dl**2/(2*h) &
@@ -109,41 +104,38 @@ program gliss_pressure_adjoint_gen
         + slope_bar*(dl**2/(2*h) - h/6)]
     call prove_and_simplify(roots4, expected4, 'spline evaluation')
     call initialize_spec('gliss_spline_evaluation_vjp')
-    spec%args = [str('distance_left'), str('distance_right'), str('interval'), &
-        str('value_cotangent'), str('slope_cotangent')]
-    spec%outputs = [str('value_left_cotangent'), str('value_right_cotangent'), &
-        str('second_left_cotangent'), str('second_right_cotangent')]
+    spec%args = words('distance_left distance_right interval value_cotangent slope_cotangent')
+    spec%outputs = words('value_left_cotangent value_right_cotangent ' &
+        //'second_left_cotangent second_right_cotangent')
     write (unit, '(a)') chars(emit_kernel(roots4, spec))
 
-    hl = sym(arena, 'interval_left')
-    hr = sym(arena, 'interval_right')
-    yc = sym(arena, 'value_center')
-    rhs_bar = sym(arena, 'rhs_cotangent')
+    hl = sym('interval_left')
+    hr = sym('interval_right')
+    yc = sym('value_center')
+    rhs_bar = sym('rhs_cotangent')
     rhs = 6*((yr - yc)/hr - (yc - yl)/hl)
     objective = rhs_bar*rhs
     roots3 = [diff(objective, yl), diff(objective, yc), diff(objective, yr)]
     expected3 = [6*rhs_bar/hl, -6*rhs_bar*(1/hr + 1/hl), 6*rhs_bar/hr]
     call prove_and_simplify(roots3, expected3, 'spline RHS')
     call initialize_spec('gliss_spline_rhs_vjp')
-    spec%args = [str('interval_left'), str('interval_right'), str('rhs_cotangent')]
-    spec%outputs = [str('value_left_cotangent'), str('value_center_cotangent'), &
-        str('value_right_cotangent')]
+    spec%args = words('interval_left interval_right rhs_cotangent')
+    spec%outputs = words('value_left_cotangent value_center_cotangent value_right_cotangent')
     write (unit, '(a)') chars(emit_kernel(roots3, spec))
 
-    ho = sym(arena, 'interval_outer')
-    hi = sym(arena, 'interval_inner')
-    adjacent = sym(arena, 'adjacent')
-    next = sym(arena, 'next')
-    endpoint_bar = sym(arena, 'endpoint_cotangent')
+    ho = sym('interval_outer')
+    hi = sym('interval_inner')
+    adjacent = sym('adjacent')
+    next = sym('next')
+    endpoint_bar = sym('endpoint_cotangent')
     endpoint = ((ho + hi)*adjacent - ho*next)/hi
     objective = endpoint_bar*endpoint
     roots2 = [diff(objective, adjacent), diff(objective, next)]
     expected2 = [endpoint_bar*(ho + hi)/hi, -endpoint_bar*ho/hi]
     call prove_and_simplify(roots2, expected2, 'spline endpoint')
     call initialize_spec('gliss_spline_endpoint_vjp')
-    spec%args = [str('interval_outer'), str('interval_inner'), &
-        str('endpoint_cotangent')]
-    spec%outputs = [str('adjacent_cotangent'), str('next_cotangent')]
+    spec%args = words('interval_outer interval_inner endpoint_cotangent')
+    spec%outputs = words('adjacent_cotangent next_cotangent')
     write (unit, '(a)') chars(emit_kernel(roots2, spec))
 
     write (unit, '(a)') 'end module gliss_pressure_adjoint_generated'
@@ -162,16 +154,14 @@ contains
         type(expr_t), intent(in) :: expected(:)
         character(*), intent(in) :: label
         type(engine_result_t) :: simplified
-        character(len=16) :: number
         integer :: k
 
         do k = 1, size(roots)
-            write (number, '(i0)') k
-            call check_identity(suite, engine, label//' '//trim(number), &
+            call check_identity(suite, engine, label//' '//itoa(k), &
                 roots(k) - expected(k))
             simplified = engine%simplify(roots(k))
             if (.not. simplified%ok) error stop 'FortSym simplification failed'
-            call check_identity(suite, engine, label//' simplified '//trim(number), &
+            call check_identity(suite, engine, label//' simplified '//itoa(k), &
                 simplified%value - roots(k))
             roots(k) = simplified%value
         end do
